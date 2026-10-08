@@ -223,6 +223,27 @@ Format : `D<n> — date — décision — raison`. Les agents ajoutent ici toute
   (`xcrun notarytool store-credentials`), à saisir par lui. Les liens `drop://` ne marchent qu'avec l'app installée
   dans `/Applications`, selon la doc du plugin.
 
+- **D31** — Pour les non-techniciens qui utilisent ChatGPT ou Claude (2026-10-08, demande de Guillaume : « comprendre
+  l'intention sans la complexité, deux clics »). Les applications grand public n'acceptent que des connecteurs MCP
+  **distants** : une URL HTTPS et OAuth avec enregistrement dynamique du client (Claude : Réglages → Connecteurs →
+  ajouter, gratuit limité à un connecteur ; ChatGPT : mode développeur, connecteurs en lecture seule sur Plus et Pro,
+  complets sur Business, Enterprise et Edu, guides tiers lus le 2026-10-08, à revérifier dans l'aide officielle).
+  Choix de Guillaume : une **passerelle** sur `drop.memolabs.dev` (connecteur MCP distant + OAuth) ; la connexion se
+  confirme dans l'app drop du poste (« Autoriser Claude à demander à ton équipe ? »), puis la passerelle transmet chaque
+  appel au Node de l'utilisateur par le relais. Les clés et le consentement restent sur les postes. La passerelle voit
+  les questions et les réponses en clair, comme ChatGPT et Claude eux-mêmes, et n'en garde rien.
+- **D32** — Un seul outil pour l'intention : « Demander à mon équipe » (`ask_team`, une question en langage courant,
+  sans identifiant ni schéma). drop choisit les destinataires par des **règles** déterministes, sans modèle : un prénom
+  cité dans la question, sinon le genre de chaque outil partagé (Figma pour une maquette, GitHub pour une PR, un CRM pour
+  un client…) ; trois destinataires au plus, et aucun envoi quand rien ne correspond (drop dit alors qui peut aider).
+  Choix de Guillaume, pour rester prévisible et gratuit.
+- **D33** — A2A dans les deux sens (choix de Guillaume). Spécification A2A v1.0.0 (https://a2a-protocol.org/latest/specification/,
+  lue le 2026-10-08) et SDK officiel `@a2a-js/sdk` 1.3.0, qui implémente la v1.0. Entrant : l'équipe est un agent A2A
+  (carte `/.well-known/agent-card.json`, un savoir-faire par capacité, `SendMessage`, `GetTask`) ; une tâche reste
+  `TASK_STATE_WORKING` pendant l'attente de l'accord, devient `TASK_STATE_COMPLETED` avec la réponse relue,
+  `TASK_STATE_REJECTED` sur un refus, `TASK_STATE_FAILED` sur une expiration ou une erreur. Sortant : une capacité
+  `a2a.answer` permet à une entreprise de brancher son propre agent A2A comme source de réponses, comme `mcp.answer`.
+
 ## À décider par l'humain
 
 - **Nom de produit** : à vérifier (nom + domaine) avant le pilote.
