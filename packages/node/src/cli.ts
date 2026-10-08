@@ -6,8 +6,9 @@ import { AGENTS, capabilities, connectMcp, McpAnswerConfigSchema } from '@drop/c
 import { implFor } from '@drop/runner';
 import { createTeam, generateIdentity, OwnerKindSchema, type ConsentCost } from '@drop/protocol';
 import { startDaemon } from './daemon.ts';
-import { AGENT_LABELS, detectAgents, shareId } from './detect.ts';
+import { AGENT_LABELS, detectAgents } from './detect.ts';
 import { bundledServer, cursorInstallLink, install, serverEntry } from './install.ts';
+import { isAgentKind, shareDetected } from './share.ts';
 import { DropHome, NodeConfigSchema } from './home.ts';
 import { costLine } from './ui.ts';
 
@@ -260,46 +261,23 @@ switch (command) {
         approver: { type: 'string', multiple: true },
       },
     });
-    const [agentName, serverName] = (positionals[0] ?? fail('drop share <agent>/<server>')).split('/');
-    const agent = detectAgents().find((candidate) => candidate.agent === agentName);
-    const server = agent?.servers.find((candidate) => candidate.name === serverName);
-    if (!agent || !server) fail(`no MCP server ${positionals[0] ?? ''}; see \`drop detect\``);
-    if (!server.shareable) fail(`${server.name} is part of drop itself`);
-    const source = { transport: 'agent' as const, agent: agent.agent, name: server.name };
-    let tools =
-      values.tools
-        ?.split(',')
-        .map((tool) => tool.trim())
-        .filter(Boolean) ?? [];
-    if (tools.length === 0) {
-      const client = await connectMcp(source);
-      try {
-        const listed = (await client.listTools()).tools;
-        tools = listed.filter((tool) => tool.annotations?.readOnlyHint === true).map((tool) => tool.name);
-        if (tools.length === 0)
-          fail(
-            `${server.name} marks no tool as read-only; choose with --tools among: ${listed.map((tool) => tool.name).join(', ')}`,
-          );
-      } finally {
-        await client.close();
-      }
+    const [agentName = '', serverName = ''] = (positionals[0] ?? fail('drop share <agent>/<server>')).split('/');
+    if (!isAgentKind(agentName)) fail(`unknown agent ${agentName}; one of ${AGENTS.join(', ')}`);
+    try {
+      const shared = await shareDetected(home, {
+        agent: agentName,
+        server: serverName,
+        label: values.label,
+        tools: values.tools?.split(',').map((tool) => tool.trim()),
+        capabilityId: values.id,
+        approvers: values.approver,
+      });
+      process.stdout.write(
+        `published ${shared.capabilityId}: « Répondre à partir de ${shared.label} » with ${String(shared.tools.length)} tools (${shared.tools.join(', ')}) from ${AGENT_LABELS[agentName]}\n`,
+      );
+    } catch (error) {
+      fail(error instanceof Error ? error.message : 'share failed');
     }
-    const capabilityId = values.id ?? shareId(server);
-    const config = McpAnswerConfigSchema.parse({
-      label:
-        values.label ?? `mon ${server.kind ? server.kind.charAt(0).toUpperCase() + server.kind.slice(1) : server.name}`,
-      server: source,
-      tools,
-    });
-    home.publish({
-      capabilityId,
-      approverNodeIds: values.approver ?? [home.identity().nodeId],
-      config,
-      publishedAt: new Date().toISOString(),
-    });
-    process.stdout.write(
-      `published ${capabilityId}: « Répondre à partir de ${config.label} » with ${String(tools.length)} tools (${tools.join(', ')}) from ${AGENT_LABELS[agent.agent]}\n(restart \`drop serve\` if it is running)\n`,
-    );
     break;
   }
   case 'mcp-tools': {

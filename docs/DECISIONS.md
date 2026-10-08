@@ -211,6 +211,18 @@ Format : `D<n> — date — décision — raison`. Les agents ajoutent ici toute
 
 - **D30** : T2.6a, documentation et vitrine locale (2026-10-08, demande de Guillaume). Trois pages HTML/CSS, sans framework ni dépendance supplémentaire, une simulation pédagogique sans connexion aux Nodes et trois SVG partagés avec les guides. `scripts/site.ts` assemble une allowlist publique dans `dist/site` et prévisualise sur `127.0.0.1` ; le dépôt entier n’est jamais servi. Les exports Markdown pointent vers le snapshot de code analysé. Le bilan est daté et distingue les tests, la traçabilité des specs et les démonstrations historiques. T2.6 garde la vidéo et la publication sur le domaine prévu, soumise au point d’arrêt humain existant. La demande autorise la rédaction et la réalisation immédiates ; les lignes déjà en cours n’ont pas été requalifiées. Le passage de T2.9 et T2.5 à done pendant cette session est intégré au bilan, au commit `cacf1cc`.
 
+- **D30** — Architecture de l'app Mac (2026-10-08, T2.4). Le panneau est une page servie par le Node local sur `/app`,
+  derrière son jeton et une politique de contenu qui n'autorise que lui-même ; l'app Tauri 2
+  (https://v2.tauri.app/learn/system-tray/, https://v2.tauri.app/plugin/deep-linking/, lus le 2026-10-08) n'est qu'une
+  coquille : icône de barre de menus, fenêtre de 380 × 620 qui affiche cette page, lancement et arrêt du daemon, liens
+  `drop://pair`. Avantages : une seule logique, testée comme le reste du Node, et le même panneau dans un navigateur. L'app
+  embarque le binaire Node qui l'a construite (arm64 pour l'instant) plutôt qu'un exécutable unique Node : les sources
+  sont des modules ES et le CLI utilise l'`await` de haut niveau. Taille : 150 Mo pour le `.app`, 45 Mo pour le `.dmg`.
+  Seule la version finale s'inscrit au démarrage de la session, pour qu'une version de développement n'y reste pas. Le
+  Mac de Guillaume a le certificat « Developer ID Application » ; la notarisation demande ses identifiants Apple
+  (`xcrun notarytool store-credentials`), à saisir par lui. Les liens `drop://` ne marchent qu'avec l'app installée
+  dans `/Applications`, selon la doc du plugin.
+
 ## À décider par l'humain
 
 - **Nom de produit** : à vérifier (nom + domaine) avant le pilote.
