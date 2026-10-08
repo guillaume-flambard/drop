@@ -5,6 +5,7 @@ import { capabilities, connectMcp, McpAnswerConfigSchema } from '@drop/capabilit
 import { implFor } from '@drop/runner';
 import { generateIdentity, OwnerKindSchema, type ConsentCost } from '@drop/protocol';
 import { startDaemon } from './daemon.ts';
+import { AGENT_LABELS, detectAgents, shareId } from './detect.ts';
 import { DropHome, NodeConfigSchema } from './home.ts';
 import { costLine } from './ui.ts';
 
@@ -17,6 +18,9 @@ const USAGE = `drop <command>
   publish <capability-id> --approver <nodeId> [--config <file.json>]
                                  e.g. publish mcp.answer.figma --config figma.json (one per MCP server)
   mcp-tools --config <file.json> list the tools of the MCP server in an mcp.answer config, to choose which to share
+  detect [--json]                the coding agents on this machine, drop in each, and their MCP servers
+  share <agent>/<server> [--label <text>] [--tools a,b] [--id mcp.answer.<name>] [--approver <nodeId>]
+                                 answer from a detected MCP server (read-only tools by default; secrets stay put)
   pending                        requests waiting for your decision
   approve|deny|not-now <dropId>  decide from the terminal
   review <dropId> send|discard [--redact <field>]…
@@ -147,6 +151,79 @@ switch (command) {
       publishedAt: new Date().toISOString(),
     });
     process.stdout.write(`published ${capabilityId} (restart \`drop serve\` if it is running)\n`);
+    break;
+  }
+  case 'detect': {
+    const started = performance.now();
+    const agents = detectAgents();
+    if (rest.includes('--json')) {
+      process.stdout.write(`${JSON.stringify(agents, null, 2)}\n`);
+      break;
+    }
+    for (const agent of agents) {
+      if (!agent.installed) continue;
+      process.stdout.write(`${agent.label}${agent.dropInstalled ? '  (drop installé)' : '  (drop absent)'}\n`);
+      for (const server of agent.servers) {
+        const secrets = [...server.envNames, ...server.headerNames];
+        process.stdout.write(
+          `  ${server.shareable ? '·' : ' '} ${agent.agent}/${server.name}\t${server.kind ?? ''}\t${server.where}${secrets.length > 0 ? `\tvariables: ${secrets.join(', ')}` : ''}\n`,
+        );
+      }
+    }
+    process.stdout.write(`(${String(Math.round(performance.now() - started))} ms)\n`);
+    break;
+  }
+  case 'share': {
+    const { values, positionals } = parseArgs({
+      args: rest,
+      allowPositionals: true,
+      options: {
+        label: { type: 'string' },
+        tools: { type: 'string' },
+        id: { type: 'string' },
+        approver: { type: 'string', multiple: true },
+      },
+    });
+    const [agentName, serverName] = (positionals[0] ?? fail('drop share <agent>/<server>')).split('/');
+    const agent = detectAgents().find((candidate) => candidate.agent === agentName);
+    const server = agent?.servers.find((candidate) => candidate.name === serverName);
+    if (!agent || !server) fail(`no MCP server ${positionals[0] ?? ''}; see \`drop detect\``);
+    if (!server.shareable) fail(`${server.name} is part of drop itself`);
+    const source = { transport: 'agent' as const, agent: agent.agent, name: server.name };
+    let tools =
+      values.tools
+        ?.split(',')
+        .map((tool) => tool.trim())
+        .filter(Boolean) ?? [];
+    if (tools.length === 0) {
+      const client = await connectMcp(source);
+      try {
+        const listed = (await client.listTools()).tools;
+        tools = listed.filter((tool) => tool.annotations?.readOnlyHint === true).map((tool) => tool.name);
+        if (tools.length === 0)
+          fail(
+            `${server.name} marks no tool as read-only; choose with --tools among: ${listed.map((tool) => tool.name).join(', ')}`,
+          );
+      } finally {
+        await client.close();
+      }
+    }
+    const capabilityId = values.id ?? shareId(server);
+    const config = McpAnswerConfigSchema.parse({
+      label:
+        values.label ?? `mon ${server.kind ? server.kind.charAt(0).toUpperCase() + server.kind.slice(1) : server.name}`,
+      server: source,
+      tools,
+    });
+    home.publish({
+      capabilityId,
+      approverNodeIds: values.approver ?? [home.identity().nodeId],
+      config,
+      publishedAt: new Date().toISOString(),
+    });
+    process.stdout.write(
+      `published ${capabilityId}: « Répondre à partir de ${config.label} » with ${String(tools.length)} tools (${tools.join(', ')}) from ${AGENT_LABELS[agent.agent]}\n(restart \`drop serve\` if it is running)\n`,
+    );
     break;
   }
   case 'mcp-tools': {
