@@ -184,7 +184,7 @@ switch (command) {
     for (const receipt of home.receipts(parseSince(values.since))) {
       const at = new Date(receipt.timestamps.requested ?? 0).toISOString();
       process.stdout.write(
-        `${at}  ${receipt.capabilityId}  ${receipt.decision}${receipt.errorCode ? ` ${receipt.errorCode}` : ''}  ${receipt.dropId}\n`,
+        `${at}  ${receipt.capabilityId}  ${receipt.decision}${receipt.errorCode ? ` ${receipt.errorCode}` : ''}${receipt.costUsd === undefined ? '' : `  ${receipt.costUsd.toFixed(4)} $`}  ${receipt.dropId}\n`,
       );
     }
     break;

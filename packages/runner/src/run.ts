@@ -78,6 +78,7 @@ async function executeAndCheck(
   workdir: string,
   calls: Map<string, number>,
   callerSignal: AbortSignal | undefined,
+  spent: { usd: number },
 ): Promise<Outcome> {
   const controller = new AbortController();
   const state: { stop?: Stop; total: number } = { total: 0 };
@@ -98,6 +99,9 @@ async function executeAndCheck(
         halt('tools');
         throw new DropError('E_BUDGET', MESSAGES.toolBudget);
       }
+    },
+    recordCost: (usd: number): void => {
+      if (Number.isFinite(usd) && usd > 0) spent.usd += usd;
     },
   };
 
@@ -144,6 +148,7 @@ async function executeAndCheck(
 export async function runCapability(impl: CapabilityImpl, rawInput: unknown, options: RunOptions): Promise<RunResult> {
   const startedAt = performance.now();
   const calls = new Map<string, number>();
+  const spent = { usd: 0 };
   const toolCalls = (): ToolCallCount[] => [...calls].map(([name, count]) => ({ name, count }));
   const durationMs = (): number => Math.max(0, Math.round(performance.now() - startedAt));
   const finish = (outcome: Outcome): RunResult =>
@@ -153,9 +158,17 @@ export async function runCapability(impl: CapabilityImpl, rawInput: unknown, opt
           output: outcome.output,
           outputHash: sha256Hex(outcome.output),
           toolCalls: toolCalls(),
+          costUsd: spent.usd,
           durationMs: durationMs(),
         }
-      : { ok: false, code: outcome.code, message: outcome.message, toolCalls: toolCalls(), durationMs: durationMs() };
+      : {
+          ok: false,
+          code: outcome.code,
+          message: outcome.message,
+          toolCalls: toolCalls(),
+          costUsd: spent.usd,
+          durationMs: durationMs(),
+        };
 
   // Step 1: input. Then the owner config, before anything is created or executed.
   const validated = validateInput(impl, rawInput);
@@ -174,7 +187,7 @@ export async function runCapability(impl: CapabilityImpl, rawInput: unknown, opt
 
   let outcome: Outcome;
   try {
-    outcome = await executeAndCheck(impl, validated.input, config.data, workdir, calls, options.signal);
+    outcome = await executeAndCheck(impl, validated.input, config.data, workdir, calls, options.signal, spent);
   } catch {
     outcome = failure('E_RUNNER', MESSAGES.executeFailed);
   }

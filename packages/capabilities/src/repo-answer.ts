@@ -221,6 +221,7 @@ export function createRepoAnswer(deps: RepoAnswerDeps = {}): CapabilityImpl<Repo
       for (let turn = 0; turn < config.maxTurns; turn += 1) {
         const reply = await provider.chat(messages, TOOLS, ctx.signal);
         cost += reply.costUsd;
+        ctx.recordCost(reply.costUsd);
         if (cost > config.maxUsd) throw new DropError('E_BUDGET', 'cost budget exceeded');
         if (reply.toolCalls.length > 0) {
           messages.push({

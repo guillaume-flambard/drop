@@ -11,6 +11,8 @@ export interface RunContext {
   signal: AbortSignal;
   /** Declares one tool call to the frame; throws E_BUDGET once card.budget.maxToolCalls is exceeded. */
   recordToolCall(name: string): void;
+  /** Declares money spent by the run (e.g. LLM tokens), paid by the capability owner; it goes into the receipt. */
+  recordCost(usd: number): void;
 }
 
 /** The card an implementation provides; buildCard adds the publication fields and the JSON schemas. */
@@ -41,6 +43,14 @@ export type RunResult =
       output: Record<string, unknown>;
       outputHash: string;
       toolCalls: ToolCallCount[];
+      costUsd: number;
       durationMs: number;
     }
-  | { ok: false; code: DropErrorCode; message: string; toolCalls: ToolCallCount[]; durationMs: number };
+  | {
+      ok: false;
+      code: DropErrorCode;
+      message: string;
+      toolCalls: ToolCallCount[];
+      costUsd: number;
+      durationMs: number;
+    };
