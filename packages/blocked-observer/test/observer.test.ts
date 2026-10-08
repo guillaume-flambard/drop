@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -439,5 +439,41 @@ describe('classify as a decision tree (D25)', () => {
       pain_minutes: 15,
       note: 'branche locale de Julie',
     });
+  });
+
+  it('classify keeps what other commands wrote while it was waiting for the answers', async () => {
+    const store = freshStore();
+    store.append({
+      id: 'evt1aaaa',
+      ts: '2026-10-08T10:00:00Z',
+      source: 'hook_claude',
+      agent: 'claude_code',
+      tool: 'Bash',
+    });
+    store.append({
+      id: 'evt2bbbb',
+      ts: '2026-10-08T10:01:00Z',
+      source: 'hook_claude',
+      agent: 'claude_code',
+      tool: 'Bash',
+    });
+    const child = spawn(process.execPath, [CLI, 'classify', 'evt1'], {
+      env: { ...process.env, BLOCKED_OBSERVER_HOME: store.root, BLOCKED_OBSERVER_NO_CODEX: '1' },
+    });
+    let stdout = '';
+    child.stdout.on('data', (chunk: Buffer) => (stdout += chunk.toString()));
+    const exited = new Promise<void>((resolve) => child.on('close', () => resolve()));
+    while (!stdout.includes('[o/n]')) await new Promise((resolve) => setTimeout(resolve, 20));
+    // Meanwhile, another classify saves evt2.
+    const others = store.events();
+    const second = others.find((event) => event.id === 'evt2bbbb');
+    if (second) second.classification = 'NOT_A_BLOCK';
+    store.replaceEvents(others);
+    child.stdin.end('n\n\n');
+    await exited;
+    expect(store.events().map((event) => [event.id, event.classification])).toEqual([
+      ['evt1aaaa', 'NOT_A_BLOCK'],
+      ['evt2bbbb', 'NOT_A_BLOCK'],
+    ]);
   });
 });

@@ -246,6 +246,11 @@ code.
   non, partage brut non, raison « la réponse n'existe que chez lui », `15` et une note
 - **THEN** l'événement `<id>` porte `classification: 'YES_LOCAL_CONTEXT'`, `pain_minutes: 15` et la note
 
+#### Scenario: Écriture concurrente préservée
+<!-- openspec-guard:test="classify as a decision tree (D25) > classify keeps what other commands wrote while it was waiting for the answers" -->
+- **WHEN** une autre commande enregistre un événement pendant que `classify` attend les réponses
+- **THEN** `classify` relit le stockage avant d'écrire et ne modifie que son événement : l'autre écriture est gardée
+
 #### Scenario: Un code par chemin
 <!-- openspec-guard:test="classify as a decision tree (D25) > each path of the questions leads to exactly one code" -->
 - **WHEN** on parcourt chaque chemin de réponses de l'arbre
