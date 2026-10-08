@@ -4,7 +4,15 @@ import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
 export default defineConfig(
-  globalIgnores(['**/node_modules/', '**/dist/', '**/coverage/', 'openspec/', '.claude/', '.agents/']),
+  globalIgnores([
+    '**/node_modules/',
+    '**/dist/',
+    '**/coverage/',
+    'openspec/',
+    '.claude/',
+    '.agents/',
+    'docs/demo/julie-repo/',
+  ]),
   {
     // Exceptions go through this file, where review sees them; inline disables are ignored (D15).
     linterOptions: { noInlineConfig: true, reportUnusedDisableDirectives: 'error' },

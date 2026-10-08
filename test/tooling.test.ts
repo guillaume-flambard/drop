@@ -51,7 +51,7 @@ function gitFiles(args: string[]): string[] {
 function trackedFiles(pattern: RegExp): string[] {
   return gitFiles(['--cached', '--others', '--exclude-standard'])
     .filter((file) => pattern.test(file))
-    .filter((file) => !/^(openspec|\.claude|\.agents)\//.test(file));
+    .filter((file) => !/^(openspec|\.claude|\.agents|docs\/demo\/julie-repo)\//.test(file));
 }
 
 // Dependencies imposed by AGENTS.md; anything else must be named in a `- **D<n>**` entry of docs/DECISIONS.md.

@@ -4,5 +4,5 @@
     "noEmit": true
   },
   "include": ["**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts"],
-  "exclude": ["**/node_modules", "**/dist", "**/coverage", "openspec", ".claude", ".agents"]
+  "exclude": ["**/node_modules", "**/dist", "**/coverage", "openspec", ".claude", ".agents", "docs/demo/julie-repo"]
 }
