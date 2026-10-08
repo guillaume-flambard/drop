@@ -1,0 +1,48 @@
+# Construit l'image SUR le VPS, avec un runner self-hosted, et la pousse dans le
+# registry local (127.0.0.1:5000). Reserve aux depots PRIVES : leur paquet GHCR
+# serait prive lui aussi, et le VPS ne peut pas le tirer sans jeton read:packages.
+# Ici il n'y a ni jeton, ni secret dans le depot, ni image privee a tirer de
+# l'exterieur : le build a lieu la ou l'image sera servie.
+#
+# Genere depuis lab-infra/ci/build-selfhosted.yml — ne pas editer a la main,
+# relancer ./scripts/install-ci.sh <app>.
+name: build drop
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: [self-hosted, Linux, X64]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Construire
+        run: |
+          docker build \
+            -f Dockerfile \
+            -t 127.0.0.1:5000/drop:${{ github.sha }} \
+            --label org.opencontainers.image.source=https://github.com/${{ github.repository }} \
+            --label org.opencontainers.image.revision=${{ github.sha }} \
+            .
+
+      - name: Pousser le sha
+        run: docker push 127.0.0.1:5000/drop:${{ github.sha }}
+
+      # :latest UNIQUEMENT depuis main : sinon une branche de travail partirait en
+      # prod, l'agent de deploiement tirant :latest dans les deux minutes.
+      - name: Pousser latest (main seulement)
+        if: github.ref == 'refs/heads/main'
+        run: |
+          docker tag 127.0.0.1:5000/drop:${{ github.sha }} 127.0.0.1:5000/drop:latest
+          docker push 127.0.0.1:5000/drop:latest
+
+      - name: Menage des images intermediaires
+        if: always()
+        run: docker image prune -f --filter "until=168h" >/dev/null 2>&1 || true
