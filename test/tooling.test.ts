@@ -1,6 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { ESLint } from 'eslint';
 import * as prettier from 'prettier';
@@ -41,11 +40,16 @@ function packageManifests(): Record<string, Record<string, unknown>> {
   return manifests;
 }
 
+// NUL-delimited so git never quotes a path (non-ASCII or special characters) out of the pattern's reach.
+function gitFiles(args: string[]): string[] {
+  const listed = spawnSync('git', ['ls-files', '-z', ...args], { cwd: root, encoding: 'utf8' });
+  if (listed.error) throw listed.error;
+  expect(listed.status, listed.stderr).toBe(0);
+  return listed.stdout.split('\0').filter((file) => file !== '');
+}
+
 function trackedFiles(pattern: RegExp): string[] {
-  const listed = run('git', ['ls-files', '--cached', '--others', '--exclude-standard']);
-  expect(listed.status, listed.output).toBe(0);
-  return listed.output
-    .split('\n')
+  return gitFiles(['--cached', '--others', '--exclude-standard'])
     .filter((file) => pattern.test(file))
     .filter((file) => !/^(openspec|\.claude|\.agents)\//.test(file));
 }
@@ -63,6 +67,12 @@ const IMPOSED_STACK = new Set([
   '@anthropic-ai/claude-agent-sdk',
 ]);
 
+// A plain registry version or range; anything else (alias, git, path, URL, tarball) can swap the code behind the name.
+const PLAIN_RANGE = /^[~^]?\d+(\.\d+){0,2}(-[0-9A-Za-z.-]+)?$/;
+
+// Files that must never be committed, checked on tracked paths independently of the effective .gitignore rules.
+const FORBIDDEN_FILE = /(^|\/)(\.drop[^/]*|\.env[^/]*|[^/]+\.pem|[^/]+\.key|id_ed25519[^/]*|\.npmrc)(\/|$)/;
+
 const DEPENDENCY_FIELDS = ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies'];
 
 export function findUnrecordedDependencies(
@@ -76,11 +86,13 @@ export function findUnrecordedDependencies(
     for (const field of DEPENDENCY_FIELDS) {
       for (const dep of Object.keys((manifest[field] as Record<string, string> | undefined) ?? {})) {
         const version = (manifest[field] as Record<string, string>)[dep] ?? '';
-        // A protocol (`npm:`, `git+`, `file:`...) can swap the package behind an approved name: only a plain
-        // registry range is exempt for the imposed stack, and only `workspace:` for @drop/*.
-        const isLocalWorkspace = dep.startsWith('@drop/') && version.startsWith('workspace:');
-        const isPlainStackDependency = IMPOSED_STACK.has(dep) && !version.includes(':');
-        if (isLocalWorkspace || isPlainStackDependency) continue;
+        if (dep.startsWith('@drop/') && version.startsWith('workspace:')) continue;
+        // A non-registry source is never approved by name alone, even for a dependency named in DECISIONS.
+        if (!PLAIN_RANGE.test(version)) {
+          unrecorded.push(`${path}: ${dep}@${version}`);
+          continue;
+        }
+        if (IMPOSED_STACK.has(dep)) continue;
         if (!entries.some((entry) => entry.includes(`\`${dep}\``))) unrecorded.push(`${path}: ${dep}`);
       }
     }
@@ -110,20 +122,18 @@ describe('monorepo tooling', () => {
   }, 180_000);
 
   it('typecheck exits non-zero on a type error and zero on valid code', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'drop-tsc-'));
+    // Exercises the real root script and tsconfig, so a disabled check (e.g. `noCheck`) turns this red.
+    const dir = join(root, 'test', 'typecheck-probe');
+    mkdirSync(dir, { recursive: true });
     try {
-      writeFileSync(join(dir, 'package.json'), JSON.stringify({ type: 'module' }));
-      writeFileSync(
-        join(dir, 'tsconfig.json'),
-        JSON.stringify({ extends: join(root, 'tsconfig.base.json'), compilerOptions: { noEmit: true, types: [] } }),
-      );
       writeFileSync(join(dir, 'valid.ts'), 'export const ok: number = 1;\n');
-      const valid = run(tscBin, ['-p', join(dir, 'tsconfig.json')], dir);
+      const valid = run('pnpm', ['typecheck']);
       expect(valid.status, valid.output).toBe(0);
 
       writeFileSync(join(dir, 'broken.ts'), 'export const n: number = "not a number";\n');
-      const broken = run(tscBin, ['-p', join(dir, 'tsconfig.json')], dir);
+      const broken = run('pnpm', ['typecheck']);
       expect(broken.status).not.toBe(0);
+      expect(broken.output).toContain('typecheck-probe/broken.ts');
       expect(broken.output).toContain('TS2322');
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -233,6 +243,8 @@ describe('monorepo tooling', () => {
     for (const path of ignored) {
       expect(run('git', ['check-ignore', '-q', '--no-index', path]).status, path).toBe(0);
     }
+    // Independent of .gitignore (a nested `!.env.local` would defeat it): no tracked path may be a secret file.
+    expect(gitFiles(['--cached']).filter((file) => FORBIDDEN_FILE.test(file))).toEqual([]);
     // A force-added file escapes .gitignore: no tracked file may match an ignore pattern.
     const trackedButIgnored = run('git', ['ls-files', '--cached', '--ignored', '--exclude-standard']);
     expect(trackedButIgnored.status, trackedButIgnored.output).toBe(0);
@@ -254,14 +266,21 @@ describe('monorepo tooling', () => {
           zod: '4',
           '@drop/protocol': 'workspace:*',
           '@drop/relay': 'npm:unreviewed-external@1.0.0',
-          ws: 'npm:unreviewed-external@1.0.0',
+          ws: 'attacker/fake-ws',
+          prettier: '../fake-prettier',
+          vitest: 'npm:unreviewed-external@1.0.0',
         },
+        devDependencies: { 'left-pad-alias': 'npm:left-pad@1.0.0' },
       },
     };
-    expect(findUnrecordedDependencies(manifests, decisions)).toEqual([
+    const decisionsWithAlias = `${decisions}- **D2** — \`left-pad-alias\` is approved.\n`;
+    expect(findUnrecordedDependencies(manifests, decisionsWithAlias)).toEqual([
       'packages/a/package.json: is-odd',
-      'packages/a/package.json: @drop/relay',
-      'packages/a/package.json: ws',
+      'packages/a/package.json: @drop/relay@npm:unreviewed-external@1.0.0',
+      'packages/a/package.json: ws@attacker/fake-ws',
+      'packages/a/package.json: prettier@../fake-prettier',
+      'packages/a/package.json: vitest@npm:unreviewed-external@1.0.0',
+      'packages/a/package.json: left-pad-alias@npm:left-pad@1.0.0',
     ]);
   });
 });
