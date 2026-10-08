@@ -1,4 +1,7 @@
-# 00 — Vision et périmètre
+# Vision et périmètre
+
+> Contexte descriptif, lu par les agents avant chaque change. Les exigences normatives vivent dans
+> `openspec/specs/<capacité>/spec.md` ; en cas d'écart, la spec fait foi.
 
 ## Le produit en une phrase
 

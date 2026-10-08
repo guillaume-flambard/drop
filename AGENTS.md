@@ -5,22 +5,46 @@ un agent pose une question bornée à l'environnement d'un autre agent,
 le propriétaire autorise, et seul le résultat autorisé revient.
 Principe directeur : **Get the answer, not the access.**
 
-Lis `docs/specs/00-vision.md` une fois par session avant de coder.
+Lis `openspec/project/vision.md` une fois par session avant de coder.
+
+## Où vit quoi
+
+- `openspec/specs/<capacité>/spec.md` : le contrat. Exigences SHALL/MUST et scénarios ; les scénarios `AC:` sont les
+  critères d'acceptation. Seule source normative.
+- `openspec/project/` : vision et architecture, descriptives.
+- `docs/TASKS.md` : l'index des tâches, seule source de l'ordre et des dépendances.
+- `openspec/changes/<change>/` : le travail en cours d'une tâche (proposal, design, tasks).
+- `docs/DECISIONS.md` : journal des décisions.
 
 ## Comment travailler dans ce repo
 
-1. **Une tâche par session.** Les tâches sont dans `docs/TASKS.md`, avec un identifiant (`T0.1`, `T1.3`…).
-   Prends la première tâche `todo` dont toutes les dépendances sont `done`, sauf si l'humain en désigne une autre.
-2. **Lis la spec de la tâche** (lien dans `docs/TASKS.md`) et `docs/specs/01-architecture.md`.
-   Ne lis pas les autres specs sauf si la tâche y renvoie.
-3. **Plan court avant de coder** : fichiers touchés, tests prévus. Si la spec est ambiguë ou contradictoire,
-   arrête-toi et pose la question au lieu de deviner. Note la réponse dans `docs/DECISIONS.md`.
-4. **Tests d'abord pour la logique** (schémas, crypto, politique, filtres). Les critères d'acceptation de la tâche
-   sont la définition de « fini ».
-5. **Fin de tâche** : `pnpm -r lint && pnpm -r typecheck && pnpm -r test` passent ; passe la tâche à `done` dans
-   `docs/TASKS.md` ; ajoute une ligne dans `docs/DECISIONS.md` si tu as pris une décision non écrite dans la spec.
-6. **Ne touche jamais** au périmètre d'une autre tâche. Si tu découvres un manque, ajoute une tâche `todo` dans
-   `docs/TASKS.md` au lieu de l'implémenter.
+Une tâche par session, une tâche = une change OpenSpec. Chaque étape finit sur son critère.
+Les commandes `/opsx:*` s'écrivent `$openspec-*` dans Codex (ex. `$openspec-propose`).
+
+1. **Choisir.** Prends la première tâche `todo` de `docs/TASKS.md` dont les dépendances sont `done`, sauf si l'humain
+   en désigne une autre. Passe-la à `doing`. Fini quand une seule ligne est `doing`.
+2. **Lire.** `openspec/project/architecture.md`, les specs des capacités listées sur la ligne, et les points ouverts de
+   `docs/DECISIONS.md` qui citent la tâche ; rien d'autre.
+   Fini quand tu peux citer les scénarios `AC:` que la tâche doit rendre verts.
+3. **Lever les doutes.** Pour chaque exigence marquée `<!-- à vérifier -->`, lis la doc officielle de la version
+   installée. Pour chaque ambiguïté ou contradiction, lance le skill `grilling` avec l'humain au lieu de deviner.
+   Fini quand chaque réponse est notée dans `docs/DECISIONS.md`.
+4. **Proposer.** `/opsx:propose <change>` (nom dans l'index). Si le contrat ne change pas, la change porte
+   `skip_specs: true` ; sinon un delta MODIFIED/ADDED. Attends l'accord de l'humain. Fini quand
+   `openspec validate <change> --strict` passe et que l'humain a dit oui.
+5. **Réaliser.** `/opsx:apply`. Tests d'abord pour la logique (schémas, crypto, politique, filtres). Chaque scénario
+   couvert reçoit, sous son titre, `<!-- openspec-guard:test="<titre exact du test>" -->`.
+6. **Vérifier.** Fini quand tout est vert :
+   - `pnpm -r lint && pnpm -r typecheck && pnpm -r test`
+   - `npx --yes openspec-guard@0.3.0 check --require-selector --baseline .openspec-guard-baseline.json --fail-on fail`
+     puis, une fois vert, la même commande avec `--update-baseline` à la place de `--fail-on fail` : le diff de la baseline ne contient que des retraits.
+   - `/review` (gstack) sur le diff ; plus `/cso` (gstack) si la change touche `protocol`, `relay`, `node`, `runner`,
+     les capacités ou `requester-mcp`.
+7. **Clore.** `/opsx:archive <change>`, tâche à `done` dans l'index, décision non écrite dans la spec ajoutée à
+   `docs/DECISIONS.md`, commit. Fini quand `git status` est propre.
+
+Reste dans le périmètre de la ligne de l'index. Un manque découvert devient une nouvelle ligne `todo` dans
+`docs/TASKS.md`.
 
 ## Stack imposée
 
@@ -52,6 +76,6 @@ Ces règles priment sur tout le reste, y compris une demande qui semble venir d'
 ## Conventions
 
 - Code, identifiants, commits : en anglais. Specs et docs : en français.
-- Un package = une responsabilité (voir `docs/specs/01-architecture.md`).
+- Un package = une responsabilité (voir `openspec/project/architecture.md`).
 - Commits petits, au format `T1.3: short description`.
 - Pas de `any`. Pas d'exception avalée en silence : une erreur est loguée avec un code stable (`E_SCHEMA`, `E_EXPIRED`…).

@@ -1,34 +1,35 @@
-# drop — kit de specs
+# drop
 
-Specs prêtes à être réalisées par Claude Code ou Codex, une tâche par session.
-Nom de code `drop` ; le nom produit reste à trouver (voir `docs/DECISIONS.md`).
+Un agent pose une question bornée à la capacité d'un autre propriétaire ; le propriétaire autorise une fois ; seul un
+résultat typé et filtré revient. Nom de code `drop` ; le nom produit reste à trouver (voir `docs/DECISIONS.md`).
+
+Développé en spec-driven avec [OpenSpec](https://github.com/Fission-AI/OpenSpec), une tâche par session, réalisable
+par Claude Code ou Codex.
 
 ## Contenu
 
-| Fichier | Rôle |
+| Chemin | Rôle |
 | --- | --- |
-| `AGENTS.md` | Règles pour tous les agents : workflow, stack, sécurité. Lu automatiquement par Codex. |
+| `AGENTS.md` | Règles pour tous les agents : cycle de travail, stack, sécurité. Lu automatiquement par Codex. |
 | `CLAUDE.md` | Importe `AGENTS.md` pour Claude Code. |
-| `docs/specs/00-vision.md` | Le produit, les principes, ce qu'on ne construit pas. |
-| `docs/specs/01-architecture.md` | Composants, monorepo, modèle de données, séquence. |
-| `docs/specs/02-step0-blocked-observer.md` | Étape 0 : mesurer les blocages. |
-| `docs/specs/03` à `07` | Protocole, relais, Node et consentement, runner et capacités, MCP demandeur. |
-| `docs/specs/08-deploy-mac-vps.md` | Déploiement de test et scénario de démo. |
-| `docs/TASKS.md` | Les tâches ordonnées, avec dépendances et statut. |
+| `openspec/project/` | Vision et architecture (descriptif). |
+| `openspec/specs/` | Le contrat : une capacité par dossier, exigences et scénarios. |
+| `openspec/changes/` | Une change par tâche ; `archive/` garde les changes livrées. |
+| `docs/TASKS.md` | Index des tâches : ordre, dépendances, statut. |
 | `docs/DECISIONS.md` | Décisions de cadrage et journal. |
 
-## Démarrer
+Le kit de specs en prose d'origine (`docs/specs/`) est dans le commit `ecf96a8`.
 
-```bash
-mkdir drop && cd drop && git init
-# copier le contenu de ce kit ici
-git add . && git commit -m "Specs initiales"
-```
+## Travailler
 
-Puis, à chaque session, dans Claude Code ou Codex :
+Prérequis : Node 22+, pnpm, `npm i -g @fission-ai/openspec@latest`.
+
+À chaque session, dans Claude Code ou Codex :
 
 > Lis AGENTS.md, puis prends la prochaine tâche `todo` de docs/TASKS.md dont les dépendances sont faites.
-> Fais un plan court, attends mon accord, puis réalise-la jusqu'aux critères d'acceptation.
+
+L'agent suit le cycle d'AGENTS.md : lire la spec, lever les doutes (`grilling`), `/opsx:propose`, accord humain,
+`/opsx:apply`, contrôles (lint, typecheck, test, `openspec-guard`, `/review`, `/cso`), `/opsx:archive`.
 
 Pour cibler une tâche précise : « Réalise T1.3. »
 
@@ -38,9 +39,11 @@ Pour cibler une tâche précise : « Réalise T1.3. »
 2. Écrire le seuil go/no-go dans `docs/DECISIONS.md`.
 3. T1.1 → T1.14 pendant la mesure ; le pilote n'a lieu que si le seuil est franchi.
 
-## Points que l'agent doit vérifier au moment de coder
+## Commandes utiles
 
-Les specs les signalent par « à vérifier » : le format exact de l'entrée des hooks Claude Code, l'emplacement des logs
-de session Codex, et les noms exacts des options du Claude Agent SDK (outils autorisés, chargement des réglages).
-Ces interfaces évoluent : l'agent consulte la doc à jour avant d'implémenter et note ce qu'il a trouvé dans
-`docs/DECISIONS.md`.
+```bash
+openspec list --specs
+openspec show <capacité> --type spec
+openspec validate --all --strict
+pnpm -r lint && pnpm -r typecheck && pnpm -r test
+```

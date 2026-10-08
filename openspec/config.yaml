@@ -1,0 +1,37 @@
+schema: spec-driven
+
+context: |
+  Language: fr
+  All artifacts must be written in fr.
+  Keep OpenSpec structural headings and SHALL/MUST keywords in English.
+
+  Projet : drop (nom de code). Un agent pose une question bornée à la capacité d'un autre
+  propriétaire ; le propriétaire autorise une fois ; seul un résultat typé et filtré revient.
+  Principe : « Get the answer, not the access ».
+
+  Avant chaque change, lire openspec/project/vision.md et openspec/project/architecture.md,
+  puis seulement les specs des capacités touchées (openspec/specs/<capacité>/spec.md).
+  L'ordre des tâches et leurs dépendances vivent dans docs/TASKS.md ; les décisions dans
+  docs/DECISIONS.md. Une change = une tâche T* de l'index.
+
+  Stack imposée, règles de sécurité non négociables et conventions : AGENTS.md, qui prime.
+
+rules:
+  proposal:
+    - Nommer la tâche de l'index (ex. T1.3) dans la section Why.
+    - Toujours inclure une section Non-goals qui rappelle le périmètre des tâches voisines.
+    - Si la spec contient un point « à vérifier » ou une ambiguïté, la trancher avant la proposal (skill grilling) et noter la réponse dans docs/DECISIONS.md.
+  specs:
+    - "Chaque critère d'acceptation de la tâche est un scénario préfixé « AC: »."
+  tasks:
+    - Écrire les tests avant le code pour la logique (schémas, crypto, politique, filtres).
+    - Dernier groupe obligatoire « Vérification » avec pnpm -r lint, pnpm -r typecheck, pnpm -r test, puis le contrôle openspec-guard de couverture des scénarios.
+    - Ajouter une tâche /review (gstack) ; ajouter /cso (gstack) si la change touche protocol, relay, node, runner, capabilities ou requester-mcp.
+
+operations:
+  apply:
+    guidance:
+      - Ne jamais toucher au périmètre d'une autre tâche ; un manque découvert devient une tâche todo dans docs/TASKS.md.
+  archive:
+    guidance:
+      - N'archiver qu'après lint, typecheck, test et review verts ; puis passer la tâche à done dans docs/TASKS.md.
