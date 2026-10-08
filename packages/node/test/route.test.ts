@@ -55,10 +55,12 @@ describe('routing a plain question to the right people (T2.12, D32)', () => {
     expect(routeQuestion(catalog, 'Demande à sami si on a avancé avec eux').map((route) => route.capabilityId)).toEqual(
       ['mcp.answer.crm'],
     );
-    expect(routeQuestion(catalog, 'Est-ce que julie a déjà fait la maquette du panier ?')[0]).toMatchObject({
-      capabilityId: 'mcp.answer.figma',
-      reason: 'tu as cité Julie',
-    });
+    expect(routeQuestion(catalog, 'Est-ce que julie a déjà fait la maquette du panier ?')).toEqual([
+      expect.objectContaining({ capabilityId: 'mcp.answer.figma', reason: 'tu as cité Julie' }),
+    ]);
+    expect(
+      routeQuestion(catalog, 'Tu peux demander à Julie où elle en est ?').map((route) => route.capabilityId),
+    ).toEqual(['mcp.answer.figma', 'repo.answer']);
     expect(routeQuestion(catalog, 'Quel temps fera-t-il demain à Lyon ?')).toEqual([]);
   });
 

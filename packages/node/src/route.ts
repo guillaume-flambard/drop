@@ -170,7 +170,12 @@ export function routeQuestion(catalog: CatalogEntry[], question: string): Route[
     })
     .filter((candidate) => candidate.score > 0)
     .sort((a, b) => b.score - a.score || Number(b.entry.online) - Number(a.entry.online));
-  return scored.slice(0, MAX_ROUTES).map(({ entry, hits }) => ({
+  // A named person's tools that match the words go first and alone; all their tools only when none matches.
+  const relevant =
+    named.length > 0 && scored.some((candidate) => candidate.hits.length > 0)
+      ? scored.filter((candidate) => candidate.hits.length > 0)
+      : scored;
+  return relevant.slice(0, MAX_ROUTES).map(({ entry, hits }) => ({
     capabilityId: entry.card.id,
     ownerName: entry.ownerName,
     title: entry.card.title,
