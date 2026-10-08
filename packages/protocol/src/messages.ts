@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { TeamMemberSchema, TeamSchema } from './team.ts';
 import { CapabilityIdSchema, SignedCapabilityCardSchema } from './capability.ts';
 import { NodeIdSchema, OwnerKindSchema } from './identity.ts';
 import { DropStateSchema } from './lifecycle.ts';
@@ -74,6 +75,11 @@ export const MessageSchema = z.discriminatedUnion('type', [
     oneTimeToken: z.string().min(16),
     displayName: z.string().min(1).max(80),
     ownerKind: OwnerKindSchema,
+  }),
+  z.object({
+    type: z.literal('team_roster'),
+    team: TeamSchema,
+    members: z.array(TeamMemberSchema).max(200),
   }),
   z.object({ type: z.literal('catalog_request') }),
   z.object({ type: z.literal('catalog'), cards: z.array(SignedCapabilityCardSchema) }),

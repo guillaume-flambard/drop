@@ -56,7 +56,7 @@ Codex, Cursor, Claude Desktop) ou pour répondre (app Mac), et l'utilise sur ses
 | T2.5 | Installation en un clic côté demandeur : `.mcpb` pour Claude Desktop, lien « Add to Cursor », commandes Claude Code et Codex, paquet npm publié | `requester-mcp` | `t2-5-requester-one-click` | T2.1 | todo |
 | T2.6 | Site et doc : page d'accueil avec la démo en vidéo et les boutons d'installation, démarrage en 5 minutes, sécurité, cas d'usage ; servi sur `drop.memolabs.dev` | `site` | `t2-6-site-docs` | T2.4, T2.5 | todo |
 | T2.8 | Détection en trois secondes : agents installés (Claude Code, Codex, Cursor, Claude Desktop) et leurs serveurs MCP, lus dans leurs fichiers de config ; proposition de partage (`drop detect`, `drop share`) ; l'installation de drop dans chaque agent est en T2.5 (D28) | `node`, `capability-mcp-answer` | `t2-8-detect-agents` | T2.2 | done |
-| T2.9 | Équipe : un annuaire signé des membres, appairage automatique entre membres, catalogue de l'équipe (qui, quels agents, quels outils, en ligne ou non) (D28) | `protocol`, `node`, `relay` | `t2-9-team-directory` | T2.1 | todo |
+| T2.9 | Équipe : un annuaire signé des membres, appairage automatique entre membres, catalogue de l'équipe (qui, quels agents, quels outils, en ligne ou non) (D28) | `protocol`, `node`, `relay` | `t2-9-team-directory` | T2.1 | done |
 | T2.10 | Demandes multiples : une question part vers plusieurs capacités de plusieurs personnes, suivi de chaque réponse, assemblage par l'agent ; scénario « où en est le projet X » (D28) | `requester-mcp`, `node` | `t2-10-fan-out` | T2.9 | todo |
 | T2.7 | Cas d'usage réels joués chez Julie (Figma) et Natha (Notion, Linear, GitHub, base de données), captures et vidéo pour les entreprises | `deploy-mac-vps` | `t2-7-real-use-cases` | T2.3, T2.4, T2.5, T2.10 | todo |
 
@@ -65,3 +65,11 @@ panneau de suivi (T2.4) ; accord avant toute publication npm ou
 mise en ligne du site (T2.5, T2.6) ; installation chez Julie et Natha (T2.7).
 
 Plus tard (étape 3) : un RAG d'entreprise (D28).
+
+## Documentation et présentation demandées par l'humain
+
+Cette préparation peut avancer avant les installateurs. Elle ne clôt pas T2.6 et ne requalifie pas les travaux déjà en cours.
+
+| ID | Tâche (périmètre) | Capacités OpenSpec | Change | Dépend de | Statut |
+| --- | --- | --- | --- | --- | --- |
+| T2.6a | Analyser l'avancement, écrire le guide illustré, construire et vérifier le site en prévisualisation locale | Documentation, sans changement de contrat | `t2-6a-docs-site-preview` | Demande humaine explicite | doing |

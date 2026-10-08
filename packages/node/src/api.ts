@@ -171,6 +171,11 @@ export function startLocalApi(options: LocalApiOptions): Promise<LocalApi> {
       json(res, 200, { pending: engine.pending() });
       return;
     }
+    if (method === 'GET' && path === '/ui/team') {
+      const team = engine.team();
+      json(res, 200, { team: team?.team ?? null, members: engine.teamView() });
+      return;
+    }
     if (method === 'GET' && path === '/ui/events') {
       res.writeHead(200, {
         'Content-Type': 'text/event-stream',

@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events';
 import {
   createAdmission,
+  createTeam,
   createInvite,
   decodeInvite,
   encodeInvite,
@@ -28,11 +29,12 @@ import {
   type Receipt,
   type RequestedBy,
   type SignedCapabilityCard,
+  type TeamMember,
   type UnsignedReceipt,
 } from '@drop/protocol';
 import type { Funder } from './funding.ts';
 import { applyRedactions, buildCard, implFor, runCapability, validateInput, type CapabilityImpl } from '@drop/runner';
-import type { Peer, Published } from './home.ts';
+import type { Peer, Published, TeamState } from './home.ts';
 
 export const APPROVAL_TTL_MS = 10 * 60_000;
 export const REVIEW_TTL_MS = 10 * 60_000;
@@ -47,6 +49,19 @@ export interface NodeStore {
   savePeer(peer: Peer): void;
   published(): Published[];
   appendReceipt(receipt: Receipt): void;
+  team(): TeamState | undefined;
+  saveTeam(state: TeamState): void;
+}
+
+/** One member as the team panel shows them (T2.9): who, which agents, online or not, which capabilities. */
+export interface TeamMemberView {
+  nodeId: NodeId;
+  displayName: string;
+  ownerKind: OwnerKind;
+  agents: string[];
+  self: boolean;
+  online: boolean;
+  capabilities: { id: string; title: string }[];
 }
 
 export type Agent = RequestedBy['agent'];
@@ -128,6 +143,8 @@ export interface EngineOptions {
   funder?: Funder;
   /** Executor side: who pays the model. 'requester' (default, D27) uses the requester's key when one is sent. */
   payer?: 'requester' | 'owner';
+  /** The coding agents this node's human uses, shared with the team (T2.9). */
+  agents?: () => string[];
 }
 
 const DECISION_ERRORS: Record<'deny' | 'not_now', DropErrorCode> = { deny: 'E_DENIED', not_now: 'E_NOT_NOW' };
@@ -204,7 +221,7 @@ export class NodeEngine extends EventEmitter {
   /** A pairing code that also carries an admission ticket, so a newcomer can join the relay with it (T2.1). */
   async invite(relayUrl: string): Promise<string> {
     const admission = await createAdmission(this.identity, this.now());
-    const invite = createInvite(this.identity, relayUrl, this.now(), admission);
+    const invite = createInvite(this.identity, relayUrl, this.now(), admission, this.team()?.team);
     this.invites.set(invite.oneTimeToken, invite.expiresAt);
     return encodeInvite(invite);
   }
@@ -212,6 +229,8 @@ export class NodeEngine extends EventEmitter {
   async pair(code: string): Promise<NodeId> {
     const invite = decodeInvite(code, this.now());
     if (invite.admission) this.options.onAdmission?.(invite.admission);
+    // Joining a team: the roster arrives from the inviter once paired (T2.9).
+    if (invite.team && !this.team()) this.options.store.saveTeam({ team: invite.team, members: [this.selfMember()] });
     this.pairing.set(invite.nodeId, { token: invite.oneTimeToken, displayName: invite.displayName });
     await this.send(invite.nodeId, {
       type: 'pair_request',
@@ -220,6 +239,108 @@ export class NodeEngine extends EventEmitter {
       ownerKind: this.options.ownerKind,
     });
     return invite.nodeId;
+  }
+
+  // ---- team (T2.9) -------------------------------------------------------------------------------------------
+
+  team(): TeamState | undefined {
+    return this.options.store.team();
+  }
+
+  createTeam(name: string): TeamState {
+    if (this.team()) throw new Error('this node already belongs to a team');
+    const state: TeamState = { team: createTeam(name), members: [this.selfMember()] };
+    this.options.store.saveTeam(state);
+    this.changed();
+    return state;
+  }
+
+  /** Every member with their agents, whether they answered a catalog request recently, and what they publish. */
+  teamView(): TeamMemberView[] {
+    const state = this.team();
+    if (!state) return [];
+    const fresh = this.now() - CATALOG_TTL_MS;
+    const own = this.options.store.published().flatMap((published) => {
+      const built = this.cardFor(published);
+      return built ? [{ id: built.card.id, title: built.card.title }] : [];
+    });
+    const others = state.members.filter((member) => member.nodeId !== this.identity.nodeId);
+    return [this.selfMember(), ...others].map((member) => {
+      const self = member.nodeId === this.identity.nodeId;
+      const catalog = this.catalogs.get(member.nodeId);
+      return {
+        ...member,
+        self,
+        online: self || (catalog?.at ?? 0) >= fresh,
+        capabilities: self ? own : (catalog?.cards ?? []).map((card) => ({ id: card.id, title: card.title })),
+      };
+    });
+  }
+
+  /** Sends the roster to every member: on start, so that agents and names stay current. */
+  async announceTeam(): Promise<void> {
+    for (const member of this.team()?.members ?? [])
+      if (member.nodeId !== this.identity.nodeId) await this.sendRoster(member.nodeId);
+  }
+
+  private selfMember(): TeamMember {
+    return {
+      nodeId: this.identity.nodeId,
+      displayName: this.identity.displayName,
+      ownerKind: this.options.ownerKind,
+      agents: (this.options.agents?.() ?? []).slice(0, 8),
+    };
+  }
+
+  private async sendRoster(to: NodeId): Promise<void> {
+    const state = this.team();
+    if (!state) return;
+    const members = [this.selfMember(), ...state.members.filter((member) => member.nodeId !== this.identity.nodeId)];
+    await this.send(to, { type: 'team_roster', team: state.team, members });
+  }
+
+  /**
+   * Merges a roster from a paired member of the same team: unknown members become peers (introduced `via` the sender)
+   * and get a catalog request. A member's own entry is the only source of its agents. Any change spreads to every
+   * member, so the rosters converge; a roster that lacks this node gets ours back.
+   */
+  private async onTeamRoster(from: NodeId, message: MessageOf<'team_roster'>): Promise<void> {
+    const state = this.team();
+    if (state?.team.teamId !== message.team.teamId) return;
+    const members = new Map(state.members.map((member) => [member.nodeId, member]));
+    const introduced: NodeId[] = [];
+    let changed = false;
+    for (const member of message.members) {
+      if (member.nodeId === this.identity.nodeId) continue;
+      const known = members.get(member.nodeId);
+      if (!known) {
+        members.set(member.nodeId, member);
+        changed = true;
+        if (!this.peers().some((peer) => peer.nodeId === member.nodeId)) {
+          this.options.store.savePeer({
+            nodeId: member.nodeId,
+            displayName: member.displayName,
+            ownerKind: member.ownerKind,
+            pairedAt: new Date(this.now()).toISOString(),
+            via: from,
+          });
+          introduced.push(member.nodeId);
+        }
+      } else if (member.nodeId === from && JSON.stringify(known) !== JSON.stringify(member)) {
+        members.set(from, member);
+      }
+    }
+    this.options.store.saveTeam({ team: state.team, members: [...members.values()] });
+    if (changed) {
+      for (const nodeId of members.keys()) if (nodeId !== this.identity.nodeId) await this.sendRoster(nodeId);
+    } else if (!message.members.some((member) => member.nodeId === this.identity.nodeId)) {
+      await this.sendRoster(from);
+    }
+    for (const nodeId of introduced) {
+      this.log({ event: 'team_introduced', peer: nodeId });
+      await this.send(nodeId, { type: 'catalog_request' });
+    }
+    this.changed();
   }
 
   // ---- requester ---------------------------------------------------------------------------------------------
@@ -337,10 +458,10 @@ export class NodeEngine extends EventEmitter {
     switch (message.type) {
       case 'pair_request':
         return this.onPairRequest(from, message);
-      case 'pair_accept': {
-        this.onPairAccept(from, message);
-        return;
-      }
+      case 'pair_accept':
+        return this.onPairAccept(from, message);
+      case 'team_roster':
+        return this.onTeamRoster(from, message);
       case 'catalog_request':
         await this.send(from, { type: 'catalog', cards: await this.ownCards() });
         return;
@@ -386,10 +507,22 @@ export class NodeEngine extends EventEmitter {
       ownerKind: this.options.ownerKind,
     });
     this.log({ event: 'paired', peer: from });
+    const state = this.team();
+    if (state && !state.members.some((member) => member.nodeId === from)) {
+      const newcomer: TeamMember = {
+        nodeId: from,
+        displayName: message.displayName,
+        ownerKind: message.ownerKind,
+        agents: [],
+      };
+      this.options.store.saveTeam({ team: state.team, members: [...state.members, newcomer] });
+      for (const member of [...state.members, newcomer])
+        if (member.nodeId !== this.identity.nodeId) await this.sendRoster(member.nodeId);
+    }
     this.changed();
   }
 
-  private onPairAccept(from: NodeId, message: MessageOf<'pair_accept'>): void {
+  private async onPairAccept(from: NodeId, message: MessageOf<'pair_accept'>): Promise<void> {
     const pending = this.pairing.get(from);
     if (pending?.token !== message.oneTimeToken) return;
     this.pairing.delete(from);
@@ -400,6 +533,7 @@ export class NodeEngine extends EventEmitter {
       pairedAt: new Date(this.now()).toISOString(),
     });
     this.log({ event: 'paired', peer: from });
+    if (this.team()) await this.sendRoster(from);
     this.changed();
   }
 
