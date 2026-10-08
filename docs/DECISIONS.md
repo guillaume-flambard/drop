@@ -69,6 +69,17 @@ Format : `D<n> — date — décision — raison`. Les agents ajoutent ici toute
   faut les horodatages pour `firstSeen`/`lastSeen`) ; le seuil `degraded` est `degradedThreshold` (50 par défaut) ;
   la notification macOS ne porte pas l'URL de l'UI (elle contiendrait le jeton) ; l'UI et son flux SSE acceptent le
   jeton en `?token=`, car un navigateur ne peut pas envoyer d'en-tête sur un `EventSource`.
+- **D19** — Runner LLM indépendant du fournisseur (2026-10-08, demande de Guillaume : « ça devrait marcher avec
+  n'importe quel agent »). Remplace le Claude Agent SDK de D6 et d'AGENTS.md. `repo.answer` appelle l'API compatible
+  OpenAI `/chat/completions` par `fetch`, sans dépendance : Ollama local par défaut (`qwen3:0.6b`, gratuit, sans clé),
+  ou tout autre fournisseur par `provider.baseUrl`, `provider.model` et `provider.apiKeyEnv` (nom de la variable qui
+  porte la clé). La règle de D6 tient toujours : clé API, jamais un login d'abonnement. Les outils du modèle
+  (`list_files`, `read_file`, `grep`) sont fournis et exécutés par la capacité sur le snapshot, ce qui remplace les
+  options « à vérifier » du SDK : la frontière ne dépend plus d'un fournisseur. `maxOutputChars` de la carte vaut
+  3 000 et couvre toute la sortie (`answer` reste limité à 1 500), ce qui tranche le point ouvert de T1.13 ; un
+  snapshot trop gros échoue en `E_BUDGET`. Mesure réelle avec `qwen3:0.6b`, le seul modèle Ollama installé : la
+  boucle répond en 1 à 3 s, mais le modèle n'appelle aucun outil et répond « unknown ». Le circuit est validé, le
+  modèle est trop petit. Il faut un modèle plus grand (local, ou gratuit dans le cloud) pour une vraie réponse.
 
 ## À décider par l'humain
 

@@ -38,5 +38,5 @@ L'étape 1 peut commencer en parallèle pour le prototype, mais pas le pilote.
 | T1.10 | `requester-mcp` : 3 outils, validation locale, encapsulation du résultat, `print-instructions` | `requester-mcp` | `t1-10-requester-mcp` | T1.5 | done |
 | T1.11 | Test de bout en bout en mémoire : relais + 3 Nodes + capacité factice, scénarios allow / deny / not_now / expiré / sortie invalide / secret détecté | `node`, `runner`, `requester-mcp` | `t1-11-e2e-in-memory` | T1.8, T1.10 | done |
 | T1.12 | `deploy/vps` : unités systemd durcies, Caddyfile d'exemple, guide pas à pas | `deploy-mac-vps` | `t1-12-deploy-vps` | T1.8 | todo |
-| T1.13 | Capacité `repo.answer` : snapshot en allowlist, Agent SDK restreint, post-contrôles (vérifier les options exactes du SDK d'abord) | `capability-repo-answer` | `t1-13-repo-answer` | T1.6 | todo |
+| T1.13 | Capacité `repo.answer` : snapshot en allowlist, modèle de n'importe quel fournisseur avec outils fixés par la capacité, post-contrôles (D19) | `capability-repo-answer` | `t1-13-repo-answer` | T1.6 | done |
 | T1.14 | Script de démo `scripts/demo.md` + exécution réelle Mac + VPS du scénario 08, captures dans `docs/demo/` | `deploy-mac-vps` | `t1-14-demo` | T1.9, T1.11, T1.12, T1.13 | todo |
