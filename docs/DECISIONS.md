@@ -199,6 +199,16 @@ Format : `D<n> — date — décision — raison`. Les agents ajoutent ici toute
     qui est connecté avec quels outils. Ce panneau reste à dessiner.
   - **Plus tard** : un RAG d'entreprise.
 
+- **D29** — Un fichier JavaScript assemblé pour ce qui s'installe hors du dépôt (2026-10-08, T2.5). Node refuse le
+  TypeScript sous `node_modules` (« Type stripping in dependencies », https://nodejs.org/api/typescript.html, lu le
+  2026-10-08), donc un paquet npm, un `.mcpb` ou l'app ne peuvent pas lancer les sources `.ts`. `node scripts/bundle.ts`
+  produit avec `esbuild` 0.28.2 (dépendance de développement ajoutée pour cette seule raison) `dist/drop.mjs` (CLI et
+  daemon) et `dist/drop-mcp.mjs` (serveur MCP du demandeur) ; `--mcpb` emballe en plus `dist/drop.mcpb` pour Claude
+  Desktop avec la CLI officielle `@anthropic-ai/mcpb` 2.1.2 (manifeste 0.3). Le développement reste sans build (D16).
+  Le script d'installation d'esbuild est refusé (`allowBuilds: esbuild: false`) : son binaire vient de sa dépendance
+  optionnelle propre à la plateforme. `drop install` copie `drop-mcp.mjs` dans `DROP_HOME/bin` et le déclare avec le
+  chemin absolu de node, parce que Claude Desktop et Cursor lancent les serveurs avec un PATH minimal.
+
 ## À décider par l'humain
 
 - **Nom de produit** : à vérifier (nom + domaine) avant le pilote.

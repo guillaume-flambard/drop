@@ -154,3 +154,24 @@ README du package `packages/requester-mcp`.
 <!-- openspec-guard:non-testable reason="Essai manuel dans Codex" -->
 - **WHEN** on configure le serveur dans Codex selon la config MCP documentée dans le README du package
 - **THEN** Codex voit et appelle `list_capabilities`, `request_drop` et `get_drop_result`
+
+### Requirement: Installation dans les agents
+`drop install <agent>|all` SHALL ajouter le serveur `drop` à Claude Code et Codex par leur propre CLI (`claude mcp add
+--scope user`, `codex mcp add`), et à Cursor et Claude Desktop en ajoutant la seule entrée `drop` à leur fichier
+`mcpServers` après une sauvegarde unique ; `drop uninstall` MUST ne retirer que cette entrée (T2.5, D29). Le serveur
+installé est le fichier assemblé `drop-mcp.mjs`, copié dans `DROP_HOME/bin` et lancé par le chemin absolu de node.
+
+#### Scenario: CLI officielles
+<!-- openspec-guard:test="installing drop in the coding agents (T2.5) > uses the official CLI of Claude Code and Codex, with the bundled server copied into DROP_HOME" -->
+- **WHEN** on lance `drop install claude_code` puis `drop install codex`
+- **THEN** drop est déclaré par `claude mcp add --scope user drop` et `codex mcp add drop`, avec `DROP_AGENT` et `DROP_HOME`
+
+#### Scenario: Fichiers de Cursor et Claude Desktop préservés
+<!-- openspec-guard:test="installing drop in the coding agents (T2.5) > adds and removes only the drop entry in the Cursor and Claude Desktop files, after one backup" -->
+- **WHEN** on installe puis désinstalle drop dans Cursor dont le fichier déclare déjà d'autres serveurs
+- **THEN** les autres serveurs et réglages restent, une sauvegarde `.bak-drop` est faite une fois, et seule l'entrée `drop` part
+
+#### Scenario: Lien d'installation Cursor
+<!-- openspec-guard:test="installing drop in the coding agents (T2.5) > builds a Cursor install link that carries the server entry" -->
+- **WHEN** on lance `drop install cursor --link`
+- **THEN** on obtient un lien `cursor://anysphere.cursor-deeplink/mcp/install` dont `config` est l'entrée du serveur en base64

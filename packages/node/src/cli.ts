@@ -1,13 +1,17 @@
 #!/usr/bin/env node
 import { readFileSync } from 'node:fs';
 import { parseArgs } from 'node:util';
-import { capabilities, connectMcp, McpAnswerConfigSchema } from '@drop/capabilities';
+import { z } from 'zod';
+import { AGENTS, capabilities, connectMcp, McpAnswerConfigSchema } from '@drop/capabilities';
 import { implFor } from '@drop/runner';
 import { createTeam, generateIdentity, OwnerKindSchema, type ConsentCost } from '@drop/protocol';
 import { startDaemon } from './daemon.ts';
 import { AGENT_LABELS, detectAgents, shareId } from './detect.ts';
+import { bundledServer, cursorInstallLink, install, serverEntry } from './install.ts';
 import { DropHome, NodeConfigSchema } from './home.ts';
 import { costLine } from './ui.ts';
+
+const AgentKindSchema = z.enum(AGENTS);
 
 const USAGE = `drop <command>
   init --name <name> --kind human|team|machine|service --relay <wss://…> [--port 7781]
@@ -20,6 +24,9 @@ const USAGE = `drop <command>
   mcp-tools --config <file.json> list the tools of the MCP server in an mcp.answer config, to choose which to share
   team create <name>             start a team; your invites then bring people into it
   team                           members, their agents, online or not, and what each one shares (daemon must run)
+  install <agent>|all [--link]   add drop to Claude Code, Codex, Cursor or Claude Desktop (agent: claude_code, codex,
+                                 cursor, claude_desktop); --link prints a Cursor install link instead
+  uninstall <agent>|all          remove drop from an agent
   detect [--json]                the coding agents on this machine, drop in each, and their MCP servers
   share <agent>/<server> [--label <text>] [--tools a,b] [--id mcp.answer.<name>] [--approver <nodeId>]
                                  answer from a detected MCP server (read-only tools by default; secrets stay put)
@@ -194,6 +201,31 @@ switch (command) {
       );
       for (const capability of member.capabilities) process.stdout.write(`    ${capability.title}\n`);
     }
+    break;
+  }
+  case 'install':
+  case 'uninstall': {
+    const target = rest[0] ?? fail(`drop ${command} <agent>|all`);
+    const remove = command === 'uninstall';
+    const detected = detectAgents();
+    const agents =
+      target === 'all'
+        ? detected.filter((agent) => agent.installed).map((agent) => agent.agent)
+        : [AgentKindSchema.parse(target)];
+    if (rest.includes('--link')) {
+      const server = bundledServer() ?? fail('the bundled server is missing: run `node scripts/bundle.ts` first');
+      process.stdout.write(`${cursorInstallLink(serverEntry('cursor', home.root, server))}\n`);
+      break;
+    }
+    for (const agent of agents) {
+      try {
+        install(agent, { dropHome: home.root }, remove);
+        process.stdout.write(`${remove ? 'removed from' : 'added to'} ${AGENT_LABELS[agent]}\n`);
+      } catch (error) {
+        process.stderr.write(`${AGENT_LABELS[agent]}: ${error instanceof Error ? error.message : 'failed'}\n`);
+      }
+    }
+    if (!remove) process.stdout.write('restart the agent so it loads drop\n');
     break;
   }
   case 'detect': {
