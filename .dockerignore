@@ -1,0 +1,12 @@
+node_modules
+**/node_modules
+.git
+.drop*
+.env*
+**/test
+coverage
+openspec
+docs
+.claude
+.agents
+.worktrees

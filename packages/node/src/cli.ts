@@ -88,7 +88,12 @@ switch (command) {
   case 'serve': {
     const daemon = await startDaemon(home);
     process.stdout.write(
-      `drop serve: ${home.identity().displayName} (${home.identity().nodeId})\nconsent UI: ${daemon.uiUrl}\n`,
+      // The UI link carries the local token: only show it to a person at a terminal, never to a log collector.
+      `drop serve: ${home.identity().displayName} (${home.identity().nodeId})\n${
+        process.stdout.isTTY
+          ? `consent UI: ${daemon.uiUrl}`
+          : `consent UI on 127.0.0.1:${String(daemon.api.port)}, token in ${home.root}/local-token`
+      }\n`,
     );
     const stop = (): void => {
       daemon.stop().then(

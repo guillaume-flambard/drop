@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import { createServer } from 'node:http';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { z } from 'zod';
 import { EnvelopeSchema, envelopeSize, MAX_ENVELOPE_BYTES, verifyDetached, type Envelope } from '@drop/protocol';
@@ -68,12 +69,13 @@ export function startRelay(config: RelayConfig, options: RelayOptions = {}): Pro
   const allowed = new Set(settings.allowedNodeIds);
   const connections = new Map<string, Connection>();
   const queues = new Map<string, Envelope[]>();
-  const server = new WebSocketServer({
-    host: settings.host,
-    port: settings.port,
-    path: '/v1',
-    maxPayload: MAX_ENVELOPE_BYTES * 2,
+  // Plain HTTP answers only GET /health (for the deploy probe and uptime monitoring); /v1 upgrades to WebSocket.
+  const http = createServer((req, res) => {
+    const healthy = req.method === 'GET' && req.url === '/health';
+    res.writeHead(healthy ? 200 : 404, { 'Content-Type': 'application/json' });
+    res.end(healthy ? JSON.stringify({ ok: true, nodes: connections.size }) : '{"error":"not_found"}');
   });
+  const server = new WebSocketServer({ server: http, path: '/v1', maxPayload: MAX_ENVELOPE_BYTES * 2 });
 
   const send = (socket: WebSocket, frame: ServerFrame): void => {
     socket.send(JSON.stringify(frame));
@@ -212,9 +214,9 @@ export function startRelay(config: RelayConfig, options: RelayOptions = {}): Pro
   }, options.pingIntervalMs ?? 25_000);
 
   return new Promise((resolve, reject) => {
-    server.once('error', reject);
-    server.once('listening', () => {
-      const address = server.address();
+    http.once('error', reject);
+    http.listen(settings.port, settings.host, () => {
+      const address = http.address();
       const port = typeof address === 'object' && address !== null ? address.port : settings.port;
       resolve({
         port,
@@ -224,7 +226,9 @@ export function startRelay(config: RelayConfig, options: RelayOptions = {}): Pro
             clearInterval(pinger);
             for (const client of server.clients) client.terminate();
             server.close(() => {
-              done();
+              http.close(() => {
+                done();
+              });
             });
           }),
       });
