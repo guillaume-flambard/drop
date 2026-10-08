@@ -49,7 +49,7 @@ Codex, Cursor, Claude Desktop) ou pour répondre (app Mac), et l'utilise sur ses
 
 | ID | Tâche (périmètre) | Capacités OpenSpec | Change | Dépend de | Statut |
 | --- | --- | --- | --- | --- | --- |
-| T2.1 | `relay` : admission par invitation. Un Node déjà admis signe une invitation ; le relais admet le Node qui la présente, sans PR sur l'allowlist. L'allowlist reste pour l'amorçage | `relay`, `protocol`, `node` | `t2-1-relay-invite-admission` | T1.12 | todo |
+| T2.1 | `relay` : admission par invitation. Un Node déjà admis signe une invitation ; le relais admet le Node qui la présente, sans PR sur l'allowlist. L'allowlist reste pour l'amorçage | `relay`, `protocol`, `node` | `t2-1-relay-invite-admission` | T1.12 | doing |
 | T2.2 | Capacité `mcp.answer` : répondre à partir d'un serveur MCP du propriétaire (stdio ou HTTP local), avec les outils en lecture seule choisis à la publication. Cas Figma (Julie) et Notion, Linear, GitHub, base de données (Natha) | `capability-mcp-answer`, `runner` | `t2-2-mcp-answer` | T1.13 | todo |
 | T2.3 | Le demandeur paie (D27) : clé plafonnée créée par le demandeur pour une demande, chiffrée pour l'exécuteur, jamais écrite sur disque chez lui ; plafond affiché sur la carte | `protocol`, `node`, `runner`, `requester-mcp` | `t2-3-requester-pays` | T2.2 | todo |
 | T2.4 | App Mac pour le propriétaire : Tauri dans la barre de menus, Node embarqué, démarrage auto, cartes de consentement, appairage par lien `drop://`, choix des serveurs MCP à partager, mises à jour signées | `owner-app` | `t2-4-owner-mac-app` | T2.1, T2.2 | todo |

@@ -1,9 +1,17 @@
 import { randomBytes } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { z } from 'zod';
-import { EnvelopeSchema, envelopeSize, MAX_ENVELOPE_BYTES, verifyDetached, type Envelope } from '@drop/protocol';
+import {
+  AdmissionSchema,
+  EnvelopeSchema,
+  envelopeSize,
+  MAX_ENVELOPE_BYTES,
+  verifyAdmission,
+  verifyDetached,
+  type Envelope,
+} from '@drop/protocol';
 import {
   CLOSE_REPLACED,
   CLOSE_SPOOFED_FROM,
@@ -19,18 +27,22 @@ export const RelayConfigSchema = z.object({
   allowedNodeIds: z.array(z.string()),
   maxQueuePerNode: z.number().int().positive().default(100),
   rateLimitPerMinute: z.number().int().positive().default(60),
+  /** Where nodes admitted by invitation are kept across restarts (T2.1). Without it, admissions last until restart. */
+  admittedPath: z.string().optional(),
+  maxAdmissionsPerSponsorPerDay: z.number().int().nonnegative().default(20),
 });
 export type RelayConfig = z.input<typeof RelayConfigSchema>;
 
 /** One relay log line: metadata only, never `body` (AGENTS.md). */
 export interface RelayLogEntry {
-  event: 'auth' | 'envelope' | 'disconnect';
+  event: 'auth' | 'admission' | 'envelope' | 'disconnect';
   outcome: string;
   nodeId?: string;
   id?: string;
   from?: string;
   to?: string;
   size?: number;
+  sponsor?: string;
 }
 export type RelayLogger = (entry: RelayLogEntry) => void;
 
@@ -55,6 +67,18 @@ const defaultLogger: RelayLogger = (entry) => {
   process.stdout.write(`${JSON.stringify({ at: new Date().toISOString(), ...entry })}\n`);
 };
 
+/** Nodes admitted by invitation, and the ticket nonces already spent (so a ticket works once, even across restarts). */
+const AdmittedStateSchema = z.object({
+  admitted: z.array(z.object({ nodeId: z.string(), sponsor: z.string(), at: z.number() })),
+  spentNonces: z.array(z.object({ nonce: z.string(), expiresAt: z.number() })),
+});
+type AdmittedState = z.infer<typeof AdmittedStateSchema>;
+
+function loadAdmitted(path: string | undefined): AdmittedState {
+  if (!path || !existsSync(path)) return { admitted: [], spentNonces: [] };
+  return AdmittedStateSchema.parse(JSON.parse(readFileSync(path, 'utf8')));
+}
+
 interface Connection {
   socket: WebSocket;
   nodeId: string;
@@ -66,7 +90,32 @@ export function startRelay(config: RelayConfig, options: RelayOptions = {}): Pro
   const settings = RelayConfigSchema.parse(config);
   const log = options.logger ?? defaultLogger;
   const now = options.now ?? Date.now;
-  const allowed = new Set(settings.allowedNodeIds);
+  const admittedState = loadAdmitted(settings.admittedPath);
+  const allowed = new Set([...settings.allowedNodeIds, ...admittedState.admitted.map((entry) => entry.nodeId)]);
+
+  /**
+   * Admits `nodeId` if `raw` is a valid ticket from an admitted sponsor, unspent and within the sponsor's daily quota.
+   * Runs after the awaited signature check, so the spent-nonce test and the write below happen in one synchronous step.
+   */
+  const admit = async (nodeId: string, raw: unknown): Promise<string> => {
+    const check = await verifyAdmission(raw, now());
+    if (check !== 'ok') return check;
+    const ticket = AdmissionSchema.parse(raw);
+    if (!allowed.has(ticket.sponsor)) return 'sponsor_not_admitted';
+    admittedState.spentNonces = admittedState.spentNonces.filter((spent) => spent.expiresAt > now());
+    if (admittedState.spentNonces.some((spent) => spent.nonce === ticket.nonce)) return 'ticket_spent';
+    const dayAgo = now() - 86_400_000;
+    const sponsored = admittedState.admitted.filter((entry) => entry.sponsor === ticket.sponsor && entry.at > dayAgo);
+    if (sponsored.length >= settings.maxAdmissionsPerSponsorPerDay) return 'sponsor_quota';
+    admittedState.spentNonces.push({ nonce: ticket.nonce, expiresAt: ticket.expiresAt });
+    admittedState.admitted.push({ nodeId, sponsor: ticket.sponsor, at: now() });
+    allowed.add(nodeId);
+    if (settings.admittedPath) {
+      writeFileSync(settings.admittedPath, `${JSON.stringify(admittedState, null, 2)}\n`, { mode: 0o600 });
+    }
+    log({ event: 'admission', outcome: 'admitted', nodeId, sponsor: ticket.sponsor });
+    return 'ok';
+  };
   const connections = new Map<string, Connection>();
   const queues = new Map<string, Envelope[]>();
   // Plain HTTP answers only GET /health (for the deploy probe and uptime monitoring); /v1 upgrades to WebSocket.
@@ -153,9 +202,13 @@ export function startRelay(config: RelayConfig, options: RelayOptions = {}): Pro
           socket.close(CLOSE_UNAUTHORIZED, 'auth expected');
           return;
         }
-        const { nodeId, sig } = frame;
+        const { nodeId, sig, admission } = frame;
         void verifyDetached(nodeId, challenge, sig)
-          .then((valid) => {
+          .then(async (valid) => {
+            if (valid && !allowed.has(nodeId) && admission !== undefined) {
+              const outcome = await admit(nodeId, admission);
+              if (outcome !== 'ok') log({ event: 'admission', outcome, nodeId });
+            }
             if (!valid || !allowed.has(nodeId)) {
               log({ event: 'auth', outcome: valid ? 'not_allowed' : 'bad_signature', nodeId });
               socket.close(CLOSE_UNAUTHORIZED, 'unauthorized');

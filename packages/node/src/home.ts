@@ -1,5 +1,14 @@
 import { randomBytes } from 'node:crypto';
-import { appendFileSync, chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  appendFileSync,
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { z } from 'zod';
@@ -74,6 +83,20 @@ export class DropHome {
 
   config(): NodeConfig {
     return NodeConfigSchema.parse(JSON.parse(readFileSync(join(this.root, 'config.json'), 'utf8')));
+  }
+
+  /** The admission ticket of an accepted invite, kept until the relay admits this node (T2.1). */
+  pendingAdmission(): unknown {
+    const path = join(this.root, 'admission.json');
+    return existsSync(path) ? (JSON.parse(readFileSync(path, 'utf8')) as unknown) : undefined;
+  }
+
+  savePendingAdmission(ticket: unknown): void {
+    writePrivate(join(this.root, 'admission.json'), `${JSON.stringify(ticket)}\n`);
+  }
+
+  clearPendingAdmission(): void {
+    rmSync(join(this.root, 'admission.json'), { force: true });
   }
 
   localToken(): string {

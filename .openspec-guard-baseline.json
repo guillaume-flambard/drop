@@ -1171,14 +1171,6 @@
       "file": "openspec/specs/protocol/spec.md"
     },
     {
-      "id": "sg_34c69582ff8bc8ca",
-      "reason": "missing-selector",
-      "verdict": "fail",
-      "capability": "protocol",
-      "scenario": "Code expiré",
-      "file": "openspec/specs/protocol/spec.md"
-    },
-    {
       "id": "sg_3822e13c5314d318",
       "reason": "missing-selector",
       "verdict": "fail",
@@ -1400,14 +1392,6 @@
       "verdict": "fail",
       "capability": "protocol",
       "scenario": "Limite déclarée",
-      "file": "openspec/specs/protocol/spec.md"
-    },
-    {
-      "id": "sg_9a8dd93216b2bc15",
-      "reason": "missing-selector",
-      "verdict": "fail",
-      "capability": "protocol",
-      "scenario": "Contenu du code",
       "file": "openspec/specs/protocol/spec.md"
     },
     {

@@ -145,13 +145,23 @@ Pour chiffrer, un Node SHALL dériver sa paire X25519 de sa paire Ed25519 avec `
 - **THEN** `identity.json` contient exactement ces champs et son mode est `0600`
 
 ### Requirement: Code d'invitation
-`drop invite` SHALL produire un code d'invitation valant le base64url de `{ relayUrl, nodeId, displayName, oneTimeToken, expiresAt }`, avec une expiration de 15 min.
+`drop invite` SHALL produire un code d'invitation valant le base64url de `{ relayUrl, nodeId, displayName, oneTimeToken, expiresAt, admission? }`, avec une expiration de 24 h : c'est un lien envoyé par message, ouvert plus tard (D26).
 
 #### Scenario: Contenu du code
+<!-- openspec-guard:test="cards, receipts, invites, lifecycle, schemas > encodes invites that expire after a day" -->
 - **WHEN** on décode en base64url un code produit par `drop invite`
-- **THEN** on obtient `relayUrl`, `nodeId`, `displayName`, `oneTimeToken` et `expiresAt`, et `expiresAt` est 15 min après l'émission
+- **THEN** on obtient `relayUrl`, `nodeId`, `displayName`, `oneTimeToken`, `expiresAt` et un ticket `admission`, et `expiresAt` est 24 h après l'émission
+
+### Requirement: Ticket d'admission
+Un ticket d'admission `{ v: 1, sponsor, nonce, expiresAt, sig }` MUST être signé en Ed25519 par le Node `sponsor` sur `canonical({ v, sponsor, nonce, expiresAt })` et expirer 24 h après l'émission (T2.1, D26). Il ne nomme pas le nouveau venu.
+
+#### Scenario: Ticket falsifié ou expiré
+<!-- openspec-guard:test="cards, receipts, invites, lifecycle, schemas > signs single-use admission tickets that only the sponsor can produce" -->
+- **WHEN** un ticket est modifié, attribué à un autre sponsor, ou présenté après `expiresAt`
+- **THEN** sa vérification échoue
 
 #### Scenario: Code expiré
+<!-- openspec-guard:test="joining the relay by invitation (T2.1) > the inviter ignores a pair request whose code expired, a day after it was issued" -->
 - **WHEN** un `pair_request` utilise le `oneTimeToken` d'un code dont `expiresAt` est passé
 - **THEN** l'invitant le rejette et ne répond pas `pair_accept`
 

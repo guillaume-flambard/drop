@@ -1,9 +1,11 @@
 import { randomBytes } from 'node:crypto';
 import { z } from 'zod';
+import { ADMISSION_TTL_MS, AdmissionSchema, type Admission } from './admission.ts';
 import { DropError } from './errors.ts';
 import { NodeIdSchema, type Identity } from './identity.ts';
 
-export const INVITE_TTL_MS = 15 * 60_000;
+/** A day: an invite is a link sent by message, opened later (D26). It used to be 15 minutes. */
+export const INVITE_TTL_MS = ADMISSION_TTL_MS;
 
 export const InviteSchema = z.object({
   relayUrl: z.url(),
@@ -11,16 +13,24 @@ export const InviteSchema = z.object({
   displayName: z.string().min(1).max(80),
   oneTimeToken: z.string().min(16),
   expiresAt: z.number().int(),
+  /** Lets a newcomer join the relay without an allowlist edit (T2.1). */
+  admission: AdmissionSchema.optional(),
 });
 export type Invite = z.infer<typeof InviteSchema>;
 
-export function createInvite(identity: Identity, relayUrl: string, now: number = Date.now()): Invite {
+export function createInvite(
+  identity: Identity,
+  relayUrl: string,
+  now: number = Date.now(),
+  admission?: Admission,
+): Invite {
   return {
     relayUrl,
     nodeId: identity.nodeId,
     displayName: identity.displayName,
     oneTimeToken: randomBytes(24).toString('base64url'),
     expiresAt: now + INVITE_TTL_MS,
+    ...(admission ? { admission } : {}),
   };
 }
 

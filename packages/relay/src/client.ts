@@ -8,6 +8,8 @@ export interface RelayClientOptions {
   onEnvelope: (envelope: Envelope) => void;
   onStatus?: (status: 'connected' | 'disconnected' | 'unauthorized') => void;
   onError?: (frame: Extract<ServerFrame, { type: 'error' }>) => void;
+  /** An admission ticket to present with auth (T2.1), read at each connection; the relay ignores it once admitted. */
+  admission?: () => unknown;
   minBackoffMs?: number;
   maxBackoffMs?: number;
 }
@@ -54,6 +56,17 @@ export class RelayClient {
     });
   }
 
+  /** Connects again at once when not connected, e.g. right after an admission ticket arrived. */
+  retryNow(): void {
+    if (this.ready || this.closed) return;
+    clearTimeout(this.reconnectTimer);
+    this.backoffMs = this.options.minBackoffMs ?? 1_000;
+    const previous = this.socket;
+    this.socket = undefined;
+    previous?.terminate();
+    this.open();
+  }
+
   close(): void {
     this.closed = true;
     clearTimeout(this.reconnectTimer);
@@ -95,7 +108,15 @@ export class RelayClient {
       case 'challenge':
         signDetached(this.options.identity, frame.challenge).then(
           (sig) => {
-            socket.send(JSON.stringify({ type: 'auth', nodeId: this.options.identity.nodeId, sig }));
+            const admission = this.options.admission?.();
+            socket.send(
+              JSON.stringify({
+                type: 'auth',
+                nodeId: this.options.identity.nodeId,
+                sig,
+                ...(admission === undefined ? {} : { admission }),
+              }),
+            );
           },
           () => {
             socket.close();

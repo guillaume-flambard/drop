@@ -54,6 +54,12 @@ Plusieurs Nodes sur une même machine SHALL fonctionner avec plusieurs `DROP_HOM
 - **WHEN** A lance `drop invite` et B lance `drop pair <code>` avec le code obtenu
 - **THEN** A et B se trouvent chacun dans le `peers.json` de l'autre
 
+#### Scenario: Nouveau venu appairé sans modifier le relais
+<!-- openspec-guard:test="joining the relay by invitation (T2.1) > a node the relay does not know pairs through an invite code and is admitted, with no allowlist edit" -->
+- **WHEN** B, inconnu du relais, lance `drop pair <code>` avec un code de A
+- **THEN** B garde le ticket d'admission du code, se reconnecte aussitôt avec, est admis, et A et B sont appairés
+- **AND** le ticket est effacé du disque de B une fois admis
+
 ### Requirement: Commande drop peers
 `drop peers` SHALL lister les pairs.
 
