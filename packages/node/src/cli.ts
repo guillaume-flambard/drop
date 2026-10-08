@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 import { readFileSync } from 'node:fs';
 import { parseArgs } from 'node:util';
-import { capabilities } from '@drop/capabilities';
+import { capabilities, connectMcp, McpAnswerConfigSchema } from '@drop/capabilities';
+import { implFor } from '@drop/runner';
 import { generateIdentity, OwnerKindSchema, type ConsentCost } from '@drop/protocol';
 import { startDaemon } from './daemon.ts';
 import { DropHome } from './home.ts';
@@ -14,6 +15,8 @@ const USAGE = `drop <command>
   pair <code>                    pair with the node that issued the code (daemon must run)
   peers                          list paired peers
   publish <capability-id> --approver <nodeId> [--config <file.json>]
+                                 e.g. publish mcp.answer.figma --config figma.json (one per MCP server)
+  mcp-tools --config <file.json> list the tools of the MCP server in an mcp.answer config, to choose which to share
   pending                        requests waiting for your decision
   approve|deny|not-now <dropId>  decide from the terminal
   review <dropId> send|discard [--redact <field>]…
@@ -127,8 +130,10 @@ switch (command) {
     });
     const capabilityId = positionals[0] ?? fail('drop publish <capability-id> --approver <nodeId>');
     const impl =
-      capabilities.find((candidate) => candidate.card.id === capabilityId) ??
-      fail(`unknown capability ${capabilityId}; known: ${capabilities.map((c) => c.card.id).join(', ')}`);
+      implFor(capabilities, capabilityId) ??
+      fail(
+        `unknown capability ${capabilityId}; known: ${capabilities.map((c) => (c.family ? `${c.card.id}.<name>` : c.card.id)).join(', ')}`,
+      );
     const config: unknown = values.config ? JSON.parse(readFileSync(values.config, 'utf8')) : {};
     const parsed = impl.configSchema.safeParse(config);
     if (!parsed.success) fail(`invalid config for ${capabilityId}: ${parsed.error.message}`);
@@ -139,6 +144,28 @@ switch (command) {
       publishedAt: new Date().toISOString(),
     });
     process.stdout.write(`published ${capabilityId} (restart \`drop serve\` if it is running)\n`);
+    break;
+  }
+  case 'mcp-tools': {
+    const { values } = parseArgs({ args: rest, options: { config: { type: 'string' } } });
+    const raw: unknown = JSON.parse(readFileSync(values.config ?? fail('drop mcp-tools --config <file.json>'), 'utf8'));
+    // Only the server part is needed here: the tool list may still be empty while the owner is choosing.
+    const server = McpAnswerConfigSchema.shape.server.parse((raw as { server?: unknown }).server);
+    const client = await connectMcp(server);
+    try {
+      for (const tool of (await client.listTools()).tools) {
+        const hint = tool.annotations?.destructiveHint
+          ? 'destructive, never run'
+          : tool.annotations?.readOnlyHint
+            ? 'read-only'
+            : 'not marked';
+        process.stdout.write(
+          `${tool.name}\t${hint}\t${(tool.description ?? '').split('\n')[0]?.slice(0, 100) ?? ''}\n`,
+        );
+      }
+    } finally {
+      await client.close();
+    }
     break;
   }
   case 'pending': {
