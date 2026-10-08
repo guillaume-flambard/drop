@@ -1,64 +1,83 @@
 # drop
 
-Un agent pose une question bornée à la capacité d'un autre propriétaire ; le propriétaire autorise une fois ; seul un
-résultat typé et filtré revient. Nom de code `drop` ; le nom produit reste à trouver (voir `docs/DECISIONS.md`).
+**Obtenir la réponse. Garder la maîtrise de ses accès.**
 
-Développé en spec-driven avec [OpenSpec](https://github.com/Fission-AI/OpenSpec), une tâche par session, réalisable
-par Claude Code ou Codex.
+Votre agent a besoin d'une information chez un collègue. Il pose une question précise ; le propriétaire autorise une fois ; une capacité s'exécute dans son environnement ; seule la réponse autorisée revient.
 
-## Contenu
+`drop` est un nom de code. Le cœur du prototype est implémenté et démontré. L'app Mac et la distribution publique restent à livrer. Le [bilan daté](docs/AVANCEMENT.md) distingue le code, les tests, les démonstrations et le travail restant.
 
-| Chemin | Rôle |
-| --- | --- |
-| `AGENTS.md` | Règles pour tous les agents : cycle de travail, stack, sécurité. Lu automatiquement par Codex. |
-| `CLAUDE.md` | Importe `AGENTS.md` pour Claude Code. |
-| `openspec/project/` | Vision et architecture (descriptif). |
-| `openspec/specs/` | Le contrat : une capacité par dossier, exigences et scénarios. |
-| `openspec/changes/` | Une change par tâche ; `archive/` garde les changes livrées. |
-| `docs/TASKS.md` | Index des tâches : ordre, dépendances, statut. |
-| `docs/DECISIONS.md` | Décisions de cadrage et journal. |
+## Commencer par comprendre
 
-Le kit de specs en prose d'origine (`docs/specs/`) est dans le commit `ecf96a8`.
+- [Le guide illustré](docs/GUIDE.md) : un exemple, le parcours, l'architecture et la confidentialité.
+- [L'avancement du projet](docs/AVANCEMENT.md) : preuves, limites et prochaines étapes.
+- [Les démonstrations conservées](docs/demo/README.md) : captures et résultats de Claude Code et Codex.
 
-## Essayer en local (5 minutes)
+![Le trajet d'une réponse autorisée](docs/diagrams/journey.svg)
+
+## Ouvrir le site
+
+Depuis un clone du dépôt, avec Node **22.18 ou supérieur** et pnpm **11.27.0** :
 
 ```bash
 pnpm install
-scripts/demo-local.sh
+pnpm site:preview
 ```
 
-Le script lance un relais, un Node « VPS » qui publie `production.error_summary` sur un log de démonstration, et un
-Node « Guillaume » qui demande via le serveur MCP puis autorise une fois. Tout tourne sur `127.0.0.1`, dans un dossier
-temporaire. Il montre le refus local d'une entrée invalide, le résultat filtré, les reçus signés, et vérifie qu'aucun
-fragment de log n'a fui.
+Ouvrir l'adresse locale affichée. Le site comprend une simulation pédagogique, le guide et le bilan. Il ne se connecte pas aux Nodes. `pnpm site:build` crée les fichiers statiques dans `dist/site/`, sans dépendance supplémentaire. Relancer la prévisualisation après une modification. Si `node scripts/bundle.ts` est exécuté ensuite, reconstruire le site : le bundle du produit nettoie `dist/`.
 
-Commandes : `node packages/node/src/cli.ts help` (binaire `drop`), `node packages/relay/src/cli.ts` (`drop-relay`).
-Brancher Claude Code ou Codex : `packages/requester-mcp/README.md`.
+## Vérifier le prototype
 
-## Travailler
+```bash
+pnpm -r lint
+pnpm -r typecheck
+pnpm -r test
+```
 
-Prérequis : Node 22+, pnpm, `npm i -g @fission-ai/openspec@latest`.
+Les tests utilisent des sources locales et des fournisseurs simulés ; ils ne demandent aucune clé LLM.
 
-À chaque session, dans Claude Code ou Codex :
+## Rejouer la démonstration
 
-> Lis AGENTS.md, puis prends la prochaine tâche `todo` de docs/TASKS.md dont les dépendances sont faites.
+```bash
+bash scripts/demo-local.sh
+```
 
-L'agent suit le cycle d'AGENTS.md : lire la spec, lever les doutes (`grilling`), `/opsx:propose`, accord humain,
-`/opsx:apply`, contrôles (lint, typecheck, test, `openspec-guard`, `/review`, `/cso`), `/opsx:archive`.
+Le script démarre un relais et trois Nodes temporaires (VPS, Guillaume et Julie) sur `127.0.0.1`, ports **7790 à 7793**. Il joue un résumé d'erreurs, puis une question sur un dépôt avec relecture. Il arrête ses processus en quittant et conserve le dossier temporaire.
 
-Pour cibler une tâche précise : « Réalise T1.3. »
+**La partie dépôt utilise OpenRouter et le réseau.** Elle attend `OPENROUTER_API_KEY`, ou une entrée du trousseau macOS nommée `OpenRouter API Key`. Sa durée dépend du fournisseur. Ne jamais placer la clé dans le dépôt. Le [guide](docs/GUIDE.md#essayer-le-prototype) explique les prérequis et la différence entre exécution locale et modèle distant.
 
-## Ordre conseillé
+## Brancher un agent
 
-1. T0.0 → T0.5, puis installer `blocked-observer` chez toi et chez les testeurs.
-2. Écrire le seuil go/no-go dans `docs/DECISIONS.md`.
-3. T1.1 → T1.14 pendant la mesure ; le pilote n'a lieu que si le seuil est franchi.
+Un Node initialisé, admis sur un relais et lancé avec `serve` est nécessaire. L'installation locale du connecteur se fait après assemblage :
 
-## Commandes utiles
+```bash
+node scripts/bundle.ts
+node packages/node/src/cli.ts install codex
+```
+
+Les autres identifiants sont `claude_code`, `cursor` et `claude_desktop`. La commande écrit la configuration de l'agent choisi. `uninstall <agent>` retire le connecteur. Le paquet npm public reste une tâche distincte ; ne pas supposer qu'un `npx drop` est disponible.
+
+Voir [les configurations manuelles](packages/requester-mcp/README.md) et `node packages/node/src/cli.ts help` pour les commandes du prototype.
+
+## Où trouver les sources
+
+| Chemin | Rôle |
+| --- | --- |
+| [AGENTS.md](AGENTS.md) | Méthode de contribution, stack et règles de sécurité |
+| [openspec/specs/](openspec/specs/) | Contrats normatifs des capacités |
+| [openspec/project/](openspec/project/) | Vision et architecture descriptives |
+| [docs/TASKS.md](docs/TASKS.md) | Ordre, dépendances et statuts du travail |
+| [docs/DECISIONS.md](docs/DECISIONS.md) | Décisions et évolutions du périmètre |
+| [packages/](packages/) | Protocole, relais, Node, runner, capacités et connecteurs |
+| [site/](site/) | Sources de la vitrine statique |
+
+## Contribuer
+
+Lire [AGENTS.md](AGENTS.md), puis la première tâche disponible dans l'index ou celle désignée par l'humain. Une change OpenSpec porte le travail, ses critères et ses preuves. Les contrôles incluent lint, types, tests, liens aux scénarios, revue, puis archivage.
 
 ```bash
 openspec list --specs
-openspec show <capacité> --type spec
 openspec validate --all --strict
-pnpm -r lint && pnpm -r typecheck && pnpm -r test
+npx --yes openspec-guard@0.3.0 check --require-selector --baseline .openspec-guard-baseline.json --fail-on fail
 ```
+
+Le seuil de validation du besoin est fixé en D24. Le pilote attend ses résultats ; un prototype qui fonctionne ne suffit pas à conclure que le besoin est validé.

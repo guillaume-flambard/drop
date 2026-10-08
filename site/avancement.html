@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Bilan vérifié de drop au 8 octobre 2026 : prototype démontré, 229 tests réussis, app Mac et distribution publique encore à construire."
+    />
+    <meta name="theme-color" content="#2548ed" />
+    <title>Où en est le projet ? · drop</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#contenu">Aller au contenu</a>
+    <header class="site-header">
+      <div class="wrap header-inner">
+        <a class="logo" href="index.html" aria-label="drop, accueil"
+          ><img src="favicon.svg" width="34" height="34" alt="" />drop</a
+        >
+        <nav class="nav" aria-label="Navigation principale">
+          <a class="desktop-link" href="index.html#principe">Le principe</a><a href="guide.html">Le guide</a
+          ><a href="avancement.html" aria-current="page">Avancement</a
+          ><span class="header-note">Un projet Memo Labs</span>
+        </nav>
+      </div>
+    </header>
+    <main id="contenu" class="wrap">
+      <div class="page-title">
+        <span class="pill">Bilan du 8 octobre 2026</span>
+        <h1>Ce qui tourne.<br />Ce qui reste à construire.</h1>
+        <p>Le cœur fonctionne et a été démontré. L’app Mac et la distribution publique sont les prochains chantiers.</p>
+      </div>
+      <div class="doc-layout">
+        <nav class="toc" aria-label="Sommaire du bilan">
+          <a href="#chiffres">Les chiffres</a><a href="#preuves">Les preuves</a><a href="#suite">La suite</a
+          ><a href="#vigilance">Les points ouverts</a><a href="#methode">La méthode</a>
+        </nav>
+        <article class="article">
+          <section id="chiffres">
+            <h2>Un prototype déjà tangible.</h2>
+            <div class="metrics">
+              <div class="metric"><strong>25 / 32</strong><span>Tâches produit déclarées faites</span></div>
+              <div class="metric"><strong>229</strong><span>Tests réussis lors de l'analyse</span></div>
+              <div class="metric"><strong>3</strong><span>Familles de capacités implémentées</span></div>
+            </div>
+            <p>
+              Les 32 tâches comprennent aussi deux lignes en cours, quatre à faire et une bloquée sur la publication
+              npm. Ce décompte exclut le travail de présentation de ce site. Il ne mesure ni l'effort restant, ni la
+              couverture des tests.
+            </p>
+            <figure>
+              <img
+                src="diagrams/roadmap.svg"
+                width="1120"
+                height="390"
+                alt="La collecte des blocages est outillée, le circuit est démontré, l’app Mac et la distribution publique restent en construction."
+              />
+              <figcaption>
+                La feuille de route dépend de preuves et d'essais. Aucune date de lancement n'est engagée.
+                <a href="diagrams/roadmap.svg">Ouvrir le schéma</a>.
+              </figcaption>
+            </figure>
+          </section>
+          <section id="preuves">
+            <h2>Ce que les preuves permettent de dire.</h2>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Partie</th>
+                    <th>État observé</th>
+                    <th>Nature de la preuve</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Protocole, relais, consentement</td>
+                    <td>Implémentés</td>
+                    <td>Code, tests unitaires et parcours complets</td>
+                  </tr>
+                  <tr>
+                    <td>Résumé d'erreurs et question sur un dépôt</td>
+                    <td>Démontrés</td>
+                    <td>Démo Mac + VPS conservée, avec Claude Code et Codex</td>
+                  </tr>
+                  <tr>
+                    <td>Questions via MCP</td>
+                    <td>Implémentées</td>
+                    <td>Tests avec serveur factice et modèle simulé</td>
+                  </tr>
+                  <tr>
+                    <td>Financement et détection locale</td>
+                    <td>Implémentés</td>
+                    <td>Code et tests automatisés</td>
+                  </tr>
+                  <tr>
+                    <td>Annuaire et installation locale</td>
+                    <td>Implémentés</td>
+                    <td>Code et tests, ajoutés pendant cette analyse</td>
+                  </tr>
+                  <tr>
+                    <td>Usage chez Julie et Natha</td>
+                    <td>À valider</td>
+                    <td>Essais réels prévus dans la feuille de route</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="note">
+              <p>
+                <strong>La démo ne vaut pas déploiement chez un testeur.</strong> Le Node nommé Julie et son dépôt de
+                démonstration tournaient sur le Mac de Guillaume. Le test de compréhension en 30 secondes auprès d'une
+                personne extérieure reste à faire.
+              </p>
+            </div>
+          </section>
+          <section id="suite">
+            <h2>De l'essai technique à l'usage en équipe.</h2>
+            <ol>
+              <li>
+                <strong>Clore l'admission par invitation.</strong> Le code et les tests existent ; la tâche T2.1 reste
+                en cours dans l'index.
+              </li>
+              <li>
+                <strong>Construire l’app Mac.</strong> L’annuaire et l’appairage par invitation existent. La barre de
+                menus doit rendre le consentement et le suivi accessibles sans terminal.
+              </li>
+              <li>
+                <strong>Distribuer les connecteurs du demandeur.</strong> L’installation locale est implémentée. La
+                publication npm attend le nom du produit et l’accord du propriétaire.
+              </li>
+              <li>
+                <strong>Jouer les usages chez les testeurs.</strong> L’annuaire permet désormais de construire les
+                demandes multiples. Les essais chez Julie et Natha dépendent aussi de la distribution.
+              </li>
+            </ol>
+            <p>
+              La vidéo, le parcours d’installation final et la mise en ligne publique restent dans la tâche du site
+              final. La présente version est une vitrine et une documentation en prévisualisation.
+            </p>
+          </section>
+          <section id="vigilance">
+            <h2>Les points encore ouverts.</h2>
+            <h3>Les tests passent. Leur lien avec les specs reste incomplet.</h3>
+            <p>
+              Le contrôle OpenSpec compte 327 critères, dont 313 testables.
+              <strong>54 sont explicitement reliés à un test</strong>, 259 sont gelés dans la baseline et 14 sont
+              déclarés non testables. Les 17,3 % obtenus mesurent la traçabilité des critères, pas la couverture du
+              code.
+            </p>
+            <h3>Le pilote attend une mesure du besoin.</h3>
+            <p>
+              La règle décidée demande au moins trois développeurs et dix jours actifs chacun. Le GO exige au moins 0,5
+              blocage qualifié par développeur-jour et une médiane d'au moins dix minutes perdues. Aucun agrégat
+              concluant n'est établi par les preuves consultées.
+            </p>
+            <h3>Le cadre de sécurité demande une lecture précise.</h3>
+            <p>
+              Le contenu entre Nodes est chiffré. Les outils et sorties sont contrôlés. Un fournisseur de modèle distant
+              peut toutefois recevoir le contexte utilisé pour répondre. Ce prototype ne constitue pas une garantie
+              absolue contre la divulgation.
+            </p>
+            <a class="text-link" href="guide.html#confidentialite">Lire ce qui est transmis à chaque destinataire</a>
+          </section>
+          <section id="methode">
+            <h2>Un état daté, des sources accessibles.</h2>
+            <p>
+              Cette analyse repose sur l'index des tâches, les décisions, les implémentations, les tests et les traces
+              de démonstration du dépôt, au commit <code>cacf1cc</code>. Elle ne certifie pas l'état actuel du serveur
+              distant.
+            </p>
+            <pre><code>pnpm -r lint
+pnpm -r typecheck
+pnpm -r test</code></pre>
+            <p>
+              Ces trois contrôles ont passé lors de l'analyse. Le bilan complet donne aussi la commande OpenSpec, les
+              sources par composant, les écarts de documentation et les prochaines dépendances.
+            </p>
+            <a class="button" href="downloads/AVANCEMENT.md" download>Télécharger le bilan sourcé</a>
+            <p class="date">Photographie du 8 octobre 2026, non recalculée à l'ouverture.</p>
+          </section>
+        </article>
+      </div>
+    </main>
+    <footer class="footer">
+      <div class="wrap footer-inner">
+        <a class="logo" href="index.html">drop</a>
+        <div class="footer-links">
+          <a href="guide.html">Documentation</a><a href="avancement.html">État du projet</a
+          ><a href="guide.html#essayer">Essayer le prototype</a>
+        </div>
+        <span>Nom de code, par Memo Labs.</span>
+      </div>
+    </footer>
+  </body>
+</html>

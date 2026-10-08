@@ -73,4 +73,6 @@ Cette préparation peut avancer avant les installateurs. Elle ne clôt pas T2.6 
 
 | ID | Tâche (périmètre) | Capacités OpenSpec | Change | Dépend de | Statut |
 | --- | --- | --- | --- | --- | --- |
-| T2.6a | Analyser l'avancement, écrire le guide illustré, construire et vérifier le site en prévisualisation locale | Documentation, sans changement de contrat | `t2-6a-docs-site-preview` | Demande humaine explicite | doing |
+| T2.6a | Analyser l'avancement, écrire le guide illustré, construire et vérifier le site en prévisualisation locale | Documentation, sans changement de contrat | `t2-6a-docs-site-preview` | Demande humaine explicite | done |
+
+T2.6a : vérification terminée, change archivée dans `openspec/changes/archive/2026-10-08-t2-6a-docs-site-preview/`. Présentation en `READY_FOR_MANUAL_ACCEPTANCE` ; l'acceptation visuelle humaine et la publication restent distinctes de l'implémentation vérifiée.

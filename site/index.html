@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Une question précise, l'accord du propriétaire, une réponse autorisée. Découvrez drop, le prototype qui fait avancer les agents sans partager les accès."
+    />
+    <meta name="theme-color" content="#2548ed" />
+    <title>drop · La réponse fait avancer votre agent</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#contenu">Aller au contenu</a>
+    <header class="site-header">
+      <div class="wrap header-inner">
+        <a class="logo" href="index.html" aria-label="drop, accueil"
+          ><img src="favicon.svg" width="34" height="34" alt="" />drop</a
+        >
+        <nav class="nav" aria-label="Navigation principale">
+          <a class="desktop-link" href="#principe">Le principe</a><a href="guide.html">Le guide</a
+          ><a href="avancement.html">Avancement</a>
+          <span class="header-note">Un projet Memo Labs</span>
+        </nav>
+      </div>
+    </header>
+    <main id="contenu">
+      <section class="hero wrap" aria-labelledby="hero-title">
+        <div>
+          <span class="pill">Prototype en construction</span>
+          <h1 id="hero-title">La bonne réponse.<br />De la bonne<br />personne.</h1>
+          <p class="intro">
+            Votre agent avance. Il lui manque une information chez un collègue. Avec drop, il pose la question, le
+            collègue autorise, la réponse revient.
+          </p>
+          <div class="actions">
+            <a class="button" href="#echange">Explorer un échange</a
+            ><a class="text-link" href="guide.html">Comprendre drop</a>
+          </div>
+          <p class="hero-foot">Les accès restent chez leur propriétaire.</p>
+        </div>
+        <div class="exchange" id="echange">
+          <svg class="route-art" viewBox="0 0 530 470" aria-hidden="true">
+            <path d="M55 30C-60 100-30 440 255 440S610 150 465 30" />
+            <path d="M55 30C-25 100 0 410 255 410S565 130 465 30" stroke-dasharray="3 7" />
+          </svg>
+          <div class="endpoint">
+            <div class="person">
+              <span class="avatar">G</span><span>Guillaume<small>Pose la question</small></span>
+            </div>
+            <div class="person">
+              <span>Julie<small>Garde la main</small></span
+              ><span class="avatar julie">J</span>
+            </div>
+          </div>
+          <fieldset class="demo-controls">
+            <legend>
+              Explorer les quatre étapes de cet échange simulé. Utilisez les flèches du clavier pour changer d'étape.
+            </legend>
+            <input class="stage-input" type="radio" name="stage" id="stage-question" aria-controls="panel-question" />
+            <input
+              class="stage-input"
+              type="radio"
+              name="stage"
+              id="stage-consent"
+              aria-controls="panel-consent"
+              checked
+            />
+            <input class="stage-input" type="radio" name="stage" id="stage-review" aria-controls="panel-review" />
+            <input class="stage-input" type="radio" name="stage" id="stage-result" aria-controls="panel-result" />
+            <div class="stage-views">
+              <section class="demo-panel panel-question" id="panel-question" aria-label="La question de Guillaume">
+                <div class="panel-top"><span class="mini-logo">drop</span><span>Chez Guillaume</span></div>
+                <p class="question">« Le mode sombre est-il déjà prévu dans ton code ? »</p>
+                <p class="demo-detail">Pour savoir si je dois le développer ou réutiliser ce qui existe.</p>
+                <div class="demo-fact"><span class="check">✓</span><span>Une question sur le dépôt de Julie</span></div>
+                <div class="status-band">Prochaine étape : l'accord de Julie</div>
+              </section>
+              <section
+                class="demo-panel panel-consent"
+                id="panel-consent"
+                aria-label="La carte de consentement de Julie"
+              >
+                <div class="panel-top"><span class="mini-logo">drop</span><span>Une demande pour Julie</span></div>
+                <h3>Guillaume voudrait savoir si ton code gère le mode sombre.</h3>
+                <p class="demo-detail">Pour éviter de développer la même chose deux fois.</p>
+                <div class="demo-fact">
+                  <span class="check">✓</span><span>Il recevra une réponse courte et des noms de fichiers.</span>
+                </div>
+                <div class="demo-fact">
+                  <span aria-hidden="true">↳</span><span>Tu reliras la réponse avant son envoi.</span>
+                </div>
+                <div class="status-band">Julie décide : autoriser, refuser ou plus tard.</div>
+              </section>
+              <section class="demo-panel panel-review" id="panel-review" aria-label="La relecture avant envoi">
+                <div class="panel-top"><span class="mini-logo">drop</span><span>Relecture par Julie</span></div>
+                <h3>Voici la réponse qui pourrait partir.</h3>
+                <p class="demo-detail">
+                  Le mode sombre suit la préférence du système. Le choix manuel du thème n'est pas encore prévu.
+                </p>
+                <div class="demo-fact"><span class="check">✓</span><span>Verdict : partiellement</span></div>
+                <div class="demo-fact">
+                  <span aria-hidden="true">↳</span
+                  ><span>Sources : <code>src/theme.ts</code>, <code>docs/theme.md</code></span>
+                </div>
+                <div class="status-band">Julie peut retirer des champs ou arrêter l'envoi.</div>
+              </section>
+              <section class="demo-panel panel-result" id="panel-result" aria-label="La réponse reçue par Guillaume">
+                <div class="panel-top"><span class="mini-logo">drop</span><span>Retour chez Guillaume</span></div>
+                <p class="question">« Je peux réutiliser le thème existant. Il reste le sélecteur manuel. »</p>
+                <p class="demo-detail">L'agent reprend son travail à partir de la réponse autorisée par Julie.</p>
+                <div class="demo-fact">
+                  <span class="check">✓</span><span>Un reçu signé garde la trace de l'échange.</span>
+                </div>
+                <div class="status-band success">La réponse est arrivée. Les accès sont restés.</div>
+              </section>
+            </div>
+            <div class="step-tabs">
+              <label for="stage-question"><span>1</span> Question</label
+              ><label for="stage-consent"><span>2</span> Accord</label
+              ><label for="stage-review"><span>3</span> Relecture</label
+              ><label for="stage-result"><span>4</span> Réponse</label>
+            </div>
+          </fieldset>
+          <p class="demo-caption">Simulation pédagogique. Aucune demande n'est envoyée.</p>
+        </div>
+      </section>
+      <div class="principle-strip">
+        <div class="wrap strip-inner">
+          <p><strong>Get the answer, not the access.</strong></p>
+          <p class="muted">Une capacité définie. Un accord humain. Un résultat borné.</p>
+        </div>
+      </div>
+      <section class="section white-section" id="principe">
+        <div class="wrap">
+          <div class="section-head">
+            <h2>Quand la suite du travail<br />se trouve chez quelqu'un d'autre.</h2>
+            <p>
+              Un collègue a le contexte. Son agent a les outils. drop organise le passage de la question à la réponse.
+            </p>
+          </div>
+          <div class="sequence">
+            <div class="sequence-item">
+              <span class="step-number">01 / La demande</span>
+              <h3>Poser une question précise.</h3>
+              <p>
+                L'agent choisit une action dans un catalogue : résumer des erreurs, interroger un dépôt ou une source
+                déjà connectée.
+              </p>
+            </div>
+            <div class="sequence-item">
+              <span class="step-number">02 / La décision</span>
+              <h3>Voir ce que l'on autorise.</h3>
+              <p>
+                Le propriétaire lit la raison, les informations attendues et le coût annoncé. Il décide pour cette
+                demande.
+              </p>
+            </div>
+            <div class="sequence-item">
+              <span class="step-number">03 / Le retour</span>
+              <h3>Continuer avec la réponse.</h3>
+              <p>
+                La sortie est contrôlée. Pour les capacités sensibles, elle est aussi relue avant d'arriver chez le
+                demandeur.
+              </p>
+            </div>
+          </div>
+          <a class="source-link" href="guide.html#parcours">Voir le parcours complet et ses limites</a>
+        </div>
+      </section>
+      <section class="section wrap" id="capacites">
+        <div class="section-head">
+          <h2>Trois façons de<br />débloquer une question.</h2>
+          <p>
+            Ces familles de capacités existent dans le prototype. Chacune définit les outils utilisables et la forme de
+            la réponse.
+          </p>
+        </div>
+        <div class="capability-row">
+          <span class="capability-symbol" aria-hidden="true">≋</span>
+          <div>
+            <h3>Comprendre la production</h3>
+            <code>production.error_summary</code>
+          </div>
+          <p>
+            Un résumé des erreurs, des compteurs et un état du service. Le traitement est déterministe, sans modèle.
+          </p>
+        </div>
+        <div class="capability-row">
+          <span class="capability-symbol" aria-hidden="true">{ }</span>
+          <div>
+            <h3>Interroger un dépôt</h3>
+            <code>repo.answer</code>
+          </div>
+          <p>Une réponse à partir de fichiers autorisés. Le propriétaire relit le résultat avant de le transmettre.</p>
+        </div>
+        <div class="capability-row">
+          <span class="capability-symbol" aria-hidden="true">⌘</span>
+          <div>
+            <h3>Retrouver le contexte d'un outil</h3>
+            <code>mcp.answer</code>
+          </div>
+          <p>
+            Une question sur une source déjà connectée : maquettes, tickets ou documentation. Les outils sont choisis
+            par le propriétaire.
+          </p>
+        </div>
+        <p class="source-link">
+          Les intégrations réelles chez les testeurs restent à valider.
+          <a href="avancement.html#preuves">Lire les preuves disponibles</a>.
+        </p>
+      </section>
+      <section class="section privacy" id="confiance">
+        <div class="wrap split">
+          <div>
+            <h2>Partager une réponse reste une décision.</h2>
+            <p>Le cadre de l'échange est fixé avant l'exécution. Le modèle travaille à l'intérieur de ce cadre.</p>
+            <a class="text-link" href="guide.html#confidentialite">Comprendre les frontières de confidentialité</a>
+          </div>
+          <div class="privacy-points">
+            <h3>Le relais transporte du contenu chiffré.</h3>
+            <p>
+              Il route les enveloppes entre les Nodes sans lire leur contenu. Les métadonnées de routage restent
+              visibles.
+            </p>
+            <h3>Les outils sont choisis à l'avance.</h3>
+            <p>La question du demandeur ne peut pas ajouter un outil à la liste autorisée.</p>
+            <h3>Le choix du modèle compte.</h3>
+            <p>
+              Un modèle distant reçoit le contexte nécessaire à ses appels. Exécution chez le propriétaire ne signifie
+              pas traitement entièrement local.
+            </p>
+          </div>
+        </div>
+      </section>
+      <section class="section wrap">
+        <div class="progress-callout">
+          <div>
+            <span class="pill">État au 8 octobre 2026</span>
+            <h2>Un circuit démontré.<br />Un produit qui se construit.</h2>
+            <p>
+              Le prototype fonctionne entre agents. L’annuaire et l’installation locale existent. La prochaine étape est
+              l’app Mac et une distribution accessible aux testeurs.
+            </p>
+            <a class="button" href="avancement.html">Voir l'avancement réel</a>
+          </div>
+          <ul class="milestone-list">
+            <li><span>Protocole, relais et consentement</span><span class="tag yes">Implémentés</span></li>
+            <li><span>Démo avec Claude Code et Codex</span><span class="tag yes">Documentée</span></li>
+            <li><span>App Mac et distribution publique</span><span class="tag">À construire</span></li>
+            <li><span>Validation du besoin en équipe</span><span class="tag">À établir</span></li>
+          </ul>
+        </div>
+      </section>
+    </main>
+    <footer class="footer">
+      <div class="wrap footer-inner">
+        <a class="logo" href="index.html">drop</a>
+        <div class="footer-links">
+          <a href="guide.html">Documentation</a><a href="avancement.html">État du projet</a
+          ><a href="guide.html#essayer">Essayer le prototype</a>
+        </div>
+        <span>Nom de code, par Memo Labs.</span>
+      </div>
+    </footer>
+  </body>
+</html>
