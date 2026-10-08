@@ -20,7 +20,7 @@ Un Node SHALL ouvrir `wss://<relay>/v1`. Le relais MUST alors envoyer `{ challen
 - **THEN** le premier message du relais est `{ challenge }` contenant 32 octets encodés en base64url
 
 ### Requirement: Réponse au défi signée
-Le Node SHALL répondre `{ nodeId, sig }` où `sig` = Ed25519(challenge) avec la clé de `nodeId`. Le relais MUST vérifier cette signature, puis vérifier que `nodeId` figure dans `allowedNodeIds` ; sinon il MUST fermer la connexion avec le code `4401`.
+Le Node SHALL répondre `{ nodeId, sig, admission? }` où `sig` = Ed25519(challenge) avec la clé de `nodeId`. Le relais MUST vérifier cette signature, puis vérifier que `nodeId` figure dans `allowedNodeIds` ou parmi les Nodes admis par invitation ; sinon il MUST fermer la connexion avec le code `4401`.
 
 #### Scenario: Node autorisé
 - **WHEN** un Node listé dans `allowedNodeIds` répond au défi avec une signature valide
@@ -70,9 +70,34 @@ Si `to` n'est pas connecté, le relais SHALL mettre l'enveloppe en file (max 100
 - **WHEN** 100 enveloppes sont déjà en file pour un destinataire
 - **THEN** la file de ce destinataire ne dépasse pas 100 enveloppes
 
+### Requirement: Admission par invitation
+Un Node inconnu qui présente avec sa réponse au défi un ticket d'admission (protocole) SHALL être admis si le ticket est
+valide et non expiré, que son `sponsor` est lui-même admis, que son `nonce` n'a jamais servi, et que le sponsor a admis
+moins de `maxAdmissionsPerSponsorPerDay` Nodes (20 par défaut) dans les dernières 24 h (T2.1, D26).
+
+#### Scenario: Nouveau venu admis une seule fois
+<!-- openspec-guard:test="relay > admits a newcomer who presents a ticket signed by an admitted node, once, and remembers it" -->
+- **WHEN** un Node absent de `allowedNodeIds` présente un ticket signé par un Node admis
+- **THEN** il est authentifié, et il l'est encore après un redémarrage du relais
+- **AND** un autre Node qui présente le même ticket est refusé avec `4401`
+
+#### Scenario: Ticket refusé
+<!-- openspec-guard:test="relay > refuses tickets from a sponsor it does not admit, forged tickets and a sponsor over quota" -->
+- **WHEN** le ticket vient d'un sponsor non admis, est falsifié, ou que le sponsor a dépassé son quota du jour
+- **THEN** le relais ferme la connexion avec `4401` et journalise la raison
+
+### Requirement: État d'admission persistant
+Le relais MUST garder les Nodes admis et les `nonce` utilisés dans `admittedPath` (mode `0600`), pour qu'un redémarrage
+ne les oublie pas, et journaliser chaque admission avec son sponsor. `allowedNodeIds` ne sert plus qu'à l'amorçage.
+
+#### Scenario: Admission gardée au redémarrage
+<!-- openspec-guard:test="relay > admits a newcomer who presents a ticket signed by an admitted node, once, and remembers it" -->
+- **WHEN** le relais redémarre après avoir admis un Node par invitation
+- **THEN** ce Node est encore authentifié, et `admittedPath` est en mode `0600`
+
 ### Requirement: Aucun stockage hors de la file
-Le relais MUST NOT stocker autre chose que la file courte des enveloppes en attente : ni contenu déchiffré, ni
-historique des enveloppes livrées.
+Le relais MUST NOT stocker autre chose que la file courte des enveloppes en attente et l'état d'admission
+(`admittedPath`) : ni contenu déchiffré, ni historique des enveloppes livrées.
 
 #### Scenario: Rien gardé après livraison
 - **WHEN** une enveloppe a été livrée à son destinataire

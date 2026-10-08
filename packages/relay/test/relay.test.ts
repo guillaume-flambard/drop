@@ -1,6 +1,16 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import WebSocket from 'ws';
-import { generateIdentity, sealEnvelope, signDetached, type Envelope, type Identity } from '@drop/protocol';
+import { mkdtempSync, readFileSync, statSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import {
+  createAdmission,
+  generateIdentity,
+  sealEnvelope,
+  signDetached,
+  type Envelope,
+  type Identity,
+} from '@drop/protocol';
 import { RelayClient, startRelay, type RelayHandle, type RelayLogEntry } from '../src/index.ts';
 
 const cleanups: (() => Promise<void> | void)[] = [];
@@ -8,7 +18,10 @@ afterEach(async () => {
   for (const cleanup of cleanups.splice(0).reverse()) await cleanup();
 });
 
-async function relayFor(identities: Identity[], extra: { rateLimitPerMinute?: number } = {}) {
+async function relayFor(
+  identities: Identity[],
+  extra: { rateLimitPerMinute?: number; admittedPath?: string; maxAdmissionsPerSponsorPerDay?: number } = {},
+) {
   const logs: RelayLogEntry[] = [];
   const relay = await startRelay(
     { port: 0, allowedNodeIds: identities.map((identity) => identity.nodeId), ...extra },
@@ -18,12 +31,13 @@ async function relayFor(identities: Identity[], extra: { rateLimitPerMinute?: nu
   return { relay, logs };
 }
 
-function client(relay: RelayHandle, identity: Identity) {
+function client(relay: RelayHandle, identity: Identity, admission?: unknown) {
   const received: Envelope[] = [];
   const statuses: string[] = [];
   const instance = new RelayClient({
     identity,
     url: relay.url,
+    ...(admission === undefined ? {} : { admission: () => admission }),
     onEnvelope: (envelope) => received.push(envelope),
     onStatus: (status) => statuses.push(status),
     minBackoffMs: 20,
@@ -168,5 +182,56 @@ describe('relay', () => {
     cleanups.push(() => second.close());
     await until(() => a.instance.connected);
     expect(a.statuses.filter((status) => status === 'connected')).toHaveLength(2);
+  });
+
+  it('admits a newcomer who presents a ticket signed by an admitted node, once, and remembers it', async () => {
+    const julie = await generateIdentity('Julie');
+    const natha = await generateIdentity('Natha');
+    const stranger = await generateIdentity('Stranger');
+    const admittedPath = join(mkdtempSync(join(tmpdir(), 'relay-')), 'admitted.json');
+    const { relay, logs } = await relayFor([julie], { admittedPath });
+    const ticket = await createAdmission(julie);
+
+    const n = client(relay, natha, ticket);
+    await n.instance.waitReady();
+    expect(logs).toContainEqual(
+      expect.objectContaining({ event: 'admission', outcome: 'admitted', nodeId: natha.nodeId, sponsor: julie.nodeId }),
+    );
+    expect(readFileSync(admittedPath, 'utf8')).toContain(natha.nodeId);
+    expect(statSync(admittedPath).mode & 0o777).toBe(0o600);
+
+    const s = client(relay, stranger, ticket);
+    await until(() => s.statuses.includes('unauthorized'));
+    expect(logs).toContainEqual(expect.objectContaining({ event: 'admission', outcome: 'ticket_spent' }));
+
+    n.instance.close();
+    await relay.close();
+    const { relay: restarted } = await relayFor([julie], { admittedPath });
+    const again = client(restarted, natha);
+    await again.instance.waitReady();
+    expect(again.statuses).toContain('connected');
+  });
+
+  it('refuses tickets from a sponsor it does not admit, forged tickets and a sponsor over quota', async () => {
+    const julie = await generateIdentity('Julie');
+    const outsider = await generateIdentity('Outsider');
+    const [a, b, c] = await Promise.all(['A', 'B', 'C'].map((name) => generateIdentity(name)));
+    if (!a || !b || !c) throw new Error('identities');
+    const { relay, logs } = await relayFor([julie], { maxAdmissionsPerSponsorPerDay: 1 });
+
+    const fromOutsider = client(relay, a, await createAdmission(outsider));
+    await until(() => fromOutsider.statuses.includes('unauthorized'));
+    const forged = { ...(await createAdmission(outsider)), sponsor: julie.nodeId };
+    const withForged = client(relay, b, forged);
+    await until(() => withForged.statuses.includes('unauthorized'));
+    const first = client(relay, c, await createAdmission(julie));
+    await first.instance.waitReady();
+    const overQuota = client(relay, a, await createAdmission(julie));
+    await until(() => overQuota.statuses.filter((status) => status === 'unauthorized').length > 0);
+
+    const outcomes = logs.filter((entry) => entry.event === 'admission').map((entry) => entry.outcome);
+    expect(outcomes).toEqual(
+      expect.arrayContaining(['sponsor_not_admitted', 'bad_signature', 'admitted', 'sponsor_quota']),
+    );
   });
 });

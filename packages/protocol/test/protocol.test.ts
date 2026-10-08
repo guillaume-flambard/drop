@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
   canonical,
   canTransition,
+  ADMISSION_TTL_MS,
+  createAdmission,
   createInvite,
+  verifyAdmission,
   decodeInvite,
   DropError,
   encodeInvite,
@@ -210,12 +213,24 @@ describe('cards, receipts, invites, lifecycle, schemas', () => {
     expect(await verifyReceipt({ ...receipt, decision: 'deny' })).toBe(false);
   });
 
-  it('encodes invites that expire after 15 minutes', async () => {
+  it('encodes invites that expire after a day', async () => {
     const { alice } = await pair();
     const invite = createInvite(alice, 'wss://relay.example', NOW);
-    expect(decodeInvite(encodeInvite(invite), NOW + 60_000)).toEqual(invite);
-    expect(() => decodeInvite(encodeInvite(invite), NOW + 15 * 60_000)).toThrow(DropError);
+    expect(decodeInvite(encodeInvite(invite), NOW + 23 * 3_600_000)).toEqual(invite);
+    expect(() => decodeInvite(encodeInvite(invite), NOW + 24 * 3_600_000)).toThrow(DropError);
     expect(() => decodeInvite('not-a-code', NOW)).toThrow(DropError);
+  });
+
+  it('signs single-use admission tickets that only the sponsor can produce', async () => {
+    const { alice, bob } = await pair();
+    const ticket = await createAdmission(alice, NOW);
+    expect(await verifyAdmission(ticket, NOW + 60_000)).toBe('ok');
+    expect(await verifyAdmission(ticket, NOW + ADMISSION_TTL_MS)).toBe('expired');
+    expect(await verifyAdmission({ ...ticket, sponsor: bob.nodeId }, NOW)).toBe('bad_signature');
+    expect(await verifyAdmission({ ...ticket, expiresAt: ticket.expiresAt + 1 }, NOW)).toBe('bad_signature');
+    expect(await verifyAdmission({ v: 1 }, NOW)).toBe('invalid');
+    const invite = createInvite(alice, 'wss://relay.example', NOW, ticket);
+    expect(decodeInvite(encodeInvite(invite), NOW).admission).toEqual(ticket);
   });
 
   it('enforces the drop lifecycle', () => {

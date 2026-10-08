@@ -121,7 +121,7 @@ export async function startMesh(capabilities: CapabilityImpl[]): Promise<Mesh> {
 
   // Pairing through real invites: requester ↔ executor, approver ↔ executor.
   for (const node of [requester, approver]) {
-    const code = executor.engine.invite(relay.url);
+    const code = await executor.engine.invite(relay.url);
     await node.engine.pair(code);
     await until(
       () =>

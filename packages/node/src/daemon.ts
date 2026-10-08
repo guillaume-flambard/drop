@@ -35,10 +35,15 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
     log: (entry) => {
       log(JSON.stringify({ at: new Date().toISOString(), ...entry }));
     },
+    onAdmission: (ticket) => {
+      home.savePendingAdmission(ticket);
+      link.relay?.retryNow();
+    },
   });
   const relay = new RelayClient({
     identity,
     url: config.relayUrl,
+    admission: () => home.pendingAdmission(),
     onEnvelope: (envelope) => {
       void engine.handleEnvelope(envelope).catch(() => {
         log('E_RUNNER envelope handling failed');
@@ -47,6 +52,7 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
     onStatus: (status) => {
       log(`relay: ${status}`);
       if (status === 'connected') {
+        home.clearPendingAdmission();
         void engine
           .flushOutbox()
           .then(() => engine.refreshCatalogs())

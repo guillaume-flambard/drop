@@ -1,5 +1,6 @@
 import { EventEmitter } from 'node:events';
 import {
+  createAdmission,
   createInvite,
   decodeInvite,
   encodeInvite,
@@ -117,6 +118,8 @@ export interface EngineOptions {
   capabilities: CapabilityImpl[];
   now?: () => number;
   log?: (entry: EngineLogEntry) => void;
+  /** Called with the admission ticket of an invite being accepted, so the node can join the relay with it (T2.1). */
+  onAdmission?: (ticket: unknown) => void;
 }
 
 const DECISION_ERRORS: Record<'deny' | 'not_now', DropErrorCode> = { deny: 'E_DENIED', not_now: 'E_NOT_NOW' };
@@ -190,14 +193,17 @@ export class NodeEngine extends EventEmitter {
 
   // ---- pairing -----------------------------------------------------------------------------------------------
 
-  invite(relayUrl: string): string {
-    const invite = createInvite(this.identity, relayUrl, this.now());
+  /** A pairing code that also carries an admission ticket, so a newcomer can join the relay with it (T2.1). */
+  async invite(relayUrl: string): Promise<string> {
+    const admission = await createAdmission(this.identity, this.now());
+    const invite = createInvite(this.identity, relayUrl, this.now(), admission);
     this.invites.set(invite.oneTimeToken, invite.expiresAt);
     return encodeInvite(invite);
   }
 
   async pair(code: string): Promise<NodeId> {
     const invite = decodeInvite(code, this.now());
+    if (invite.admission) this.options.onAdmission?.(invite.admission);
     this.pairing.set(invite.nodeId, { token: invite.oneTimeToken, displayName: invite.displayName });
     await this.send(invite.nodeId, {
       type: 'pair_request',

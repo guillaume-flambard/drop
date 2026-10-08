@@ -200,7 +200,7 @@ export function startLocalApi(options: LocalApiOptions): Promise<LocalApi> {
       return;
     }
     if (method === 'POST' && path === '/ui/invite') {
-      json(res, 200, { code: engine.invite(options.relayUrl) });
+      json(res, 200, { code: await engine.invite(options.relayUrl) });
       return;
     }
     if (method === 'POST' && path === '/ui/pair') {

@@ -107,7 +107,7 @@ switch (command) {
   }
   case 'invite': {
     const { code } = (await api(home, 'POST', '/ui/invite', {})) as { code: string };
-    process.stdout.write(`${code}\n(valid 15 minutes, single use)\n`);
+    process.stdout.write(`${code}\n(valid 24 hours, single use; also lets a new node join the relay)\n`);
     break;
   }
   case 'pair': {
