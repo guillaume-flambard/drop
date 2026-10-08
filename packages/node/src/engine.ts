@@ -91,6 +91,7 @@ interface ExecutorDrop {
   reviewExpiresAt?: number;
   output?: Record<string, unknown> | undefined;
   toolCalls: { name: string; count: number }[];
+  costUsd: number;
   reviewed: boolean;
   timestamps: { requested: number; decided?: number; started?: number; finished?: number; delivered?: number };
 }
@@ -429,6 +430,7 @@ export class NodeEngine extends EventEmitter {
       approver: undefined,
       expiresAt: now + APPROVAL_TTL_MS,
       toolCalls: [],
+      costUsd: 0,
       reviewed: false,
       timestamps: { requested: now },
     };
@@ -494,6 +496,7 @@ export class NodeEngine extends EventEmitter {
     await this.status(drop);
     const result = await runCapability(drop.impl, drop.input, { config: drop.config });
     drop.toolCalls = result.toolCalls;
+    drop.costUsd = result.costUsd;
     drop.timestamps.finished = this.now();
     if (!result.ok) {
       drop.state = 'failed';
@@ -623,6 +626,7 @@ export class NodeEngine extends EventEmitter {
       reviewed: drop.reviewed,
       toolCalls: drop.toolCalls,
       timestamps: drop.timestamps,
+      ...(drop.costUsd > 0 ? { costUsd: drop.costUsd } : {}),
       ...(outputHash ? { outputHash } : {}),
       ...(errorCode ? { errorCode } : {}),
     };

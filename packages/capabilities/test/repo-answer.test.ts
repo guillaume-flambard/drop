@@ -152,6 +152,16 @@ describe('repo.answer', () => {
     expect(looksLikeCode('Oui. Le calcul est fait dans src/index.ts, avec la TVA (20 %).')).toBe(false);
   });
 
+  it('reports the real cost, paid by the owner, in the run result', async () => {
+    const { provider } = scripted([
+      { toolCalls: [{ id: 'c', name: 'list_files', arguments: '{}' }], costUsd: 0.01 },
+      { content: finalAnswer, costUsd: 0.02 },
+    ]);
+    const result = await runCapability(createRepoAnswer({ provider }), QUESTION, { config });
+    expect(result.ok).toBe(true);
+    expect(result.costUsd).toBeCloseTo(0.03, 6);
+  });
+
   it('stops with E_BUDGET when the real cost exceeds maxUsd', async () => {
     const { provider } = scripted([{ toolCalls: [{ id: 'c', name: 'list_files', arguments: '{}' }], costUsd: 0.4 }]);
     expect(
