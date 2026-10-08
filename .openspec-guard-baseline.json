@@ -75,14 +75,6 @@
       "file": "openspec/specs/blocked-observer/spec.md"
     },
     {
-      "id": "sg_55ea3cba7a2242e4",
-      "reason": "missing-selector",
-      "verdict": "fail",
-      "capability": "blocked-observer",
-      "scenario": "Fichier de motifs testé",
-      "file": "openspec/specs/blocked-observer/spec.md"
-    },
-    {
       "id": "sg_58ccbc7b6b38f1fe",
       "reason": "missing-selector",
       "verdict": "fail",
@@ -208,14 +200,6 @@
       "verdict": "fail",
       "capability": "blocked-observer",
       "scenario": "Origine des événements",
-      "file": "openspec/specs/blocked-observer/spec.md"
-    },
-    {
-      "id": "sg_bc86db318c2bdb63",
-      "reason": "missing-selector",
-      "verdict": "fail",
-      "capability": "blocked-observer",
-      "scenario": "Détection insensible à la casse",
       "file": "openspec/specs/blocked-observer/spec.md"
     },
     {
@@ -1008,14 +992,6 @@
       "verdict": "fail",
       "capability": "node",
       "scenario": "Runner conditionnel",
-      "file": "openspec/specs/node/spec.md"
-    },
-    {
-      "id": "sg_cb8e8f2d3f53e6e3",
-      "reason": "missing-selector",
-      "verdict": "fail",
-      "capability": "node",
-      "scenario": "Ordre des éléments",
       "file": "openspec/specs/node/spec.md"
     },
     {

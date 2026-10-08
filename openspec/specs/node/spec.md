@@ -275,6 +275,7 @@ Expire dans {mm:ss}
 ```
 
 #### Scenario: Ordre des éléments
+<!-- openspec-guard:test="consent UI > shows no technical identifier and defaults to « Pas maintenant »" -->
 - **WHEN** la carte d'une demande est rendue
 - **THEN** les éléments apparaissent dans l'ordre : demandeur et agent, titre, aperçu de l'entrée, « Pourquoi », « recevra », « ne recevra jamais », coût éventuel, sensibilité haute éventuelle, « Expire dans », puis les boutons « Pas maintenant », « Refuser », « Autoriser une fois »
 

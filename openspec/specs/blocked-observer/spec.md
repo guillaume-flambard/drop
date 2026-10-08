@@ -133,10 +133,12 @@ n'est reconnu que dans un contexte HTTP, « forbidden » et « unauthorized » s
 tient sur une ligne. Le hook et l'import Codex MUST utiliser ces mêmes motifs. Seul le nom du motif est stocké.
 
 #### Scenario: Vrais blocages reconnus
+<!-- openspec-guard:test="patterns > recognizes real block messages" -->
 - **WHEN** une sortie contient `HTTP/1.1 401 Unauthorized`, `gh: HTTP 403`, `Permission Denied` ou `Requires sign-in`
 - **THEN** le motif correspondant est détecté
 
 #### Scenario: Bruit ignoré
+<!-- openspec-guard:test="patterns > ignores code, line numbers and prose that only mention a code or the word" -->
 - **WHEN** une sortie contient seulement un numéro de ligne 401, une table de tests `[401, 403]` ou un identifiant
   comme `BranchForbiddenError`
 - **THEN** aucun motif n'est détecté
@@ -293,13 +295,16 @@ L'export MUST contenir les jours actifs du développeur, sous forme de dates seu
 l'échantillon (au moins 3 développeurs avec 10 jours actifs chacun) et appliquer le seuil go/no-go de D24.
 
 #### Scenario: Verdict sur un échantillon suffisant
+<!-- openspec-guard:test="report --merge (T0.6) > says GO above both thresholds, EXTEND between them" -->
 - **WHEN** trois exports de 10 jours actifs chacun totalisent 0,6 blocage YES par dev-jour et une médiane de 12 minutes
 - **THEN** le rapport donne le verdict `GO`
 
 #### Scenario: Échantillon insuffisant
+<!-- openspec-guard:test="report --merge (T0.6) > refuses to conclude on too small a sample" -->
 - **WHEN** un seul export est fourni, ou qu'un développeur a moins de 10 jours actifs
 - **THEN** le verdict est `INSUFFICIENT_SAMPLE`, quels que soient les chiffres
 
 #### Scenario: Ancien format refusé
+<!-- openspec-guard:test="report --merge (T0.6) > rejects the old export format, a bare array without active days" -->
 - **WHEN** un export est un simple tableau d'événements, sans jours actifs
 - **THEN** il est refusé avec un message qui demande de réexporter
