@@ -72,3 +72,18 @@ son modèle s'il est précisé, avec un budget égal au plus petit de `maxUsd` e
 <!-- openspec-guard:test="mcp.answer (T2.2) > runs on the requester capped key when the requester pays (D27)" -->
 - **WHEN** la demande porte une clé plafonnée à 0,10 $ pour `requester/model`
 - **THEN** le modèle appelé est `requester/model` avec cette clé, et le budget est 0,10 $
+
+### Requirement: Serveur déclaré par un agent
+La config MAY désigner un serveur par `{ transport: 'agent', agent, name }` : un serveur déjà déclaré par Claude Code,
+Claude Desktop, Cursor ou Codex (T2.8). La capacité SHALL alors le démarrer comme l'agent le démarre, avec les
+variables et en-têtes lus dans le fichier de l'agent au moment de l'exécution, sans les recopier dans la config de drop.
+
+#### Scenario: Secret lu chez l'agent
+<!-- openspec-guard:test="MCP servers declared by the coding agents (T2.8) > starts a server as its agent declares it, with the secrets read from the agent file at run time" -->
+- **WHEN** Claude Code déclare un serveur avec un jeton dans `env`, et que Julie le partage
+- **THEN** le serveur démarre avec ce jeton, lu dans `~/.claude.json` ; un serveur que l'agent ne déclare plus fait échouer la connexion
+
+#### Scenario: Config des quatre agents
+<!-- openspec-guard:test="MCP servers declared by the coding agents (T2.8) > reads the servers of Claude Code, Cursor, Claude Desktop and Codex, with their env and headers" -->
+- **WHEN** les quatre agents déclarent des serveurs, dont une table Codex désactivée
+- **THEN** chaque serveur actif est lu avec sa commande ou son URL, ses variables et ses en-têtes

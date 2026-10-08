@@ -84,6 +84,29 @@ demande se termine. Sans clé de gestion, ou si l'API refuse, il n'envoie pas de
 - **WHEN** la variable de la clé de gestion est absente ou l'API refuse
 - **THEN** la demande part sans clé et l'erreur est journalisée avec un code stable
 
+### Requirement: Détection des agents et de leurs serveurs MCP
+`drop detect` SHALL lister, en moins de 3 secondes, les agents de code présents (Claude Code, Claude Desktop, Cursor,
+Codex), si drop y est installé, et leurs serveurs MCP lus dans leurs fichiers de config, avec le genre de chaque
+serveur quand son nom, sa commande ou son URL le dit (Figma, Notion, GitHub, Linear, Jira, base de données, CRM…). La
+sortie MUST NOT contenir de valeur secrète : seulement les noms de variables et d'en-têtes (T2.8, D28).
+
+#### Scenario: Inventaire sans secret
+<!-- openspec-guard:test="detecting agents and their MCP servers (T2.8) > lists each agent, whether drop is installed, and what each server is, without any secret value" -->
+- **WHEN** Claude Code déclare un serveur Notion avec `NOTION_TOKEN` et le serveur drop, et Cursor un CRM
+- **THEN** `drop detect` montre Notion (genre `notion`, variable `NOTION_TOKEN`), drop installé dans Claude Code, le CRM
+  dans Cursor, et aucune valeur de jeton
+
+### Requirement: Partage d'un serveur détecté
+`drop share <agent>/<serveur>` SHALL publier `mcp.answer.<genre ou nom>` sur ce serveur, tel que l'agent le déclare,
+avec par défaut les seuls outils que le serveur marque `readOnlyHint` ; si aucun ne l'est, la commande MUST demander
+`--tools`. Les serveurs de drop lui-même ne sont jamais proposés.
+
+#### Scenario: Partage en une commande
+<!-- openspec-guard:test="detecting agents and their MCP servers (T2.8) > drop share publishes a detected server with its read-only tools, and never drop itself" -->
+- **WHEN** Julie lance `drop share claude_code/figma`
+- **THEN** `mcp.answer.figma` est publié avec le libellé « mon Figma », le serveur désigné par l'agent et les seuls outils en lecture seule
+- **AND** `drop share` sur le serveur de drop lui-même est refusé
+
 ### Requirement: Commande drop peers
 `drop peers` SHALL lister les pairs.
 

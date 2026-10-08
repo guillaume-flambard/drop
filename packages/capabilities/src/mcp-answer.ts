@@ -13,6 +13,7 @@ import {
   type ChatProvider,
   type ProviderConfig,
 } from './llm.ts';
+import { AGENTS, findAgentServer } from './agents.ts';
 import { frameQuestion } from './repo-answer.ts';
 
 /**
@@ -36,6 +37,14 @@ export const McpServerSchema = z.discriminatedUnion('transport', [
     url: z.url(),
     /** Header name to the environment variable that holds its value, e.g. { "Authorization": "NOTION_AUTH" }. */
     headersFromEnv: z.record(z.string(), EnvNameSchema).default({}),
+  }) /**
+   * A server already declared in one of the owner's agents (T2.8): started as that agent starts it, with the secrets
+   * read from the agent's own config file at run time. Nothing is copied into drop's config.
+   */,
+  z.object({
+    transport: z.literal('agent'),
+    agent: z.enum(AGENTS),
+    name: z.string().min(1).max(100),
   }),
 ]);
 export type McpServerConfig = z.infer<typeof McpServerSchema>;
@@ -100,6 +109,26 @@ export async function connectMcp(server: McpServerConfig, env: NodeJS.ProcessEnv
     return value;
   };
   const client = new Client({ name: 'drop-mcp-answer', version: '1.0.0' });
+  if (server.transport === 'agent') {
+    const declared = findAgentServer(server.agent, server.name);
+    if (!declared) throw new DropError('E_RUNNER', `${server.agent} no longer declares the MCP server ${server.name}`);
+    if (declared.transport === 'stdio') {
+      await client.connect(
+        new StdioClientTransport({
+          command: declared.command ?? '',
+          args: declared.args ?? [],
+          env: { ...getDefaultEnvironment(), ...declared.env },
+          stderr: 'ignore',
+        }),
+      );
+    } else {
+      const transport = new StreamableHTTPClientTransport(new URL(declared.url ?? ''), {
+        requestInit: { headers: declared.headers },
+      }) as Transport;
+      await client.connect(transport);
+    }
+    return client;
+  }
   if (server.transport === 'stdio') {
     const forwarded = Object.fromEntries(server.env.map((name) => [name, read(name)]));
     await client.connect(

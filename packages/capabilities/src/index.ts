@@ -40,6 +40,15 @@ export {
 export { openAiCompatible, ProviderConfigSchema, providerFor, type ChatProvider, type ProviderConfig } from './llm.ts';
 
 export {
+  AGENTS,
+  agentConfigPath,
+  agentServers,
+  codexServers,
+  findAgentServer,
+  type AgentKind,
+  type AgentServer,
+} from './agents.ts';
+export {
   connectMcp,
   createMcpAnswer,
   mcpAnswer,
