@@ -254,7 +254,7 @@ code.
 ### Requirement: Filtre de bruit
 Un motif trouvé dans du contenu que l'agent a seulement lu MUST NOT créer d'événement : sortie d'une commande qui n'a
 fait qu'afficher du contenu local et n'a pas échoué, sortie des tests ou du build de l'agent, résultat de recherche web,
-résultat réussi d'un outil de lecture de Claude Code (D25). Un refus venu d'une commande qui atteint une ressource, ou
+résultat réussi d'un outil Claude Code autre que `Bash` et les outils MCP (D25). Un refus venu d'une commande qui atteint une ressource, ou
 d'un outil en échec, MUST rester un événement. Un événement classé MUST NOT être retiré par un nouvel import.
 
 #### Scenario: Mot lu dans un fichier ignoré
