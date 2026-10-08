@@ -4,12 +4,55 @@ Scénario de la spec 08, joué en vrai : le relais public `wss://drop.memolabs.d
 dans le VPS, le Node « Guillaume » et le Node « Julie » sur le Mac. Le script pour la rejouer est
 [`scripts/demo.md`](../../scripts/demo.md).
 
-**L'agent demandeur est Codex**, pas Claude Code. Claude Code non interactif (`claude -p`) a échoué à
-l'authentification (« OAuth session expired and could not be refreshed »), alors que son serveur MCP `drop` était
-connecté. Codex a pris le relais avec le même serveur MCP. La démo montre ainsi que drop marche avec n'importe quel
-agent MCP.
+La démo a été jouée deux fois, avec deux agents différents branchés sur le même serveur MCP `drop` : **Claude Code**
+(`claude -p`, section suivante) puis **Codex** (plus bas). Le protocole ne change pas d'un agent à l'autre.
 
-## Étapes 1 à 3 : « La prod de traefik va bien ? »
+## Avec Claude Code (15:05 UTC)
+
+Appels MCP, identiques aux deux questions : `list_capabilities`, puis `request_drop`, puis `get_drop_result`.
+
+**« La prod de traefik va bien ? »** Carte chez Guillaume, « via Claude Code » :
+
+![Carte de consentement, Claude Code](cc-01-consent-traefik.jpg)
+
+> Oui, la prod de traefik va bien. J'ai utilisé la capacité « Résumer les erreurs de production » de lab, qui a
+> accepté la demande. Fenêtre : la dernière heure. État du service : `ok`. Erreurs : 0 ligne d'erreur, donc aucun
+> type d'erreur à remonter. Ce résultat ne porte que sur la dernière heure, et il vient de l'outil de lab : je n'ai
+> rien vérifié moi-même sur le serveur.
+
+**« Est-ce que l'implémentation de Julie gère déjà le mode sombre ? »** Carte et relecture chez Julie :
+
+![Carte chez Julie, Claude Code](cc-02-consent-julie.jpg)
+![Relecture chez Julie, Claude Code](cc-03-review-julie.jpg)
+
+> Oui, d'après Julie, son implémentation gère déjà le mode sombre. Elle a accepté et relu la demande avant de répondre.
+> Type `Theme` avec `'dark'` ; détection par `prefers-color-scheme` ; application par l'attribut `data-theme` sur
+> l'élément racine ; tout est dans `src/theme.ts`. C'est ce que Julie déclare, je n'ai pas lu son code. Sa réponse ne
+> précise pas si on peut forcer le thème à la main, ni si ce choix est sauvegardé.
+
+Claude Code traite le résultat comme une donnée venue de quelqu'un d'autre, ce que demande le cadrage
+`<drop_result>` : il cite la source, dit ce qu'il n'a pas vérifié et propose de reposer la question. Coût estimé
+de l'agent demandeur, selon Claude Code : 0,49 $ et 0,26 $, pris sur l'abonnement de Guillaume. Les réponses de Julie, elles, coûtent 0 $
+(modèle gratuit).
+
+Reçus après ce passage :
+
+```text
+== Guillaume
+2026-10-08T15:05:06.339Z  production.error_summary  allow_once  01a11c0b-ee15-7106-ba4a-823e48d1b6a3
+2026-10-08T15:05:36.097Z  repo.answer  allow_once  01a11c0c-624a-7a20-8aec-b6509742e9c2
+== Julie
+2026-10-08T15:05:36.097Z  repo.answer  allow_once  01a11c0c-624a-7a20-8aec-b6509742e9c2
+== lab (VPS)
+2026-10-08T15:05:06.339Z  production.error_summary  allow_once  01a11c0b-ee15-7106-ba4a-823e48d1b6a3
+```
+
+## Avec Codex (15:00 UTC)
+
+Premier passage. `claude -p` échouait alors à l'authentification (« OAuth session expired and could not be
+refreshed ») ; Guillaume s'est reconnecté avec `claude auth login` avant le passage Claude Code ci-dessus.
+
+### Étapes 1 à 3 : « La prod de traefik va bien ? »
 
 Appels MCP de Codex, dans l'ordre :
 
@@ -29,7 +72,7 @@ Codex :
 > Oui, d'après le résultat fourni par **lab**, Traefik est **OK** sur la dernière heure : **0 ligne d'erreur
 > détectée**, aucun type d'erreur remonté.
 
-## Étape 4 : « Est-ce que l'implémentation de Julie gère déjà le mode sombre ? »
+### Étape 4 : « Est-ce que l'implémentation de Julie gère déjà le mode sombre ? »
 
 La carte chez Julie. `repo.answer` est à sensibilité haute, et l'appel au modèle se fait avec la clé de Julie (ici
 gratuit) :
@@ -50,7 +93,7 @@ Les noms de fichiers sont là, sans une ligne de code. Le premier `request_drop`
 le journal de Codex ne dit pas pourquoi. La cause la plus probable est une entrée refusée localement par
 `requester-mcp` (question de plus de 300 caractères ou raison de plus de 140).
 
-## Étape 5 : les reçus, des deux côtés
+### Étape 5 : les reçus, des deux côtés
 
 ```text
 == Guillaume
