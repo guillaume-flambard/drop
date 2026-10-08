@@ -445,6 +445,7 @@ export class NodeEngine extends EventEmitter {
         neverReceives: built.card.neverReceives,
         sensitivity: built.card.sensitivity,
         executorName: this.identity.displayName,
+        ...(built.impl.cost ? { cost: built.impl.cost(published.config) } : {}),
       },
       inputPreview: built.impl.preview(validated.input).slice(0, 2000),
       purpose: drop.purpose,

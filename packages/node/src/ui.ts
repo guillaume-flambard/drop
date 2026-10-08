@@ -1,3 +1,4 @@
+import type { ConsentCost } from '@drop/protocol';
 import type { InboxItem } from './engine.ts';
 
 const AGENT_NAMES: Record<string, string> = {
@@ -26,12 +27,21 @@ function list(items: string[]): string {
   return `<ul>${items.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>`;
 }
 
+/** One line on who pays: the capability owner, who is also the one deciding here (D21). */
+export function costLine(cost: ConsentCost | undefined): string | undefined {
+  if (!cost) return undefined;
+  if (cost.kind === 'free') return 'Coût : gratuit.';
+  if (cost.kind === 'capped') return `Coût max : ${cost.maxUsd.toFixed(2).replace('.', ',')} $, à votre charge.`;
+  return 'Coût : à votre charge, non mesuré (tarifs du modèle non configurés).';
+}
+
 /**
  * The consent card, in the order fixed by the spec. No technical identifier (node id, tool, capability id) is shown,
  * and « Pas maintenant » is the default button, never « Autoriser ».
  */
 export function renderConsentCard(item: Extract<InboxItem, { kind: 'approval' }>, now: number): string {
   const who = escapeHtml(item.requestedBy.displayName);
+  const cost = costLine(item.card.cost);
   const high =
     item.card.sensitivity === 'high'
       ? '<p class="high">Sensibilité haute : vous relirez le résultat avant envoi.</p>'
@@ -43,6 +53,7 @@ export function renderConsentCard(item: Extract<InboxItem, { kind: 'approval' }>
   <p>Pourquoi : ${escapeHtml(item.purpose)}</p>
   <div class="cols"><div><h3>${who} recevra :</h3>${list(item.card.receives)}</div>
   <div><h3>${who} ne recevra jamais :</h3>${list(item.card.neverReceives)}</div></div>
+  ${cost ? `<p class="cost">${escapeHtml(cost)}</p>` : ''}
   ${high}
   <p class="expires">Expire dans <time data-expires="${String(item.expiresAt)}">${remaining(item.expiresAt, now)}</time></p>
   <form method="post" action="/ui/decide">

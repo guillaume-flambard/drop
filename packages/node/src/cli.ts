@@ -2,9 +2,10 @@
 import { readFileSync } from 'node:fs';
 import { parseArgs } from 'node:util';
 import { capabilities } from '@drop/capabilities';
-import { generateIdentity, OwnerKindSchema } from '@drop/protocol';
+import { generateIdentity, OwnerKindSchema, type ConsentCost } from '@drop/protocol';
 import { startDaemon } from './daemon.ts';
 import { DropHome } from './home.ts';
+import { costLine } from './ui.ts';
 
 const USAGE = `drop <command>
   init --name <name> --kind human|team|machine|service --relay <wss://…> [--port 7781]
@@ -141,7 +142,7 @@ switch (command) {
         kind: string;
         dropId: string;
         requestedBy?: { displayName: string };
-        card?: { title: string };
+        card?: { title: string; cost?: ConsentCost };
         title?: string;
         purpose?: string;
         inputPreview?: string;
@@ -152,7 +153,7 @@ switch (command) {
     for (const item of pending) {
       process.stdout.write(
         item.kind === 'approval'
-          ? `${item.dropId}  ${item.requestedBy?.displayName ?? ''}: ${item.card?.title ?? ''}\n  « ${item.inputPreview ?? ''} »\n  Pourquoi : ${item.purpose ?? ''}\n`
+          ? `${item.dropId}  ${item.requestedBy?.displayName ?? ''}: ${item.card?.title ?? ''}\n  « ${item.inputPreview ?? ''} »\n  Pourquoi : ${item.purpose ?? ''}\n${costLine(item.card?.cost) ? `  ${costLine(item.card?.cost) ?? ''}\n` : ''}`
           : `${item.dropId}  à relire : ${item.title ?? ''}\n${JSON.stringify(item.output, null, 2)}\n`,
       );
     }

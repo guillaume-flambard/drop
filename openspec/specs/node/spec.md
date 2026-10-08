@@ -266,6 +266,7 @@ Pourquoi : {purpose}
 
 {displayName} recevra :            {receives[]}
 {displayName} ne recevra jamais :  {neverReceives[]}
+Coût max : {maxUsd} $, à votre charge.   (ou « gratuit », ou « non mesuré » ; absent si la capacité ne coûte rien)
 Sensibilité haute : vous relirez le résultat avant envoi.   (si high)
 
 Expire dans {mm:ss}
@@ -275,7 +276,7 @@ Expire dans {mm:ss}
 
 #### Scenario: Ordre des éléments
 - **WHEN** la carte d'une demande est rendue
-- **THEN** les éléments apparaissent dans l'ordre : demandeur et agent, titre, aperçu de l'entrée, « Pourquoi », « recevra », « ne recevra jamais », sensibilité haute éventuelle, « Expire dans », puis les boutons « Pas maintenant », « Refuser », « Autoriser une fois »
+- **THEN** les éléments apparaissent dans l'ordre : demandeur et agent, titre, aperçu de l'entrée, « Pourquoi », « recevra », « ne recevra jamais », coût éventuel, sensibilité haute éventuelle, « Expire dans », puis les boutons « Pas maintenant », « Refuser », « Autoriser une fois »
 
 #### Scenario: Ligne de sensibilité haute
 - **WHEN** la capacité est `low`

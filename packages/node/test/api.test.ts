@@ -89,6 +89,21 @@ describe('consent UI', () => {
     expect(html).not.toContain('<b>prod');
   });
 
+  it('tells the approver what the run may cost them', () => {
+    const capped = renderConsentCard(
+      { ...card, card: { ...card.card, cost: { kind: 'capped', maxUsd: 0.5 } } },
+      Date.now(),
+    );
+    expect(capped).toContain('Coût max : 0,50 $, à votre charge.');
+    expect(renderConsentCard({ ...card, card: { ...card.card, cost: { kind: 'free' } } }, Date.now())).toContain(
+      'Coût : gratuit.',
+    );
+    expect(renderConsentCard({ ...card, card: { ...card.card, cost: { kind: 'unmeasured' } } }, Date.now())).toContain(
+      'non mesuré',
+    );
+    expect(renderConsentCard(card, Date.now())).not.toContain('Coût');
+  });
+
   it('shows no technical identifier and defaults to « Pas maintenant »', () => {
     const html = renderConsentCard(card, Date.now());
     expect(html).not.toContain('production.error_summary');

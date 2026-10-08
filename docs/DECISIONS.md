@@ -89,6 +89,11 @@ Format : `D<n> — date — décision — raison`. Les agents ajoutent ici toute
   `baseUrl: http://127.0.0.1:11434/v1` pour Ollama local, sans clé. Seul le Node propriétaire de la capacité a la clé :
   dans la démo, les daemons du VPS et de Guillaume tournent sans `OPENROUTER_API_KEY`. Un modèle gratuit coûte 0 $ ;
   le reçu ne porte alors pas de `costUsd`.
+- **D21** — Qui paie une demande (2026-10-08, choix de Guillaume : option A). Le propriétaire de la capacité paie,
+  car le calcul doit tourner chez lui, avec ses accès. Il le voit avant de décider : la carte de consentement affiche
+  « Coût max : 0,50 $, à votre charge », ou « gratuit » (Ollama local, modèle `:free`), ou « non mesuré » (tarifs du
+  modèle absents de la config). La ligne est absente pour une capacité qui ne coûte rien (`production.error_summary`).
+  Le coût réel est ensuite inscrit dans le reçu signé. Une capacité déclare son coût par `CapabilityImpl.cost(config)`.
 
 ## À décider par l'humain
 
@@ -118,3 +123,8 @@ Format : `D<n> — date — décision — raison`. Les agents ajoutent ici toute
   - T1.13 : aucun code d'erreur n'est prévu pour un snapshot au-delà de `maxSnapshotBytes`, ni pour le post-contrôle
     d'extrait de code.
   Détail : `coverage.md` de la change `migrate-spec-kit` (archivée sous `openspec/changes/archive/`).
+- **Financement des demandes, options gardées pour plus tard** (D21 a retenu A). B : une clé d'équipe ou
+  d'organisation sur chaque Node ; aucun code, c'est la variable d'environnement. C : le demandeur finance, en joignant
+  à sa demande une clé jetable à plafond dur (OpenRouter sait en créer), chiffrée pour l'exécuteur ; il faut l'ajouter
+  au protocole et à la carte. D : refacturation, où le propriétaire paie et les reçus signés (`costUsd`) servent de
+  relevé. C ou D ne valent que si drop sert entre entreprises différentes ; à trancher à ce moment-là.
