@@ -14,6 +14,14 @@ export const RequestedBySchema = z.object({
 });
 export type RequestedBy = z.infer<typeof RequestedBySchema>;
 
+/** Who pays and how much, shown to the approver before deciding. The capability owner always pays (D21). */
+export const ConsentCostSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('free') }),
+  z.object({ kind: z.literal('capped'), maxUsd: z.number().positive() }),
+  z.object({ kind: z.literal('unmeasured') }),
+]);
+export type ConsentCost = z.infer<typeof ConsentCostSchema>;
+
 /** What the approver reads on the consent card: never a scope or a tool name. */
 export const ConsentCardSchema = z.object({
   capabilityId: CapabilityIdSchema,
@@ -22,6 +30,7 @@ export const ConsentCardSchema = z.object({
   neverReceives: z.array(z.string()),
   sensitivity: z.enum(['low', 'high']),
   executorName: z.string(),
+  cost: ConsentCostSchema.optional(),
 });
 export type ConsentCard = z.infer<typeof ConsentCardSchema>;
 

@@ -1,7 +1,7 @@
 import { copyFile, lstat, mkdir, readdir, readFile } from 'node:fs/promises';
 import { dirname, join, relative, sep } from 'node:path';
 import { z } from 'zod';
-import { DropError } from '@drop/protocol';
+import { DropError, type ConsentCost } from '@drop/protocol';
 import type { CapabilityImpl, RunContext } from '@drop/runner';
 import {
   openAiCompatible,
@@ -208,6 +208,14 @@ export function createRepoAnswer(deps: RepoAnswerDeps = {}): CapabilityImpl<Repo
     output: RepoAnswerOutputSchema,
     configSchema: RepoAnswerConfigSchema,
     preview: (input) => input.question,
+    cost(rawConfig: unknown): ConsentCost {
+      const config = RepoAnswerConfigSchema.parse(rawConfig);
+      const { provider } = config;
+      if (provider.inputUsdPerMTok > 0 || provider.outputUsdPerMTok > 0)
+        return { kind: 'capped', maxUsd: config.maxUsd };
+      const local = /^https?:\/\/(127\.0\.0\.1|localhost)(:|\/)/.test(provider.baseUrl);
+      return local || provider.model.endsWith(':free') ? { kind: 'free' } : { kind: 'unmeasured' };
+    },
     async execute(input: RepoAnswerInput, ctx: RunContext): Promise<RepoAnswerOutput> {
       const config = RepoAnswerConfigSchema.parse(ctx.config);
       const files = await takeSnapshot(config, ctx.workdir);

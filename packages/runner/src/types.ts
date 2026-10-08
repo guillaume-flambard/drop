@@ -1,4 +1,4 @@
-import type { CapabilityCard, DropErrorCode } from '@drop/protocol';
+import type { CapabilityCard, ConsentCost, DropErrorCode } from '@drop/protocol';
 import type { ZodObject, ZodType } from 'zod';
 
 /** Everything a capability receives from the frame. It gets nothing else. */
@@ -30,6 +30,8 @@ export interface CapabilityImpl<I = unknown, O = unknown> {
   /** Human-readable rendering of the input for the consent card. */
   preview(input: I): string;
   execute(input: I, ctx: RunContext): Promise<O>;
+  /** What one run may cost the owner, from the owner's config. Absent for a capability that spends nothing. */
+  cost?(config: unknown): ConsentCost;
 }
 
 export interface ToolCallCount {

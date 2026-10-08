@@ -169,6 +169,25 @@ describe('repo.answer', () => {
     ).toMatchObject({ ok: false, code: 'E_BUDGET' });
   });
 
+  it('declares its cost to the owner: free, capped or unmeasured', () => {
+    const impl = createRepoAnswer();
+    expect(impl.cost?.({ repoPath: repo })).toEqual({ kind: 'free' });
+    expect(
+      impl.cost?.({
+        repoPath: repo,
+        provider: { baseUrl: 'http://127.0.0.1:11434/v1', model: 'qwen3:8b', apiKeyEnv: null },
+      }),
+    ).toEqual({ kind: 'free' });
+    expect(
+      impl.cost?.({
+        repoPath: repo,
+        maxUsd: 0.2,
+        provider: { model: 'paid/model', inputUsdPerMTok: 1, outputUsdPerMTok: 2 },
+      }),
+    ).toEqual({ kind: 'capped', maxUsd: 0.2 });
+    expect(impl.cost?.({ repoPath: repo, provider: { model: 'paid/model' } })).toEqual({ kind: 'unmeasured' });
+  });
+
   it('matches allow globs on relative paths', () => {
     expect(globToRegExp('src/**').test('src/a/b.ts')).toBe(true);
     expect(globToRegExp('src/**').test('srcx/a.ts')).toBe(false);
