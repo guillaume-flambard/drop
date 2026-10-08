@@ -12,7 +12,7 @@ implémenter qui appartient à une autre ligne.
 
 | ID | Tâche (périmètre) | Capacités OpenSpec | Change | Dépend de | Statut |
 | --- | --- | --- | --- | --- | --- |
-| T0.0 | Initialiser le monorepo : pnpm workspaces, TypeScript strict, eslint, prettier, vitest, scripts `lint`/`typecheck`/`test` à la racine, `.gitignore` (inclut `.drop*/`, `.env*`) | `monorepo-tooling` | `t0-0-init-monorepo` | — | doing |
+| T0.0 | Initialiser le monorepo : pnpm workspaces, TypeScript strict, eslint, prettier, vitest, scripts `lint`/`typecheck`/`test` à la racine, `.gitignore` (inclut `.drop*/`, `.env*`) | `monorepo-tooling` | `t0-0-init-monorepo` | — | done |
 | T0.1 | `blocked-observer` : schéma d'événement, stockage JSONL, serveur MCP stdio avec `report_blocked` | `blocked-observer` | `t0-1-observer-mcp` | T0.0 | todo |
 | T0.2 | `blocked-observer hook` pour Claude Code + fichier de motifs + tests (aucun extrait de sortie stocké) | `blocked-observer` | `t0-2-observer-claude-hook` | T0.1 | todo |
 | T0.3 | `blocked-observer import-codex` (vérifier d'abord l'emplacement et le format des logs Codex ; sinon `blocked` + note dans DECISIONS) | `blocked-observer` | `t0-3-observer-codex-import` | T0.1 | todo |
