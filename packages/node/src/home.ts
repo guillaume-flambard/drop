@@ -12,6 +12,7 @@ import {
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { z } from 'zod';
+import { FundingConfigSchema } from './funding.ts';
 import {
   IdentitySchema,
   NodeIdSchema,
@@ -25,6 +26,10 @@ export const NodeConfigSchema = z.object({
   relayUrl: z.string(),
   ownerKind: OwnerKindSchema,
   apiPort: z.number().int().min(0).max(65535).default(7781),
+  /** As executor: who pays the model of the capabilities run here (D27: the requester, by default). */
+  payer: z.enum(['requester', 'owner']).default('requester'),
+  /** As requester: how this node pays for its drops (D27). Absent: it sends no key, the owner's config applies. */
+  funding: FundingConfigSchema.optional(),
 });
 export type NodeConfig = z.infer<typeof NodeConfigSchema>;
 

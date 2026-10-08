@@ -6,7 +6,7 @@ import { decodeInvite, generateIdentity, sealEnvelope, type Envelope } from '@dr
 import { startRelay } from '@drop/relay';
 import { startDaemon, type Daemon } from '../src/daemon.ts';
 import { NodeEngine } from '../src/engine.ts';
-import { DropHome } from '../src/home.ts';
+import { DropHome, NodeConfigSchema } from '../src/home.ts';
 import { MemoryStore } from './helpers.ts';
 
 const cleanups: (() => Promise<void>)[] = [];
@@ -30,7 +30,7 @@ describe('joining the relay by invitation (T2.1)', () => {
     cleanups.push(() => relay.close());
     const daemon = async (identity: typeof vps): Promise<{ home: DropHome; daemon: Daemon }> => {
       const home = new DropHome(join(mkdtempSync(join(tmpdir(), 'drop-home-')), 'home'));
-      home.init(identity, { relayUrl: relay.url, ownerKind: 'human', apiPort: 0 });
+      home.init(identity, NodeConfigSchema.parse({ relayUrl: relay.url, ownerKind: 'human', apiPort: 0 }));
       const started = await startDaemon(home, { apiPort: 0, notifications: false, log: () => undefined });
       cleanups.push(() => started.stop());
       return { home, daemon: started };

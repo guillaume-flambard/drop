@@ -22,6 +22,19 @@ export const ConsentCostSchema = z.discriminatedUnion('kind', [
 ]);
 export type ConsentCost = z.infer<typeof ConsentCostSchema>;
 
+/**
+ * The requester pays for the model (D27): a key minted for this one drop, capped at `maxUsd`, sent end-to-end encrypted
+ * inside drop_request to the executor only. Never forwarded to an approver, never written to disk, never in a receipt.
+ */
+export const FundingSchema = z.object({
+  kind: z.literal('capped_key'),
+  baseUrl: z.url(),
+  apiKey: z.string().min(10).max(300),
+  maxUsd: z.number().positive().max(50),
+  model: z.string().min(1).max(200).optional(),
+});
+export type Funding = z.infer<typeof FundingSchema>;
+
 /** What the approver reads on the consent card: never a scope or a tool name. */
 export const ConsentCardSchema = z.object({
   capabilityId: CapabilityIdSchema,
@@ -31,6 +44,8 @@ export const ConsentCardSchema = z.object({
   sensitivity: z.enum(['low', 'high']),
   executorName: z.string(),
   cost: ConsentCostSchema.optional(),
+  /** Who pays the model: the owner (D21) or the requester with a capped key (D27). */
+  paidBy: z.enum(['owner', 'requester']).optional(),
 });
 export type ConsentCard = z.infer<typeof ConsentCardSchema>;
 
@@ -70,6 +85,7 @@ export const MessageSchema = z.discriminatedUnion('type', [
     input: z.unknown(),
     purpose: z.string().min(1).max(140),
     requestedBy: RequestedBySchema,
+    funding: FundingSchema.optional(),
   }),
   z.object({ type: z.literal('drop_status'), dropId: DropId, state: DropStateSchema }),
   z.object({

@@ -37,7 +37,7 @@ export {
   type RepoAnswerInput,
   type RepoAnswerOutput,
 } from './repo-answer.ts';
-export { openAiCompatible, ProviderConfigSchema, type ChatProvider, type ProviderConfig } from './llm.ts';
+export { openAiCompatible, ProviderConfigSchema, providerFor, type ChatProvider, type ProviderConfig } from './llm.ts';
 
 export {
   connectMcp,

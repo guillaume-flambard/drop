@@ -1,6 +1,7 @@
 import { capabilities } from '@drop/capabilities';
 import { RelayClient } from '@drop/relay';
 import { NodeEngine, type InboxItem } from './engine.ts';
+import { openRouterFunder } from './funding.ts';
 import { startLocalApi, type LocalApi } from './api.ts';
 import type { DropHome } from './home.ts';
 import { notify } from './notify.ts';
@@ -35,6 +36,16 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
     log: (entry) => {
       log(JSON.stringify({ at: new Date().toISOString(), ...entry }));
     },
+    payer: config.payer,
+    ...(config.funding
+      ? {
+          funder: openRouterFunder(config.funding, {
+            log: (code) => {
+              log(code);
+            },
+          }),
+        }
+      : {}),
     onAdmission: (ticket) => {
       home.savePendingAdmission(ticket);
       link.relay?.retryNow();

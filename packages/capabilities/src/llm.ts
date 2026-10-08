@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { Funding } from '@drop/protocol';
 
 /**
  * Provider-agnostic chat client over the OpenAI-compatible `/chat/completions` API, spoken by Ollama, OpenRouter,
@@ -66,6 +67,26 @@ const CompletionSchema = z.object({
     .min(1),
   usage: z.object({ prompt_tokens: z.number(), completion_tokens: z.number() }).partial().nullish(),
 });
+
+/** Env name under which a requester's capped key is handed to the provider client: it never leaves the process. */
+const FUNDED_KEY_ENV = 'DROP_REQUESTER_FUNDED_KEY';
+
+/**
+ * The provider a run uses: the requester's capped key when the requester pays (D27), else the owner's config. With a
+ * funded key the requester may name the model; the budget is the smaller of the owner's and the requester's caps.
+ */
+export function providerFor(
+  config: ProviderConfig,
+  maxUsd: number,
+  funding?: Funding,
+): { config: ProviderConfig; env: NodeJS.ProcessEnv; maxUsd: number } {
+  if (!funding) return { config, env: process.env, maxUsd };
+  return {
+    config: { ...config, baseUrl: funding.baseUrl, model: funding.model ?? config.model, apiKeyEnv: FUNDED_KEY_ENV },
+    env: { [FUNDED_KEY_ENV]: funding.apiKey },
+    maxUsd: Math.min(maxUsd, funding.maxUsd),
+  };
+}
 
 export function openAiCompatible(config: ProviderConfig, env: NodeJS.ProcessEnv = process.env): ChatProvider {
   const key = config.apiKeyEnv ? env[config.apiKeyEnv] : undefined;
