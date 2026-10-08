@@ -164,10 +164,15 @@ switch (command) {
       choice === 'NOT_A_BLOCK' ? 0 : Number(await rl.ask('minutes perdues (attente et contournement) : '));
     const note = await rl.ask('note (optionnelle) : ');
     rl.close();
-    event.classification = choice;
-    if (Number.isFinite(minutes) && minutes >= 0) event.pain_minutes = minutes;
-    if (note.trim() !== '') event.note = note.trim();
-    store.replaceEvents(events);
+    // Re-read just before writing: the human may answer minutes later, after the hook, an import or another classify
+    // wrote. Writing back the list read at the start would erase their work (seen on 2026-10-08).
+    const fresh = store.events();
+    const target = fresh.find((candidate) => candidate.id === event.id);
+    if (!target) throw new Error(`event ${event.id} is no longer stored`);
+    target.classification = choice;
+    if (Number.isFinite(minutes) && minutes >= 0) target.pain_minutes = minutes;
+    if (note.trim() !== '') target.note = note.trim();
+    store.replaceEvents(fresh);
     process.stdout.write(`${choice}, saved\n`);
     break;
   }
