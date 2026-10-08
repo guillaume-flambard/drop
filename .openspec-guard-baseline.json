@@ -1,0 +1,2166 @@
+{
+  "schemaVersion": 1,
+  "tool": "openspec-guard",
+  "entries": [
+    {
+      "id": "sg_114ce05075fba30e",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "blocked-observer",
+      "scenario": "Valeur d'énumération inconnue",
+      "file": "openspec/specs/blocked-observer/spec.md"
+    },
+    {
+      "id": "sg_15b7cce88fbe7fcf",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "blocked-observer",
+      "scenario": "Sous-commandes disponibles",
+      "file": "openspec/specs/blocked-observer/spec.md"
+    },
+    {
+      "id": "sg_161ba3e56af75a45",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "blocked-observer",
+      "scenario": "Événements non liés",
+      "file": "openspec/specs/blocked-observer/spec.md"
+    },
+    {
+      "id": "sg_1f3db3673e46c79e",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "blocked-observer",
+      "scenario": "Affichage seul",
+      "file": "openspec/specs/blocked-observer/spec.md"
+    },
+    {
+      "id": "sg_1f6626bee41afdff",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "blocked-observer",
+      "scenario": "Champs requis",
+      "file": "openspec/specs/blocked-observer/spec.md"
+    },
+    {
+      "id": "sg_3ec7bdc91761064f",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "blocked-observer",
+      "scenario": "Texte du snippet",
+      "file": "openspec/specs/blocked-observer/spec.md"
+    },
+    {
+      "id": "sg_541d4903eb49f38e",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "blocked-observer",
+      "scenario": "Entrée valide",
+      "file": "openspec/specs/blocked-observer/spec.md"
+    },
+    {
+      "id": "sg_542ea39ae7491ea4",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "blocked-observer",
+      "scenario": "Liste des outils",
+      "file": "openspec/specs/blocked-observer/spec.md"
+    },
+    {
+      "id": "sg_54b68f93fadde8be",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "blocked-observer",
+      "scenario": "Import d'un blocage Codex",
+      "file": "openspec/specs/blocked-observer/spec.md"
+    },
+    {
+      "id": "sg_55ea3cba7a2242e4",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "blocked-observer",
+      "scenario": "Fichier de motifs testé",
+      "file": "openspec/specs/blocked-observer/spec.md"
+    },
+    {
+      "id": "sg_58ccbc7b6b38f1fe",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "blocked-observer",
+      "scenario": "AC: champ retiré absent de l'export",
+      "file": "openspec/specs/blocked-observer/spec.md"
+    },
+    {
+      "id": "sg_5babf9e6650b2591",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "blocked-observer",
+      "scenario": "Anonymisation proposée",
+      "file": "openspec/specs/blocked-observer/spec.md"
+    },
+    {
+      "id": "sg_5ca364f126412dda",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "blocked-observer",
+      "scenario": "Une ligne par événement",
+      "file": "openspec/specs/blocked-observer/spec.md"
+    },
+    {
+      "id": "sg_642399b43633deb6",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "blocked-observer",
+      "scenario": "Limite de longueur dépassée",
+      "file": "openspec/specs/blocked-observer/spec.md"
+    },
+    {
+      "id": "sg_71c5c30a8af634a5",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "blocked-observer",
+      "scenario": "AC: report_blocked visible dans list",
+      "file": "openspec/specs/blocked-observer/spec.md"
+    },
+    {
+      "id": "sg_756df9a1fdc81a32",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "blocked-observer",
+      "scenario": "Aucun appel réseau",
+      "file": "openspec/specs/blocked-observer/spec.md"
+    },
+    {
+      "id": "sg_77fcdace7f9d588c",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "blocked-observer",
+      "scenario": "Accusé d'enregistrement",
+      "file": "openspec/specs/blocked-observer/spec.md"
+    },
+    {
+      "id": "sg_7f5b6de1056fe107",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "blocked-observer",
+      "scenario": "Filtre since",
+      "file": "openspec/specs/blocked-observer/spec.md"
+    },
+    {
+      "id": "sg_8148e2a6d7d9a481",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "blocked-observer",
+      "scenario": "AC: 403 Forbidden sans extrait de la sortie",
+      "file": "openspec/specs/blocked-observer/spec.md"
+    },
+    {
+      "id": "sg_89c784034633dfcc",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "blocked-observer",
+      "scenario": "Temps de sortie",
+      "file": "openspec/specs/blocked-observer/spec.md"
+    },
+    {
+      "id": "sg_9a1e6b8898bdb180",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "blocked-observer",
+      "scenario": "Classification d'un événement",
+      "file": "openspec/specs/blocked-observer/spec.md"
+    },
+    {
+      "id": "sg_9ff8f29b4150e346",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "blocked-observer",
+      "scenario": "Aucun motif",
+      "file": "openspec/specs/blocked-observer/spec.md"
+    },
+    {
+      "id": "sg_a12d8e581de4f063",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "blocked-observer",
+      "scenario": "Seul export écrit hors du stockage local",
+      "file": "openspec/specs/blocked-observer/spec.md"
+    },
+    {
+      "id": "sg_a5fffcbd22b31f20",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "blocked-observer",
+      "scenario": "Description exposée",
+      "file": "openspec/specs/blocked-observer/spec.md"
+    },
+    {
+      "id": "sg_a66080a065a950d1",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "blocked-observer",
+      "scenario": "Événements liés",
+      "file": "openspec/specs/blocked-observer/spec.md"
+    },
+    {
+      "id": "sg_b9e7cc122da22a77",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "blocked-observer",
+      "scenario": "Origine des événements",
+      "file": "openspec/specs/blocked-observer/spec.md"
+    },
+    {
+      "id": "sg_bc86db318c2bdb63",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "blocked-observer",
+      "scenario": "Détection insensible à la casse",
+      "file": "openspec/specs/blocked-observer/spec.md"
+    },
+    {
+      "id": "sg_c9cdae62c1ce52b1",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "blocked-observer",
+      "scenario": "Jour sans événement hook ni session Codex",
+      "file": "openspec/specs/blocked-observer/spec.md"
+    },
+    {
+      "id": "sg_dc16e4552fca0aa9",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "blocked-observer",
+      "scenario": "Temps de réponse",
+      "file": "openspec/specs/blocked-observer/spec.md"
+    },
+    {
+      "id": "sg_e48672931fcea193",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "blocked-observer",
+      "scenario": "Aucune dépendance interne",
+      "file": "openspec/specs/blocked-observer/spec.md"
+    },
+    {
+      "id": "sg_e6bd7cd498083fc7",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "blocked-observer",
+      "scenario": "Valeur hors liste",
+      "file": "openspec/specs/blocked-observer/spec.md"
+    },
+    {
+      "id": "sg_e80ed28710c00eef",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "blocked-observer",
+      "scenario": "AC: entrée JSON invalide",
+      "file": "openspec/specs/blocked-observer/spec.md"
+    },
+    {
+      "id": "sg_f74f580f269fe4c0",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "blocked-observer",
+      "scenario": "AC: chiffres justes sur fixture",
+      "file": "openspec/specs/blocked-observer/spec.md"
+    },
+    {
+      "id": "sg_1232b21e4fa3d8d5",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "capability-error-summary",
+      "scenario": "Fenêtre hors liste",
+      "file": "openspec/specs/capability-error-summary/spec.md"
+    },
+    {
+      "id": "sg_50b2190396355899",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "capability-error-summary",
+      "scenario": "Lecture d'une source docker",
+      "file": "openspec/specs/capability-error-summary/spec.md"
+    },
+    {
+      "id": "sg_611330cf1633dea2",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "capability-error-summary",
+      "scenario": "Source muette",
+      "file": "openspec/specs/capability-error-summary/spec.md"
+    },
+    {
+      "id": "sg_667190ad5bb4f6a0",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "capability-error-summary",
+      "scenario": "Entrée qui tente de désigner une unité",
+      "file": "openspec/specs/capability-error-summary/spec.md"
+    },
+    {
+      "id": "sg_6c183b5d1166aaeb",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "capability-error-summary",
+      "scenario": "Ligne d'erreur comptée",
+      "file": "openspec/specs/capability-error-summary/spec.md"
+    },
+    {
+      "id": "sg_7719d76e53d6a5db",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "capability-error-summary",
+      "scenario": "Approbation systématique en v1",
+      "file": "openspec/specs/capability-error-summary/spec.md"
+    },
+    {
+      "id": "sg_79ecafff70065b95",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "capability-error-summary",
+      "scenario": "Plus de cinq types d'erreurs",
+      "file": "openspec/specs/capability-error-summary/spec.md"
+    },
+    {
+      "id": "sg_8bec714399f9074f",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "capability-error-summary",
+      "scenario": "Service sain",
+      "file": "openspec/specs/capability-error-summary/spec.md"
+    },
+    {
+      "id": "sg_8ec62b00e274b546",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "capability-error-summary",
+      "scenario": "Erreur sans motif correspondant",
+      "file": "openspec/specs/capability-error-summary/spec.md"
+    },
+    {
+      "id": "sg_91271ff3570ee5c5",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "capability-error-summary",
+      "scenario": "Trois types de source",
+      "file": "openspec/specs/capability-error-summary/spec.md"
+    },
+    {
+      "id": "sg_988004b0e9c0e9ab",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "capability-error-summary",
+      "scenario": "AC: fixture avec emails, UUID et montants",
+      "file": "openspec/specs/capability-error-summary/spec.md"
+    },
+    {
+      "id": "sg_a23dab4379b2419c",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "capability-error-summary",
+      "scenario": "Droits du process",
+      "file": "openspec/specs/capability-error-summary/spec.md"
+    },
+    {
+      "id": "sg_aec32d4007efbd5c",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "capability-error-summary",
+      "scenario": "Carte publiée par le VPS",
+      "file": "openspec/specs/capability-error-summary/spec.md"
+    },
+    {
+      "id": "sg_bfbdb36417ce2ac4",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "capability-error-summary",
+      "scenario": "Lecture d'une source journald",
+      "file": "openspec/specs/capability-error-summary/spec.md"
+    },
+    {
+      "id": "sg_c116ba7a957ee596",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "capability-error-summary",
+      "scenario": "Erreurs au-delà du seuil",
+      "file": "openspec/specs/capability-error-summary/spec.md"
+    },
+    {
+      "id": "sg_cba85c2d045a806d",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "capability-error-summary",
+      "scenario": "Carte de consentement",
+      "file": "openspec/specs/capability-error-summary/spec.md"
+    },
+    {
+      "id": "sg_cbee882863686b8e",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "capability-error-summary",
+      "scenario": "Exécution sans modèle",
+      "file": "openspec/specs/capability-error-summary/spec.md"
+    },
+    {
+      "id": "sg_f7abfca349dcbcbb",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "capability-error-summary",
+      "scenario": "AC: service absent de la config rejeté avant toute lecture",
+      "file": "openspec/specs/capability-error-summary/spec.md"
+    },
+    {
+      "id": "sg_fca3d65b4ca0970b",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "capability-error-summary",
+      "scenario": "Config jamais transmise",
+      "file": "openspec/specs/capability-error-summary/spec.md"
+    },
+    {
+      "id": "sg_00a87f5bdfcdea13",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "capability-repo-answer",
+      "scenario": "AC: clé sk-ant dans une réponse simulée",
+      "file": "openspec/specs/capability-repo-answer/spec.md"
+    },
+    {
+      "id": "sg_150b4711aba32f54",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "capability-repo-answer",
+      "scenario": "Question trop courte ou trop longue",
+      "file": "openspec/specs/capability-repo-answer/spec.md"
+    },
+    {
+      "id": "sg_1b88d42dcdc349bd",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "capability-repo-answer",
+      "scenario": "Budget dépassé",
+      "file": "openspec/specs/capability-repo-answer/spec.md"
+    },
+    {
+      "id": "sg_2c29445dd70b221b",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "capability-repo-answer",
+      "scenario": "Question contenant des balises",
+      "file": "openspec/specs/capability-repo-answer/spec.md"
+    },
+    {
+      "id": "sg_3366ad638f0e2c49",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "capability-repo-answer",
+      "scenario": "Relecture avant envoi",
+      "file": "openspec/specs/capability-repo-answer/spec.md"
+    },
+    {
+      "id": "sg_3380803390981b6b",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "capability-repo-answer",
+      "scenario": "Limite de tours atteinte",
+      "file": "openspec/specs/capability-repo-answer/spec.md"
+    },
+    {
+      "id": "sg_48f38805408039c7",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "capability-repo-answer",
+      "scenario": "Prompt indépendant de la requête",
+      "file": "openspec/specs/capability-repo-answer/spec.md"
+    },
+    {
+      "id": "sg_4b38b16358e19dc7",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "capability-repo-answer",
+      "scenario": "Valeurs par défaut du modèle",
+      "file": "openspec/specs/capability-repo-answer/spec.md"
+    },
+    {
+      "id": "sg_5ec7e469284659de",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "capability-repo-answer",
+      "scenario": "Snapshot trop gros",
+      "file": "openspec/specs/capability-repo-answer/spec.md"
+    },
+    {
+      "id": "sg_66b2d5e15ccf9776",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "capability-repo-answer",
+      "scenario": "Budget de temps épuisé",
+      "file": "openspec/specs/capability-repo-answer/spec.md"
+    },
+    {
+      "id": "sg_6cf424538f444e03",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "capability-repo-answer",
+      "scenario": "Carte de consentement",
+      "file": "openspec/specs/capability-repo-answer/spec.md"
+    },
+    {
+      "id": "sg_6f4b75e6a2d75bdc",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "capability-repo-answer",
+      "scenario": "Fichier référencé hors snapshot",
+      "file": "openspec/specs/capability-repo-answer/spec.md"
+    },
+    {
+      "id": "sg_7224f02b62fe3516",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "capability-repo-answer",
+      "scenario": "Snapshot contenant un CLAUDE.md",
+      "file": "openspec/specs/capability-repo-answer/spec.md"
+    },
+    {
+      "id": "sg_80f0ac80f1b72a7e",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "capability-repo-answer",
+      "scenario": "Authentification du SDK",
+      "file": "openspec/specs/capability-repo-answer/spec.md"
+    },
+    {
+      "id": "sg_8c76a16ae25288c3",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "capability-repo-answer",
+      "scenario": "Outil d'écriture ou réseau demandé",
+      "file": "openspec/specs/capability-repo-answer/spec.md"
+    },
+    {
+      "id": "sg_9937d4e8974ea1b4",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "capability-repo-answer",
+      "scenario": "Extraits interdits",
+      "file": "openspec/specs/capability-repo-answer/spec.md"
+    },
+    {
+      "id": "sg_9a2533ecefe55312",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "capability-repo-answer",
+      "scenario": "Bloc de code dans la réponse",
+      "file": "openspec/specs/capability-repo-answer/spec.md"
+    },
+    {
+      "id": "sg_9e18406a07566c53",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "capability-repo-answer",
+      "scenario": "AC: lien symbolique vers /etc absent du snapshot",
+      "file": "openspec/specs/capability-repo-answer/spec.md"
+    },
+    {
+      "id": "sg_b52d87cc98e97957",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "capability-repo-answer",
+      "scenario": "Valeurs par défaut du snapshot",
+      "file": "openspec/specs/capability-repo-answer/spec.md"
+    },
+    {
+      "id": "sg_b7b24709b4eba9dc",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "capability-repo-answer",
+      "scenario": "Répertoire de travail du modèle",
+      "file": "openspec/specs/capability-repo-answer/spec.md"
+    },
+    {
+      "id": "sg_b9a141ec518d07a9",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "capability-repo-answer",
+      "scenario": "AC: fichier .env absent du snapshot",
+      "file": "openspec/specs/capability-repo-answer/spec.md"
+    },
+    {
+      "id": "sg_ce5509b76aba99f2",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "capability-repo-answer",
+      "scenario": "Outils de lecture seuls",
+      "file": "openspec/specs/capability-repo-answer/spec.md"
+    },
+    {
+      "id": "sg_e6e45c562637acc9",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "capability-repo-answer",
+      "scenario": "Lignes consécutives qui ressemblent à du code",
+      "file": "openspec/specs/capability-repo-answer/spec.md"
+    },
+    {
+      "id": "sg_ea736ea01cbae611",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "capability-repo-answer",
+      "scenario": "Réponse trop longue",
+      "file": "openspec/specs/capability-repo-answer/spec.md"
+    },
+    {
+      "id": "sg_f9747dab27473e9d",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "capability-repo-answer",
+      "scenario": "Heuristique testée",
+      "file": "openspec/specs/capability-repo-answer/spec.md"
+    },
+    {
+      "id": "sg_ffed06d673005459",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "capability-repo-answer",
+      "scenario": "Deux réponses invalides",
+      "file": "openspec/specs/capability-repo-answer/spec.md"
+    },
+    {
+      "id": "sg_032957a3d29808d7",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "deploy-mac-vps",
+      "scenario": "Relais joignable via Caddy",
+      "file": "openspec/specs/deploy-mac-vps/spec.md"
+    },
+    {
+      "id": "sg_39b2717a9ddb0681",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "deploy-mac-vps",
+      "scenario": "Deux personnes sur le même Mac",
+      "file": "openspec/specs/deploy-mac-vps/spec.md"
+    },
+    {
+      "id": "sg_44ce83b97a21007c",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "deploy-mac-vps",
+      "scenario": "Exécution sans ANTHROPIC_API_KEY",
+      "file": "openspec/specs/deploy-mac-vps/spec.md"
+    },
+    {
+      "id": "sg_5b28a9ae77621630",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "deploy-mac-vps",
+      "scenario": "Groupes de l'utilisateur drop",
+      "file": "openspec/specs/deploy-mac-vps/spec.md"
+    },
+    {
+      "id": "sg_68d4cea024ab39ef",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "deploy-mac-vps",
+      "scenario": "Directives présentes",
+      "file": "openspec/specs/deploy-mac-vps/spec.md"
+    },
+    {
+      "id": "sg_91ecf90e1dafb76c",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "deploy-mac-vps",
+      "scenario": "Environnements séparés",
+      "file": "openspec/specs/deploy-mac-vps/spec.md"
+    },
+    {
+      "id": "sg_9a70db5b69bebc38",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "deploy-mac-vps",
+      "scenario": "Journaux Docker",
+      "file": "openspec/specs/deploy-mac-vps/spec.md"
+    },
+    {
+      "id": "sg_a6b1b7774cafe7b2",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "deploy-mac-vps",
+      "scenario": "Reverse proxy",
+      "file": "openspec/specs/deploy-mac-vps/spec.md"
+    },
+    {
+      "id": "sg_ce753f285e49a89f",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "deploy-mac-vps",
+      "scenario": "Configuration du demandeur",
+      "file": "openspec/specs/deploy-mac-vps/spec.md"
+    },
+    {
+      "id": "sg_d09f7f735d1fe377",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "deploy-mac-vps",
+      "scenario": "Ports exposés",
+      "file": "openspec/specs/deploy-mac-vps/spec.md"
+    },
+    {
+      "id": "sg_eef7a4882ea95a0c",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "deploy-mac-vps",
+      "scenario": "Node VPS exécuteur",
+      "file": "openspec/specs/deploy-mac-vps/spec.md"
+    },
+    {
+      "id": "sg_000b79dafccf652f",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "node",
+      "scenario": "Historique filtré",
+      "file": "openspec/specs/node/spec.md"
+    },
+    {
+      "id": "sg_0783a2f15b05840e",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "node",
+      "scenario": "Sortie à relire",
+      "file": "openspec/specs/node/spec.md"
+    },
+    {
+      "id": "sg_07997096cc04d929",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "node",
+      "scenario": "Initialisation",
+      "file": "openspec/specs/node/spec.md"
+    },
+    {
+      "id": "sg_0c3c5aef46af7465",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "node",
+      "scenario": "Adresse d'écoute",
+      "file": "openspec/specs/node/spec.md"
+    },
+    {
+      "id": "sg_11a686e58131cc54",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "node",
+      "scenario": "Entrée au clavier",
+      "file": "openspec/specs/node/spec.md"
+    },
+    {
+      "id": "sg_1e6eeb9d28c16ada",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "node",
+      "scenario": "Fichier du jeton",
+      "file": "openspec/specs/node/spec.md"
+    },
+    {
+      "id": "sg_2a32fb2e2d669cd5",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "node",
+      "scenario": "Arborescence après init",
+      "file": "openspec/specs/node/spec.md"
+    },
+    {
+      "id": "sg_30ab9f82e12c6b6c",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "node",
+      "scenario": "Appairage par la CLI",
+      "file": "openspec/specs/node/spec.md"
+    },
+    {
+      "id": "sg_324e9de14b1640a5",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "node",
+      "scenario": "Nouvelle demande poussée",
+      "file": "openspec/specs/node/spec.md"
+    },
+    {
+      "id": "sg_33a6a5ca47395c3f",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "node",
+      "scenario": "Demandes en attente",
+      "file": "openspec/specs/node/spec.md"
+    },
+    {
+      "id": "sg_3418bac9e4cd7300",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "node",
+      "scenario": "Host local accepté",
+      "file": "openspec/specs/node/spec.md"
+    },
+    {
+      "id": "sg_34705dfe056cf025",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "node",
+      "scenario": "AC: Host étranger refusé",
+      "file": "openspec/specs/node/spec.md"
+    },
+    {
+      "id": "sg_3566b4c37b55d783",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "node",
+      "scenario": "Autorisation puis exécution",
+      "file": "openspec/specs/node/spec.md"
+    },
+    {
+      "id": "sg_35dfe0f97bb1ffe2",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "node",
+      "scenario": "Requête transmise",
+      "file": "openspec/specs/node/spec.md"
+    },
+    {
+      "id": "sg_37f3aa8b9f594987",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "node",
+      "scenario": "Demande affichée",
+      "file": "openspec/specs/node/spec.md"
+    },
+    {
+      "id": "sg_43c59fd6daa6dc21",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "node",
+      "scenario": "Requête invalide",
+      "file": "openspec/specs/node/spec.md"
+    },
+    {
+      "id": "sg_457f03f0abeafed9",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "node",
+      "scenario": "Liste des pairs",
+      "file": "openspec/specs/node/spec.md"
+    },
+    {
+      "id": "sg_487eea243ab8b1cf",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "node",
+      "scenario": "Permissions de l'identité",
+      "file": "openspec/specs/node/spec.md"
+    },
+    {
+      "id": "sg_57e24943c8f850d6",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "node",
+      "scenario": "Requête valide",
+      "file": "openspec/specs/node/spec.md"
+    },
+    {
+      "id": "sg_594e8737d9daae07",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "node",
+      "scenario": "AC: drop serve se reconnecte seul après coupure du relais",
+      "file": "openspec/specs/node/spec.md"
+    },
+    {
+      "id": "sg_5d588cd6b3a46f15",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "node",
+      "scenario": "Valeur par défaut",
+      "file": "openspec/specs/node/spec.md"
+    },
+    {
+      "id": "sg_62f1df8a8d312ccc",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "node",
+      "scenario": "AC: requête sans jeton refusée",
+      "file": "openspec/specs/node/spec.md"
+    },
+    {
+      "id": "sg_6e2f88dd9d1e8210",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "node",
+      "scenario": "Livraison",
+      "file": "openspec/specs/node/spec.md"
+    },
+    {
+      "id": "sg_74886776ec70d837",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "node",
+      "scenario": "Notification émise",
+      "file": "openspec/specs/node/spec.md"
+    },
+    {
+      "id": "sg_7af7262ea1754620",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "node",
+      "scenario": "Publication avec approbateur distant",
+      "file": "openspec/specs/node/spec.md"
+    },
+    {
+      "id": "sg_8ad14ab44cce5ee6",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "node",
+      "scenario": "Retrait d'un champ",
+      "file": "openspec/specs/node/spec.md"
+    },
+    {
+      "id": "sg_8ae77ff76507a9b0",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "node",
+      "scenario": "Délais bornés",
+      "file": "openspec/specs/node/spec.md"
+    },
+    {
+      "id": "sg_8d724dce59bae63d",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "node",
+      "scenario": "AC: un Drop non décidé passe à expired et le demandeur reçoit E_EXPIRED",
+      "file": "openspec/specs/node/spec.md"
+    },
+    {
+      "id": "sg_8ec61d5b80374392",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "node",
+      "scenario": "Cache du catalogue",
+      "file": "openspec/specs/node/spec.md"
+    },
+    {
+      "id": "sg_92de04db18bb422c",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "node",
+      "scenario": "Ne pas envoyer",
+      "file": "openspec/specs/node/spec.md"
+    },
+    {
+      "id": "sg_956c2202fc2afaa6",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "node",
+      "scenario": "Erreur",
+      "file": "openspec/specs/node/spec.md"
+    },
+    {
+      "id": "sg_95c69fb372622907",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "node",
+      "scenario": "Accès sans jeton",
+      "file": "openspec/specs/node/spec.md"
+    },
+    {
+      "id": "sg_9ad43823eafa6571",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "node",
+      "scenario": "Linux",
+      "file": "openspec/specs/node/spec.md"
+    },
+    {
+      "id": "sg_a1f8f94ffb006439",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "node",
+      "scenario": "AC: l'UI échappe une entrée contenant script",
+      "file": "openspec/specs/node/spec.md"
+    },
+    {
+      "id": "sg_a64a87e5770a3d9e",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "node",
+      "scenario": "Rafraîchissement",
+      "file": "openspec/specs/node/spec.md"
+    },
+    {
+      "id": "sg_a718e99ffb5372a6",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "node",
+      "scenario": "Polling du résultat",
+      "file": "openspec/specs/node/spec.md"
+    },
+    {
+      "id": "sg_aa6b65dcc1950391",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "node",
+      "scenario": "Envoyer",
+      "file": "openspec/specs/node/spec.md"
+    },
+    {
+      "id": "sg_b65a31f9e85a19fb",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "node",
+      "scenario": "Création d'un Drop",
+      "file": "openspec/specs/node/spec.md"
+    },
+    {
+      "id": "sg_ba05eb9bc4a518c6",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "node",
+      "scenario": "Décision depuis une surface",
+      "file": "openspec/specs/node/spec.md"
+    },
+    {
+      "id": "sg_c166804408eaf5c0",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "node",
+      "scenario": "Texte avec balises",
+      "file": "openspec/specs/node/spec.md"
+    },
+    {
+      "id": "sg_c9819272ec1812f5",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "node",
+      "scenario": "Reçu écrit",
+      "file": "openspec/specs/node/spec.md"
+    },
+    {
+      "id": "sg_ca2d6032f0423011",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "node",
+      "scenario": "Runner conditionnel",
+      "file": "openspec/specs/node/spec.md"
+    },
+    {
+      "id": "sg_cb8e8f2d3f53e6e3",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "node",
+      "scenario": "Ordre des éléments",
+      "file": "openspec/specs/node/spec.md"
+    },
+    {
+      "id": "sg_d30f369f26a9a3e1",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "node",
+      "scenario": "Deux Nodes locaux",
+      "file": "openspec/specs/node/spec.md"
+    },
+    {
+      "id": "sg_df059b4e85379c65",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "node",
+      "scenario": "Carte sans identifiant",
+      "file": "openspec/specs/node/spec.md"
+    },
+    {
+      "id": "sg_df3b515734b879f8",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "node",
+      "scenario": "Approbation en CLI",
+      "file": "openspec/specs/node/spec.md"
+    },
+    {
+      "id": "sg_df98cbd123b26e79",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "node",
+      "scenario": "Pairs et statut",
+      "file": "openspec/specs/node/spec.md"
+    },
+    {
+      "id": "sg_fb51dd6d156246f2",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "node",
+      "scenario": "Runner actif",
+      "file": "openspec/specs/node/spec.md"
+    },
+    {
+      "id": "sg_fc43953538b55d56",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "node",
+      "scenario": "Ligne de sensibilité haute",
+      "file": "openspec/specs/node/spec.md"
+    },
+    {
+      "id": "sg_069ab8c31e40c211",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "protocol",
+      "scenario": "Génération d'identité",
+      "file": "openspec/specs/protocol/spec.md"
+    },
+    {
+      "id": "sg_0d1ae25b9eb6acb3",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "protocol",
+      "scenario": "Enveloppe altérée",
+      "file": "openspec/specs/protocol/spec.md"
+    },
+    {
+      "id": "sg_14592e749207e24b",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "protocol",
+      "scenario": "Couverture complète",
+      "file": "openspec/specs/protocol/spec.md"
+    },
+    {
+      "id": "sg_1d85da6d668311eb",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "protocol",
+      "scenario": "Contenu de la demande d'approbation",
+      "file": "openspec/specs/protocol/spec.md"
+    },
+    {
+      "id": "sg_1dcb44392d29f023",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "protocol",
+      "scenario": "Pas maintenant puis nouvelle demande",
+      "file": "openspec/specs/protocol/spec.md"
+    },
+    {
+      "id": "sg_1f9996b99c0781a5",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "protocol",
+      "scenario": "Fichier d'identité écrit",
+      "file": "openspec/specs/protocol/spec.md"
+    },
+    {
+      "id": "sg_219b89d714cc7f3a",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "protocol",
+      "scenario": "AC: les schémas zod exportent leur JSON Schema",
+      "file": "openspec/specs/protocol/spec.md"
+    },
+    {
+      "id": "sg_239347e8b8a31afd",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "protocol",
+      "scenario": "Pas de détail interne",
+      "file": "openspec/specs/protocol/spec.md"
+    },
+    {
+      "id": "sg_24e3b2c13e95e0fd",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "protocol",
+      "scenario": "agent inconnu",
+      "file": "openspec/specs/protocol/spec.md"
+    },
+    {
+      "id": "sg_296e43117d1270fe",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "protocol",
+      "scenario": "Reçu diffusé",
+      "file": "openspec/specs/protocol/spec.md"
+    },
+    {
+      "id": "sg_2c9f039e93faa097",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "protocol",
+      "scenario": "Reçu sans contenu",
+      "file": "openspec/specs/protocol/spec.md"
+    },
+    {
+      "id": "sg_2d7db556bbcebf7f",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "protocol",
+      "scenario": "Champs d'appairage",
+      "file": "openspec/specs/protocol/spec.md"
+    },
+    {
+      "id": "sg_2d927efbee249a71",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "protocol",
+      "scenario": "Reçu identifié",
+      "file": "openspec/specs/protocol/spec.md"
+    },
+    {
+      "id": "sg_2f885edd8e6d31c3",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "protocol",
+      "scenario": "AC: vecteurs de test fixes pour canonical()",
+      "file": "openspec/specs/protocol/spec.md"
+    },
+    {
+      "id": "sg_2fdad136c2cd41e8",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "protocol",
+      "scenario": "Transition interdite",
+      "file": "openspec/specs/protocol/spec.md"
+    },
+    {
+      "id": "sg_317863a28c619d73",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "protocol",
+      "scenario": "AC: vecteurs de test fixes pour la signature",
+      "file": "openspec/specs/protocol/spec.md"
+    },
+    {
+      "id": "sg_328f0bb4da77d80a",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "protocol",
+      "scenario": "Enveloppe opaque",
+      "file": "openspec/specs/protocol/spec.md"
+    },
+    {
+      "id": "sg_34c69582ff8bc8ca",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "protocol",
+      "scenario": "Code expiré",
+      "file": "openspec/specs/protocol/spec.md"
+    },
+    {
+      "id": "sg_3822e13c5314d318",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "protocol",
+      "scenario": "Plusieurs défauts",
+      "file": "openspec/specs/protocol/spec.md"
+    },
+    {
+      "id": "sg_3c4507dac2eee4a3",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "protocol",
+      "scenario": "purpose trop long",
+      "file": "openspec/specs/protocol/spec.md"
+    },
+    {
+      "id": "sg_3c4571b9c88fa701",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "protocol",
+      "scenario": "Chemin nominal",
+      "file": "openspec/specs/protocol/spec.md"
+    },
+    {
+      "id": "sg_3e8c52d412352269",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "protocol",
+      "scenario": "Owner incomplet",
+      "file": "openspec/specs/protocol/spec.md"
+    },
+    {
+      "id": "sg_4753a9d05bfc7bab",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "protocol",
+      "scenario": "Appairage réussi",
+      "file": "openspec/specs/protocol/spec.md"
+    },
+    {
+      "id": "sg_4e3832cbe4267f50",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "protocol",
+      "scenario": "Expiration trop lointaine",
+      "file": "openspec/specs/protocol/spec.md"
+    },
+    {
+      "id": "sg_4ee6d326292dfea1",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "protocol",
+      "scenario": "exp passé",
+      "file": "openspec/specs/protocol/spec.md"
+    },
+    {
+      "id": "sg_4f1fa900e04ebe8f",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "protocol",
+      "scenario": "Capacité high",
+      "file": "openspec/specs/protocol/spec.md"
+    },
+    {
+      "id": "sg_5252f643aeb1a938",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "protocol",
+      "scenario": "Appairage depuis un inconnu",
+      "file": "openspec/specs/protocol/spec.md"
+    },
+    {
+      "id": "sg_55b3343573b69e68",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "protocol",
+      "scenario": "Valeur hors énumération",
+      "file": "openspec/specs/protocol/spec.md"
+    },
+    {
+      "id": "sg_57e63bf5dc3d7186",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "protocol",
+      "scenario": "Pairs enregistrés des deux côtés",
+      "file": "openspec/specs/protocol/spec.md"
+    },
+    {
+      "id": "sg_5f2bb0055c05f4cf",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "protocol",
+      "scenario": "Sensibilité inconnue",
+      "file": "openspec/specs/protocol/spec.md"
+    },
+    {
+      "id": "sg_6082955a70994e49",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "protocol",
+      "scenario": "Envoi avec retraits",
+      "file": "openspec/specs/protocol/spec.md"
+    },
+    {
+      "id": "sg_643f2ef556680d9c",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "protocol",
+      "scenario": "Reçu d'un Drop expiré",
+      "file": "openspec/specs/protocol/spec.md"
+    },
+    {
+      "id": "sg_6d23468c6bebad0d",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "protocol",
+      "scenario": "Sortie relue déjà filtrée",
+      "file": "openspec/specs/protocol/spec.md"
+    },
+    {
+      "id": "sg_6f0b81eadac8393e",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "protocol",
+      "scenario": "Aucun approbateur",
+      "file": "openspec/specs/protocol/spec.md"
+    },
+    {
+      "id": "sg_7266cda7de38b735",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "protocol",
+      "scenario": "Import depuis protocol",
+      "file": "openspec/specs/protocol/spec.md"
+    },
+    {
+      "id": "sg_73444a45dbf38e7b",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "protocol",
+      "scenario": "Décision inconnue",
+      "file": "openspec/specs/protocol/spec.md"
+    },
+    {
+      "id": "sg_7570d35553e8fac6",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "protocol",
+      "scenario": "AC: aller-retour signer, chiffrer, vérifier, déchiffrer",
+      "file": "openspec/specs/protocol/spec.md"
+    },
+    {
+      "id": "sg_758a6afc19adbe08",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "protocol",
+      "scenario": "AC: chaque code d'erreur dans l'ordre spécifié",
+      "file": "openspec/specs/protocol/spec.md"
+    },
+    {
+      "id": "sg_7658a25539a1200f",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "protocol",
+      "scenario": "Capacité low",
+      "file": "openspec/specs/protocol/spec.md"
+    },
+    {
+      "id": "sg_79c15e9ce921d0f7",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "protocol",
+      "scenario": "Statut transmis",
+      "file": "openspec/specs/protocol/spec.md"
+    },
+    {
+      "id": "sg_7a956d95fde8e6bb",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "protocol",
+      "scenario": "Défaut v1",
+      "file": "openspec/specs/protocol/spec.md"
+    },
+    {
+      "id": "sg_7b8714390728ed61",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "protocol",
+      "scenario": "Owner valide",
+      "file": "openspec/specs/protocol/spec.md"
+    },
+    {
+      "id": "sg_88d0abdff4505f9f",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "protocol",
+      "scenario": "Budget sans maxSeconds",
+      "file": "openspec/specs/protocol/spec.md"
+    },
+    {
+      "id": "sg_8f34a8e8fc93fb0f",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "protocol",
+      "scenario": "Émetteur inconnu",
+      "file": "openspec/specs/protocol/spec.md"
+    },
+    {
+      "id": "sg_93e2d4851c36ede2",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "protocol",
+      "scenario": "Code hors liste",
+      "file": "openspec/specs/protocol/spec.md"
+    },
+    {
+      "id": "sg_94dc6e214c9838b1",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "protocol",
+      "scenario": "Limite déclarée",
+      "file": "openspec/specs/protocol/spec.md"
+    },
+    {
+      "id": "sg_9a8dd93216b2bc15",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "protocol",
+      "scenario": "Contenu du code",
+      "file": "openspec/specs/protocol/spec.md"
+    },
+    {
+      "id": "sg_9aec6c60ca6b9cd1",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "protocol",
+      "scenario": "Version non semver",
+      "file": "openspec/specs/protocol/spec.md"
+    },
+    {
+      "id": "sg_9ee79aacb4246f54",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "protocol",
+      "scenario": "Version inconnue",
+      "file": "openspec/specs/protocol/spec.md"
+    },
+    {
+      "id": "sg_a7c1ac520583ddaa",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "protocol",
+      "scenario": "Clés triées sans espaces",
+      "file": "openspec/specs/protocol/spec.md"
+    },
+    {
+      "id": "sg_b0a0ea60e8b8bd9b",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "protocol",
+      "scenario": "État inconnu",
+      "file": "openspec/specs/protocol/spec.md"
+    },
+    {
+      "id": "sg_ba7990fe67d09c93",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "protocol",
+      "scenario": "Résultat livré",
+      "file": "openspec/specs/protocol/spec.md"
+    },
+    {
+      "id": "sg_c461e80a5ee1e197",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "protocol",
+      "scenario": "Schémas présents",
+      "file": "openspec/specs/protocol/spec.md"
+    },
+    {
+      "id": "sg_cb0b2ae3f6d7c811",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "protocol",
+      "scenario": "Enveloppe rejouée",
+      "file": "openspec/specs/protocol/spec.md"
+    },
+    {
+      "id": "sg_cb63b8e85037ddec",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "protocol",
+      "scenario": "dropId manquant",
+      "file": "openspec/specs/protocol/spec.md"
+    },
+    {
+      "id": "sg_cbb4c0682e09899f",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "protocol",
+      "scenario": "Aucune I/O dans protocol",
+      "file": "openspec/specs/protocol/spec.md"
+    },
+    {
+      "id": "sg_ce627e49ade1d394",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "protocol",
+      "scenario": "Catalogue signé",
+      "file": "openspec/specs/protocol/spec.md"
+    },
+    {
+      "id": "sg_d22a3e82680dac0b",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "protocol",
+      "scenario": "Clés de chiffrement dérivées",
+      "file": "openspec/specs/protocol/spec.md"
+    },
+    {
+      "id": "sg_d6c319abccfdd5fd",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "protocol",
+      "scenario": "Type inconnu",
+      "file": "openspec/specs/protocol/spec.md"
+    },
+    {
+      "id": "sg_dd720ab158b34881",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "protocol",
+      "scenario": "ts dans le futur",
+      "file": "openspec/specs/protocol/spec.md"
+    },
+    {
+      "id": "sg_de29fe3ff9373eea",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "protocol",
+      "scenario": "Reçu d'un refus",
+      "file": "openspec/specs/protocol/spec.md"
+    },
+    {
+      "id": "sg_e0313f798590b80f",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "protocol",
+      "scenario": "Enveloppe trop grosse",
+      "file": "openspec/specs/protocol/spec.md"
+    },
+    {
+      "id": "sg_e301721914ce59c5",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "protocol",
+      "scenario": "NodeId dérivé de la clé publique",
+      "file": "openspec/specs/protocol/spec.md"
+    },
+    {
+      "id": "sg_e428d30f9e8a8140",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "protocol",
+      "scenario": "inputHash calculé",
+      "file": "openspec/specs/protocol/spec.md"
+    },
+    {
+      "id": "sg_f06e31134bdd665d",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "protocol",
+      "scenario": "ts non entier",
+      "file": "openspec/specs/protocol/spec.md"
+    },
+    {
+      "id": "sg_f58d2f09af003329",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "protocol",
+      "scenario": "Déchiffrement par le destinataire",
+      "file": "openspec/specs/protocol/spec.md"
+    },
+    {
+      "id": "sg_fc07f6e600f6c2b1",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "protocol",
+      "scenario": "Reçu falsifié",
+      "file": "openspec/specs/protocol/spec.md"
+    },
+    {
+      "id": "sg_00a2d5afd83e99fe",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "relay",
+      "scenario": "Champs journalisés",
+      "file": "openspec/specs/relay/spec.md"
+    },
+    {
+      "id": "sg_0c729ecf1e02194b",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "relay",
+      "scenario": "Redémarrage",
+      "file": "openspec/specs/relay/spec.md"
+    },
+    {
+      "id": "sg_23e16dea26d516ac",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "relay",
+      "scenario": "Node autorisé",
+      "file": "openspec/specs/relay/spec.md"
+    },
+    {
+      "id": "sg_2e70f947455a4841",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "relay",
+      "scenario": "Défi envoyé à l'ouverture",
+      "file": "openspec/specs/relay/spec.md"
+    },
+    {
+      "id": "sg_3e75c6ae5e7b4639",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "relay",
+      "scenario": "Configuration chargée",
+      "file": "openspec/specs/relay/spec.md"
+    },
+    {
+      "id": "sg_42d813acb7844eb1",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "relay",
+      "scenario": "AC: livraison directe entre deux Nodes en mémoire",
+      "file": "openspec/specs/relay/spec.md"
+    },
+    {
+      "id": "sg_56838077e93305a2",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "relay",
+      "scenario": "Enveloppe hors schéma",
+      "file": "openspec/specs/relay/spec.md"
+    },
+    {
+      "id": "sg_74c8e9fb6fe24d7c",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "relay",
+      "scenario": "Connexion chiffrée",
+      "file": "openspec/specs/relay/spec.md"
+    },
+    {
+      "id": "sg_75ea7d9f337a4767",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "relay",
+      "scenario": "Ajout d'un Node autorisé",
+      "file": "openspec/specs/relay/spec.md"
+    },
+    {
+      "id": "sg_84cbb79caafbfd5d",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "relay",
+      "scenario": "Purge à l'expiration",
+      "file": "openspec/specs/relay/spec.md"
+    },
+    {
+      "id": "sg_85b0701b2cab3e96",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "relay",
+      "scenario": "Corps jamais déchiffré",
+      "file": "openspec/specs/relay/spec.md"
+    },
+    {
+      "id": "sg_9bcf37121d03d53e",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "relay",
+      "scenario": "AC: rejet d'usurpation de from",
+      "file": "openspec/specs/relay/spec.md"
+    },
+    {
+      "id": "sg_a0e7ba3d307d086c",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "relay",
+      "scenario": "Rien gardé après livraison",
+      "file": "openspec/specs/relay/spec.md"
+    },
+    {
+      "id": "sg_afa853b82837a1be",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "relay",
+      "scenario": "AC: livraison différée après reconnexion",
+      "file": "openspec/specs/relay/spec.md"
+    },
+    {
+      "id": "sg_b2e60e04d1adb819",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "relay",
+      "scenario": "Node muet",
+      "file": "openspec/specs/relay/spec.md"
+    },
+    {
+      "id": "sg_b64c5d46c2f86fc7",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "relay",
+      "scenario": "Plafond de file",
+      "file": "openspec/specs/relay/spec.md"
+    },
+    {
+      "id": "sg_ca173ba7f399de04",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "relay",
+      "scenario": "AC: rate limit",
+      "file": "openspec/specs/relay/spec.md"
+    },
+    {
+      "id": "sg_d6e1abd401f3d1f2",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "relay",
+      "scenario": "AC: rejet d'un Node non autorisé",
+      "file": "openspec/specs/relay/spec.md"
+    },
+    {
+      "id": "sg_d7bd8cf34102f5ee",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "relay",
+      "scenario": "AC: aucun champ body dans les logs",
+      "file": "openspec/specs/relay/spec.md"
+    },
+    {
+      "id": "sg_08e3e6a61115da42",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "requester-mcp",
+      "scenario": "AC: résultat toujours encapsulé",
+      "file": "openspec/specs/requester-mcp/spec.md"
+    },
+    {
+      "id": "sg_2503fa236be9d775",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "requester-mcp",
+      "scenario": "Texte du snippet",
+      "file": "openspec/specs/requester-mcp/spec.md"
+    },
+    {
+      "id": "sg_2ff5d7f7e315fae0",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "requester-mcp",
+      "scenario": "Demande en attente",
+      "file": "openspec/specs/requester-mcp/spec.md"
+    },
+    {
+      "id": "sg_5c228dda225dc92a",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "requester-mcp",
+      "scenario": "purpose aux bornes",
+      "file": "openspec/specs/requester-mcp/spec.md"
+    },
+    {
+      "id": "sg_60b40381581231c5",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "requester-mcp",
+      "scenario": "AC: entrée invalide refusée localement",
+      "file": "openspec/specs/requester-mcp/spec.md"
+    },
+    {
+      "id": "sg_610e291843bf47fa",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "requester-mcp",
+      "scenario": "Résultat contenant des consignes",
+      "file": "openspec/specs/requester-mcp/spec.md"
+    },
+    {
+      "id": "sg_66d5cdd28586a23b",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "requester-mcp",
+      "scenario": "Demande en erreur",
+      "file": "openspec/specs/requester-mcp/spec.md"
+    },
+    {
+      "id": "sg_7696dc9b75012ce6",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "requester-mcp",
+      "scenario": "Envoi après accord",
+      "file": "openspec/specs/requester-mcp/spec.md"
+    },
+    {
+      "id": "sg_7dadf2fb56532615",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "requester-mcp",
+      "scenario": "Description exposée",
+      "file": "openspec/specs/requester-mcp/spec.md"
+    },
+    {
+      "id": "sg_8afc209d954ea427",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "requester-mcp",
+      "scenario": "Attente par défaut",
+      "file": "openspec/specs/requester-mcp/spec.md"
+    },
+    {
+      "id": "sg_9554050960e32b12",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "requester-mcp",
+      "scenario": "purpose trop court ou trop long",
+      "file": "openspec/specs/requester-mcp/spec.md"
+    },
+    {
+      "id": "sg_9f699252b38c8912",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "requester-mcp",
+      "scenario": "Lancement par un agent",
+      "file": "openspec/specs/requester-mcp/spec.md"
+    },
+    {
+      "id": "sg_a558c9594e3e1574",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "requester-mcp",
+      "scenario": "Demande envoyée",
+      "file": "openspec/specs/requester-mcp/spec.md"
+    },
+    {
+      "id": "sg_cfb62ed440377daf",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "requester-mcp",
+      "scenario": "Description exposée",
+      "file": "openspec/specs/requester-mcp/spec.md"
+    },
+    {
+      "id": "sg_d259eefec5abe653",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "requester-mcp",
+      "scenario": "Liste des capacités",
+      "file": "openspec/specs/requester-mcp/spec.md"
+    },
+    {
+      "id": "sg_d517a69429027b9f",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "requester-mcp",
+      "scenario": "Aucune connexion au relais",
+      "file": "openspec/specs/requester-mcp/spec.md"
+    },
+    {
+      "id": "sg_e787c07d14aed9c3",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "requester-mcp",
+      "scenario": "wait_seconds hors bornes",
+      "file": "openspec/specs/requester-mcp/spec.md"
+    },
+    {
+      "id": "sg_0036913bdf0f45a5",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "runner",
+      "scenario": "Reçu d'un Drop",
+      "file": "openspec/specs/runner/spec.md"
+    },
+    {
+      "id": "sg_136e4320d90453f8",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "runner",
+      "scenario": "Signal déclenché au budget de temps",
+      "file": "openspec/specs/runner/spec.md"
+    },
+    {
+      "id": "sg_16b5ef4f2afc740c",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "runner",
+      "scenario": "Enregistrement des appels d'outils",
+      "file": "openspec/specs/runner/spec.md"
+    },
+    {
+      "id": "sg_31f4c52720f8ae48",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "runner",
+      "scenario": "Motifs testés",
+      "file": "openspec/specs/runner/spec.md"
+    },
+    {
+      "id": "sg_3c6c3e80c834ba22",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "runner",
+      "scenario": "Chaîne longue à forte entropie",
+      "file": "openspec/specs/runner/spec.md"
+    },
+    {
+      "id": "sg_475000be6a6a2dc8",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "runner",
+      "scenario": "Capacité à haute sensibilité",
+      "file": "openspec/specs/runner/spec.md"
+    },
+    {
+      "id": "sg_4d36f04db2ea08e4",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "runner",
+      "scenario": "Valeur bénigne qui ressemble à un secret",
+      "file": "openspec/specs/runner/spec.md"
+    },
+    {
+      "id": "sg_4d730da567a7deba",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "runner",
+      "scenario": "Fichier hors allowlist",
+      "file": "openspec/specs/runner/spec.md"
+    },
+    {
+      "id": "sg_53128c788474d55e",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "runner",
+      "scenario": "Fin de pipeline nominale",
+      "file": "openspec/specs/runner/spec.md"
+    },
+    {
+      "id": "sg_540909e758ec6333",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "runner",
+      "scenario": "Requête contenant une instruction",
+      "file": "openspec/specs/runner/spec.md"
+    },
+    {
+      "id": "sg_6146ce65a8467a9e",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "runner",
+      "scenario": "Config propriétaire validée par son schéma",
+      "file": "openspec/specs/runner/spec.md"
+    },
+    {
+      "id": "sg_7a0699b564947cd0",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "runner",
+      "scenario": "Requête qui demande un outil supplémentaire",
+      "file": "openspec/specs/runner/spec.md"
+    },
+    {
+      "id": "sg_80072bd20da044e6",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "runner",
+      "scenario": "Jetons GitHub, Slack et AWS",
+      "file": "openspec/specs/runner/spec.md"
+    },
+    {
+      "id": "sg_8335ca6b3be51a0a",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "runner",
+      "scenario": "Aperçu pour la carte de consentement",
+      "file": "openspec/specs/runner/spec.md"
+    },
+    {
+      "id": "sg_96a699009497b6d3",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "runner",
+      "scenario": "Pas de réparation de sortie",
+      "file": "openspec/specs/runner/spec.md"
+    },
+    {
+      "id": "sg_9ac487d3eedcbb99",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "runner",
+      "scenario": "En-tête de clé privée PEM",
+      "file": "openspec/specs/runner/spec.md"
+    },
+    {
+      "id": "sg_9ea563e55d7f83ad",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "runner",
+      "scenario": "Ordre des étapes respecté",
+      "file": "openspec/specs/runner/spec.md"
+    },
+    {
+      "id": "sg_a6905e587fd723ed",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "runner",
+      "scenario": "Clé Anthropic",
+      "file": "openspec/specs/runner/spec.md"
+    },
+    {
+      "id": "sg_a741418b1d480687",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "runner",
+      "scenario": "Entrée invalide rejetée",
+      "file": "openspec/specs/runner/spec.md"
+    },
+    {
+      "id": "sg_a8921ecc91b51d46",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "runner",
+      "scenario": "JWT",
+      "file": "openspec/specs/runner/spec.md"
+    },
+    {
+      "id": "sg_b3274880f75ac3db",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "runner",
+      "scenario": "Capacité à faible sensibilité",
+      "file": "openspec/specs/runner/spec.md"
+    },
+    {
+      "id": "sg_c06020e044509865",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "runner",
+      "scenario": "Champ inattendu dans la sortie",
+      "file": "openspec/specs/runner/spec.md"
+    },
+    {
+      "id": "sg_c6c147de4e1d7640",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "runner",
+      "scenario": "Répertoire de travail créé par le runner",
+      "file": "openspec/specs/runner/spec.md"
+    },
+    {
+      "id": "sg_ccbad5512f68369d",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "runner",
+      "scenario": "Démarrage du runner",
+      "file": "openspec/specs/runner/spec.md"
+    },
+    {
+      "id": "sg_cff95ab0e91e38d2",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "runner",
+      "scenario": "Exécution après préparation",
+      "file": "openspec/specs/runner/spec.md"
+    },
+    {
+      "id": "sg_e078c11c5a4004ee",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "runner",
+      "scenario": "Carte complétée à la publication",
+      "file": "openspec/specs/runner/spec.md"
+    },
+    {
+      "id": "sg_e47a022e8f331c2b",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "runner",
+      "scenario": "Affectation d'un mot de passe",
+      "file": "openspec/specs/runner/spec.md"
+    },
+    {
+      "id": "sg_ec500352fe0826e2",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "runner",
+      "scenario": "Secret dans une chaîne imbriquée",
+      "file": "openspec/specs/runner/spec.md"
+    },
+    {
+      "id": "sg_f1ab799e20b7d82b",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "runner",
+      "scenario": "Sortie sérialisée trop longue",
+      "file": "openspec/specs/runner/spec.md"
+    }
+  ]
+}

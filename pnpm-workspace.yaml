@@ -1,0 +1,6 @@
+packages:
+  - packages/*
+
+# Root scripts lint, typecheck and test cover the whole repo; including the root
+# makes `pnpm -r <script>` run them too (see DECISIONS D15).
+includeWorkspaceRoot: true

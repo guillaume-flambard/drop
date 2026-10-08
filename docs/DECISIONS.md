@@ -36,6 +36,14 @@ Format : `D<n> — date — décision — raison`. Les agents ajoutent ici toute
   mots ne traverse pas les langues. Les scénarios de lecture de doc (« à vérifier ») ou de décision humaine sont
   annotés `non-testable` avec leur raison. `openspec-guard` est lancé par `npx` à version figée, sans entrer dans les
   dépendances du dépôt.
+- **D15** — T0.0 (2026-10-08). TypeScript figé en `~6.0.3` : typescript-eslint 8.71 exige `typescript <6.1.0`, et la
+  7.0 casserait le lint. pnpm figé en 11.27.0 (version installée ; passer à la 12 sera une décision à part). Tout
+  l'outillage vit à la racine : `eslint .`, `tsc --noEmit -p tsconfig.json` (qui inclut `packages/*/src` et
+  `packages/*/test`) et `vitest run` couvrent tout le dépôt, et `includeWorkspaceRoot: true` fait tourner ces scripts
+  par `pnpm -r`. Les packages ne définissent donc pas leurs propres scripts `lint`, `typecheck` ni `test`, pour éviter
+  les doubles exécutions. Dépendances de développement hors de la stack nommée, toutes nécessaires à eslint et
+  TypeScript : `@eslint/js` (règles recommandées), `typescript-eslint` (parser et règles TS, dont `no-explicit-any`),
+  `globals` (globales Node pour ESLint), `@types/node` (types Node, figés en 22 comme le plancher `engines`).
 
 ## À décider par l'humain
 
