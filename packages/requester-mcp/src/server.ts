@@ -3,10 +3,14 @@ import type { LocalNode } from './client.ts';
 import {
   createTools,
   GetResultInput,
+  GetResultsInput,
   LIST_DESCRIPTION,
   REQUEST_DESCRIPTION,
   RequestDropInput,
+  RequestDropsInput,
+  REQUEST_MANY_DESCRIPTION,
   RESULT_DESCRIPTION,
+  RESULTS_DESCRIPTION,
 } from './tools.ts';
 
 export function createRequesterServer(node: LocalNode, agent = 'other'): McpServer {
@@ -18,6 +22,14 @@ export function createRequesterServer(node: LocalNode, agent = 'other'): McpServ
   );
   server.registerTool('get_drop_result', { description: RESULT_DESCRIPTION, inputSchema: GetResultInput }, (args) =>
     tools.getDropResult(args),
+  );
+  server.registerTool(
+    'request_drops',
+    { description: REQUEST_MANY_DESCRIPTION, inputSchema: RequestDropsInput },
+    (args) => tools.requestDrops(args),
+  );
+  server.registerTool('get_drop_results', { description: RESULTS_DESCRIPTION, inputSchema: GetResultsInput }, (args) =>
+    tools.getDropResults(args),
   );
   return server;
 }
