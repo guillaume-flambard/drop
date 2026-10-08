@@ -39,4 +39,4 @@ L'étape 1 peut commencer en parallèle pour le prototype, mais pas le pilote.
 | T1.11 | Test de bout en bout en mémoire : relais + 3 Nodes + capacité factice, scénarios allow / deny / not_now / expiré / sortie invalide / secret détecté | `node`, `runner`, `requester-mcp` | `t1-11-e2e-in-memory` | T1.8, T1.10 | done |
 | T1.12 | déploiement sur le VPS lab : stack `lab-infra/stacks/drop` (Traefik, docker, autodeploy), D22 | `deploy-mac-vps` | `t1-12-deploy-vps` | T1.8 | done |
 | T1.13 | Capacité `repo.answer` : snapshot en allowlist, modèle de n'importe quel fournisseur avec outils fixés par la capacité, post-contrôles (D19) | `capability-repo-answer` | `t1-13-repo-answer` | T1.6 | done |
-| T1.14 | Script de démo `scripts/demo.md` + exécution réelle Mac + VPS du scénario 08, captures dans `docs/demo/` | `deploy-mac-vps` | `t1-14-demo` | T1.9, T1.11, T1.12, T1.13 | todo |
+| T1.14 | Script de démo `scripts/demo.md` + exécution réelle Mac + VPS du scénario 08, captures dans `docs/demo/` | `deploy-mac-vps` | `t1-14-demo` | T1.9, T1.11, T1.12, T1.13 | doing |
