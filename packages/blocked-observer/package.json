@@ -1,0 +1,17 @@
+{
+  "name": "@drop/blocked-observer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Step 0: measures how often coding agents are blocked by a resource someone else owns. No network.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "bin": {
+    "blocked-observer": "./src/cli.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "zod": "^4.6.5"
+  }
+}

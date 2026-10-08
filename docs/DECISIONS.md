@@ -110,6 +110,21 @@ Format : `D<n> — date — décision — raison`. Les agents ajoutent ici toute
   4 erreurs `NOT_IMPLEMENTED` (501), statut `ok`, aucune ligne de log transmise, reçus signés des deux côtés. Moniteur Uptime Kuma `drop` (id 26) sur
   `https://drop.memolabs.dev/health`, notification e-mail liée, premier battement `200 - OK`. Carte `docs/architecture.md` de `lab-infra`
   régénérée par `make map` (PR #100).
+- **D23** — `blocked-observer` (T0.1 à T0.5, 2026-10-08). Points « à vérifier » tranchés par lecture :
+  - Hook Claude Code (https://code.claude.com/docs/en/hooks) : `PostToolUse` porte `tool_response`, mais un outil en
+    échec déclenche `PostToolUseFailure`, avec un champ `error`. Les 401 et 403 arrivent souvent par là, donc le hook
+    est inscrit sur les deux événements.
+  - Logs Codex (codex-cli 0.156, vérifié sur 216 sessions locales) : `~/.codex/sessions/AAAA/MM/JJ/rollout-*.jsonl`.
+    Les appels sont des `function_call` ou `custom_tool_call`, leurs résultats des `*_call_output` reliés par
+    `call_id`, et la session est dans `session_meta`.
+  Motifs : la v1 de la spec, mesurée sur 30 jours de logs Codex réels, donne 780 « blocages » (34 par jour actif),
+  surtout du bruit : numéros de ligne, tables de tests, `BranchForbiddenError`, `HTTPStatus.FORBIDDEN`. La v2 exige un
+  contexte HTTP pour 401 et 403 et lit « forbidden » ou « unauthorized » comme une réponse. Elle donne 202 événements
+  (environ 9 par jour actif) ; sur un échantillon de 401, environ 9 sur 12 sont de vrais refus d'authentification,
+  contre environ 5 sur 15 en v1. Le hook n'importe pas zod (`light.ts`) : 60 ms au lieu de 80 à 105 ms. « Jour actif »
+  vient de `activity.json` : un jour avec au moins un appel d'outil Claude Code ou une session Codex, pas seulement un
+  jour avec un blocage. `report_blocked` lit la session dans `CLAUDE_SESSION_ID` ou `CODEX_SESSION_ID` quand l'agent
+  l'expose ; sinon le rapprochement A↔B n'a pas de session commune et reste vide.
 
 ## À décider par l'humain
 

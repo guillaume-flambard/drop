@@ -126,18 +126,20 @@ n'écrire aucun événement et MUST consigner l'erreur dans `~/.blocked-observer
 - **WHEN** le hook reçoit une entrée valide
 - **THEN** il sort en code 0 en moins de 100 ms
 
-### Requirement: Motifs de détection v1
-Les motifs v1 MUST être des regex insensibles à la casse, listés dans un fichier dédié et testés :
-`\b401\b|\b403\b|permission denied|access denied|forbidden|unauthori[sz]ed|authentication required|not authorized|EACCES|no such tool|tool .* not (found|available)|MCP server .* (not|failed)|requires? (login|sign[- ]in)`.
-Le hook et l'import Codex MUST utiliser ces mêmes motifs.
+### Requirement: Motifs de détection
+Les motifs MUST être des regex nommées, listées dans `packages/blocked-observer/src/patterns.ts` et testées. Ils
+reprennent l'intention des motifs v1 de la spec d'origine, resserrés en v2 après mesure (D23) : un 401 ou un 403
+n'est reconnu que dans un contexte HTTP, « forbidden » et « unauthorized » seulement comme réponse, et chaque motif
+tient sur une ligne. Le hook et l'import Codex MUST utiliser ces mêmes motifs. Seul le nom du motif est stocké.
 
-#### Scenario: Détection insensible à la casse
-- **WHEN** une sortie contient `Permission Denied`, `UNAUTHORIZED` ou `Requires sign-in`
+#### Scenario: Vrais blocages reconnus
+- **WHEN** une sortie contient `HTTP/1.1 401 Unauthorized`, `gh: HTTP 403`, `Permission Denied` ou `Requires sign-in`
 - **THEN** le motif correspondant est détecté
 
-#### Scenario: Fichier de motifs testé
-- **WHEN** la suite de tests du package s'exécute
-- **THEN** des tests couvrent la liste de motifs du fichier dédié
+#### Scenario: Bruit ignoré
+- **WHEN** une sortie contient seulement un numéro de ligne 401, une table de tests `[401, 403]` ou un identifiant
+  comme `BranchForbiddenError`
+- **THEN** aucun motif n'est détecté
 
 ### Requirement: Import des logs Codex
 `blocked-observer import-codex [--since 7d]` SHALL parser les logs de session locaux de Codex et enregistrer les
