@@ -44,16 +44,24 @@ Format : `D<n> — date — décision — raison`. Les agents ajoutent ici toute
   les doubles exécutions. Dépendances de développement hors de la stack nommée, toutes nécessaires à eslint et
   TypeScript : `@eslint/js` (règles recommandées), `typescript-eslint` (parser et règles TS, dont `no-explicit-any`),
   `globals` (globales Node pour ESLint), `@types/node` (types Node, figés en 22 comme le plancher `engines`).
+  Après review : plancher Node `>=22.13` (eslint 10 exige `^22.13.0`, vitest 5 `^22.12.0`). Lint typé
+  (`strictTypeChecked` avec `projectService`) et `noInlineConfig` : une exception de lint passe par
+  `eslint.config.js`, jamais par un commentaire. `lint` inclut `prettier --check`. Vitest `allowOnly: false`. Choix
+  validés par Guillaume le 2026-10-08.
 
 ## À décider par l'humain
 
 - **Seuil go/no-go de l'étape 0** : à écrire ici avant de lancer la mesure (blocages « YES » par dev-jour actif,
   minutes perdues par blocage).
 - **Nom de produit** : à vérifier (nom + domaine) avant le pilote.
-- **Incohérences héritées du kit d'origine**, relevées pendant la migration. À trancher au début de la tâche citée :
+- **Points ouverts**, à trancher au début de la tâche citée. Ce sont les incohérences héritées du kit d'origine,
+  relevées pendant la migration, plus la convention d'import relevée en review de T0.0 :
   - T1.2 : le message de décision s'appelle `drop_decision` dans la séquence d'architecture et `approval_decision`
     dans la table des messages de `protocol`.
   - T1.2 : un Drop `low` passe-t-il directement de `running` à `delivered` ?
+  - T1.1 : convention d'import entre packages (`@drop/protocol` depuis les autres). Un `exports` vers `dist/` casse le
+    contrôle sans build, ou valide un `dist/` périmé. Options : condition d'export `source` vers `src/` avec
+    `customConditions`, ou `paths` dans tsconfig plus un alias vitest.
   - T1.2 : `E_SCHEMA`, émis par le runner et les capacités, est absent de la liste fermée des codes `drop_error`.
   - T1.3 : TTL de la file du relais, 10 min dans l'architecture, purge à `exp` (jusqu'à `ts` + 15 min) dans `relay`.
   - T1.3 : nature du code `4403` (fermeture WebSocket ou réponse), et si `4401` couvre une mauvaise signature.
