@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { canonical, DropError, isDropError, sha256Hex, type DropErrorCode } from '@drop/protocol';
+import { canonical, DropError, isDropError, sha256Hex, type DropErrorCode, type Funding } from '@drop/protocol';
 import { scanSecrets } from './secrets.ts';
 import type { CapabilityImpl, RunContext, RunResult, ToolCallCount } from './types.ts';
 
@@ -27,6 +27,8 @@ export type InputValidation = { ok: true; input: unknown } | { ok: false; code: 
 
 export interface RunOptions {
   config: unknown;
+  /** The requester's capped key (D27); handed to the capability, never logged. */
+  funding?: Funding;
   tmpRoot?: string;
   signal?: AbortSignal;
 }
@@ -79,6 +81,7 @@ async function executeAndCheck(
   calls: Map<string, number>,
   callerSignal: AbortSignal | undefined,
   spent: { usd: number },
+  funding: Funding | undefined,
 ): Promise<Outcome> {
   const controller = new AbortController();
   const state: { stop?: Stop; total: number } = { total: 0 };
@@ -103,6 +106,7 @@ async function executeAndCheck(
     recordCost: (usd: number): void => {
       if (Number.isFinite(usd) && usd > 0) spent.usd += usd;
     },
+    ...(funding ? { funding } : {}),
   };
 
   const stopped = new Promise<never>((_resolve, reject) => {
@@ -187,7 +191,16 @@ export async function runCapability(impl: CapabilityImpl, rawInput: unknown, opt
 
   let outcome: Outcome;
   try {
-    outcome = await executeAndCheck(impl, validated.input, config.data, workdir, calls, options.signal, spent);
+    outcome = await executeAndCheck(
+      impl,
+      validated.input,
+      config.data,
+      workdir,
+      calls,
+      options.signal,
+      spent,
+      options.funding,
+    );
   } catch {
     outcome = failure('E_RUNNER', MESSAGES.executeFailed);
   }

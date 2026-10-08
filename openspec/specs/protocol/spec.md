@@ -152,6 +152,18 @@ Pour chiffrer, un Node SHALL dériver sa paire X25519 de sa paire Ed25519 avec `
 - **WHEN** on décode en base64url un code produit par `drop invite`
 - **THEN** on obtient `relayUrl`, `nodeId`, `displayName`, `oneTimeToken`, `expiresAt` et un ticket `admission`, et `expiresAt` est 24 h après l'émission
 
+### Requirement: Financement par le demandeur
+`drop_request` MAY porter `funding: { kind: 'capped_key', baseUrl, apiKey, maxUsd (≤ 50), model? }` : une clé de modèle
+créée pour cette seule demande et plafonnée à `maxUsd` (D27). Elle voyage dans l'enveloppe chiffrée vers l'exécuteur
+seulement ; elle MUST NOT figurer dans `approval_request`, un reçu, un log ou un fichier. La carte de consentement
+MUST dire qui paie (`paidBy: 'owner' | 'requester'`).
+
+#### Scenario: Clé visible de l'exécuteur seulement
+<!-- openspec-guard:test="the requester pays with a capped key (T2.3, D27) > sends the key to the executor only, shows who pays on the card, and deletes the key when the drop ends" -->
+- **WHEN** Guillaume demande une capacité avec une clé plafonnée à 0,10 $
+- **THEN** l'exécution reçoit la clé, la carte de l'approbateur affiche « Coût max : 0,10 $, payé par Guillaume » sans la clé
+- **AND** aucun reçu ne contient la clé, et le demandeur supprime la clé quand la demande se termine
+
 ### Requirement: Ticket d'admission
 Un ticket d'admission `{ v: 1, sponsor, nonce, expiresAt, sig }` MUST être signé en Ed25519 par le Node `sponsor` sur `canonical({ v, sponsor, nonce, expiresAt })` et expirer 24 h après l'émission (T2.1, D26). Il ne nomme pas le nouveau venu.
 

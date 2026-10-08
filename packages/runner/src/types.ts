@@ -1,4 +1,4 @@
-import type { CapabilityCard, ConsentCost, DropErrorCode } from '@drop/protocol';
+import type { CapabilityCard, ConsentCost, DropErrorCode, Funding } from '@drop/protocol';
 import type { ZodObject, ZodType } from 'zod';
 
 /** Everything a capability receives from the frame. It gets nothing else. */
@@ -11,8 +11,10 @@ export interface RunContext {
   signal: AbortSignal;
   /** Declares one tool call to the frame; throws E_BUDGET once card.budget.maxToolCalls is exceeded. */
   recordToolCall(name: string): void;
-  /** Declares money spent by the run (e.g. LLM tokens), paid by the capability owner; it goes into the receipt. */
+  /** Declares money spent by the run (e.g. LLM tokens); it goes into the receipt. */
   recordCost(usd: number): void;
+  /** The requester's capped key for this run (D27), when the requester pays. Capabilities use it instead of the owner's. */
+  funding?: Funding;
 }
 
 /** The card an implementation provides; buildCard adds the publication fields and the JSON schemas. */

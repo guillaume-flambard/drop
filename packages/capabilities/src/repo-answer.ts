@@ -5,6 +5,7 @@ import { DropError, type ConsentCost } from '@drop/protocol';
 import type { CapabilityImpl, RunContext } from '@drop/runner';
 import {
   openAiCompatible,
+  providerFor,
   ProviderConfigSchema,
   type ChatMessage,
   type ChatProvider,
@@ -219,7 +220,8 @@ export function createRepoAnswer(deps: RepoAnswerDeps = {}): CapabilityImpl<Repo
     async execute(input: RepoAnswerInput, ctx: RunContext): Promise<RepoAnswerOutput> {
       const config = RepoAnswerConfigSchema.parse(ctx.config);
       const files = await takeSnapshot(config, ctx.workdir);
-      const provider = (deps.provider ?? openAiCompatible)(config.provider);
+      const run = providerFor(config.provider, config.maxUsd, ctx.funding);
+      const provider = deps.provider ? deps.provider(run.config) : openAiCompatible(run.config, run.env);
       const messages: ChatMessage[] = [
         { role: 'system', content: systemPrompt(config.allowSourceExcerpts) },
         { role: 'user', content: frameQuestion(input.question) },
@@ -230,7 +232,7 @@ export function createRepoAnswer(deps: RepoAnswerDeps = {}): CapabilityImpl<Repo
         const reply = await provider.chat(messages, TOOLS, ctx.signal);
         cost += reply.costUsd;
         ctx.recordCost(reply.costUsd);
-        if (cost > config.maxUsd) throw new DropError('E_BUDGET', 'cost budget exceeded');
+        if (cost > run.maxUsd) throw new DropError('E_BUDGET', 'cost budget exceeded');
         if (reply.toolCalls.length > 0) {
           messages.push({
             role: 'assistant',

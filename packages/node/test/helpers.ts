@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { generateIdentity, verifyReceipt, type Identity, type Receipt } from '@drop/protocol';
 import { RelayClient, startRelay, type RelayHandle } from '@drop/relay';
 import type { CapabilityImpl } from '@drop/runner';
-import { NodeEngine, type NodeStore } from '../src/engine.ts';
+import { NodeEngine, type EngineOptions, type NodeStore } from '../src/engine.ts';
 import type { Peer, Published } from '../src/home.ts';
 
 export class MemoryStore implements NodeStore {
@@ -81,7 +81,10 @@ export async function until(check: () => boolean, timeoutMs = 4000): Promise<voi
 }
 
 /** Relay + three nodes: Guillaume requests, the VPS executes, Julie approves. Everyone is paired with everyone. */
-export async function startMesh(capabilities: CapabilityImpl[]): Promise<Mesh> {
+export async function startMesh(
+  capabilities: CapabilityImpl[],
+  extra: { requester?: Partial<EngineOptions>; executor?: Partial<EngineOptions> } = {},
+): Promise<Mesh> {
   const clock = { now: Date.now() };
   const ids = {
     requester: await generateIdentity('Guillaume'),
@@ -92,7 +95,11 @@ export async function startMesh(capabilities: CapabilityImpl[]): Promise<Mesh> {
     { port: 0, allowedNodeIds: Object.values(ids).map((identity) => identity.nodeId) },
     { logger: () => undefined },
   );
-  const make = async (identity: Identity, ownerKind: 'human' | 'machine'): Promise<TestNode> => {
+  const make = async (
+    identity: Identity,
+    ownerKind: 'human' | 'machine',
+    options: Partial<EngineOptions> = {},
+  ): Promise<TestNode> => {
     const store = new MemoryStore();
     const link: { client?: RelayClient } = {};
     const engine = new NodeEngine({
@@ -102,6 +109,7 @@ export async function startMesh(capabilities: CapabilityImpl[]): Promise<Mesh> {
       capabilities,
       now: () => clock.now,
       transport: { send: (envelope) => (link.client ? link.client.send(envelope) : Promise.resolve('offline')) },
+      ...options,
     });
     const client = new RelayClient({
       identity,
@@ -115,8 +123,8 @@ export async function startMesh(capabilities: CapabilityImpl[]): Promise<Mesh> {
     await client.waitReady();
     return { identity, engine, store, client };
   };
-  const requester = await make(ids.requester, 'human');
-  const executor = await make(ids.executor, 'machine');
+  const requester = await make(ids.requester, 'human', extra.requester);
+  const executor = await make(ids.executor, 'machine', extra.executor);
   const approver = await make(ids.approver, 'human');
 
   // Pairing through real invites: requester ↔ executor, approver ↔ executor.

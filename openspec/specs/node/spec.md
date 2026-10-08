@@ -60,6 +60,30 @@ Plusieurs Nodes sur une même machine SHALL fonctionner avec plusieurs `DROP_HOM
 - **THEN** B garde le ticket d'admission du code, se reconnecte aussitôt avec, est admis, et A et B sont appairés
 - **AND** le ticket est effacé du disque de B une fois admis
 
+### Requirement: Qui paie le modèle
+La config du Node SHALL porter `payer: 'requester' | 'owner'` (défaut `requester`, D27) pour ce qu'il exécute. Un
+exécuteur en `payer: 'owner'` ignore la clé reçue et paie avec sa propre config.
+
+#### Scenario: Le propriétaire paie
+<!-- openspec-guard:test="the requester pays with a capped key (T2.3, D27) > an owner who pays ignores the key and the card says the cost is theirs" -->
+- **WHEN** l'exécuteur est en `payer: 'owner'` et reçoit une demande avec une clé
+- **THEN** la capacité tourne sans la clé et la carte indique `paidBy: 'owner'`
+
+### Requirement: Clé plafonnée du demandeur
+La config MAY porter `funding: { kind: 'openrouter', managementKeyEnv, perDropUsd, model? }`. Le Node demandeur SHALL
+alors créer par demande une clé OpenRouter plafonnée à `perDropUsd`, qui expire au bout de 2 h, et la supprimer quand la
+demande se termine. Sans clé de gestion, ou si l'API refuse, il n'envoie pas de clé.
+
+#### Scenario: Clé plafonnée créée puis supprimée
+<!-- openspec-guard:test="OpenRouter capped keys > mints a key capped and expiring, then deletes it by hash" -->
+- **WHEN** le demandeur envoie une demande avec `funding` configuré
+- **THEN** il crée une clé `POST /keys` avec `limit` = `perDropUsd` et `expires_at` à 2 h, puis la supprime par `DELETE /keys/{hash}`
+
+#### Scenario: Pas de clé de gestion
+<!-- openspec-guard:test="OpenRouter capped keys > sends no key when the management key is missing or the API refuses" -->
+- **WHEN** la variable de la clé de gestion est absente ou l'API refuse
+- **THEN** la demande part sans clé et l'erreur est journalisée avec un code stable
+
 ### Requirement: Commande drop peers
 `drop peers` SHALL lister les pairs.
 

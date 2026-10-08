@@ -28,11 +28,13 @@ function list(items: string[]): string {
 }
 
 /** One line on who pays: the capability owner, who is also the one deciding here (D21). */
-export function costLine(cost: ConsentCost | undefined): string | undefined {
+/** `requester` names who pays when the requester funds the run (D27); otherwise the cost is the reader's. */
+export function costLine(cost: ConsentCost | undefined, requester?: string): string | undefined {
   if (!cost) return undefined;
   if (cost.kind === 'free') return 'Coût : gratuit.';
-  if (cost.kind === 'capped') return `Coût max : ${cost.maxUsd.toFixed(2).replace('.', ',')} $, à votre charge.`;
-  return 'Coût : à votre charge, non mesuré (tarifs du modèle non configurés).';
+  const payer = requester ? `payé par ${requester}` : 'à votre charge';
+  if (cost.kind === 'capped') return `Coût max : ${cost.maxUsd.toFixed(2).replace('.', ',')} $, ${payer}.`;
+  return `Coût : ${payer}, non mesuré (tarifs du modèle non configurés).`;
 }
 
 /**
@@ -41,7 +43,7 @@ export function costLine(cost: ConsentCost | undefined): string | undefined {
  */
 export function renderConsentCard(item: Extract<InboxItem, { kind: 'approval' }>, now: number): string {
   const who = escapeHtml(item.requestedBy.displayName);
-  const cost = costLine(item.card.cost);
+  const cost = costLine(item.card.cost, item.card.paidBy === 'requester' ? item.requestedBy.displayName : undefined);
   const high =
     item.card.sensitivity === 'high'
       ? '<p class="high">Sensibilité haute : vous relirez le résultat avant envoi.</p>'

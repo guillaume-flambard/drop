@@ -7,6 +7,7 @@ import { DropError, type ConsentCost } from '@drop/protocol';
 import type { CapabilityImpl, ImplCard, RunContext } from '@drop/runner';
 import {
   openAiCompatible,
+  providerFor,
   ProviderConfigSchema,
   type ChatMessage,
   type ChatProvider,
@@ -191,7 +192,8 @@ export function createMcpAnswer(deps: McpAnswerDeps = {}): CapabilityImpl<McpAns
           description: (tool.description ?? tool.name).slice(0, 1000),
           parameters: tool.inputSchema,
         }));
-        const provider = (deps.provider ?? openAiCompatible)(config.provider);
+        const run = providerFor(config.provider, config.maxUsd, ctx.funding);
+        const provider = deps.provider ? deps.provider(run.config) : openAiCompatible(run.config, run.env);
         const messages: ChatMessage[] = [
           { role: 'system', content: mcpSystemPrompt(config.label, [...allowed]) },
           { role: 'user', content: frameQuestion(input.question) },
@@ -202,7 +204,7 @@ export function createMcpAnswer(deps: McpAnswerDeps = {}): CapabilityImpl<McpAns
           const reply = await provider.chat(messages, specs, ctx.signal);
           cost += reply.costUsd;
           ctx.recordCost(reply.costUsd);
-          if (cost > config.maxUsd) throw new DropError('E_BUDGET', 'cost budget exceeded');
+          if (cost > run.maxUsd) throw new DropError('E_BUDGET', 'cost budget exceeded');
           if (reply.toolCalls.length > 0) {
             messages.push({
               role: 'assistant',

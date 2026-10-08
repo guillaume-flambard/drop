@@ -3,7 +3,15 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { describe, expect, it } from 'vitest';
 import { buildCard, implFor, runCapability } from '@drop/runner';
-import { capabilities, connectMcp, createMcpAnswer, parseMcpFinal, toolResultText } from '../src/index.ts';
+import {
+  capabilities,
+  connectMcp,
+  createMcpAnswer,
+  parseMcpFinal,
+  ProviderConfigSchema,
+  providerFor,
+  toolResultText,
+} from '../src/index.ts';
 import type { ChatMessage, ChatProvider, ChatTurn } from '../src/llm.ts';
 import { createFakeDesignServer } from './fixtures/fake-design-mcp.ts';
 
@@ -161,5 +169,42 @@ describe('mcp.answer (T2.2)', () => {
     } finally {
       await client.close();
     }
+  });
+
+  it('runs on the requester capped key when the requester pays (D27)', async () => {
+    const owner = ProviderConfigSchema.parse({ model: 'owner/model' });
+    const funded = providerFor(owner, 0.5, {
+      kind: 'capped_key',
+      baseUrl: 'https://openrouter.ai/api/v1',
+      apiKey: 'sk-or-v1-capped-0123456789',
+      maxUsd: 0.1,
+      model: 'requester/model',
+    });
+    expect(funded.config).toMatchObject({ model: 'requester/model', apiKeyEnv: 'DROP_REQUESTER_FUNDED_KEY' });
+    expect(funded.env).toEqual({ DROP_REQUESTER_FUNDED_KEY: 'sk-or-v1-capped-0123456789' });
+    expect(funded.maxUsd).toBe(0.1);
+    expect(providerFor(owner, 0.5)).toMatchObject({ config: owner, maxUsd: 0.5 });
+
+    const used: string[] = [];
+    const turns = scripted([{ content: finalAnswer }]);
+    const impl = createMcpAnswer({
+      provider: (providerConfig) => {
+        used.push(providerConfig.model);
+        return turns.provider();
+      },
+      connect: () => inMemory([]),
+    });
+    const result = await runCapability(impl, QUESTION, {
+      config,
+      funding: {
+        kind: 'capped_key',
+        baseUrl: 'https://openrouter.ai/api/v1',
+        apiKey: 'sk-or-v1-capped-0123456789',
+        maxUsd: 0.1,
+        model: 'requester/model',
+      },
+    });
+    expect(result.ok).toBe(true);
+    expect(used).toEqual(['requester/model']);
   });
 });

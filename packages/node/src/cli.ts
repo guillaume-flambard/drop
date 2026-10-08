@@ -5,7 +5,7 @@ import { capabilities, connectMcp, McpAnswerConfigSchema } from '@drop/capabilit
 import { implFor } from '@drop/runner';
 import { generateIdentity, OwnerKindSchema, type ConsentCost } from '@drop/protocol';
 import { startDaemon } from './daemon.ts';
-import { DropHome } from './home.ts';
+import { DropHome, NodeConfigSchema } from './home.ts';
 import { costLine } from './ui.ts';
 
 const USAGE = `drop <command>
@@ -82,9 +82,12 @@ switch (command) {
     if (!values.name || !values.relay) fail('drop init --name <name> --kind human --relay wss://…');
     const ownerKind = OwnerKindSchema.parse(values.kind ?? 'human');
     const identity = await generateIdentity(values.name);
-    home.init(identity, { relayUrl: values.relay, ownerKind, apiPort: Number(values.port ?? 7781) });
+    home.init(
+      identity,
+      NodeConfigSchema.parse({ relayUrl: values.relay, ownerKind, apiPort: Number(values.port ?? 7781) }),
+    );
     process.stdout.write(
-      `initialized ${home.root}\nnodeId ${identity.nodeId}\nask the relay operator to run: drop-relay allow ${identity.nodeId}\n`,
+      `initialized ${home.root}\nnodeId ${identity.nodeId}\njoin the relay: \`drop pair <invite code>\` from a member (or, for a first node, ask the relay operator to run: drop-relay allow ${identity.nodeId})\n`,
     );
     break;
   }
@@ -174,7 +177,7 @@ switch (command) {
         kind: string;
         dropId: string;
         requestedBy?: { displayName: string };
-        card?: { title: string; cost?: ConsentCost };
+        card?: { title: string; cost?: ConsentCost; paidBy?: 'owner' | 'requester' };
         title?: string;
         purpose?: string;
         inputPreview?: string;
@@ -183,9 +186,13 @@ switch (command) {
     };
     if (pending.length === 0) process.stdout.write('nothing pending\n');
     for (const item of pending) {
+      const cost = costLine(
+        item.card?.cost,
+        item.card?.paidBy === 'requester' ? item.requestedBy?.displayName : undefined,
+      );
       process.stdout.write(
         item.kind === 'approval'
-          ? `${item.dropId}  ${item.requestedBy?.displayName ?? ''}: ${item.card?.title ?? ''}\n  « ${item.inputPreview ?? ''} »\n  Pourquoi : ${item.purpose ?? ''}\n${costLine(item.card?.cost) ? `  ${costLine(item.card?.cost) ?? ''}\n` : ''}`
+          ? `${item.dropId}  ${item.requestedBy?.displayName ?? ''}: ${item.card?.title ?? ''}\n  « ${item.inputPreview ?? ''} »\n  Pourquoi : ${item.purpose ?? ''}\n${cost ? `  ${cost}\n` : ''}`
           : `${item.dropId}  à relire : ${item.title ?? ''}\n${JSON.stringify(item.output, null, 2)}\n`,
       );
     }

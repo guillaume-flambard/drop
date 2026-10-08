@@ -63,3 +63,12 @@ La carte MUST déclarer `sensitivity: 'high'` et `approval: 'always'` : le propr
 <!-- openspec-guard:test="mcp.answer (T2.2) > reads only text from tool results and only a well-formed final answer" -->
 - **WHEN** le modèle ne rend pas un objet conforme
 - **THEN** la réponse n'est pas retenue (une relance, puis `E_OUTPUT_INVALID`)
+
+### Requirement: Clé du demandeur
+Quand la demande porte une clé plafonnée (D27), la capacité MUST appeler le modèle avec cette clé, l'URL qu'elle donne et
+son modèle s'il est précisé, avec un budget égal au plus petit de `maxUsd` et du plafond de la clé.
+
+#### Scenario: Modèle payé par le demandeur
+<!-- openspec-guard:test="mcp.answer (T2.2) > runs on the requester capped key when the requester pays (D27)" -->
+- **WHEN** la demande porte une clé plafonnée à 0,10 $ pour `requester/model`
+- **THEN** le modèle appelé est `requester/model` avec cette clé, et le budget est 0,10 $

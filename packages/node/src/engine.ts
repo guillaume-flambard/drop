@@ -19,6 +19,7 @@ import {
   type DropErrorCode,
   type DropState,
   type Envelope,
+  type Funding,
   type Identity,
   type Message,
   type MessageOf,
@@ -29,6 +30,7 @@ import {
   type SignedCapabilityCard,
   type UnsignedReceipt,
 } from '@drop/protocol';
+import type { Funder } from './funding.ts';
 import { applyRedactions, buildCard, implFor, runCapability, validateInput, type CapabilityImpl } from '@drop/runner';
 import type { Peer, Published } from './home.ts';
 
@@ -95,6 +97,8 @@ interface ExecutorDrop {
   costUsd: number;
   reviewed: boolean;
   timestamps: { requested: number; decided?: number; started?: number; finished?: number; delivered?: number };
+  /** The requester's capped key, kept in memory until the run ends, then dropped. */
+  funding?: Funding | undefined;
 }
 
 export interface CatalogEntry {
@@ -120,6 +124,10 @@ export interface EngineOptions {
   log?: (entry: EngineLogEntry) => void;
   /** Called with the admission ticket of an invite being accepted, so the node can join the relay with it (T2.1). */
   onAdmission?: (ticket: unknown) => void;
+  /** Requester side: mints a capped key per drop so the requester pays the model (D27). */
+  funder?: Funder;
+  /** Executor side: who pays the model. 'requester' (default, D27) uses the requester's key when one is sent. */
+  payer?: 'requester' | 'owner';
 }
 
 const DECISION_ERRORS: Record<'deny' | 'not_now', DropErrorCode> = { deny: 'E_DENIED', not_now: 'E_NOT_NOW' };
@@ -239,6 +247,7 @@ export class NodeEngine extends EventEmitter {
       createdAt: this.now(),
     };
     this.outbound.set(dropId, outbound);
+    const funding = await this.options.funder?.mint(dropId);
     await this.send(entry.card.executorNodeId, {
       type: 'drop_request',
       dropId,
@@ -247,6 +256,7 @@ export class NodeEngine extends EventEmitter {
       input: request.input,
       purpose: request.purpose,
       requestedBy: { nodeId: this.identity.nodeId, displayName: this.identity.displayName, agent: request.agent },
+      ...(funding ? { funding } : {}),
     });
     this.changed();
     return outbound;
@@ -311,6 +321,7 @@ export class NodeEngine extends EventEmitter {
     for (const drop of this.executing.values()) {
       if (drop.state === 'awaiting_approval' && drop.expiresAt <= now) {
         drop.state = 'expired';
+        drop.funding = undefined;
         await this.fail(drop, 'E_EXPIRED', 'La demande a expiré sans décision.', 'expired');
       } else if (drop.state === 'in_review' && (drop.reviewExpiresAt ?? Infinity) <= now) {
         drop.state = 'failed';
@@ -439,8 +450,11 @@ export class NodeEngine extends EventEmitter {
       costUsd: 0,
       reviewed: false,
       timestamps: { requested: now },
+      funding: this.options.payer === 'owner' ? undefined : message.funding,
     };
     this.executing.set(drop.dropId, drop);
+    const ownerCost = built.impl.cost?.(published.config);
+    const cost = drop.funding ? { kind: 'capped' as const, maxUsd: drop.funding.maxUsd } : ownerCost;
     const request: Message = {
       type: 'approval_request',
       dropId: drop.dropId,
@@ -451,7 +465,7 @@ export class NodeEngine extends EventEmitter {
         neverReceives: built.card.neverReceives,
         sensitivity: built.card.sensitivity,
         executorName: this.identity.displayName,
-        ...(built.impl.cost ? { cost: built.impl.cost(published.config) } : {}),
+        ...(cost ? { cost, paidBy: drop.funding ? ('requester' as const) : ('owner' as const) } : {}),
       },
       inputPreview: built.impl.preview(validated.input).slice(0, 2000),
       purpose: drop.purpose,
@@ -488,6 +502,7 @@ export class NodeEngine extends EventEmitter {
     drop.approver = from;
     drop.timestamps.decided = this.now();
     if (message.decision !== 'allow_once') {
+      drop.funding = undefined;
       drop.state = message.decision === 'deny' ? 'denied' : 'not_now';
       const text =
         message.decision === 'deny'
@@ -501,7 +516,11 @@ export class NodeEngine extends EventEmitter {
     drop.state = 'running';
     drop.timestamps.started = this.now();
     await this.status(drop);
-    const result = await runCapability(drop.impl, drop.input, { config: drop.config });
+    const result = await runCapability(drop.impl, drop.input, {
+      config: drop.config,
+      ...(drop.funding ? { funding: drop.funding } : {}),
+    });
+    drop.funding = undefined;
     drop.toolCalls = result.toolCalls;
     drop.costUsd = result.costUsd;
     drop.timestamps.finished = this.now();
@@ -562,6 +581,12 @@ export class NodeEngine extends EventEmitter {
     const drop = this.outbound.get(message.dropId);
     if (drop?.executor !== from) return;
     if (message.type === 'drop_status') drop.state = message.state;
+    // The drop is over: delete the capped key minted for it (D27).
+    if (message.type !== 'drop_status' && this.options.funder) {
+      this.options.funder.release(drop.dropId).catch(() => {
+        this.log({ event: 'funding', code: 'E_FUNDING_RELEASE', dropId: drop.dropId });
+      });
+    }
     if (message.type === 'drop_result') {
       drop.state = 'delivered';
       drop.result = { output: message.output, outputSchemaHash: message.outputSchemaHash };
