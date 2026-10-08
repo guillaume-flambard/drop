@@ -107,8 +107,8 @@ Format : `D<n> — date — décision — raison`. Les agents ajoutent ici toute
   commande est fixe : chaque minute, il exporte `docker logs --since 24h --timestamps traefik` vers
   `/opt/drop/logs/traefik.log`, que `drop-node` lit en lecture seule (source `file`). Les erreurs sont les codes 5xx
   et `level=error`, nommées dans `stacks/drop/error-summary.json` (PR #99). Premier drop réel le 2026-10-08 : sur 24 h,
-  4 erreurs `NOT_IMPLEMENTED` (501), statut `ok`, aucune ligne de log transmise, reçus signés des deux côtés. Restent hors code : le moniteur
-  Uptime Kuma (commande de `lab-infra/README.md`, bloquée par le hook tirith dans cette session) et `make map`.
+  4 erreurs `NOT_IMPLEMENTED` (501), statut `ok`, aucune ligne de log transmise, reçus signés des deux côtés. Moniteur Uptime Kuma `drop` (id 26) sur
+  `https://drop.memolabs.dev/health`, notification e-mail liée, premier battement `200 - OK`. Reste `make map`.
 
 ## À décider par l'humain
 
