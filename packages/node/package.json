@@ -10,6 +10,8 @@
     "drop": "./src/cli.ts"
   },
   "dependencies": {
+    "@a2a-js/sdk": "1.3.0",
+    "@drop/a2a": "workspace:*",
     "@drop/capabilities": "workspace:*",
     "@drop/protocol": "workspace:*",
     "@drop/relay": "workspace:*",
