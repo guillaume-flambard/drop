@@ -1,0 +1,16 @@
+{
+  "name": "@drop/protocol",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "libsodium-wrappers": "^0.8.4",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/libsodium-wrappers": "^0.8.2"
+  }
+}

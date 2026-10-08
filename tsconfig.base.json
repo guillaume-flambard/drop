@@ -14,7 +14,8 @@
     "verbatimModuleSyntax": true,
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": false,
-    "declaration": true,
-    "sourceMap": true
+    "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true,
+    "noEmit": true
   }
 }
