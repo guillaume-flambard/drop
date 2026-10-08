@@ -1,0 +1,20 @@
+{
+  "name": "@drop/relay",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "bin": {
+    "drop-relay": "./src/cli.ts"
+  },
+  "dependencies": {
+    "@drop/protocol": "workspace:*",
+    "ws": "^8.22.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.18.2"
+  }
+}

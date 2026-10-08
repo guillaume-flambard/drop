@@ -1,0 +1,23 @@
+{
+  "name": "@drop/node",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "bin": {
+    "drop": "./src/cli.ts"
+  },
+  "dependencies": {
+    "@drop/capabilities": "workspace:*",
+    "@drop/protocol": "workspace:*",
+    "@drop/relay": "workspace:*",
+    "@drop/runner": "workspace:*",
+    "ws": "^8.22.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.18.2"
+  }
+}

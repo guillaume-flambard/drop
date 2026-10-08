@@ -1,0 +1,36 @@
+import { z } from 'zod';
+import { EnvelopeSchema, NodeIdSchema } from '@drop/protocol';
+
+/** Frames exchanged on the relay socket. Envelopes stay opaque: the relay never sees a message type. */
+export const ServerFrameSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('challenge'), challenge: z.string() }),
+  z.object({ type: z.literal('ready'), nodeId: NodeIdSchema }),
+  z.object({ type: z.literal('envelope'), envelope: EnvelopeSchema }),
+  z.object({ type: z.literal('ack'), id: z.string(), status: z.enum(['delivered', 'queued']) }),
+  z.object({
+    type: z.literal('error'),
+    id: z.string().optional(),
+    error: z.enum(['E_SCHEMA', 'E_TOO_LARGE', 'E_RATE', 'E_QUEUE_FULL']),
+  }),
+]);
+export type ServerFrame = z.infer<typeof ServerFrameSchema>;
+
+export const ClientFrameSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('auth'), nodeId: NodeIdSchema, sig: z.string() }),
+  z.object({ type: z.literal('envelope'), envelope: z.unknown() }),
+]);
+export type ClientFrame = z.infer<typeof ClientFrameSchema>;
+
+export const CLOSE_UNAUTHORIZED = 4401;
+export const CLOSE_SPOOFED_FROM = 4403;
+export const CLOSE_REPLACED = 4409;
+
+export function parseFrame<T>(schema: z.ZodType<T>, data: unknown): T | undefined {
+  try {
+    const parsed = schema.safeParse(JSON.parse(String(data)));
+    return parsed.success ? parsed.data : undefined;
+  } catch {
+    // Not JSON: treated like any malformed frame by the caller.
+    return undefined;
+  }
+}

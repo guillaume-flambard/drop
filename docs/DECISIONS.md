@@ -47,14 +47,15 @@ Format : `D<n> — date — décision — raison`. Les agents ajoutent ici toute
   Après review : plancher Node `>=22.13` (eslint 10 exige `^22.13.0`, vitest 5 `^22.12.0`). Lint typé
   (`strictTypeChecked` avec `projectService`) et `noInlineConfig` : une exception de lint passe par
   `eslint.config.js`, jamais par un commentaire. `lint` inclut `prettier --check`. Vitest `allowOnly: false`. Choix
-  validés par Guillaume le 2026-10-08. Second cycle de review : `skipLibCheck: false` (coût mesuré : environ 1 s),
+  validés par Guillaume le 2026-10-08. Second cycle de review : `skipLibCheck: false`, revenu à `true` avec D16 (le SDK MCP référence des types DOM) en
+  interdisant tout `.d.ts` écrit à la main ;
   `no-floating-promises` sans `ignoreVoid`, JavaScript réservé aux `*.config.js` de la racine.
 - **D16** — Pas de build (2026-10-08, demande de Guillaume : construire de bout en bout, vite). Chaque package
   exporte `./src/index.ts` et Node exécute TypeScript directement par le type stripping natif. Plancher Node passé à
   `>=22.18`, où ce mode est actif par défaut. D'où `erasableSyntaxOnly`, des imports relatifs en `.ts`
   (`allowImportingTsExtensions`) et `noEmit` partout. Raison : le contrôle teste toujours la source, sans `dist/`
   périmé ni étape de compilation entre packages. Cela tranche le point d'import ouvert pour T1.1. Dépendance hors
-  stack : `@types/libsodium-wrappers` (types de `libsodium-wrappers`, qui n'en publie pas).
+  stack : `@types/libsodium-wrappers` et `@types/ws` (types de `libsodium-wrappers` et de `ws`, qui n'en publient pas).
 - **D17** — Points ouverts du kit tranchés pour avancer (2026-10-08). Le message de décision s'appelle
   `approval_decision`, comme dans la table de `protocol`. `E_SCHEMA` rejoint les codes de `drop_error`. Un Drop `low`
   passe de `running` à `delivered`. Un expéditeur inconnu échoue à `E_UNKNOWN_PEER` dans l'ordre de la spec ; il n'est
