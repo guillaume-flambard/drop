@@ -94,6 +94,16 @@ Format : `D<n> — date — décision — raison`. Les agents ajoutent ici toute
   « Coût max : 0,50 $, à votre charge », ou « gratuit » (Ollama local, modèle `:free`), ou « non mesuré » (tarifs du
   modèle absents de la config). La ligne est absente pour une capacité qui ne coûte rien (`production.error_summary`).
   Le coût réel est ensuite inscrit dans le reçu signé. Une capacité déclare son coût par `CapabilityImpl.cost(config)`.
+- **D22** — Déploiement réel sur le VPS lab (2026-10-08), adapté à l'infrastructure qui tourne au lieu du Caddy et
+  des unités systemd de la spec 08 : la stack `stacks/drop` de `lab-infra` (PR #97 et #98) suit les conventions du lab,
+  soit Traefik v3, docker compose, une image privée construite par le runner `lab-drop` dans `127.0.0.1:5000/drop`,
+  et la sonde `url:https://drop.memolabs.dev/health` pour `autodeploy`. Le relais public est
+  `wss://drop.memolabs.dev/v1` ; `relay.memolabs.dev` était déjà pris par une autre app. Le Node du lab est sortant
+  uniquement (`ws://drop-relay:7780/v1` par le réseau interne), uid 1000, identité dans `/opt/drop/home` en 0700, et
+  n'a aucune clé LLM. Un Node s'autorise par PR sur `stacks/drop/relay.config.json`, jamais par `drop-relay allow`
+  sur le serveur : le rsync du déploiement l'écraserait. Les logs résumés par `production.error_summary` seront
+  choisis plus tard (décision de Guillaume) : la capacité n'est pas encore publiée. Restent hors code : le moniteur
+  Uptime Kuma (commande de `lab-infra/README.md`, bloquée par le hook tirith dans cette session) et `make map`.
 
 ## À décider par l'humain
 
