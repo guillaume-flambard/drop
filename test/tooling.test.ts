@@ -64,7 +64,6 @@ const IMPOSED_STACK = new Set([
   '@modelcontextprotocol/sdk',
   'libsodium-wrappers',
   'ws',
-  '@anthropic-ai/claude-agent-sdk',
 ]);
 
 // A plain registry version or range; anything else (alias, git, path, URL, tarball) can swap the code behind the name.

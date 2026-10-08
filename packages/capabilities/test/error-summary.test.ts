@@ -121,7 +121,7 @@ describe('production.error_summary card', () => {
   });
 
   it('is in the capability registry', () => {
-    expect(capabilities.map((impl) => impl.card.id)).toEqual(['production.error_summary']);
+    expect(capabilities.map((impl) => impl.card.id)).toContain('production.error_summary');
   });
 
   it('previews the service and window', () => {

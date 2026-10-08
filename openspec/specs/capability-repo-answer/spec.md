@@ -23,14 +23,15 @@ La config propriétaire MUST déclarer `repoPath: string`, `allow: string[]` (gl
 - **WHEN** la config ne précise ni `allow`, ni `maxSnapshotBytes`, ni `allowSourceExcerpts`
 - **THEN** `allow` vaut `["src/**", "tests/**", "docs/**", "package.json", "README.md"]`, `maxSnapshotBytes` vaut 20 Mo et `allowSourceExcerpts` vaut `false`
 
-### Requirement: Config propriétaire du modèle
-
-La config propriétaire MUST accepter `model?: string`, `maxTurns?: number` (défaut 15) et `maxUsd?: number` (défaut 0,50 USD).
+### Requirement: Config propriétaire du fournisseur de modèle
+La config MUST désigner le modèle par un fournisseur compatible OpenAI (`provider.baseUrl`, `provider.model`), quel qu'il
+soit : Ollama local, OpenRouter, Groq, Gemini, Mistral, OpenAI ou Anthropic. Par défaut : Ollama local
+(`http://127.0.0.1:11434/v1`) et `qwen3:0.6b`, gratuit et sans clé. `maxTurns` vaut 15 et `maxUsd` 0,50 par défaut.
 
 #### Scenario: Valeurs par défaut du modèle
-
-- **WHEN** la config ne précise ni `maxTurns` ni `maxUsd`
-- **THEN** `maxTurns` vaut 15 et `maxUsd` vaut 0,50
+<!-- openspec-guard:non-testable reason="Couvert par le schéma de config ; vérifié par le test de bout en bout de la capacité" -->
+- **WHEN** la config ne précise ni fournisseur ni limites
+- **THEN** la capacité appelle Ollama local avec `qwen3:0.6b`, `maxTurns` 15 et `maxUsd` 0,50
 
 ### Requirement: Schéma d'entrée
 
@@ -79,116 +80,31 @@ La capacité MUST abandonner l'exécution si la taille du snapshot dépasse `max
 - **WHEN** les fichiers autorisés à copier dépassent `maxSnapshotBytes`
 - **THEN** la capacité abandonne sans appeler le modèle
 
-### Requirement: Clé API du propriétaire
+### Requirement: Clé API par variable d'environnement
+Si le fournisseur exige une clé, la config MUST seulement nommer la variable d'environnement qui la contient
+(`provider.apiKeyEnv`). La clé ne figure jamais dans un fichier de config, un message, un log ou un reçu. Le runner
+utilise une clé API, jamais un login d'abonnement.
 
-La capacité MUST appeler le Claude Agent SDK avec la clé API du propriétaire, lue dans `ANTHROPIC_API_KEY` de l'environnement du runner, et MUST NOT utiliser un login d'abonnement.
+#### Scenario: Clé absente
+- **WHEN** `provider.apiKeyEnv` nomme une variable non définie
+- **THEN** la capacité échoue avant tout appel au modèle
 
-#### Scenario: Authentification du SDK
+### Requirement: Outils fixés par la capacité
+Le modèle MUST n'avoir que trois outils, fournis par la capacité et exécutés par elle sur le snapshot :
+`list_files`, `read_file` (seulement un chemin de la liste du snapshot) et `grep` (texte littéral, sans regex). Aucun
+outil d'écriture, de shell, de réseau ou MCP n'existe pour lui, quel que soit le fournisseur.
 
-- **WHEN** la capacité appelle le Claude Agent SDK
-- **THEN** l'authentification utilise `ANTHROPIC_API_KEY` de l'environnement du runner
+#### Scenario: Lecture hors snapshot
+- **WHEN** le modèle demande `read_file` sur `../.env` ou un chemin absent du snapshot
+- **THEN** l'outil répond « fichier introuvable » et rien n'est lu hors du snapshot
 
-### Requirement: Option SDK cwd sur le snapshot
-<!-- à vérifier -->
-
-L'appel au Claude Agent SDK MUST fixer `cwd = workdir`. Le nom exact de l'option est à vérifier dans la doc du SDK au moment de l'implémentation.
-
-#### Scenario: Répertoire de travail du modèle
-
-- **WHEN** la capacité appelle le Claude Agent SDK
-- **THEN** le répertoire de travail de l'agent est `workdir`, qui contient le snapshot
-
-#### Scenario: Option vérifiée dans la doc officielle
-<!-- openspec-guard:non-testable reason="Lecture de la doc officielle du Claude Agent SDK, consignée dans docs/DECISIONS.md" -->
-
-- **WHEN** la tâche qui implémente `repo.answer` (T1.13) configure le répertoire de travail du SDK
-- **THEN** l'agent lit d'abord la doc officielle actuelle du Claude Agent SDK
-- **AND** il consigne le nom exact de l'option et la source dans `docs/DECISIONS.md`
-
-### Requirement: Option SDK outils autorisés
-<!-- à vérifier -->
-
-L'appel au Claude Agent SDK MUST n'autoriser que les outils `Read`, `Grep` et `Glob`, fixés avant l'appel. Le nom exact de l'option est à vérifier dans la doc du SDK au moment de l'implémentation.
-
-#### Scenario: Outils de lecture seuls
-
-- **WHEN** la capacité appelle le Claude Agent SDK
-- **THEN** les seuls outils disponibles pour le modèle sont `Read`, `Grep` et `Glob`
-
-#### Scenario: Option vérifiée dans la doc officielle
-<!-- openspec-guard:non-testable reason="Lecture de la doc officielle du Claude Agent SDK, consignée dans docs/DECISIONS.md" -->
-
-- **WHEN** la tâche qui implémente `repo.answer` (T1.13) configure les outils autorisés du SDK
-- **THEN** l'agent lit d'abord la doc officielle actuelle du Claude Agent SDK
-- **AND** il consigne le nom exact de l'option et la source dans `docs/DECISIONS.md`
-
-### Requirement: Option SDK outils refusés
-<!-- à vérifier -->
-
-L'appel au Claude Agent SDK MUST refuser tous les autres outils : pas de `Bash`, `Write`, `Edit`, `WebFetch`, `WebSearch`, et pas de MCP. Le nom exact de l'option est à vérifier dans la doc du SDK au moment de l'implémentation.
-
-#### Scenario: Outil d'écriture ou réseau demandé
-
-- **WHEN** le modèle tente d'utiliser `Bash`, `Write`, `Edit`, `WebFetch`, `WebSearch` ou un outil MCP
-- **THEN** l'appel d'outil est refusé
-
-#### Scenario: Option vérifiée dans la doc officielle
-<!-- openspec-guard:non-testable reason="Lecture de la doc officielle du Claude Agent SDK, consignée dans docs/DECISIONS.md" -->
-
-- **WHEN** la tâche qui implémente `repo.answer` (T1.13) configure le refus des autres outils
-- **THEN** l'agent lit d'abord la doc officielle actuelle du Claude Agent SDK
-- **AND** il consigne le nom exact de l'option et la source dans `docs/DECISIONS.md`
-
-### Requirement: Option SDK sans réglages utilisateur ni projet
-<!-- à vérifier -->
-
-L'appel au Claude Agent SDK MUST NOT charger de réglages utilisateur ou projet : pas de `CLAUDE.md`, pas de hooks, pas de MCP de l'utilisateur. Le nom exact de l'option est à vérifier dans la doc du SDK au moment de l'implémentation.
-
-#### Scenario: Snapshot contenant un CLAUDE.md
-
-- **WHEN** la machine du runner a des réglages, hooks ou serveurs MCP utilisateur, ou que le snapshot contient un `CLAUDE.md`
-- **THEN** aucun de ces réglages n'est chargé par l'agent
-
-#### Scenario: Option vérifiée dans la doc officielle
-<!-- openspec-guard:non-testable reason="Lecture de la doc officielle du Claude Agent SDK, consignée dans docs/DECISIONS.md" -->
-
-- **WHEN** la tâche qui implémente `repo.answer` (T1.13) configure le chargement des réglages du SDK
-- **THEN** l'agent lit d'abord la doc officielle actuelle du Claude Agent SDK
-- **AND** il consigne le nom exact de l'option et la source dans `docs/DECISIONS.md`
-
-### Requirement: Option SDK maxTurns
-<!-- à vérifier -->
-
-L'appel au Claude Agent SDK MUST borner le nombre de tours par `maxTurns` de la config. Le nom exact de l'option est à vérifier dans la doc du SDK au moment de l'implémentation.
+### Requirement: Tours bornés et annulation
+La boucle d'appels au modèle MUST s'arrêter après `maxTurns` tours et MUST être annulable par `ctx.signal` (budget de
+temps du runner).
 
 #### Scenario: Limite de tours atteinte
-
-- **WHEN** l'agent atteint `maxTurns` tours
-- **THEN** le SDK arrête la boucle de l'agent
-
-#### Scenario: Option vérifiée dans la doc officielle
-<!-- openspec-guard:non-testable reason="Lecture de la doc officielle du Claude Agent SDK, consignée dans docs/DECISIONS.md" -->
-
-- **WHEN** la tâche qui implémente `repo.answer` (T1.13) configure la limite de tours du SDK
-- **THEN** l'agent lit d'abord la doc officielle actuelle du Claude Agent SDK
-- **AND** il consigne le nom exact de l'option et la source dans `docs/DECISIONS.md`
-
-### Requirement: Option SDK annulation par signal
-<!-- à vérifier -->
-
-L'appel au Claude Agent SDK MUST être annulable par `ctx.signal`. Le mécanisme exact d'annulation est à vérifier dans la doc du SDK au moment de l'implémentation.
-
-#### Scenario: Budget de temps épuisé
-
-- **WHEN** `ctx.signal` est déclenché pendant l'appel au SDK
-- **THEN** l'appel au SDK est annulé
-
-#### Scenario: Option vérifiée dans la doc officielle
-<!-- openspec-guard:non-testable reason="Lecture de la doc officielle du Claude Agent SDK, consignée dans docs/DECISIONS.md" -->
-
-- **WHEN** la tâche qui implémente `repo.answer` (T1.13) branche l'annulation du SDK
-- **THEN** l'agent lit d'abord la doc officielle actuelle du Claude Agent SDK
-- **AND** il consigne le mécanisme exact et la source dans `docs/DECISIONS.md`
+- **WHEN** le modèle n'a pas donné de réponse finale valide après `maxTurns` tours
+- **THEN** la capacité échoue avec `E_OUTPUT_INVALID`
 
 ### Requirement: Prompt système fixe et versionné
 
@@ -236,7 +152,7 @@ La sortie de `repo.answer` MUST passer par tout le pipeline commun du runner, et
 
 #### Scenario: AC: clé sk-ant dans une réponse simulée
 
-- **WHEN** le Claude Agent SDK mocké renvoie une réponse dont une chaîne contient une clé `sk-ant-…`
+- **WHEN** le fournisseur de modèle simulé renvoie une réponse dont une chaîne contient une clé `sk-ant-…`
 - **THEN** le Drop échoue avec `E_SECRET_DETECTED` et rien ne sort
 - **AND** ce comportement est couvert par un test avec le SDK mocké
 

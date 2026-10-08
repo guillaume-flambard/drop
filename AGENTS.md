@@ -54,7 +54,9 @@ Reste dans le périmètre de la ligne de l'index. Un manque découvert devient u
 - MCP : `@modelcontextprotocol/sdk` (transport stdio côté poste de travail).
 - Crypto : `libsodium-wrappers` (Ed25519 pour signer, `crypto_box` / X25519 pour chiffrer). Pas de crypto maison.
 - WebSocket : `ws`. Pas de framework web lourd.
-- Runner LLM : `@anthropic-ai/claude-agent-sdk` **avec clé API** (`ANTHROPIC_API_KEY`), jamais un login d'abonnement.
+- Runner LLM : n'importe quel fournisseur compatible OpenAI (Ollama local par défaut, gratuit ; OpenRouter, Groq,
+  Gemini, OpenAI, Anthropic…) par `fetch`, sans SDK. Clé API par variable d'environnement nommée dans la config, jamais
+  un login d'abonnement. Les outils du modèle sont fournis par la capacité, jamais par le fournisseur (D19).
 
 Ne pas ajouter de dépendance hors de cette liste sans l'écrire dans `docs/DECISIONS.md` avec la raison.
 

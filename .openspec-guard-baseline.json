@@ -419,14 +419,6 @@
       "file": "openspec/specs/capability-error-summary/spec.md"
     },
     {
-      "id": "sg_00a87f5bdfcdea13",
-      "reason": "missing-selector",
-      "verdict": "fail",
-      "capability": "capability-repo-answer",
-      "scenario": "AC: clé sk-ant dans une réponse simulée",
-      "file": "openspec/specs/capability-repo-answer/spec.md"
-    },
-    {
       "id": "sg_150b4711aba32f54",
       "reason": "missing-selector",
       "verdict": "fail",
@@ -440,6 +432,14 @@
       "verdict": "fail",
       "capability": "capability-repo-answer",
       "scenario": "Budget dépassé",
+      "file": "openspec/specs/capability-repo-answer/spec.md"
+    },
+    {
+      "id": "sg_2030e22b5f6b941a",
+      "reason": "missing-selector",
+      "verdict": "fail",
+      "capability": "capability-repo-answer",
+      "scenario": "Lecture hors snapshot",
       "file": "openspec/specs/capability-repo-answer/spec.md"
     },
     {
@@ -459,14 +459,6 @@
       "file": "openspec/specs/capability-repo-answer/spec.md"
     },
     {
-      "id": "sg_3380803390981b6b",
-      "reason": "missing-selector",
-      "verdict": "fail",
-      "capability": "capability-repo-answer",
-      "scenario": "Limite de tours atteinte",
-      "file": "openspec/specs/capability-repo-answer/spec.md"
-    },
-    {
       "id": "sg_48f38805408039c7",
       "reason": "missing-selector",
       "verdict": "fail",
@@ -475,11 +467,11 @@
       "file": "openspec/specs/capability-repo-answer/spec.md"
     },
     {
-      "id": "sg_4b38b16358e19dc7",
+      "id": "sg_579f507cbf9d6952",
       "reason": "missing-selector",
       "verdict": "fail",
       "capability": "capability-repo-answer",
-      "scenario": "Valeurs par défaut du modèle",
+      "scenario": "Limite de tours atteinte",
       "file": "openspec/specs/capability-repo-answer/spec.md"
     },
     {
@@ -488,14 +480,6 @@
       "verdict": "fail",
       "capability": "capability-repo-answer",
       "scenario": "Snapshot trop gros",
-      "file": "openspec/specs/capability-repo-answer/spec.md"
-    },
-    {
-      "id": "sg_66b2d5e15ccf9776",
-      "reason": "missing-selector",
-      "verdict": "fail",
-      "capability": "capability-repo-answer",
-      "scenario": "Budget de temps épuisé",
       "file": "openspec/specs/capability-repo-answer/spec.md"
     },
     {
@@ -515,27 +499,11 @@
       "file": "openspec/specs/capability-repo-answer/spec.md"
     },
     {
-      "id": "sg_7224f02b62fe3516",
+      "id": "sg_8b73d51c58e2218f",
       "reason": "missing-selector",
       "verdict": "fail",
       "capability": "capability-repo-answer",
-      "scenario": "Snapshot contenant un CLAUDE.md",
-      "file": "openspec/specs/capability-repo-answer/spec.md"
-    },
-    {
-      "id": "sg_80f0ac80f1b72a7e",
-      "reason": "missing-selector",
-      "verdict": "fail",
-      "capability": "capability-repo-answer",
-      "scenario": "Authentification du SDK",
-      "file": "openspec/specs/capability-repo-answer/spec.md"
-    },
-    {
-      "id": "sg_8c76a16ae25288c3",
-      "reason": "missing-selector",
-      "verdict": "fail",
-      "capability": "capability-repo-answer",
-      "scenario": "Outil d'écriture ou réseau demandé",
+      "scenario": "Clé absente",
       "file": "openspec/specs/capability-repo-answer/spec.md"
     },
     {
@@ -571,14 +539,6 @@
       "file": "openspec/specs/capability-repo-answer/spec.md"
     },
     {
-      "id": "sg_b7b24709b4eba9dc",
-      "reason": "missing-selector",
-      "verdict": "fail",
-      "capability": "capability-repo-answer",
-      "scenario": "Répertoire de travail du modèle",
-      "file": "openspec/specs/capability-repo-answer/spec.md"
-    },
-    {
       "id": "sg_b9a141ec518d07a9",
       "reason": "missing-selector",
       "verdict": "fail",
@@ -587,11 +547,11 @@
       "file": "openspec/specs/capability-repo-answer/spec.md"
     },
     {
-      "id": "sg_ce5509b76aba99f2",
+      "id": "sg_c7090aebbc38a640",
       "reason": "missing-selector",
       "verdict": "fail",
       "capability": "capability-repo-answer",
-      "scenario": "Outils de lecture seuls",
+      "scenario": "AC: clé sk-ant dans une réponse simulée",
       "file": "openspec/specs/capability-repo-answer/spec.md"
     },
     {

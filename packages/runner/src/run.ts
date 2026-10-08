@@ -16,6 +16,7 @@ const MESSAGES = {
   executeFailed: 'capability execution failed',
   timeBudget: 'time budget exceeded',
   toolBudget: 'tool call budget exceeded',
+  costBudget: 'cost budget exceeded',
   outputSchema: 'output does not match the capability output schema',
   outputAltered: 'output would be altered by its schema; outputs are never repaired',
   outputSize: 'serialized output exceeds maxOutputChars',
@@ -124,8 +125,11 @@ async function executeAndCheck(
     return checkOutput(impl, raw);
   } catch (error) {
     if (state.stop !== undefined) return stopFailure(state.stop);
-    // Only E_SCHEMA passes through (e.g. a service absent from the config); anything else stays opaque.
+    // A capability may refuse with E_SCHEMA (input it rejects), E_OUTPUT_INVALID (its own post-checks) or E_BUDGET
+    // (cost); the message is always fixed text. Anything else stays opaque.
     if (isDropError(error, 'E_SCHEMA')) return failure('E_SCHEMA', MESSAGES.inputRejected);
+    if (isDropError(error, 'E_OUTPUT_INVALID')) return failure('E_OUTPUT_INVALID', MESSAGES.outputSchema);
+    if (isDropError(error, 'E_BUDGET')) return failure('E_BUDGET', MESSAGES.costBudget);
     return failure('E_RUNNER', MESSAGES.executeFailed);
   } finally {
     clearTimeout(timer);
