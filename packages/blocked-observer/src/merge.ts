@@ -18,6 +18,14 @@ export function exportPayload(reviewed: ObservedEvent[], activity: Activity): Ex
   return { format: 'blocked-observer-export', version: 1, activeDays: activeDaysOf(activity), events: reviewed };
 }
 
+/**
+ * `export --classified-only`: an unclassified event never counts as a YES block, so leaving it out does not move the
+ * verdict, and the developer reviews only what was classified during interviews. Active days are kept in full.
+ */
+export function classifiedOnly(events: ObservedEvent[]): ObservedEvent[] {
+  return events.filter((event) => event.classification !== undefined);
+}
+
 export function parseExport(raw: unknown): ExportPayload {
   if (Array.isArray(raw)) throw new Error('old export format without active days: re-export with this version');
   return ExportSchema.parse(raw);

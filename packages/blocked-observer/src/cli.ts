@@ -11,7 +11,7 @@ const USAGE = `blocked-observer <command>
   classify <id>             classification, minutes lost, note
   report [--since 30d]      summary per active day (imports new Codex blocks first)
   report --merge <exports…> pool several developers' exports and apply the go/no-go threshold (D24)
-  export --out file.json    export after reviewing every event
+  export --out file.json    export after reviewing every event (--classified-only: skip unclassified events)
   print-instructions        snippet for AGENTS.md / CLAUDE.md`;
 
 function since(value: string | undefined): number {
@@ -167,12 +167,20 @@ switch (command) {
     break;
   }
   case 'export': {
-    const { values } = parseArgs({ args: rest, options: { out: { type: 'string' } } });
-    if (!values.out) throw new Error('blocked-observer export --out file.json');
+    const { values } = parseArgs({
+      args: rest,
+      options: { out: { type: 'string' }, 'classified-only': { type: 'boolean' } },
+    });
+    if (!values.out) throw new Error('blocked-observer export --out file.json [--classified-only]');
     const { applyReview, TEXT_FIELDS } = await import('./analysis.ts');
     const { shortHash } = await import('./store.ts');
     const { writeFileSync } = await import('node:fs');
-    const events = store.events();
+    const { classifiedOnly, exportPayload } = await import('./merge.ts');
+    const all = store.events();
+    const events = values['classified-only'] ? classifiedOnly(all) : all;
+    if (events.length < all.length) {
+      process.stdout.write(`${String(all.length - events.length)} unclassified events left out\n`);
+    }
     const rl = createInterface({ input: process.stdin, output: process.stdout });
     const decisions = new Map<
       string,
@@ -196,7 +204,6 @@ switch (command) {
     }
     rl.close();
     const reviewed = applyReview(events, decisions, shortHash);
-    const { exportPayload } = await import('./merge.ts');
     writeFileSync(values.out, `${JSON.stringify(exportPayload(reviewed, store.activity()), null, 2)}\n`);
     process.stdout.write(`${String(reviewed.length)} events written to ${values.out}\n`);
     break;

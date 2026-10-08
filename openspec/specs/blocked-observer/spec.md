@@ -304,6 +304,12 @@ l'échantillon (au moins 3 développeurs avec 10 jours actifs chacun) et appliqu
 - **WHEN** un seul export est fourni, ou qu'un développeur a moins de 10 jours actifs
 - **THEN** le verdict est `INSUFFICIENT_SAMPLE`, quels que soient les chiffres
 
+#### Scenario: Export des seuls événements classés
+<!-- openspec-guard:test="report --merge (T0.6) > classified-only export drops unclassified events without moving the verdict" -->
+- **WHEN** l'utilisateur lance `export --classified-only`
+- **THEN** seuls les événements classés sont relus et écrits, et tous les jours actifs sont gardés
+- **AND** le verdict de `report --merge` est le même qu'avec l'export complet
+
 #### Scenario: Ancien format refusé
 <!-- openspec-guard:test="report --merge (T0.6) > rejects the old export format, a bare array without active days" -->
 - **WHEN** un export est un simple tableau d'événements, sans jours actifs

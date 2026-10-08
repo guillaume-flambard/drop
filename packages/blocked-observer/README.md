@@ -61,6 +61,9 @@ L'export montre chaque événement un par un. Tu peux le retirer, et pour chaque
 action, note) le garder, le remplacer par son empreinte ou le supprimer. Seul ce que tu as gardé est écrit. Le
 fichier contient aussi tes jours actifs, sous forme de dates seulement, sans identifiant de session.
 
+Avec `--classified-only`, seuls les événements classés avec `classify` sont relus et écrits. Un événement non classé
+ne compte jamais comme blocage, donc le verdict ne change pas ; tous les jours actifs restent dans le fichier.
+
 ## Rassembler plusieurs testeurs
 
 Chaque testeur envoie son export relu. Ensuite :

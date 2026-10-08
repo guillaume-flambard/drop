@@ -3,7 +3,14 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { exportPayload, mergeExports, parseExport, type ExportPayload, type ObservedEvent } from '../src/index.ts';
+import {
+  classifiedOnly,
+  exportPayload,
+  mergeExports,
+  parseExport,
+  type ExportPayload,
+  type ObservedEvent,
+} from '../src/index.ts';
 
 const CLI = resolve(import.meta.dirname, '..', 'src', 'cli.ts');
 
@@ -81,6 +88,22 @@ describe('report --merge (T0.6)', () => {
     expect(out.activeDays).toEqual(['2026-10-01', '2026-10-02']);
     expect(JSON.stringify(out)).not.toContain('secret-session-1');
     expect(parseExport(JSON.parse(JSON.stringify(out)))).toEqual(out);
+  });
+
+  it('classified-only export drops unclassified events without moving the verdict', () => {
+    const unclassified: ObservedEvent = {
+      id: 'u1',
+      ts: '2026-10-02T10:00:00Z',
+      source: 'hook_claude',
+      agent: 'claude_code',
+    };
+    const events = [yes('g1', 20), unclassified, noBlock('g2')];
+    expect(classifiedOnly(events).map((event) => event.id)).toEqual(['g1', 'g2']);
+    const full = mergeExports(['a', 'b', 'c'].map((name) => ({ name, payload: payload(10, events) })));
+    const kept = mergeExports(['a', 'b', 'c'].map((name) => ({ name, payload: payload(10, classifiedOnly(events)) })));
+    expect(kept.total.yesPerActiveDay).toBe(full.total.yesPerActiveDay);
+    expect(kept.total.medianPainMinutesYes).toBe(full.total.medianPainMinutesYes);
+    expect(kept.verdict).toBe(full.verdict);
   });
 
   it('rejects the old export format, a bare array without active days', () => {
