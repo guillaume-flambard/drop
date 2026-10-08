@@ -61,6 +61,14 @@ Format : `D<n> — date — décision — raison`. Les agents ajoutent ici toute
   passe de `running` à `delivered`. Un expéditeur inconnu échoue à `E_UNKNOWN_PEER` dans l'ordre de la spec ; il n'est
   déchiffré que si le Node a une invitation en attente, et seulement accepté pour un `pair_request` au jeton valide.
   `review_request` porte un `expiresAt`, et le reçu peut porter un `errorCode` (métadonnée, pas de contenu).
+- **D18** — T1.1 à T1.11 construits d'un bloc le 2026-10-08, à la demande de Guillaume (« construire de A à Z »),
+  sans une change OpenSpec par tâche. Les specs `openspec/specs/` restent le contrat ; le code est vérifié par 166
+  tests dont un test de bout en bout (relais et trois Nodes), et par `scripts/demo-local.sh` en processus réels. Les
+  scénarios ne sont pas encore reliés à leurs tests par sélecteurs `openspec-guard` : la baseline les garde gelés,
+  ce qui est une dette connue. Choix d'implémentation sans spec : `journalctl -o short-iso` au lieu de `-o cat` (il
+  faut les horodatages pour `firstSeen`/`lastSeen`) ; le seuil `degraded` est `degradedThreshold` (50 par défaut) ;
+  la notification macOS ne porte pas l'URL de l'UI (elle contiendrait le jeton) ; l'UI et son flux SSE acceptent le
+  jeton en `?token=`, car un navigateur ne peut pas envoyer d'en-tête sur un `EventSource`.
 
 ## À décider par l'humain
 

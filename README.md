@@ -20,6 +20,21 @@ par Claude Code ou Codex.
 
 Le kit de specs en prose d'origine (`docs/specs/`) est dans le commit `ecf96a8`.
 
+## Essayer en local (5 minutes)
+
+```bash
+pnpm install
+scripts/demo-local.sh
+```
+
+Le script lance un relais, un Node « VPS » qui publie `production.error_summary` sur un log de démonstration, et un
+Node « Guillaume » qui demande via le serveur MCP puis autorise une fois. Tout tourne sur `127.0.0.1`, dans un dossier
+temporaire. Il montre le refus local d'une entrée invalide, le résultat filtré, les reçus signés, et vérifie qu'aucun
+fragment de log n'a fui.
+
+Commandes : `node packages/node/src/cli.ts help` (binaire `drop`), `node packages/relay/src/cli.ts` (`drop-relay`).
+Brancher Claude Code ou Codex : `packages/requester-mcp/README.md`.
+
 ## Travailler
 
 Prérequis : Node 22+, pnpm, `npm i -g @fission-ai/openspec@latest`.

@@ -26,17 +26,17 @@ L'étape 1 peut commencer en parallèle pour le prototype, mais pas le pilote.
 
 | ID | Tâche (périmètre) | Capacités OpenSpec | Change | Dépend de | Statut |
 | --- | --- | --- | --- | --- | --- |
-| T1.1 | `protocol` : identité Ed25519, dérivation X25519, `canonical()`, enveloppe (signer, chiffrer, vérifier, déchiffrer), codes d'erreur dans l'ordre, cache anti-rejeu, vecteurs de test | `protocol` | `t1-1-protocol-envelope` | T0.0 | todo |
-| T1.2 | `protocol` : schémas zod de tous les messages, `CapabilityCard`, `Receipt`, export JSON Schema | `protocol` | `t1-2-protocol-messages` | T1.1 | todo |
-| T1.3 | `relay` : challenge/réponse, allowlist, routage, file différée, rate limit, ping, tests d'intégration | `relay` | `t1-3-relay` | T1.1 | todo |
-| T1.4 | `node` : `drop init`, stockage identité 0600, connexion relais avec reconnexion, dispatch des messages reçus, `peers`, `invite`/`pair` | `node`, `protocol` | `t1-4-node-core` | T1.2, T1.3 | todo |
-| T1.5 | `node` : API locale (jeton, contrôle `Host`), routes `/peers`, `/capabilities`, `/drops` | `node` | `t1-5-node-local-api` | T1.4 | todo |
-| T1.6 | `runner` : interface `CapabilityImpl`, pipeline en 8 étapes, scanner de secrets, écriture des reçus | `runner` | `t1-6-runner-pipeline` | T1.2 | todo |
-| T1.7 | Capacité `production.error_summary` (déterministe) + fixtures de logs piégées | `capability-error-summary` | `t1-7-error-summary` | T1.6 | todo |
-| T1.8 | `node` : flux complet côté exécuteur et approbateur : `catalog`, `drop_request`, `approval_request`/`decision`, expiration, `review`, `drop_result`/`drop_error`, `receipt` ; CLI `publish`, `pending`, `approve`, `deny`, `not-now`, `receipts` | `node`, `protocol` | `t1-8-node-drop-flow` | T1.5, T1.6 | todo |
-| T1.9 | `node` : UI de consentement web locale (SSE, échappement), écran de relecture, notification macOS | `node` | `t1-9-consent-ui` | T1.8 | todo |
-| T1.10 | `requester-mcp` : 3 outils, validation locale, encapsulation du résultat, `print-instructions` | `requester-mcp` | `t1-10-requester-mcp` | T1.5 | todo |
-| T1.11 | Test de bout en bout en mémoire : relais + 3 Nodes + capacité factice, scénarios allow / deny / not_now / expiré / sortie invalide / secret détecté | `node`, `runner`, `requester-mcp` | `t1-11-e2e-in-memory` | T1.8, T1.10 | todo |
+| T1.1 | `protocol` : identité Ed25519, dérivation X25519, `canonical()`, enveloppe (signer, chiffrer, vérifier, déchiffrer), codes d'erreur dans l'ordre, cache anti-rejeu, vecteurs de test | `protocol` | `t1-1-protocol-envelope` | T0.0 | done |
+| T1.2 | `protocol` : schémas zod de tous les messages, `CapabilityCard`, `Receipt`, export JSON Schema | `protocol` | `t1-2-protocol-messages` | T1.1 | done |
+| T1.3 | `relay` : challenge/réponse, allowlist, routage, file différée, rate limit, ping, tests d'intégration | `relay` | `t1-3-relay` | T1.1 | done |
+| T1.4 | `node` : `drop init`, stockage identité 0600, connexion relais avec reconnexion, dispatch des messages reçus, `peers`, `invite`/`pair` | `node`, `protocol` | `t1-4-node-core` | T1.2, T1.3 | done |
+| T1.5 | `node` : API locale (jeton, contrôle `Host`), routes `/peers`, `/capabilities`, `/drops` | `node` | `t1-5-node-local-api` | T1.4 | done |
+| T1.6 | `runner` : interface `CapabilityImpl`, pipeline en 8 étapes, scanner de secrets, écriture des reçus | `runner` | `t1-6-runner-pipeline` | T1.2 | done |
+| T1.7 | Capacité `production.error_summary` (déterministe) + fixtures de logs piégées | `capability-error-summary` | `t1-7-error-summary` | T1.6 | done |
+| T1.8 | `node` : flux complet côté exécuteur et approbateur : `catalog`, `drop_request`, `approval_request`/`decision`, expiration, `review`, `drop_result`/`drop_error`, `receipt` ; CLI `publish`, `pending`, `approve`, `deny`, `not-now`, `receipts` | `node`, `protocol` | `t1-8-node-drop-flow` | T1.5, T1.6 | done |
+| T1.9 | `node` : UI de consentement web locale (SSE, échappement), écran de relecture, notification macOS | `node` | `t1-9-consent-ui` | T1.8 | done |
+| T1.10 | `requester-mcp` : 3 outils, validation locale, encapsulation du résultat, `print-instructions` | `requester-mcp` | `t1-10-requester-mcp` | T1.5 | done |
+| T1.11 | Test de bout en bout en mémoire : relais + 3 Nodes + capacité factice, scénarios allow / deny / not_now / expiré / sortie invalide / secret détecté | `node`, `runner`, `requester-mcp` | `t1-11-e2e-in-memory` | T1.8, T1.10 | done |
 | T1.12 | `deploy/vps` : unités systemd durcies, Caddyfile d'exemple, guide pas à pas | `deploy-mac-vps` | `t1-12-deploy-vps` | T1.8 | todo |
 | T1.13 | Capacité `repo.answer` : snapshot en allowlist, Agent SDK restreint, post-contrôles (vérifier les options exactes du SDK d'abord) | `capability-repo-answer` | `t1-13-repo-answer` | T1.6 | todo |
 | T1.14 | Script de démo `scripts/demo.md` + exécution réelle Mac + VPS du scénario 08, captures dans `docs/demo/` | `deploy-mac-vps` | `t1-14-demo` | T1.9, T1.11, T1.12, T1.13 | todo |
