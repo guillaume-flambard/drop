@@ -1,0 +1,40 @@
+import { randomBytes } from 'node:crypto';
+import { z } from 'zod';
+import { DropError } from './errors.ts';
+import { NodeIdSchema, type Identity } from './identity.ts';
+
+export const INVITE_TTL_MS = 15 * 60_000;
+
+export const InviteSchema = z.object({
+  relayUrl: z.url(),
+  nodeId: NodeIdSchema,
+  displayName: z.string().min(1).max(80),
+  oneTimeToken: z.string().min(16),
+  expiresAt: z.number().int(),
+});
+export type Invite = z.infer<typeof InviteSchema>;
+
+export function createInvite(identity: Identity, relayUrl: string, now: number = Date.now()): Invite {
+  return {
+    relayUrl,
+    nodeId: identity.nodeId,
+    displayName: identity.displayName,
+    oneTimeToken: randomBytes(24).toString('base64url'),
+    expiresAt: now + INVITE_TTL_MS,
+  };
+}
+
+export function encodeInvite(invite: Invite): string {
+  return Buffer.from(JSON.stringify(InviteSchema.parse(invite)), 'utf8').toString('base64url');
+}
+
+export function decodeInvite(code: string, now: number = Date.now()): Invite {
+  let invite: Invite;
+  try {
+    invite = InviteSchema.parse(JSON.parse(Buffer.from(code.trim(), 'base64url').toString('utf8')));
+  } catch {
+    throw new DropError('E_INVITE', 'invalid invite code');
+  }
+  if (invite.expiresAt <= now) throw new DropError('E_INVITE', 'invite expired');
+  return invite;
+}

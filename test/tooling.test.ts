@@ -101,11 +101,11 @@ export function findUnrecordedDependencies(
 }
 
 describe('monorepo tooling', () => {
-  it('root package.json pins pnpm, Node >=22.13 and packages/* workspaces', () => {
+  it('root package.json pins pnpm, Node >=22.18 and packages/* workspaces', () => {
     const pkg = readJson('package.json');
     expect(pkg.private).toBe(true);
     expect(String(pkg.packageManager)).toMatch(/^pnpm@/);
-    expect((pkg.engines as Record<string, string>).node).toBe('>=22.13');
+    expect((pkg.engines as Record<string, string>).node).toBe('>=22.18');
     const workspace = readFileSync(join(root, 'pnpm-workspace.yaml'), 'utf8');
     expect(workspace).toMatch(/^\s+- packages\/\*$/m);
   });

@@ -8,13 +8,13 @@ et fichiers ignorés, pour que chaque tâche se termine sur les mêmes contrôle
 
 ### Requirement: Workspaces pnpm
 Le dépôt MUST être un monorepo pnpm workspaces dont les packages vivent sous `packages/*`. Le `package.json` racine
-MUST être `private`, déclarer `packageManager` (pnpm) et `engines.node` à `>=22.13`, le plancher réel de l'outillage
+MUST être `private`, déclarer `packageManager` (pnpm) et `engines.node` à `>=22.18`, le plancher réel de l'outillage
 (eslint 10 et vitest 5).
 
 #### Scenario: AC: déclaration du gestionnaire et de Node
-<!-- openspec-guard:test="monorepo tooling > root package.json pins pnpm, Node >=22.13 and packages/* workspaces" -->
+<!-- openspec-guard:test="monorepo tooling > root package.json pins pnpm, Node >=22.18 and packages/* workspaces" -->
 - **WHEN** on lit le `package.json` racine
-- **THEN** `private` vaut `true`, `packageManager` commence par `pnpm@` et `engines.node` vaut `>=22.13`
+- **THEN** `private` vaut `true`, `packageManager` commence par `pnpm@` et `engines.node` vaut `>=22.18`
 - **AND** `pnpm-workspace.yaml` déclare `packages/*`
 
 ### Requirement: Scripts racine lint, typecheck et test

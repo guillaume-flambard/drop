@@ -49,6 +49,17 @@ Format : `D<n> — date — décision — raison`. Les agents ajoutent ici toute
   `eslint.config.js`, jamais par un commentaire. `lint` inclut `prettier --check`. Vitest `allowOnly: false`. Choix
   validés par Guillaume le 2026-10-08. Second cycle de review : `skipLibCheck: false` (coût mesuré : environ 1 s),
   `no-floating-promises` sans `ignoreVoid`, JavaScript réservé aux `*.config.js` de la racine.
+- **D16** — Pas de build (2026-10-08, demande de Guillaume : construire de bout en bout, vite). Chaque package
+  exporte `./src/index.ts` et Node exécute TypeScript directement par le type stripping natif. Plancher Node passé à
+  `>=22.18`, où ce mode est actif par défaut. D'où `erasableSyntaxOnly`, des imports relatifs en `.ts`
+  (`allowImportingTsExtensions`) et `noEmit` partout. Raison : le contrôle teste toujours la source, sans `dist/`
+  périmé ni étape de compilation entre packages. Cela tranche le point d'import ouvert pour T1.1. Dépendance hors
+  stack : `@types/libsodium-wrappers` (types de `libsodium-wrappers`, qui n'en publie pas).
+- **D17** — Points ouverts du kit tranchés pour avancer (2026-10-08). Le message de décision s'appelle
+  `approval_decision`, comme dans la table de `protocol`. `E_SCHEMA` rejoint les codes de `drop_error`. Un Drop `low`
+  passe de `running` à `delivered`. Un expéditeur inconnu échoue à `E_UNKNOWN_PEER` dans l'ordre de la spec ; il n'est
+  déchiffré que si le Node a une invitation en attente, et seulement accepté pour un `pair_request` au jeton valide.
+  `review_request` porte un `expiresAt`, et le reçu peut porter un `errorCode` (métadonnée, pas de contenu).
 
 ## À décider par l'humain
 
