@@ -16,6 +16,8 @@ Votre agent a besoin d'une information chez un collègue. Il pose une question p
 
 ## Ouvrir le site
 
+La publication sur [drop.memolabs.dev](https://drop.memolabs.dev) est suivie dans le [guide d'exploitation du site](docs/SITE-DEPLOYMENT.md). Le site utilise une stack distincte du relais.
+
 Depuis un clone du dépôt, avec Node **22.18 ou supérieur** et pnpm **11.27.0** :
 
 ```bash
