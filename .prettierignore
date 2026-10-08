@@ -1,0 +1,9 @@
+node_modules/
+dist/
+coverage/
+pnpm-lock.yaml
+openspec/
+.claude/
+.agents/
+docs/
+*.md
