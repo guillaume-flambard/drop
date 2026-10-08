@@ -139,6 +139,26 @@ Format : `D<n> — date — décision — raison`. Les agents ajoutent ici toute
   donne le verdict (T0.6). Les signaux bruts non classés ne comptent pas : au 2026-10-08,
   Guillaume en a 202 sur 23 jours actifs côté Codex, aucun encore classé.
 
+- **D25** — Classification et filtre de bruit de l'étape 0 (2026-10-08). Constat : classer 3 événements Codex vieux
+  de plusieurs semaines avec Guillaume a donné trois « je ne sais pas », parce que la spec listait les huit codes sans
+  les définir, que la mémoire d'un incident s'efface, et que la plupart des événements n'étaient pas des refus.
+  - **Grille** : `docs/CLASSIFICATION.md`, un codebook au sens de MacQueen et al. (1998) : définition, ce qui entre, ce
+    qui n'entre pas, un exemple par code. Le sens des huit codes est tiré de l'étape 0 de la vision (« une réponse
+    bornée aurait-elle suffi ? ») ; c'est une lecture des noms, que Guillaume peut corriger.
+  - **`classify` devient un arbre de décision** : quatre questions oui/non puis une raison, dans un ordre qui rend les
+    codes exclusifs. L'humain ne choisit plus parmi huit codes. Les questions sont en français : `classify` sert en
+    entretien.
+  - **Quand classer** : le jour même ou en entretien, avec la technique des incidents critiques (Flanagan, 1954).
+    Accord vérifié sur les 20 premiers événements de chaque testeur : moins de 8 sur 10, on réécrit la définition.
+  - **Filtre de bruit** (`noise.ts`), mesuré sur 30 jours de logs Codex : de 202 à 62 événements. Est ignorée la sortie
+    d'une commande qui n'a fait qu'afficher du contenu local, sauf échec signalé ; celle des tests et builds de l'agent ;
+    celle d'une recherche web ; côté Claude Code, un résultat réussi de `Read`, `Grep`, `Glob`, `WebSearch`,
+    `WebFetch` ou `ToolSearch`. Le mode code de Codex ne publie pas le code de sortie de ses commandes, donc
+    l'échec n'est connu que quand la sortie le dit. `import-codex` retire les événements non classés qu'un nouvel
+    import ne produit plus ; un événement classé n'est jamais retiré.
+  - **Constat à garder** : sur le poste de Guillaume, qui travaille seul, les vrais refus portent sur sa propre
+    infrastructure. Le signal « ressource de quelqu'un d'autre » ne peut venir que de testeurs en équipe.
+
 ## À décider par l'humain
 
 - **Nom de produit** : à vérifier (nom + domaine) avant le pilote.

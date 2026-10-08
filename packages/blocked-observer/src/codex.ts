@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { codexNoise } from './noise.ts';
 import { detectPattern } from './patterns.ts';
 import { shortHash, type ObservedEvent, type ObserverStore } from './store.ts';
 
@@ -87,9 +88,11 @@ export function parseCodexSessions(dir: string, sinceMs: number): CodexImport {
         continue;
       }
       if ((payload.type === 'function_call_output' || payload.type === 'custom_tool_call_output') && payload.call_id) {
-        const pattern = detectPattern(outputText(payload.output));
+        const output = outputText(payload.output);
+        const pattern = detectPattern(output);
         if (!pattern) continue;
         const tool = tools.get(payload.call_id);
+        if (codexNoise(tool?.name ?? '', tool?.resource ?? '', output)) continue;
         result.events.push({
           id: `codex-${shortHash(`${session}:${payload.call_id}`)}`,
           ts: rec.timestamp ?? new Date().toISOString(),
@@ -106,10 +109,27 @@ export function parseCodexSessions(dir: string, sinceMs: number): CodexImport {
   return result;
 }
 
-/** Appends new Codex events and records active Codex days. Returns how many events were new. */
-export function importCodex(store: ObserverStore, dir: string, sinceMs: number): { added: number; files: number } {
+/**
+ * Appends new Codex events and records active Codex days. An unclassified Codex event that a re-parse no longer yields
+ * (the noise filter got stricter, D25) is dropped; a classified one is always kept. Returns added and removed counts.
+ */
+export function importCodex(
+  store: ObserverStore,
+  dir: string,
+  sinceMs: number,
+): { added: number; removed: number; files: number } {
   const parsed = parseCodexSessions(dir, sinceMs);
-  const known = new Set(store.events().map((event) => event.id));
+  const current = new Set(parsed.events.map((event) => event.id));
+  const before = store.events();
+  const kept = before.filter(
+    (event) =>
+      event.source !== 'codex_log' ||
+      event.classification !== undefined ||
+      Date.parse(event.ts) < sinceMs ||
+      current.has(event.id),
+  );
+  if (kept.length < before.length) store.replaceEvents(kept);
+  const known = new Set(kept.map((event) => event.id));
   let added = 0;
   for (const event of parsed.events) {
     if (known.has(event.id)) continue;
@@ -117,5 +137,5 @@ export function importCodex(store: ObserverStore, dir: string, sinceMs: number):
     added += 1;
   }
   for (const { day, session } of parsed.sessions) store.touch(day, 'codex', session);
-  return { added, files: parsed.files };
+  return { added, removed: before.length - kept.length, files: parsed.files };
 }

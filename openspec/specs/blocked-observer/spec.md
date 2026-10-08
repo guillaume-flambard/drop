@@ -235,12 +235,37 @@ hook et la config Codex.
 - **THEN** seuls les événements des 7 derniers jours sont affichés
 
 ### Requirement: Commande classify
-`blocked-observer classify <id>` SHALL poser des questions interactives sur l'événement `<id>` : classification,
-minutes perdues et note, enregistrées dans `classification`, `pain_minutes` et `note`.
+`blocked-observer classify <id>` SHALL déduire la classification de l'événement `<id>` des réponses à des questions
+oui/non posées dans l'ordre de `docs/CLASSIFICATION.md` (arbre de décision, D25), puis demander les minutes perdues et
+une note, enregistrées dans `classification`, `pain_minutes` et `note`. Chaque chemin de réponses MUST mener à un seul
+code.
 
 #### Scenario: Classification d'un événement
-- **WHEN** on lance `blocked-observer classify <id>` et qu'on répond `YES_LOCAL_CONTEXT`, `15` et une note
+<!-- openspec-guard:test="classify as a decision tree (D25) > the classify command asks the questions and saves the code, minutes and note" -->
+- **WHEN** on lance `blocked-observer classify <id>` et qu'on répond : bloqué oui, quelqu'un d'autre oui, accès durable
+  non, partage brut non, raison « la réponse n'existe que chez lui », `15` et une note
 - **THEN** l'événement `<id>` porte `classification: 'YES_LOCAL_CONTEXT'`, `pain_minutes: 15` et la note
+
+#### Scenario: Un code par chemin
+<!-- openspec-guard:test="classify as a decision tree (D25) > each path of the questions leads to exactly one code" -->
+- **WHEN** on parcourt chaque chemin de réponses de l'arbre
+- **THEN** chacun mène à exactement un des huit codes, et les huit codes sont atteignables
+
+### Requirement: Filtre de bruit
+Un motif trouvé dans du contenu que l'agent a seulement lu MUST NOT créer d'événement : sortie d'une commande qui n'a
+fait qu'afficher du contenu local et n'a pas échoué, sortie des tests ou du build de l'agent, résultat de recherche web,
+résultat réussi d'un outil de lecture de Claude Code (D25). Un refus venu d'une commande qui atteint une ressource, ou
+d'un outil en échec, MUST rester un événement. Un événement classé MUST NOT être retiré par un nouvel import.
+
+#### Scenario: Mot lu dans un fichier ignoré
+<!-- openspec-guard:test="noise filter (D25) > drops a refusal word that the agent only read in a file, a web page or its own tests" -->
+- **WHEN** la sortie de `sed -n`, `rg`, `git show`, d'un test de l'agent ou d'une recherche web contient « 401 Unauthorized »
+- **THEN** aucun événement n'est créé
+
+#### Scenario: Vrai refus gardé
+<!-- openspec-guard:test="noise filter (D25) > keeps a refusal from a command that reached a resource or failed" -->
+- **WHEN** `gh api`, `ssh` ou `curl` reçoit un 403, ou qu'une lecture échoue avec « Permission denied »
+- **THEN** l'événement est créé
 
 ### Requirement: Commande report
 `blocked-observer report` SHALL afficher une synthèse : événements par jour actif, répartition par classification,
