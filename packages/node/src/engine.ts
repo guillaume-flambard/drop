@@ -187,6 +187,11 @@ export class NodeEngine extends EventEmitter {
     return this.outbound.get(dropId);
   }
 
+  /** This node's own questions, newest first: what the panel shows under « Mes questions en cours » (T2.4). */
+  outboundDrops(): OutboundDrop[] {
+    return [...this.outbound.values()].sort((a, b) => b.createdAt - a.createdAt);
+  }
+
   catalog(): CatalogEntry[] {
     const names = new Map(this.peers().map((peer) => [peer.nodeId, peer.displayName]));
     names.set(this.identity.nodeId, this.identity.displayName);

@@ -143,6 +143,14 @@ export class DropHome {
       .map((file) => PublishedSchema.parse(JSON.parse(readFileSync(join(dir, file), 'utf8'))));
   }
 
+  /** Stops publishing a capability; returns false when it was not published. */
+  unpublish(capabilityId: string): boolean {
+    const path = join(this.root, 'capabilities', `${capabilityId}.json`);
+    if (!/^[a-z][a-z0-9_.]*$/.test(capabilityId) || !existsSync(path)) return false;
+    rmSync(path);
+    return true;
+  }
+
   publish(entry: Published): void {
     writePrivate(join(this.root, 'capabilities', `${entry.capabilityId}.json`), `${JSON.stringify(entry, null, 2)}\n`);
   }

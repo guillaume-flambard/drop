@@ -3,6 +3,8 @@ import { RelayClient } from '@drop/relay';
 import { NodeEngine, type InboxItem } from './engine.ts';
 import { detectAgents } from './detect.ts';
 import { openRouterFunder } from './funding.ts';
+import { install } from './install.ts';
+import { isAgentKind, shareDetected } from './share.ts';
 import { startLocalApi, type LocalApi } from './api.ts';
 import type { DropHome } from './home.ts';
 import { notify } from './notify.ts';
@@ -12,6 +14,8 @@ export interface Daemon {
   relay: RelayClient;
   api: LocalApi;
   uiUrl: string;
+  /** The menu bar panel (T2.4). */
+  panelUrl: string;
   stop(): Promise<void>;
 }
 
@@ -84,12 +88,37 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
     token: home.localToken(),
     port: options.apiPort ?? config.apiPort,
     relayUrl: config.relayUrl,
+    admin: {
+      status: () => ({ displayName: identity.displayName, nodeId: identity.nodeId, relayConnected: relay.connected }),
+      tools: () => {
+        const shared: Record<string, string> = {};
+        for (const published of home.published()) {
+          const server = (published.config as { server?: { transport?: string; agent?: string; name?: string } })
+            .server;
+          if (server?.transport === 'agent' && server.agent && server.name)
+            shared[`${server.agent}/${server.name}`] = published.capabilityId;
+        }
+        return { agents: detectAgents(), shared, payer: config.payer };
+      },
+      share: async (body) => {
+        if (!isAgentKind(body.agent)) throw new Error(`unknown agent ${body.agent}`);
+        return shareDetected(home, { agent: body.agent, server: body.server, label: body.label, tools: body.tools });
+      },
+      unshare: (capabilityId) => home.unpublish(capabilityId),
+      install: (agent, remove) => {
+        if (!isAgentKind(agent)) throw new Error(`unknown agent ${agent}`);
+        install(agent, { dropHome: home.root }, remove);
+        return { ok: true };
+      },
+      createTeam: (name) => engine.createTeam(name),
+    },
     refreshCatalogs: async () => {
       await engine.refreshCatalogs();
       await new Promise((resolve) => setTimeout(resolve, 1500));
     },
   });
   const uiUrl = `http://127.0.0.1:${String(api.port)}/?token=${home.localToken()}`;
+  const panelUrl = `http://127.0.0.1:${String(api.port)}/app?token=${home.localToken()}`;
 
   if (options.notifications ?? true) {
     engine.on('approval', (item: Extract<InboxItem, { kind: 'approval' }>) => {
@@ -111,6 +140,7 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
     relay,
     api,
     uiUrl,
+    panelUrl,
     stop: async () => {
       clearInterval(ticker);
       relay.close();

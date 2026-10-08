@@ -2,6 +2,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { z } from 'zod';
 import type { NodeEngine } from './engine.ts';
+import { renderPanel } from './panel.ts';
 import { renderInbox, renderPage } from './ui.ts';
 
 export interface LocalApiOptions {
@@ -12,7 +13,31 @@ export interface LocalApiOptions {
   refreshCatalogs: () => Promise<void>;
   relayUrl: string;
   now?: () => number;
+  /** Owner actions of the app's panel (T2.4), wired by the daemon; absent in tests of the drop routes. */
+  admin?: AdminHooks;
 }
+
+/** What the panel can do beyond deciding: see and share tools, install drop in agents, create a team. */
+export interface AdminHooks {
+  status(): { displayName: string; nodeId: string; relayConnected: boolean };
+  tools(): unknown;
+  share(body: {
+    agent: string;
+    server: string;
+    label?: string | undefined;
+    tools?: string[] | undefined;
+  }): Promise<unknown>;
+  unshare(capabilityId: string): boolean;
+  install(agent: string, remove: boolean): unknown;
+  createTeam(name: string): unknown;
+}
+
+const ShareBody = z.object({
+  agent: z.string().min(1),
+  server: z.string().min(1),
+  label: z.string().min(2).max(60).optional(),
+  tools: z.array(z.string().min(1)).max(30).optional(),
+});
 
 export interface LocalApi {
   port: number;
@@ -162,6 +187,17 @@ export function startLocalApi(options: LocalApiOptions): Promise<LocalApi> {
       res.end(renderPage(''));
       return;
     }
+    if (method === 'GET' && path === '/app') {
+      res.writeHead(200, {
+        'Content-Type': 'text/html; charset=utf-8',
+        'Cache-Control': 'no-store',
+        'Referrer-Policy': 'no-referrer',
+        'Content-Security-Policy':
+          "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'",
+      });
+      res.end(renderPanel());
+      return;
+    }
     if (method === 'GET' && path === '/ui/inbox') {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
       res.end(renderInbox(engine.pending(), now()));
@@ -169,6 +205,61 @@ export function startLocalApi(options: LocalApiOptions): Promise<LocalApi> {
     }
     if (method === 'GET' && path === '/ui/pending') {
       json(res, 200, { pending: engine.pending() });
+      return;
+    }
+    if (method === 'GET' && path === '/ui/outbound') {
+      json(res, 200, { drops: engine.outboundDrops().slice(0, 50) });
+      return;
+    }
+    if (path.startsWith('/ui/admin/')) {
+      const admin = options.admin;
+      if (!admin) {
+        json(res, 404, { error: 'not_found' });
+        return;
+      }
+      try {
+        if (method === 'GET' && path === '/ui/admin/status') {
+          json(res, 200, admin.status());
+          return;
+        }
+        if (method === 'GET' && path === '/ui/admin/tools') {
+          json(res, 200, admin.tools());
+          return;
+        }
+        const body: unknown = method === 'POST' ? JSON.parse((await readBody(req)) || '{}') : {};
+        if (method === 'POST' && path === '/ui/admin/share') {
+          const parsed = ShareBody.safeParse(body);
+          if (!parsed.success) {
+            json(res, 400, { error: 'E_SCHEMA' });
+            return;
+          }
+          json(res, 200, await admin.share(parsed.data));
+          return;
+        }
+        const field = (name: string): string => {
+          const value = (body as Record<string, unknown>)[name];
+          return typeof value === 'string' ? value : '';
+        };
+        if (method === 'POST' && path === '/ui/admin/unshare') {
+          json(res, 200, { ok: admin.unshare(field('capabilityId')) });
+          return;
+        }
+        if (method === 'POST' && path === '/ui/admin/install') {
+          json(res, 200, admin.install(field('agent'), (body as { remove?: unknown }).remove === true));
+          return;
+        }
+        if (method === 'POST' && path === '/ui/admin/team') {
+          json(res, 200, admin.createTeam(field('name')));
+          return;
+        }
+      } catch (error) {
+        json(res, 400, {
+          error: 'E_ADMIN',
+          message: error instanceof Error ? error.message.slice(0, 300) : 'failed',
+        });
+        return;
+      }
+      json(res, 404, { error: 'not_found' });
       return;
     }
     if (method === 'GET' && path === '/ui/team') {
