@@ -63,7 +63,7 @@ describe('report_blocked (source A)', () => {
       resource: 'Datadog checkout service logs',
     });
     const listed = spawnSync(process.execPath, [CLI, 'list'], {
-      env: { ...process.env, BLOCKED_OBSERVER_HOME: store.root },
+      env: { ...process.env, BLOCKED_OBSERVER_HOME: store.root, BLOCKED_OBSERVER_NO_CODEX: '1' },
       encoding: 'utf8',
     });
     expect(listed.stdout).toContain(reply.id.slice(0, 8));
