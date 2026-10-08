@@ -1,6 +1,10 @@
 packages:
   - packages/*
 
+allowBuilds:
+  # esbuild finds its platform binary in its optional dependency; its install script is not needed (D29).
+  esbuild: false
+
 # Root scripts lint, typecheck and test cover the whole repo; including the root
 # makes `pnpm -r <script>` run them too (see DECISIONS D15).
 includeWorkspaceRoot: true
