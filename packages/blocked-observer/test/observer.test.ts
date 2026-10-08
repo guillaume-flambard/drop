@@ -462,7 +462,11 @@ describe('classify as a decision tree (D25)', () => {
     });
     let stdout = '';
     child.stdout.on('data', (chunk: Buffer) => (stdout += chunk.toString()));
-    const exited = new Promise<void>((resolve) => child.on('close', () => resolve()));
+    const exited = new Promise<void>((resolve) => {
+      child.on('close', () => {
+        resolve();
+      });
+    });
     while (!stdout.includes('[o/n]')) await new Promise((resolve) => setTimeout(resolve, 20));
     // Meanwhile, another classify saves evt2.
     const others = store.events();
