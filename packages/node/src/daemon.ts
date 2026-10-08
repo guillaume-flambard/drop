@@ -1,10 +1,12 @@
 import { capabilities } from '@drop/capabilities';
+import { NodeIdSchema } from '@drop/protocol';
 import { RelayClient } from '@drop/relay';
 import { NodeEngine, type InboxItem } from './engine.ts';
 import { detectAgents } from './detect.ts';
 import { openRouterFunder } from './funding.ts';
 import { install } from './install.ts';
 import { isAgentKind, shareDetected } from './share.ts';
+import { runAgentCall } from './assistant.ts';
 import { startLocalApi, type LocalApi } from './api.ts';
 import type { DropHome } from './home.ts';
 import { notify } from './notify.ts';
@@ -31,7 +33,7 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
   const config = home.config();
   const log = options.log ?? ((line: string) => process.stderr.write(`${line}\n`));
   // The engine is built before the relay client that delivers to it; the transport reads the client lazily.
-  const link: { relay?: RelayClient } = {};
+  const link: { relay?: RelayClient; apiPort?: number } = {};
   const engine = new NodeEngine({
     identity,
     ownerKind: config.ownerKind,
@@ -52,6 +54,9 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
           }),
         }
       : {}),
+    // A linked assistant's call runs the requester tools against this node's own local API (T2.13).
+    onAgentCall: (call) =>
+      runAgentCall(`http://127.0.0.1:${String(link.apiPort ?? config.apiPort)}`, home.localToken(), call),
     onAdmission: (ticket) => {
       home.savePendingAdmission(ticket);
       link.relay?.retryNow();
@@ -98,7 +103,13 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
           if (server?.transport === 'agent' && server.agent && server.name)
             shared[`${server.agent}/${server.name}`] = published.capabilityId;
         }
-        return { agents: detectAgents(), shared, payer: config.payer };
+        return {
+          agents: detectAgents(),
+          shared,
+          payer: config.payer,
+          links: engine.links(),
+          gateways: config.gateways,
+        };
       },
       share: async (body) => {
         if (!isAgentKind(body.agent)) throw new Error(`unknown agent ${body.agent}`);
@@ -111,12 +122,18 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
         return { ok: true };
       },
       createTeam: (name) => engine.createTeam(name),
+      link: async (gateway, session, client) => {
+        await engine.linkAssistant(NodeIdSchema.parse(gateway), session, client);
+        return { ok: true, trusted: config.gateways.includes(gateway) };
+      },
+      unlink: (gateway, client) => engine.unlinkAssistant(NodeIdSchema.parse(gateway), client),
     },
     refreshCatalogs: async () => {
       await engine.refreshCatalogs();
       await new Promise((resolve) => setTimeout(resolve, 1500));
     },
   });
+  link.apiPort = api.port;
   const uiUrl = `http://127.0.0.1:${String(api.port)}/?token=${home.localToken()}`;
   const panelUrl = `http://127.0.0.1:${String(api.port)}/app?token=${home.localToken()}`;
 

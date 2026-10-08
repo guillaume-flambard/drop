@@ -31,6 +31,8 @@ export interface AdminHooks {
   unshare(capabilityId: string): boolean;
   install(agent: string, remove: boolean): unknown;
   createTeam(name: string): unknown;
+  link(gateway: string, session: string, client: string): Promise<unknown>;
+  unlink(gateway: string, client: string): boolean;
 }
 
 const ShareBody = z.object({
@@ -279,6 +281,14 @@ export function startLocalApi(options: LocalApiOptions): Promise<LocalApi> {
         }
         if (method === 'POST' && path === '/ui/admin/install') {
           json(res, 200, admin.install(field('agent'), (body as { remove?: unknown }).remove === true));
+          return;
+        }
+        if (method === 'POST' && path === '/ui/admin/link') {
+          json(res, 200, await admin.link(field('gateway'), field('session'), field('client')));
+          return;
+        }
+        if (method === 'POST' && path === '/ui/admin/unlink') {
+          json(res, 200, { ok: admin.unlink(field('gateway'), field('client')) });
           return;
         }
         if (method === 'POST' && path === '/ui/admin/team') {

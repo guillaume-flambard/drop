@@ -247,6 +247,18 @@ code { font: 11px ui-monospace, monospace; word-break: break-all; }
         });
         view.appendChild(card);
       });
+      if (data.links.length > 0) {
+        view.appendChild(el('h2', { text: 'Assistants reliés' }));
+        var linked = el('div', { class: 'list' });
+        data.links.forEach(function (link) {
+          linked.appendChild(el('div', { class: 'row' },
+            el('div', { class: 'grow' }, el('div', { text: link.clientName }), el('div', { class: 'muted', text: 'peut demander à ton équipe en ton nom' })),
+            el('button', { class: 'act', onclick: function () {
+              api('POST', '/ui/admin/unlink', { gateway: link.gateway, client: link.clientName }).then(render);
+            } }, 'Retirer')));
+        });
+        view.appendChild(linked);
+      }
       view.appendChild(el('div', { class: 'muted', text: 'Qui paie le modèle : ' + (data.payer === 'owner' ? 'toi' : 'celui qui demande') }));
     });
   }
@@ -260,6 +272,10 @@ code { font: 11px ui-monospace, monospace; word-break: break-all; }
     next.id = 'view';
     if (notice) { next.appendChild(el('div', { class: 'error', text: notice })); notice = ''; }
     if (info) { next.appendChild(el('div', { class: 'card', text: info })); info = ''; }
+    if (linkRequest) {
+      api('GET', '/ui/admin/tools').then(function (tools) { linkCard(next, tools); view.replaceWith(next); });
+      return;
+    }
     var build = tab === 'requests' ? renderRequests : tab === 'team' ? renderTeam : renderTools;
     build(next).then(function () { view.replaceWith(next); }, function () { view.replaceWith(next); });
     api('GET', '/ui/admin/status').then(function (status) {
@@ -271,6 +287,30 @@ code { font: 11px ui-monospace, monospace; word-break: break-all; }
   ['requests', 'team', 'tools'].forEach(function (name) {
     document.getElementById('tab-' + name).addEventListener('click', function () { tab = name; render(); });
   });
+  // Opened from a drop://link link (T2.13): an assistant such as Claude or ChatGPT asks to reach the team in this
+  // user's name, through a gateway. Nothing happens until the user clicks.
+  var linkParams = new URLSearchParams(location.search);
+  var linkRequest = linkParams.get('link') ? { session: linkParams.get('link'), gateway: linkParams.get('gateway') || '', client: linkParams.get('client') || 'Un assistant' } : null;
+  if (linkRequest) history.replaceState(null, '', '/app?token=' + encodeURIComponent(token));
+
+  function linkCard(view, status) {
+    var request = linkRequest;
+    var trusted = status.gateways.indexOf(request.gateway) >= 0;
+    view.appendChild(el('div', { class: 'card' },
+      el('strong', { text: 'Autoriser ' + request.client + ' à demander à ton équipe ?' }),
+      el('div', { text: request.client + ' pourra poser des questions à tes collègues en ton nom. Chacun continue d’accepter ou de refuser chaque question ; personne ne reçoit d’accès.' }),
+      trusted ? null : el('div', { class: 'error', text: 'Attention : cette demande ne passe pas par la passerelle officielle de drop. Refuse si tu n’en es pas à l’origine.' }),
+      el('div', { class: 'actions' },
+        el('button', { class: 'act', onclick: function () { linkRequest = null; render(); } }, 'Refuser'),
+        el('button', { class: 'act fill', onclick: function () {
+          api('POST', '/ui/admin/link', { gateway: request.gateway, session: request.session, client: request.client }).then(function () {
+            linkRequest = null;
+            info = request.client + ' est relié. Tu peux revenir dans ta conversation.';
+            render();
+          }, function (error) { notice = error.message; render(); });
+        } }, 'Autoriser'))));
+  }
+
   // Opened from a drop://pair link: accept the invitation once, then forget the code.
   var pairCode = new URLSearchParams(location.search).get('pair');
   if (pairCode) {

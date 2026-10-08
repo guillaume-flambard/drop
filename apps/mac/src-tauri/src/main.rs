@@ -85,12 +85,12 @@ fn api_port() -> u16 {
         .unwrap_or(7781)
 }
 
-fn panel_url(pair_code: Option<&str>) -> Option<Url> {
+fn panel_url(extra: &[(&str, String)]) -> Option<Url> {
     let token = fs::read_to_string(drop_home().join("local-token")).ok()?;
     let mut url = Url::parse(&format!("http://127.0.0.1:{}/app", api_port())).ok()?;
     url.query_pairs_mut().append_pair("token", token.trim());
-    if let Some(code) = pair_code {
-        url.query_pairs_mut().append_pair("pair", code);
+    for (key, value) in extra {
+        url.query_pairs_mut().append_pair(key, value);
     }
     Some(url)
 }
@@ -127,17 +127,31 @@ fn toggle_panel(app: &AppHandle, near: PhysicalPosition<f64>) {
     show_panel(app, Some(near));
 }
 
-/// `drop://pair?code=…`: the panel opens with the code and pairs, which also joins the inviter's team.
+/// `drop://pair?code=…` joins a team; `drop://link?session=…&gateway=…&client=…` asks to link an assistant such as
+/// Claude or ChatGPT (T2.13). Either way the panel opens with the request and the user decides there.
 fn open_links(app: &AppHandle, urls: Vec<Url>) {
     for link in urls {
-        if link.scheme() != "drop" || link.host_str() != Some("pair") {
+        if link.scheme() != "drop" {
             continue;
         }
-        let code = link.query_pairs().find(|(key, _)| key == "code").map(|(_, value)| value.into_owned());
-        if let (Some(code), Some(window)) = (code, app.get_webview_window("panel")) {
-            if let Some(url) = panel_url(Some(&code)) {
-                let _ = window.navigate(url);
-            }
+        let param = |name: &str| link.query_pairs().find(|(key, _)| key == name).map(|(_, value)| value.into_owned());
+        let extra: Vec<(&str, String)> = match link.host_str() {
+            Some("pair") => param("code").map(|code| vec![("pair", code)]).unwrap_or_default(),
+            Some("link") => match (param("session"), param("gateway")) {
+                (Some(session), Some(gateway)) => vec![
+                    ("link", session),
+                    ("gateway", gateway),
+                    ("client", param("client").unwrap_or_else(|| "Un assistant".to_string())),
+                ],
+                _ => vec![],
+            },
+            _ => vec![],
+        };
+        if extra.is_empty() {
+            continue;
+        }
+        if let (Some(window), Some(url)) = (app.get_webview_window("panel"), panel_url(&extra)) {
+            let _ = window.navigate(url);
             show_panel(app, None);
         }
     }
@@ -173,7 +187,7 @@ fn main() {
             let ready = handle.clone();
             thread::spawn(move || {
                 if wait_for_daemon() {
-                    if let (Some(window), Some(url)) = (ready.get_webview_window("panel"), panel_url(None)) {
+                    if let (Some(window), Some(url)) = (ready.get_webview_window("panel"), panel_url(&[])) {
                         let _ = window.navigate(url);
                     }
                 }
