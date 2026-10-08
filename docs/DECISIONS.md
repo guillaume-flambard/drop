@@ -108,7 +108,8 @@ Format : `D<n> — date — décision — raison`. Les agents ajoutent ici toute
   `/opt/drop/logs/traefik.log`, que `drop-node` lit en lecture seule (source `file`). Les erreurs sont les codes 5xx
   et `level=error`, nommées dans `stacks/drop/error-summary.json` (PR #99). Premier drop réel le 2026-10-08 : sur 24 h,
   4 erreurs `NOT_IMPLEMENTED` (501), statut `ok`, aucune ligne de log transmise, reçus signés des deux côtés. Moniteur Uptime Kuma `drop` (id 26) sur
-  `https://drop.memolabs.dev/health`, notification e-mail liée, premier battement `200 - OK`. Reste `make map`.
+  `https://drop.memolabs.dev/health`, notification e-mail liée, premier battement `200 - OK`. Carte `docs/architecture.md` de `lab-infra`
+  régénérée par `make map` (PR #100).
 
 ## À décider par l'humain
 
