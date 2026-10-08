@@ -191,3 +191,14 @@ reçue encadrée comme donnée avec son propriétaire, et l'état des autres (en
 <!-- openspec-guard:test="requester MCP tools > fan-out results: each answer framed as data with its owner, the others with their state (T2.10)" -->
 - **WHEN** une réponse est reçue, une autre attend l'accord et une troisième est refusée
 - **THEN** l'agent reçoit « 1 réponse(s) reçue(s) sur 3 », la réponse dans `<drop_result>` avec son propriétaire, puis l'état des deux autres
+
+### Requirement: Demander à mon équipe
+Le serveur SHALL exposer `ask_team({ question, why? })` : une question en langage courant, sans identifiant de capacité
+ni schéma (T2.12, D32), pour les personnes qui ne connaissent pas les agents. Le Node choisit les destinataires ; l'outil
+MUST dire à qui la question est partie et pourquoi, ou, si personne ne correspond, ne rien envoyer et dire qui peut aider.
+
+#### Scenario: Destinataires expliqués
+<!-- openspec-guard:test="requester MCP tools > ask_team tells who was asked and why, or who can help when nothing matches (T2.12)" -->
+- **WHEN** la question est routée vers Julie (Figma) et Natha (GitHub, hors ligne)
+- **THEN** l'agent apprend qui a reçu la question, pourquoi, que Natha est hors ligne, et les `drop_ids` à suivre
+- **AND** quand rien ne correspond, rien n'est envoyé et l'agent reçoit la liste de qui peut aider

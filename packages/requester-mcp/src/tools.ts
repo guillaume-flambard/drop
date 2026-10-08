@@ -8,6 +8,14 @@ export const REQUEST_DESCRIPTION =
 export const RESULT_DESCRIPTION =
   "Récupère le résultat d'une demande envoyée avec request_drop. Attend jusqu'à wait_seconds secondes (0 à 50, 30 par défaut).";
 
+export const ASK_TEAM_DESCRIPTION =
+  "Pose une question à l'équipe de l'utilisateur, en langage courant, quand la réponse se trouve chez un collègue : une maquette, du code, un ticket, un client, une base de données… drop choisit à qui la poser selon les outils que chacun partage, ou selon le prénom cité. Chaque collègue voit la question et accepte ou refuse ; personne ne donne d'accès. Utilise ensuite get_drop_results avec les drop_ids rendus.";
+
+export const AskTeamInput = {
+  question: z.string().min(10).max(300),
+  why: z.string().min(1).max(140).optional(),
+};
+
 export const REQUEST_MANY_DESCRIPTION =
   "Pose une même question à plusieurs capacités de plusieurs collègues à la fois, quand la réponse est éparpillée (ex. « où en est le projet X » : GitHub chez l'un, Figma chez l'autre, un CRM chez un troisième). Chaque collègue accepte ou refuse de son côté. Si une entrée est invalide, rien n'est envoyé. Récupère les réponses avec get_drop_results.";
 export const RESULTS_DESCRIPTION =
@@ -157,6 +165,27 @@ export function createTools(node: LocalNode, agent: string) {
         );
       }
       return text(lines.join('\n\n'));
+    },
+
+    async askTeam(args: { question: string; why?: string | undefined }): Promise<ToolText> {
+      const { asked, helpers } = await node.ask({ question: args.question, purpose: args.why, agent });
+      if (asked.length === 0) {
+        const who = helpers.map(
+          (helper) => `- ${helper.ownerName} : ${helper.title}${helper.online ? '' : ' (hors ligne)'}`,
+        );
+        return text(
+          helpers.length === 0
+            ? "Personne dans l'équipe ne partage encore d'outil qui réponde aux questions. Rien n'a été envoyé."
+            : `Je ne sais pas à qui poser cette question, alors je n'ai rien envoyé. Voici qui peut aider ; reformule en citant un prénom ou un outil :\n${who.join('\n')}`,
+        );
+      }
+      const lines = asked.map(
+        (entry) =>
+          `- ${entry.ownerName} (« ${entry.title} »), parce que ${entry.reason}${entry.online ? '' : ' ; hors ligne pour l\u2019instant'}`,
+      );
+      return text(
+        `Question envoyée. Chacun doit accepter avant de répondre :\n${lines.join('\n')}\n\n${JSON.stringify({ drop_ids: asked.map((entry) => entry.dropId) })}`,
+      );
     },
   };
 }

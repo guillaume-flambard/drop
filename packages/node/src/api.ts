@@ -3,6 +3,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { z } from 'zod';
 import type { NodeEngine } from './engine.ts';
 import { renderPanel } from './panel.ts';
+import { routeQuestion, takesQuestion } from './route.ts';
 import { renderInbox, renderPage } from './ui.ts';
 
 export interface LocalApiOptions {
@@ -49,6 +50,12 @@ const DropRequestBody = z.object({
   capabilityId: z.string(),
   input: z.unknown(),
   purpose: z.string().min(1).max(140),
+  agent: z.enum(['claude_code', 'codex', 'cursor', 'other']).default('other'),
+});
+
+const AskBody = z.object({
+  question: z.string().trim().min(10).max(300),
+  purpose: z.string().trim().min(1).max(140).optional(),
   agent: z.enum(['claude_code', 'codex', 'cursor', 'other']).default('other'),
 });
 
@@ -141,6 +148,32 @@ export function startLocalApi(options: LocalApiOptions): Promise<LocalApi> {
       } catch {
         json(res, 404, { error: 'E_UNKNOWN_CAPABILITY', message: 'no such capability among paired peers' });
       }
+      return;
+    }
+    if (method === 'POST' && path === '/ask') {
+      // « Demander à mon équipe » (T2.12, D32): routed by rules, then one drop per chosen capability.
+      const parsed = AskBody.safeParse(JSON.parse(await readBody(req)));
+      if (!parsed.success) {
+        json(res, 400, { error: 'E_SCHEMA', message: 'a question of 10 to 300 characters is needed' });
+        return;
+      }
+      if (!engine.catalogIsFresh()) await options.refreshCatalogs();
+      const catalog = engine.catalog();
+      const routes = routeQuestion(catalog, parsed.data.question);
+      const asked = [];
+      for (const route of routes) {
+        const drop = await engine.requestDrop({
+          capabilityId: route.capabilityId,
+          input: { question: parsed.data.question },
+          purpose: parsed.data.purpose ?? 'Pas de raison précisée.',
+          agent: parsed.data.agent,
+        });
+        asked.push({ dropId: drop.dropId, ...route });
+      }
+      const helpers = catalog
+        .filter(takesQuestion)
+        .map((entry) => ({ ownerName: entry.ownerName, title: entry.card.title, online: entry.online }));
+      json(res, 200, { asked, helpers });
       return;
     }
     const dropMatch = /^\/drops\/([0-9a-f-]{36})$/.exec(path);

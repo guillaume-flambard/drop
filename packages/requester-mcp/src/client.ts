@@ -24,6 +24,20 @@ export const DropViewSchema = z.object({
 });
 export type DropView = z.infer<typeof DropViewSchema>;
 
+export const AskViewSchema = z.object({
+  asked: z.array(
+    z.object({
+      dropId: z.string(),
+      ownerName: z.string(),
+      title: z.string(),
+      reason: z.string(),
+      online: z.boolean(),
+    }),
+  ),
+  helpers: z.array(z.object({ ownerName: z.string(), title: z.string(), online: z.boolean() })),
+});
+export type AskView = z.infer<typeof AskViewSchema>;
+
 /** The only thing requester-mcp talks to: the local node API. Never the relay. */
 export interface LocalNode {
   capabilities(): Promise<CapabilityView[]>;
@@ -34,6 +48,8 @@ export interface LocalNode {
     agent: string;
   }): Promise<{ dropId: string; owner: string }>;
   drop(dropId: string, waitSeconds: number): Promise<DropView>;
+  /** « Demander à mon équipe »: the node picks who to ask (T2.12). */
+  ask(body: { question: string; purpose?: string | undefined; agent: string }): Promise<AskView>;
 }
 
 export function httpLocalNode(baseUrl: string, token: string): LocalNode {
@@ -54,6 +70,7 @@ export function httpLocalNode(baseUrl: string, token: string): LocalNode {
       z.object({ dropId: z.string(), owner: z.string() }).parse(await call('POST', '/drops', body)),
     drop: async (dropId, waitSeconds) =>
       DropViewSchema.parse(await call('GET', `/drops/${encodeURIComponent(dropId)}?wait=${String(waitSeconds)}`)),
+    ask: async (body) => AskViewSchema.parse(await call('POST', '/ask', body)),
   };
 }
 
