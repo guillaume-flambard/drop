@@ -58,7 +58,7 @@ Codex, Cursor, Claude Desktop) ou pour répondre (app Mac), et l'utilise sur ses
 | T2.6 | Site et doc : page d'accueil avec la démo en vidéo et les boutons d'installation, démarrage en 5 minutes, sécurité, cas d'usage ; servi sur `drop.memolabs.dev` | `site` | `t2-6-site-docs` | T2.4, T2.5 | todo |
 | T2.8 | Détection en trois secondes : agents installés (Claude Code, Codex, Cursor, Claude Desktop) et leurs serveurs MCP, lus dans leurs fichiers de config ; proposition de partage (`drop detect`, `drop share`) ; l'installation de drop dans chaque agent est en T2.5 (D28) | `node`, `capability-mcp-answer` | `t2-8-detect-agents` | T2.2 | done |
 | T2.9 | Équipe : un annuaire signé des membres, appairage automatique entre membres, catalogue de l'équipe (qui, quels agents, quels outils, en ligne ou non) (D28) | `protocol`, `node`, `relay` | `t2-9-team-directory` | T2.1 | done |
-| T2.10 | Demandes multiples : une question part vers plusieurs capacités de plusieurs personnes, suivi de chaque réponse, assemblage par l'agent ; scénario « où en est le projet X » (D28) | `requester-mcp`, `node` | `t2-10-fan-out` | T2.9 | todo |
+| T2.10 | Demandes multiples : une question part vers plusieurs capacités de plusieurs personnes, suivi de chaque réponse, assemblage par l'agent ; scénario « où en est le projet X » (D28) | `requester-mcp`, `node` | `t2-10-fan-out` | T2.9 | done |
 | T2.7 | Cas d'usage réels joués chez Julie (Figma) et Natha (Notion, Linear, GitHub, base de données), captures et vidéo pour les entreprises | `deploy-mac-vps` | `t2-7-real-use-cases` | T2.3, T2.4, T2.5, T2.10 | todo |
 
 **Points d'arrêt humains** : signature de l'app avec le compte Apple Developer de Guillaume (T2.4) ; dessin du

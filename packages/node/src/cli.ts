@@ -38,7 +38,8 @@ const USAGE = `drop <command>
 
 const INSTRUCTIONS = `Si tu es bloqué par une ressource, une donnée ou un contexte qui appartient à un collègue, appelle
 \`list_capabilities\`. Si une capacité correspond, propose à l'utilisateur de l'utiliser et attends son accord avant
-d'appeler \`request_drop\`.`;
+d'appeler \`request_drop\`. Si la réponse est éparpillée entre plusieurs personnes, utilise \`request_drops\` puis
+\`get_drop_results\`, et dis d'où vient chaque information.`;
 
 function fail(message: string): never {
   process.stderr.write(`${message}\n`);

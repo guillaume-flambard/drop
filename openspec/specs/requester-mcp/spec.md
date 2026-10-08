@@ -175,3 +175,19 @@ installé est le fichier assemblé `drop-mcp.mjs`, copié dans `DROP_HOME/bin` e
 <!-- openspec-guard:test="installing drop in the coding agents (T2.5) > builds a Cursor install link that carries the server entry" -->
 - **WHEN** on lance `drop install cursor --link`
 - **THEN** on obtient un lien `cursor://anysphere.cursor-deeplink/mcp/install` dont `config` est l'entrée du serveur en base64
+
+### Requirement: Question à plusieurs personnes
+Le serveur SHALL exposer `request_drops({ purpose, requests: { capability_id, input }[] })` (2 à 10 demandes) et
+`get_drop_results({ drop_ids, wait_seconds })` (T2.10, D28). `request_drops` MUST valider toutes les entrées avant
+d'envoyer quoi que ce soit ; si une seule est invalide, rien ne part. `get_drop_results` MUST rendre chaque réponse
+reçue encadrée comme donnée avec son propriétaire, et l'état des autres (en attente, refusée, expirée).
+
+#### Scenario: Tout ou rien à l'envoi
+<!-- openspec-guard:test="requester MCP tools > fan-out: one question to several capabilities, all checked before any is sent (T2.10)" -->
+- **WHEN** l'agent envoie une question à deux capacités dont une est inconnue
+- **THEN** rien n'est envoyé et l'agent apprend laquelle pose problème ; avec deux capacités valides, les deux partent avec le même `purpose`
+
+#### Scenario: Réponses assemblables
+<!-- openspec-guard:test="requester MCP tools > fan-out results: each answer framed as data with its owner, the others with their state (T2.10)" -->
+- **WHEN** une réponse est reçue, une autre attend l'accord et une troisième est refusée
+- **THEN** l'agent reçoit « 1 réponse(s) reçue(s) sur 3 », la réponse dans `<drop_result>` avec son propriétaire, puis l'état des deux autres

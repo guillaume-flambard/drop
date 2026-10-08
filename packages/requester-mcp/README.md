@@ -1,7 +1,8 @@
 # @drop/requester-mcp
 
 Serveur MCP stdio côté demandeur. Il ne parle qu'à l'API locale du Node (`drop serve`), jamais au relais.
-Trois outils : `list_capabilities`, `request_drop`, `get_drop_result`.
+Cinq outils : `list_capabilities`, `request_drop`, `get_drop_result`, et pour une question qui concerne plusieurs
+personnes à la fois, `request_drops` et `get_drop_results` (T2.10).
 
 Prérequis : un Node initialisé (`drop init`) et `drop serve` lancé. Le serveur lit `DROP_HOME` (défaut `~/.drop`) :
 le port dans `config.json` et le jeton dans `local-token`. On peut forcer `DROP_LOCAL_URL` et `DROP_LOCAL_TOKEN_FILE`.

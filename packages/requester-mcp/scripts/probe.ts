@@ -1,5 +1,6 @@
 // Plays the requester agent: starts requester-mcp over stdio like Claude Code would, and calls its three tools.
 // Usage: DROP_HOME=<requester home> node packages/requester-mcp/scripts/probe.ts list|request <json>|result <dropId>
+//        |request-many <json>|results <dropId,dropId…>
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 
@@ -27,5 +28,9 @@ if (action === 'tools') {
   await call('request_drop', JSON.parse(argument) as Record<string, unknown>);
 } else if (action === 'result') {
   await call('get_drop_result', { drop_id: argument, wait_seconds: 5 });
+} else if (action === 'request-many') {
+  await call('request_drops', JSON.parse(argument) as Record<string, unknown>);
+} else if (action === 'results') {
+  await call('get_drop_results', { drop_ids: argument.split(','), wait_seconds: 5 });
 }
 await client.close();
