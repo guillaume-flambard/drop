@@ -47,7 +47,8 @@ Format : `D<n> — date — décision — raison`. Les agents ajoutent ici toute
   Après review : plancher Node `>=22.13` (eslint 10 exige `^22.13.0`, vitest 5 `^22.12.0`). Lint typé
   (`strictTypeChecked` avec `projectService`) et `noInlineConfig` : une exception de lint passe par
   `eslint.config.js`, jamais par un commentaire. `lint` inclut `prettier --check`. Vitest `allowOnly: false`. Choix
-  validés par Guillaume le 2026-10-08.
+  validés par Guillaume le 2026-10-08. Second cycle de review : `skipLibCheck: false` (coût mesuré : environ 1 s),
+  `no-floating-promises` sans `ignoreVoid`, JavaScript réservé aux `*.config.js` de la racine.
 
 ## À décider par l'humain
 

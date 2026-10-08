@@ -76,8 +76,11 @@ export function findUnrecordedDependencies(
     for (const field of DEPENDENCY_FIELDS) {
       for (const dep of Object.keys((manifest[field] as Record<string, string> | undefined) ?? {})) {
         const version = (manifest[field] as Record<string, string>)[dep] ?? '';
-        // Only a real local workspace package is exempt; an npm alias named @drop/* is not.
-        if ((dep.startsWith('@drop/') && version.startsWith('workspace:')) || IMPOSED_STACK.has(dep)) continue;
+        // A protocol (`npm:`, `git+`, `file:`...) can swap the package behind an approved name: only a plain
+        // registry range is exempt for the imposed stack, and only `workspace:` for @drop/*.
+        const isLocalWorkspace = dep.startsWith('@drop/') && version.startsWith('workspace:');
+        const isPlainStackDependency = IMPOSED_STACK.has(dep) && !version.includes(':');
+        if (isLocalWorkspace || isPlainStackDependency) continue;
         if (!entries.some((entry) => entry.includes(`\`${dep}\``))) unrecorded.push(`${path}: ${dep}`);
       }
     }
@@ -134,6 +137,10 @@ describe('monorepo tooling', () => {
     const typechecked = new Set(listed.output.split('\n').map((file) => file.trim()));
     expect(tsFiles.filter((file) => !typechecked.has(join(root, file)))).toEqual([]);
 
+    const javascript = trackedFiles(/\.(js|mjs|cjs|jsx)$/).filter((file) => !/^[^/]+\.config\.js$/.test(file));
+    expect(javascript).toEqual([]);
+    expect((readJson('tsconfig.base.json').compilerOptions as Record<string, unknown>).skipLibCheck).toBe(false);
+
     const testFiles = trackedFiles(/\.(test|spec)\.(ts|tsx|mts|cts)$/);
     const collected = run('pnpm', ['exec', 'vitest', 'list', '--filesOnly']);
     expect(collected.status, collected.output).toBe(0);
@@ -176,13 +183,14 @@ describe('monorepo tooling', () => {
     }
   });
 
-  it('lint rejects a floating promise and an unsafe any from JSON.parse', async () => {
+  it('lint rejects a floating promise, a void-discarded promise and an unsafe any from JSON.parse', async () => {
     const eslint = new ESLint({ cwd: root });
     const filePath = join(root, 'test', 'tooling.test.ts');
     const code = [
       'async function work(): Promise<void> {}',
       'work();',
       "export const parsed: { id: string } = JSON.parse('{}');",
+      "void Promise.reject(new Error('unhandled'));",
       '',
     ].join('\n');
     const [result] = await eslint.lintText(code, { filePath });
@@ -190,6 +198,8 @@ describe('monorepo tooling', () => {
     expect(rules).toEqual(
       expect.arrayContaining(['@typescript-eslint/no-floating-promises', '@typescript-eslint/no-unsafe-assignment']),
     );
+    // One for the bare call, one for the `void`-discarded rejection.
+    expect(rules.filter((rule) => rule === '@typescript-eslint/no-floating-promises')).toHaveLength(2);
   });
 
   it('format check uses the repo Prettier config and flags an unformatted file', async () => {
@@ -223,6 +233,10 @@ describe('monorepo tooling', () => {
     for (const path of ignored) {
       expect(run('git', ['check-ignore', '-q', '--no-index', path]).status, path).toBe(0);
     }
+    // A force-added file escapes .gitignore: no tracked file may match an ignore pattern.
+    const trackedButIgnored = run('git', ['ls-files', '--cached', '--ignored', '--exclude-standard']);
+    expect(trackedButIgnored.status, trackedButIgnored.output).toBe(0);
+    expect(trackedButIgnored.output.trim()).toBe('');
   });
 
   it('every dependency outside the imposed stack is recorded in DECISIONS', () => {
@@ -240,12 +254,14 @@ describe('monorepo tooling', () => {
           zod: '4',
           '@drop/protocol': 'workspace:*',
           '@drop/relay': 'npm:unreviewed-external@1.0.0',
+          ws: 'npm:unreviewed-external@1.0.0',
         },
       },
     };
     expect(findUnrecordedDependencies(manifests, decisions)).toEqual([
       'packages/a/package.json: is-odd',
       'packages/a/package.json: @drop/relay',
+      'packages/a/package.json: ws',
     ]);
   });
 });

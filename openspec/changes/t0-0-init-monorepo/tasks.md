@@ -23,7 +23,8 @@
 - [x] 4.2 Activer le lint typé et `noInlineConfig`, inclure `prettier --check` dans `lint`, et vérifier qu'un `eslint-disable` + `any` échoue
 - [x] 4.3 Passer à `allowOnly: false` et vérifier qu'un `it.only` fait échouer `pnpm test`
 - [x] 4.4 Ignorer les clés, `.drop*` et `.env.example`, et n'exempter `@drop/*` qu'en `workspace:` ; tests ajoutés
-- [x] 4.5 Écrire le delta de spec `monorepo-tooling`, et vérifier que `openspec validate --strict` passe et que chaque scénario a son test
+- [x] 4.5 Second cycle (Codex) : alias npm refusés pour la stack, JavaScript limité aux `*.config.js` racine, `skipLibCheck` désactivé, `void` sur une promesse refusé, aucun fichier ignoré suivi par git ; sondes de mutation faites
+- [x] 4.6 Écrire le delta de spec `monorepo-tooling`, et vérifier que `openspec validate --strict` passe et que chaque scénario a son test
 
 ## Workflow follow-up
 
