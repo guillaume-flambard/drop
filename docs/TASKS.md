@@ -18,7 +18,7 @@ implémenter qui appartient à une autre ligne.
 | T0.3 | `blocked-observer import-codex` (vérifier d'abord l'emplacement et le format des logs Codex ; sinon `blocked` + note dans DECISIONS) | `blocked-observer` | `t0-3-observer-codex-import` | T0.1 | done |
 | T0.4 | CLI `list`, `classify`, `report`, `export` (avec relecture), `install`, `print-instructions` + rapprochement A/B | `blocked-observer` | `t0-4-observer-cli` | T0.2 | done |
 | T0.5 | `packages/blocked-observer/README.md` pour les testeurs : installation en 5 minutes (Claude Code et Codex), ce qui est collecté, ce qui ne l'est pas, comment exporter | `blocked-observer` | `t0-5-observer-readme` | T0.4 | done |
-| T0.6 | `blocked-observer report --merge <exports…>` : agréger les exports relus de plusieurs développeurs (jours actifs et blocages YES additionnés) pour juger le seuil D24 | `blocked-observer` | `t0-6-observer-merge` | T0.4 | todo |
+| T0.6 | `blocked-observer report --merge <exports…>` : agréger les exports relus de plusieurs développeurs (jours actifs et blocages YES additionnés) pour juger le seuil D24 | `blocked-observer` | `t0-6-observer-merge` | T0.4 | done |
 
 **Point d'arrêt humain** : écrire le seuil go/no-go dans `docs/DECISIONS.md`, lancer la mesure, faire les entretiens.
 L'étape 1 peut commencer en parallèle pour le prototype, mais pas le pilote.

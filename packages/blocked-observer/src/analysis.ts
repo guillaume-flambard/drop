@@ -46,17 +46,23 @@ function median(values: number[]): number | null {
 }
 
 /** "Jour actif" = a day with at least one Claude Code hook call or one Codex session (spec 02). */
+export function activeDaysOf(activity: Activity, sinceMs = 0): string[] {
+  return Object.entries(activity)
+    .filter(
+      ([day, entry]) =>
+        Date.parse(`${day}T23:59:59Z`) >= sinceMs && (entry.claude.length > 0 || entry.codex.length > 0),
+    )
+    .map(([day]) => day)
+    .sort();
+}
+
 export function buildReport(events: ObservedEvent[], activity: Activity, sinceMs = 0): Report {
   const inRange = events.filter((event) => Date.parse(event.ts) >= sinceMs);
-  const days = new Set(
-    Object.entries(activity)
-      .filter(
-        ([day, entry]) =>
-          Date.parse(`${day}T23:59:59Z`) >= sinceMs && (entry.claude.length > 0 || entry.codex.length > 0),
-      )
-      .map(([day]) => day),
-  );
-  const activeDays = days.size;
+  return reportFromDays(inRange, activeDaysOf(activity, sinceMs).length);
+}
+
+/** Report over already-selected events and a number of (developer-)active days. */
+export function reportFromDays(inRange: ObservedEvent[], activeDays: number): Report {
   const bySource: Record<string, number> = {};
   const byClassification: Report['byClassification'] = {};
   let painMinutes = 0;
