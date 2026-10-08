@@ -1,4 +1,7 @@
-# 01 — Architecture
+# Architecture
+
+> Contexte descriptif, lu par les agents avant chaque change. Les exigences normatives vivent dans
+> `openspec/specs/<capacité>/spec.md` ; en cas d'écart, la spec fait foi.
 
 ## Vue d'ensemble
 
@@ -35,9 +38,12 @@ packages/
   runner/             Registre de capacités, cadre d'exécution, validation, scan de secrets, budget.
   capabilities/       Implémentations : production-error-summary, repo-answer.
   requester-mcp/      Serveur MCP stdio exposé à Claude Code / Codex.
+openspec/
+  project/            Contexte descriptif : vision, architecture.
+  specs/              Exigences normatives, une capacité par dossier.
+  changes/            Une change par tâche T*, archivée une fois livrée.
 docs/
-  specs/              Ces specs.
-  TASKS.md            Liste ordonnée des tâches.
+  TASKS.md            Index ordonné des tâches et de leurs dépendances.
   DECISIONS.md        Journal des décisions.
 deploy/
   vps/                Unités systemd, Caddyfile d'exemple.
@@ -46,7 +52,7 @@ deploy/
 Règle de dépendance : `protocol` ← tout le monde ; `runner` ← `capabilities` ; `node` ← `runner` ;
 `requester-mcp` ne parle qu'à l'API locale de `node`, jamais au relais.
 
-## Modèle de données (extrait, la source de vérité est `packages/protocol`)
+## Modèle de données (extrait, normatif dans `openspec/specs/protocol/spec.md`, implémenté dans `packages/protocol`)
 
 ```ts
 type NodeId = string;            // base64url de la clé publique Ed25519
