@@ -101,8 +101,13 @@ Format : `D<n> — date — décision — raison`. Les agents ajoutent ici toute
   `wss://drop.memolabs.dev/v1` ; `relay.memolabs.dev` était déjà pris par une autre app. Le Node du lab est sortant
   uniquement (`ws://drop-relay:7780/v1` par le réseau interne), uid 1000, identité dans `/opt/drop/home` en 0700, et
   n'a aucune clé LLM. Un Node s'autorise par PR sur `stacks/drop/relay.config.json`, jamais par `drop-relay allow`
-  sur le serveur : le rsync du déploiement l'écraserait. Les logs résumés par `production.error_summary` seront
-  choisis plus tard (décision de Guillaume) : la capacité n'est pas encore publiée. Restent hors code : le moniteur
+  sur le serveur : le rsync du déploiement l'écraserait. Logs résumés (choix de Guillaume, même jour) : ceux de
+  Traefik, qui n'écrit que sur sa sortie standard. Le conteneur `drop-logs` (`docker:28-cli` épinglé, sans réseau) est
+  le seul à voir le socket Docker, l'option que la spec 08 demande de documenter puisque ce socket équivaut à root. Sa
+  commande est fixe : chaque minute, il exporte `docker logs --since 24h --timestamps traefik` vers
+  `/opt/drop/logs/traefik.log`, que `drop-node` lit en lecture seule (source `file`). Les erreurs sont les codes 5xx
+  et `level=error`, nommées dans `stacks/drop/error-summary.json` (PR #99). Premier drop réel le 2026-10-08 : sur 24 h,
+  4 erreurs `NOT_IMPLEMENTED` (501), statut `ok`, aucune ligne de log transmise, reçus signés des deux côtés. Restent hors code : le moniteur
   Uptime Kuma (commande de `lab-infra/README.md`, bloquée par le hook tirith dans cette session) et `make map`.
 
 ## À décider par l'humain
