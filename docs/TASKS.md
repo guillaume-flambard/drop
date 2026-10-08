@@ -41,3 +41,21 @@ L'étape 1 peut commencer en parallèle pour le prototype, mais pas le pilote.
 | T1.12 | déploiement sur le VPS lab : stack `lab-infra/stacks/drop` (Traefik, docker, autodeploy), D22 | `deploy-mac-vps` | `t1-12-deploy-vps` | T1.8 | done |
 | T1.13 | Capacité `repo.answer` : snapshot en allowlist, modèle de n'importe quel fournisseur avec outils fixés par la capacité, post-contrôles (D19) | `capability-repo-answer` | `t1-13-repo-answer` | T1.6 | done |
 | T1.14 | Script de démo `scripts/demo.md` + exécution réelle Mac + VPS du scénario 08, captures dans `docs/demo/` | `deploy-mac-vps` | `t1-14-demo` | T1.9, T1.11, T1.12, T1.13 | doing |
+
+## Étape 2 — Installable chez n'importe qui (D26)
+
+Objectif : une personne qui n'a jamais vu le dépôt installe drop en un clic, que ce soit pour demander (Claude Code,
+Codex, Cursor, Claude Desktop) ou pour répondre (app Mac), et l'utilise sur ses propres outils MCP.
+
+| ID | Tâche (périmètre) | Capacités OpenSpec | Change | Dépend de | Statut |
+| --- | --- | --- | --- | --- | --- |
+| T2.1 | `relay` : admission par invitation. Un Node déjà admis signe une invitation ; le relais admet le Node qui la présente, sans PR sur l'allowlist. L'allowlist reste pour l'amorçage | `relay`, `protocol`, `node` | `t2-1-relay-invite-admission` | T1.12 | todo |
+| T2.2 | Capacité `mcp.answer` : répondre à partir d'un serveur MCP du propriétaire (stdio ou HTTP local), avec les outils en lecture seule choisis à la publication. Cas Figma (Julie) et Notion, Linear, GitHub, base de données (Natha) | `capability-mcp-answer`, `runner` | `t2-2-mcp-answer` | T1.13 | todo |
+| T2.3 | Le demandeur paie (D27) : clé plafonnée créée par le demandeur pour une demande, chiffrée pour l'exécuteur, jamais écrite sur disque chez lui ; plafond affiché sur la carte | `protocol`, `node`, `runner`, `requester-mcp` | `t2-3-requester-pays` | T2.2 | todo |
+| T2.4 | App Mac pour le propriétaire : Tauri dans la barre de menus, Node embarqué, démarrage auto, cartes de consentement, appairage par lien `drop://`, choix des serveurs MCP à partager, mises à jour signées | `owner-app` | `t2-4-owner-mac-app` | T2.1, T2.2 | todo |
+| T2.5 | Installation en un clic côté demandeur : `.mcpb` pour Claude Desktop, lien « Add to Cursor », commandes Claude Code et Codex, paquet npm publié | `requester-mcp` | `t2-5-requester-one-click` | T2.1 | todo |
+| T2.6 | Site et doc : page d'accueil avec la démo en vidéo et les boutons d'installation, démarrage en 5 minutes, sécurité, cas d'usage ; servi sur `drop.memolabs.dev` | `site` | `t2-6-site-docs` | T2.4, T2.5 | todo |
+| T2.7 | Cas d'usage réels joués chez Julie (Figma) et Natha (Notion, Linear, GitHub, base de données), captures et vidéo pour les entreprises | `deploy-mac-vps` | `t2-7-real-use-cases` | T2.3, T2.4, T2.5 | todo |
+
+**Points d'arrêt humains** : compte Apple Developer pour signer l'app (T2.4) ; accord avant toute publication npm ou
+mise en ligne du site (T2.5, T2.6) ; installation chez Julie et Natha (T2.7).
