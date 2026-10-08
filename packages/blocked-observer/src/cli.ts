@@ -136,8 +136,15 @@ switch (command) {
     if (rest[0] === '--merge') {
       const files = rest.slice(1);
       if (files.length === 0) throw new Error('blocked-observer report --merge <export.json>…');
-      const { readFileSync } = await import('node:fs');
+      const { existsSync, readFileSync } = await import('node:fs');
       const path = await import('node:path');
+      const missing = files.filter((file) => !existsSync(file));
+      if (missing.length > 0) {
+        process.stderr.write(
+          `export not found: ${missing.join(', ')}\nEach developer first runs: blocked-observer export --out <name>.json\n`,
+        );
+        process.exit(1);
+      }
       const { mergeExports, parseExport } = await import('./merge.ts');
       const merged = mergeExports(
         files.map((file) => ({
