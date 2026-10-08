@@ -72,6 +72,10 @@ const store = new ObserverStore();
 
 /** Codex has no hook: list and report first pull in new Codex blocks (idempotent), unless --no-codex is given. */
 async function syncCodex(args: string[]): Promise<void> {
+  const { pruneHookNoise } = await import('./noise.ts');
+  const events = store.events();
+  const kept = pruneHookNoise(events);
+  if (kept.length < events.length) store.replaceEvents(kept);
   if (args.includes('--no-codex') || process.env.BLOCKED_OBSERVER_NO_CODEX === '1') return;
   try {
     const { codexSessionsDir, importCodex } = await import('./codex.ts');

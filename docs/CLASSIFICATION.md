@@ -111,7 +111,8 @@ contient. `blocked-observer` ignore donc :
   elle a échoué ;
 - les sorties des tests et des builds de l'agent (`npm test`, `pytest`, `vitest`…) ;
 - les résultats de recherche web ;
-- côté Claude Code, les résultats réussis de `Read`, `Grep`, `Glob`, `WebSearch`, `WebFetch` et `ToolSearch`.
+- côté Claude Code, le résultat réussi de tout outil autre que `Bash` et les outils MCP : `Read`, `Write`, `Grep`,
+  `AskUserQuestion`… ne renvoient que ce que l'agent a lu ou écrit lui-même.
 
 Mesuré sur 30 jours de journaux Codex réels : de 202 événements à 62. Un événement déjà classé n'est jamais retiré.
 

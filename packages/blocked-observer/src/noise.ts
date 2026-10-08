@@ -34,8 +34,14 @@ const READERS = new Set([
 ]);
 const GIT_READERS = new Set(['show', 'diff', 'log', 'status', 'grep', 'blame', 'ls-files', 'rev-parse', 'branch']);
 
-/** Claude Code tools whose successful result is content the agent asked to read, never a refusal. */
-export const CONTENT_TOOLS = new Set(['Read', 'Grep', 'Glob', 'WebSearch', 'WebFetch', 'ToolSearch', 'NotebookRead']);
+/**
+ * Claude Code tools whose successful result can carry someone else's refusal: the shell and MCP tools. Every other
+ * tool (Read, Write, Edit, Grep, AskUserQuestion, WebSearch…) returns content the agent read or wrote itself, as seen on
+ * 2026-10-08 when writing tests and questions that mention « 401 » created events.
+ */
+export function reachesResource(tool: string): boolean {
+  return tool === 'Bash' || tool.startsWith('mcp__');
+}
 
 /** Shell keywords that wrap other commands: they read nothing themselves. */
 const NEUTRAL = new Set(['cd', 'for', 'do', 'done', 'while', 'if', 'then', 'else', 'fi', 'set', 'export', '{', '}']);
@@ -141,11 +147,24 @@ export function codexNoise(name: string, args: string, output: string): boolean 
   return commands.length > 0 && commands.every(isReadOnlyCommand);
 }
 
-/** Claude Code: a successful content tool, or a Bash call that only read content, is noise. Failures always count. */
+/** Claude Code: a successful tool that reaches no resource, or a Bash call that only read content, is noise. Failures always count. */
 export function claudeNoise(event: string, tool: string, input: unknown): boolean {
   if (event !== 'PostToolUse') return false;
-  if (CONTENT_TOOLS.has(tool)) return true;
+  if (!reachesResource(tool)) return true;
   if (tool !== 'Bash') return false;
   const command = typeof input === 'object' && input !== null && 'command' in input ? input.command : undefined;
   return typeof command === 'string' && isReadOnlyCommand(command);
+}
+
+/**
+ * Drops stored, unclassified Claude Code events from tools that reach no resource: they were recorded before this
+ * filter (D25). Bash events stay, their command was never stored. A classified event is always kept.
+ */
+export function pruneHookNoise<
+  E extends { source: string; tool?: string | undefined; classification?: string | undefined },
+>(events: E[]): E[] {
+  return events.filter(
+    (event) =>
+      event.source !== 'hook_claude' || event.classification !== undefined || reachesResource(event.tool ?? 'Bash'),
+  );
 }

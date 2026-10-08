@@ -19,6 +19,7 @@ import {
   ObserverStore,
   parseCodexSessions,
   PATTERNS,
+  pruneHookNoise,
   REASONS,
   REPORT_BLOCKED_DESCRIPTION,
   shortHash,
@@ -374,7 +375,15 @@ describe('noise filter (D25)', () => {
       expect(isReadOnlyCommand(command), command).toBe(true);
     expect(codexNoise('exec', 'tools.web__run({search_query:[{q:"x"}]})', '401 Unauthorized')).toBe(true);
     expect(codexNoise('exec', 'tools.exec_command({cmd:"cat notes.md"})', 'status code 401')).toBe(true);
-    expect(claudeNoise('PostToolUse', 'Read', { file_path: '/x' })).toBe(true);
+    for (const tool of ['Read', 'Write', 'AskUserQuestion', 'ToolSearch'])
+      expect(claudeNoise('PostToolUse', tool, {})).toBe(true);
+    const stored = [
+      { id: 'w', source: 'hook_claude', tool: 'Write' },
+      { id: 'c', source: 'hook_claude', tool: 'Write', classification: 'NOT_A_BLOCK' },
+      { id: 'b', source: 'hook_claude', tool: 'Bash' },
+      { id: 'm', source: 'hook_claude', tool: 'mcp__github__get_repo' },
+    ];
+    expect(pruneHookNoise(stored).map((event) => event.id)).toEqual(['c', 'b', 'm']);
   });
 
   it('keeps a refusal from a command that reached a resource or failed', () => {
@@ -391,6 +400,7 @@ describe('noise filter (D25)', () => {
     );
     expect(claudeNoise('PostToolUseFailure', 'Read', { file_path: '/x' })).toBe(false);
     expect(claudeNoise('PostToolUse', 'Bash', { command: 'curl -i https://api.example.com' })).toBe(false);
+    expect(claudeNoise('PostToolUse', 'mcp__datadog__query_logs', {})).toBe(false);
   });
 });
 

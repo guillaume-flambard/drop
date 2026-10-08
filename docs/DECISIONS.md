@@ -152,8 +152,9 @@ Format : `D<n> — date — décision — raison`. Les agents ajoutent ici toute
     Accord vérifié sur les 20 premiers événements de chaque testeur : moins de 8 sur 10, on réécrit la définition.
   - **Filtre de bruit** (`noise.ts`), mesuré sur 30 jours de logs Codex : de 202 à 62 événements. Est ignorée la sortie
     d'une commande qui n'a fait qu'afficher du contenu local, sauf échec signalé ; celle des tests et builds de l'agent ;
-    celle d'une recherche web ; côté Claude Code, un résultat réussi de `Read`, `Grep`, `Glob`, `WebSearch`,
-    `WebFetch` ou `ToolSearch`. Le mode code de Codex ne publie pas le code de sortie de ses commandes, donc
+    celle d'une recherche web ; côté Claude Code, le résultat réussi de tout outil autre que `Bash` et les
+    outils MCP (les tests et questions écrits pendant cette session avaient créé 5 événements via `Write`, `Read`,
+    `AskUserQuestion`, `ToolSearch`). Le mode code de Codex ne publie pas le code de sortie de ses commandes, donc
     l'échec n'est connu que quand la sortie le dit. `import-codex` retire les événements non classés qu'un nouvel
     import ne produit plus ; un événement classé n'est jamais retiré.
   - **Constat à garder** : sur le poste de Guillaume, qui travaille seul, les vrais refus portent sur sa propre
