@@ -14,6 +14,8 @@ import { join } from 'node:path';
 import { z } from 'zod';
 import { FundingConfigSchema } from './funding.ts';
 import {
+  TeamMemberSchema,
+  TeamSchema,
   IdentitySchema,
   NodeIdSchema,
   OwnerKindSchema,
@@ -38,6 +40,8 @@ export const PeerSchema = z.object({
   displayName: z.string(),
   ownerKind: OwnerKindSchema,
   pairedAt: z.string(),
+  /** Set when the peer was introduced by a team member rather than paired by invite (T2.9). */
+  via: NodeIdSchema.optional(),
 });
 export type Peer = z.infer<typeof PeerSchema>;
 
@@ -49,6 +53,10 @@ export const PublishedSchema = z.object({
   publishedAt: z.string(),
 });
 export type Published = z.infer<typeof PublishedSchema>;
+
+/** This node's team and the members it knows (T2.9). */
+export const TeamStateSchema = z.object({ team: TeamSchema, members: z.array(TeamMemberSchema) });
+export type TeamState = z.infer<typeof TeamStateSchema>;
 
 export function defaultHome(): string {
   return process.env.DROP_HOME ?? join(homedir(), '.drop');
@@ -116,6 +124,15 @@ export class DropHome {
     const peers = this.peers().filter((existing) => existing.nodeId !== peer.nodeId);
     peers.push(peer);
     writeFileSync(join(this.root, 'peers.json'), `${JSON.stringify(peers, null, 2)}\n`);
+  }
+
+  team(): TeamState | undefined {
+    const path = join(this.root, 'team.json');
+    return existsSync(path) ? TeamStateSchema.parse(JSON.parse(readFileSync(path, 'utf8'))) : undefined;
+  }
+
+  saveTeam(state: TeamState): void {
+    writeFileSync(join(this.root, 'team.json'), `${JSON.stringify(TeamStateSchema.parse(state), null, 2)}\n`);
   }
 
   published(): Published[] {

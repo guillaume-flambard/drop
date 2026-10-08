@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { ADMISSION_TTL_MS, AdmissionSchema, type Admission } from './admission.ts';
 import { DropError } from './errors.ts';
 import { NodeIdSchema, type Identity } from './identity.ts';
+import { TeamSchema, type Team } from './team.ts';
 
 /** A day: an invite is a link sent by message, opened later (D26). It used to be 15 minutes. */
 export const INVITE_TTL_MS = ADMISSION_TTL_MS;
@@ -15,6 +16,8 @@ export const InviteSchema = z.object({
   expiresAt: z.number().int(),
   /** Lets a newcomer join the relay without an allowlist edit (T2.1). */
   admission: AdmissionSchema.optional(),
+  /** The inviter's team, joined on pairing (T2.9). */
+  team: TeamSchema.optional(),
 });
 export type Invite = z.infer<typeof InviteSchema>;
 
@@ -23,6 +26,7 @@ export function createInvite(
   relayUrl: string,
   now: number = Date.now(),
   admission?: Admission,
+  team?: Team,
 ): Invite {
   return {
     relayUrl,
@@ -31,6 +35,7 @@ export function createInvite(
     oneTimeToken: randomBytes(24).toString('base64url'),
     expiresAt: now + INVITE_TTL_MS,
     ...(admission ? { admission } : {}),
+    ...(team ? { team } : {}),
   };
 }
 

@@ -1,6 +1,7 @@
 import { capabilities } from '@drop/capabilities';
 import { RelayClient } from '@drop/relay';
 import { NodeEngine, type InboxItem } from './engine.ts';
+import { detectAgents } from './detect.ts';
 import { openRouterFunder } from './funding.ts';
 import { startLocalApi, type LocalApi } from './api.ts';
 import type { DropHome } from './home.ts';
@@ -37,6 +38,7 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
       log(JSON.stringify({ at: new Date().toISOString(), ...entry }));
     },
     payer: config.payer,
+    agents: () => detectAgents().flatMap((agent) => (agent.installed ? [agent.label] : [])),
     ...(config.funding
       ? {
           funder: openRouterFunder(config.funding, {
@@ -66,6 +68,7 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
         home.clearPendingAdmission();
         void engine
           .flushOutbox()
+          .then(() => engine.announceTeam())
           .then(() => engine.refreshCatalogs())
           .catch(() => {
             log('E_RUNNER flush failed');

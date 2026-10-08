@@ -107,6 +107,27 @@ avec par défaut les seuls outils que le serveur marque `readOnlyHint` ; si aucu
 - **THEN** `mcp.answer.figma` est publié avec le libellé « mon Figma », le serveur désigné par l'agent et les seuls outils en lecture seule
 - **AND** `drop share` sur le serveur de drop lui-même est refusé
 
+### Requirement: Équipe
+Un Node SHALL pouvoir créer une équipe (`drop team create <nom>`) ; ses invitations portent alors l'équipe, et qui
+s'appaire avec elles la rejoint (T2.9, D28). Chaque membre MUST envoyer la liste des membres (`team_roster`) à un
+nouveau pair de l'équipe, et à tous les membres quand sa liste change. Un membre inconnu reçu d'un membre de la même
+équipe MUST devenir un pair, présenté par ce membre (`via`), et recevoir une demande de catalogue.
+
+#### Scenario: Tout le monde se connaît
+<!-- openspec-guard:test="team (T2.9) > everyone invited by any member ends up paired with every member, and sees their agents and tools" -->
+- **WHEN** Guillaume crée l'équipe Atlas et invite Julie, Julie invite Natha, et Guillaume invite Sami
+- **THEN** chacun des quatre a les trois autres pour pairs et dans son équipe, sans autre appairage
+- **AND** `drop team` montre chaque membre avec ses agents, en ligne ou non, et ce qu'il partage
+
+### Requirement: Liste d'une autre équipe ignorée
+Un Node MUST ignorer une liste `team_roster` d'une autre équipe, ou reçue alors qu'il n'est dans aucune équipe ;
+aucune liste ne choisit un outil ni n'autorise une demande : chaque demande passe toujours par le consentement.
+
+#### Scenario: Liste étrangère
+<!-- openspec-guard:test="team (T2.9) > ignores a roster from another team, and a node outside any team ignores rosters" -->
+- **WHEN** un pair qui n'est pas de l'équipe envoie une liste d'une autre équipe avec un inconnu
+- **THEN** ni la liste des membres ni les pairs ne changent
+
 ### Requirement: Commande drop peers
 `drop peers` SHALL lister les pairs.
 

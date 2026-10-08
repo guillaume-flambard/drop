@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { parseArgs } from 'node:util';
 import { capabilities, connectMcp, McpAnswerConfigSchema } from '@drop/capabilities';
 import { implFor } from '@drop/runner';
-import { generateIdentity, OwnerKindSchema, type ConsentCost } from '@drop/protocol';
+import { createTeam, generateIdentity, OwnerKindSchema, type ConsentCost } from '@drop/protocol';
 import { startDaemon } from './daemon.ts';
 import { AGENT_LABELS, detectAgents, shareId } from './detect.ts';
 import { DropHome, NodeConfigSchema } from './home.ts';
@@ -18,6 +18,8 @@ const USAGE = `drop <command>
   publish <capability-id> --approver <nodeId> [--config <file.json>]
                                  e.g. publish mcp.answer.figma --config figma.json (one per MCP server)
   mcp-tools --config <file.json> list the tools of the MCP server in an mcp.answer config, to choose which to share
+  team create <name>             start a team; your invites then bring people into it
+  team                           members, their agents, online or not, and what each one shares (daemon must run)
   detect [--json]                the coding agents on this machine, drop in each, and their MCP servers
   share <agent>/<server> [--label <text>] [--tools a,b] [--id mcp.answer.<name>] [--approver <nodeId>]
                                  answer from a detected MCP server (read-only tools by default; secrets stay put)
@@ -151,6 +153,47 @@ switch (command) {
       publishedAt: new Date().toISOString(),
     });
     process.stdout.write(`published ${capabilityId} (restart \`drop serve\` if it is running)\n`);
+    break;
+  }
+  case 'team': {
+    if (rest[0] === 'create') {
+      const name = rest.slice(1).join(' ').trim() || fail('drop team create <name>');
+      if (home.team()) fail(`already in team ${home.team()?.team.name ?? ''}`);
+      const identity = home.identity();
+      home.saveTeam({
+        team: createTeam(name),
+        members: [
+          {
+            nodeId: identity.nodeId,
+            displayName: identity.displayName,
+            ownerKind: home.config().ownerKind,
+            agents: [],
+          },
+        ],
+      });
+      process.stdout.write(
+        `team ${name} created; \`drop invite\` now brings people into it (restart \`drop serve\`)\n`,
+      );
+      break;
+    }
+    const { team, members } = (await api(home, 'GET', '/ui/team')) as {
+      team: { name: string } | null;
+      members: {
+        displayName: string;
+        self: boolean;
+        online: boolean;
+        agents: string[];
+        capabilities: { title: string }[];
+      }[];
+    };
+    if (!team) fail('not in a team: `drop team create <name>`, or `drop pair <code>` with an invite from a member');
+    process.stdout.write(`${team.name} · ${String(members.length)} members\n`);
+    for (const member of members) {
+      process.stdout.write(
+        `${member.online ? '●' : '○'} ${member.displayName}${member.self ? ' (toi)' : ''}\t${member.agents.join(', ') || '-'}\n`,
+      );
+      for (const capability of member.capabilities) process.stdout.write(`    ${capability.title}\n`);
+    }
     break;
   }
   case 'detect': {

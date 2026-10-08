@@ -164,6 +164,16 @@ MUST dire qui paie (`paidBy: 'owner' | 'requester'`).
 - **THEN** l'exécution reçoit la clé, la carte de l'approbateur affiche « Coût max : 0,10 $, payé par Guillaume » sans la clé
 - **AND** aucun reçu ne contient la clé, et le demandeur supprime la clé quand la demande se termine
 
+### Requirement: Message team_roster
+`team_roster` SHALL porter `team: { teamId, name }` et `members: { nodeId, displayName, ownerKind, agents[] }[]` (200
+au plus) ; un code d'invitation MAY porter `team`. Une équipe est un cercle de confiance : un membre se porte garant de
+qui il invite (T2.9).
+
+#### Scenario: Liste partagée à l'appairage
+<!-- openspec-guard:test="team (T2.9) > everyone invited by any member ends up paired with every member, and sees their agents and tools" -->
+- **WHEN** un membre invite quelqu'un et que l'appairage aboutit
+- **THEN** l'invité reçoit `team_roster` avec tous les membres, et l'équipe adopte l'invité
+
 ### Requirement: Ticket d'admission
 Un ticket d'admission `{ v: 1, sponsor, nonce, expiresAt, sig }` MUST être signé en Ed25519 par le Node `sponsor` sur `canonical({ v, sponsor, nonce, expiresAt })` et expirer 24 h après l'émission (T2.1, D26). Il ne nomme pas le nouveau venu.
 

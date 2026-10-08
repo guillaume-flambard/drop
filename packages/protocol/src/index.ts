@@ -11,3 +11,4 @@ export * from './lifecycle.ts';
 export * from './messages.ts';
 export * from './receipt.ts';
 export * from './schemas.ts';
+export * from './team.ts';
