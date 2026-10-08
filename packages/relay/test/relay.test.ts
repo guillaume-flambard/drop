@@ -146,6 +146,16 @@ describe('relay', () => {
     expect(serialized).not.toContain(envelope.sig);
   });
 
+  it('answers GET /health for probes, and nothing else over plain HTTP', async () => {
+    const alice = await generateIdentity('Alice');
+    const { relay } = await relayFor([alice]);
+    const base = relay.url.replace('ws://', 'http://').replace('/v1', '');
+    const health = await fetch(`${base}/health`);
+    expect(health.status).toBe(200);
+    expect(await health.json()).toEqual({ ok: true, nodes: 0 });
+    expect((await fetch(`${base}/peers`)).status).toBe(404);
+  });
+
   it('client reconnects after the relay restarts', async () => {
     const alice = await generateIdentity('Alice');
     const first = await startRelay({ port: 0, allowedNodeIds: [alice.nodeId] }, { logger: () => undefined });
