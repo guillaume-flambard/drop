@@ -29,7 +29,7 @@ import {
   type SignedCapabilityCard,
   type UnsignedReceipt,
 } from '@drop/protocol';
-import { applyRedactions, buildCard, runCapability, validateInput, type CapabilityImpl } from '@drop/runner';
+import { applyRedactions, buildCard, implFor, runCapability, validateInput, type CapabilityImpl } from '@drop/runner';
 import type { Peer, Published } from './home.ts';
 
 export const APPROVAL_TTL_MS = 10 * 60_000;
@@ -657,12 +657,14 @@ export class NodeEngine extends EventEmitter {
   }
 
   private cardFor(published: Published): { card: CapabilityCard; impl: CapabilityImpl } | undefined {
-    const impl = this.options.capabilities.find((candidate) => candidate.card.id === published.capabilityId);
+    const impl = implFor(this.options.capabilities, published.capabilityId);
     if (!impl) return undefined;
     const card = buildCard(impl, {
       owner: { kind: this.options.ownerKind, displayName: this.identity.displayName, nodeId: this.identity.nodeId },
       executorNodeId: this.identity.nodeId,
       approverNodeIds: published.approverNodeIds,
+      capabilityId: published.capabilityId,
+      config: published.config,
     });
     return { card, impl };
   }

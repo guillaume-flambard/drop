@@ -1,5 +1,6 @@
 import type { CapabilityImpl } from '@drop/runner';
 import { errorSummary } from './error-summary.ts';
+import { mcpAnswer } from './mcp-answer.ts';
 import { repoAnswer } from './repo-answer.ts';
 
 export {
@@ -38,4 +39,21 @@ export {
 } from './repo-answer.ts';
 export { openAiCompatible, ProviderConfigSchema, type ChatProvider, type ProviderConfig } from './llm.ts';
 
-export const capabilities: CapabilityImpl[] = [errorSummary, repoAnswer];
+export {
+  connectMcp,
+  createMcpAnswer,
+  mcpAnswer,
+  McpAnswerConfigSchema,
+  McpServerSchema,
+  mcpSystemPrompt,
+  parseMcpFinal,
+  toolResultText,
+  type McpAnswerConfig,
+  type McpAnswerDeps,
+  type McpAnswerInput,
+  type McpAnswerOutput,
+  type McpClient,
+  type McpServerConfig,
+} from './mcp-answer.ts';
+
+export const capabilities: CapabilityImpl[] = [errorSummary, repoAnswer, mcpAnswer];

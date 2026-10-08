@@ -20,6 +20,16 @@ Chaque capacité MUST implémenter `CapabilityImpl<I, O>` avec exactement ces me
 - **WHEN** la carte de consentement d'un Drop est affichée à l'approbateur
 - **THEN** le rendu lisible de l'entrée provient de `preview(input)`
 
+### Requirement: Famille de capacités
+Une implémentation MAY se déclarer `family: true` : tout id publié `<card.id>.<nom>` (`<nom>` en `[a-z][a-z0-9_]*`)
+l'exécute alors avec sa propre config (le runner SHALL la résoudre ainsi), et `cardFor(config)` MAY fixer le titre, `receives` et `neverReceives` de la carte
+publiée (T2.2). Un id exact a priorité sur une famille.
+
+#### Scenario: Id de famille résolu
+<!-- openspec-guard:test="mcp.answer (T2.2) > is published once per source as mcp.answer.<name>, with a card naming the source" -->
+- **WHEN** un Node publie `mcp.answer.figma`
+- **THEN** l'implémentation `mcp.answer` l'exécute et la carte publiée porte l'id `mcp.answer.figma`
+
 ### Requirement: Contexte d'exécution RunContext
 
 `execute()` MUST ne recevoir QUE ce que le cadre lui donne, à savoir l'entrée validée et un `RunContext` composé de : `config: unknown` (config propriétaire de la capacité, validée par son propre schéma zod) ; `workdir: string` (répertoire temporaire créé et supprimé par le runner) ; `signal: AbortSignal` (déclenché à `budget.maxSeconds`) ; `recordToolCall(name: string): void`.

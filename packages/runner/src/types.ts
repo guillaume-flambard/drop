@@ -32,6 +32,13 @@ export interface CapabilityImpl<I = unknown, O = unknown> {
   execute(input: I, ctx: RunContext): Promise<O>;
   /** What one run may cost the owner, from the owner's config. Absent for a capability that spends nothing. */
   cost?(config: unknown): ConsentCost;
+  /**
+   * A family is published once per owner source, as `<card.id>.<name>` (e.g. `mcp.answer.figma`, T2.2): every such id
+   * runs this implementation with its own config.
+   */
+  family?: boolean;
+  /** Card fields that depend on the owner's config, e.g. the title naming the source. */
+  cardFor?(config: unknown): Partial<Pick<ImplCard, 'title' | 'receives' | 'neverReceives'>>;
 }
 
 export interface ToolCallCount {

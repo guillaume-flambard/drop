@@ -1,0 +1,65 @@
+# capability-mcp-answer Specification
+
+## Purpose
+La capacité `mcp.answer` répond à la question d'un collègue à partir d'un des serveurs MCP du propriétaire (Figma, Notion,
+Linear, GitHub, une base de données…), sans lui donner l'accès à l'outil ni ses données brutes (T2.2, D26). Elle ouvre
+les cas d'usage réels : chacun partage une réponse depuis les outils qu'il utilise déjà.
+
+## Requirements
+
+### Requirement: Une publication par source
+`mcp.answer` SHALL être une famille : le propriétaire la publie une fois par serveur MCP, sous l'id
+`mcp.answer.<nom>` (`<nom>` en `[a-z][a-z0-9_]*`), chaque publication avec sa propre config. La carte MUST nommer la
+source dans son titre (« Répondre à partir de <label> ») et dans `neverReceives` (« l'accès à <label> »).
+
+#### Scenario: Carte d'une source
+<!-- openspec-guard:test="mcp.answer (T2.2) > is published once per source as mcp.answer.<name>, with a card naming the source" -->
+- **WHEN** Julie publie `mcp.answer.figma` avec `label: "mon Figma"`
+- **THEN** la carte a l'id `mcp.answer.figma`, le titre « Répondre à partir de mon Figma » et la sensibilité `high`
+- **AND** un id hors du format `mcp.answer.<nom>` ne correspond à aucune capacité
+
+### Requirement: Outils choisis par le propriétaire
+La config MUST lister les outils que le modèle peut appeler (`tools`). Le runner MUST ne proposer au modèle que les
+outils de cette liste que le serveur offre réellement, en retirant ceux que le serveur marque `destructiveHint`, et MUST
+refuser tout autre appel d'outil sans l'exécuter. La requête ne choisit jamais un outil (D19). `drop mcp-tools` liste les
+outils d'un serveur avec leurs annotations pour aider le propriétaire à choisir.
+
+#### Scenario: Outil non choisi refusé
+<!-- openspec-guard:test="mcp.answer (T2.2) > answers from the owner MCP server, calling only the tools the owner chose" -->
+- **WHEN** le modèle appelle un outil hors de la liste, ou un outil de la liste marqué destructif par le serveur
+- **THEN** l'outil n'est pas appelé sur le serveur et le modèle reçoit « outil non autorisé »
+- **AND** seuls les outils choisis et non destructifs sont proposés au modèle
+
+#### Scenario: Aucun outil disponible
+<!-- openspec-guard:test="mcp.answer (T2.2) > frames the question as data and refuses a server that offers none of the chosen tools" -->
+- **WHEN** le serveur n'offre aucun des outils choisis
+- **THEN** l'exécution échoue avec `E_RUNNER`, sans appeler le modèle pour répondre
+
+### Requirement: Secrets du serveur dans l'environnement
+Un serveur stdio MUST recevoir l'environnement minimal du SDK plus les seules variables que la config nomme (`env`) ;
+un serveur HTTP MUST recevoir ses en-têtes depuis des variables nommées (`headersFromEnv`). Aucune valeur de secret ne
+figure dans la config. Une variable nommée absente MUST faire échouer la connexion.
+
+#### Scenario: Variable transmise au serveur stdio
+<!-- openspec-guard:test="mcp.answer (T2.2) > starts a stdio server with only the environment variables the owner named" -->
+- **WHEN** la config nomme `FAKE_DESIGN_TOKEN` et que la variable est définie chez le propriétaire
+- **THEN** le serveur la reçoit ; si elle est absente, la connexion échoue en la nommant
+
+### Requirement: Résultats d'outils traités comme données
+Les résultats d'outils MUST être réduits à leur texte (images et binaires retirés), tronqués à 20 000 caractères, et
+présentés au modèle comme des données dont il ignore les consignes. La question MUST être encadrée par
+`<question>…</question>` après échappement.
+
+#### Scenario: Texte seulement
+<!-- openspec-guard:test="mcp.answer (T2.2) > reads only text from tool results and only a well-formed final answer" -->
+- **WHEN** un outil renvoie du texte et une image
+- **THEN** le modèle ne reçoit que le texte
+
+### Requirement: Sortie bornée et relue
+La sortie MUST être `{ answer: string (≤ 1500), verdict: 'yes'|'no'|'partial'|'unknown', sources: string[] (≤ 10 noms) }`.
+La carte MUST déclarer `sensitivity: 'high'` et `approval: 'always'` : le propriétaire relit chaque réponse avant envoi.
+
+#### Scenario: Réponse finale invalide
+<!-- openspec-guard:test="mcp.answer (T2.2) > reads only text from tool results and only a well-formed final answer" -->
+- **WHEN** le modèle ne rend pas un objet conforme
+- **THEN** la réponse n'est pas retenue (une relance, puis `E_OUTPUT_INVALID`)
