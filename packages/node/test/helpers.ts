@@ -3,13 +3,22 @@ import { generateIdentity, verifyReceipt, type Identity, type Receipt } from '@d
 import { RelayClient, startRelay, type RelayHandle } from '@drop/relay';
 import type { CapabilityImpl } from '@drop/runner';
 import { NodeEngine, type EngineOptions, type NodeStore } from '../src/engine.ts';
-import type { Peer, Published, TeamState } from '../src/home.ts';
+import type { AgentLink, Peer, Published, TeamState } from '../src/home.ts';
 
 export class MemoryStore implements NodeStore {
   readonly peerList: Peer[] = [];
   readonly publishedList: Published[] = [];
   readonly receiptList: Receipt[] = [];
   teamState: TeamState | undefined;
+  linkList: AgentLink[] = [];
+
+  links(): AgentLink[] {
+    return this.linkList;
+  }
+
+  saveLinks(links: AgentLink[]): void {
+    this.linkList = [...links];
+  }
 
   team(): TeamState | undefined {
     return this.teamState;

@@ -60,6 +60,14 @@ describe('menu bar panel and its admin routes (T2.4)', () => {
         calls.push(`${remove ? 'uninstall' : 'install'} ${agent}`);
         return { ok: true };
       },
+      link: (gateway, session, client) => {
+        calls.push(`link ${client}`);
+        return Promise.resolve({ ok: true, gateway, session });
+      },
+      unlink: (_gateway, client) => {
+        calls.push(`unlink ${client}`);
+        return true;
+      },
       createTeam: (name) => {
         calls.push(`team ${name}`);
         return { ok: true };

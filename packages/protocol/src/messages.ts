@@ -81,6 +81,24 @@ export const MessageSchema = z.discriminatedUnion('type', [
     team: TeamSchema,
     members: z.array(TeamMemberSchema).max(200),
   }),
+  // A user's own assistant (Claude, ChatGPT) reaching their node through the gateway (T2.13, D31).
+  z.object({
+    type: z.literal('link_grant'),
+    sessionId: z.string().regex(/^[A-Za-z0-9_-]{16,64}$/),
+    clientName: z.string().min(1).max(80),
+  }),
+  z.object({
+    type: z.literal('agent_call'),
+    callId: z.string().regex(/^[A-Za-z0-9_-]{8,64}$/),
+    tool: z.enum(['ask_team', 'get_drop_results', 'list_capabilities']),
+    args: z.record(z.string(), z.unknown()),
+  }),
+  z.object({
+    type: z.literal('agent_reply'),
+    callId: z.string().regex(/^[A-Za-z0-9_-]{8,64}$/),
+    text: z.string().max(60_000),
+    isError: z.boolean(),
+  }),
   z.object({ type: z.literal('catalog_request') }),
   z.object({ type: z.literal('catalog'), cards: z.array(SignedCapabilityCardSchema) }),
   z.object({

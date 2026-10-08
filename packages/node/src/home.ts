@@ -28,6 +28,8 @@ export const NodeConfigSchema = z.object({
   relayUrl: z.string(),
   ownerKind: OwnerKindSchema,
   apiPort: z.number().int().min(0).max(65535).default(7781),
+  /** Gateways this node trusts to carry its assistants' calls (T2.13); the app warns about any other one. */
+  gateways: z.array(NodeIdSchema).default([]),
   /** As executor: who pays the model of the capabilities run here (D27: the requester, by default). */
   payer: z.enum(['requester', 'owner']).default('requester'),
   /** As requester: how this node pays for its drops (D27). Absent: it sends no key, the owner's config applies. */
@@ -53,6 +55,14 @@ export const PublishedSchema = z.object({
   publishedAt: z.string(),
 });
 export type Published = z.infer<typeof PublishedSchema>;
+
+/** An assistant (Claude, ChatGPT…) the user linked through a gateway: it may ask the team in their name (T2.13). */
+export const AgentLinkSchema = z.object({
+  gateway: NodeIdSchema,
+  clientName: z.string().min(1).max(80),
+  linkedAt: z.string(),
+});
+export type AgentLink = z.infer<typeof AgentLinkSchema>;
 
 /** This node's team and the members it knows (T2.9). */
 export const TeamStateSchema = z.object({ team: TeamSchema, members: z.array(TeamMemberSchema) });
@@ -124,6 +134,15 @@ export class DropHome {
     const peers = this.peers().filter((existing) => existing.nodeId !== peer.nodeId);
     peers.push(peer);
     writeFileSync(join(this.root, 'peers.json'), `${JSON.stringify(peers, null, 2)}\n`);
+  }
+
+  links(): AgentLink[] {
+    const path = join(this.root, 'links.json');
+    return existsSync(path) ? z.array(AgentLinkSchema).parse(JSON.parse(readFileSync(path, 'utf8'))) : [];
+  }
+
+  saveLinks(links: AgentLink[]): void {
+    writePrivate(join(this.root, 'links.json'), `${JSON.stringify(links, null, 2)}\n`);
   }
 
   team(): TeamState | undefined {

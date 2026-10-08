@@ -13,6 +13,7 @@
     "@drop/capabilities": "workspace:*",
     "@drop/protocol": "workspace:*",
     "@drop/relay": "workspace:*",
+    "@drop/requester-mcp": "workspace:*",
     "@drop/runner": "workspace:*",
     "ws": "^8.22.0",
     "zod": "^4.6.5"

@@ -34,7 +34,7 @@ import {
 } from '@drop/protocol';
 import type { Funder } from './funding.ts';
 import { applyRedactions, buildCard, implFor, runCapability, validateInput, type CapabilityImpl } from '@drop/runner';
-import type { Peer, Published, TeamState } from './home.ts';
+import type { AgentLink, Peer, Published, TeamState } from './home.ts';
 
 export const APPROVAL_TTL_MS = 10 * 60_000;
 export const REVIEW_TTL_MS = 10 * 60_000;
@@ -51,6 +51,8 @@ export interface NodeStore {
   appendReceipt(receipt: Receipt): void;
   team(): TeamState | undefined;
   saveTeam(state: TeamState): void;
+  links(): AgentLink[];
+  saveLinks(links: AgentLink[]): void;
 }
 
 /** One member as the team panel shows them (T2.9): who, which agents, online or not, which capabilities. */
@@ -145,6 +147,8 @@ export interface EngineOptions {
   payer?: 'requester' | 'owner';
   /** The coding agents this node's human uses, shared with the team (T2.9). */
   agents?: () => string[];
+  /** Runs a call from a linked assistant (T2.13) with the requester tools, in this user's name. */
+  onAgentCall?: (call: { tool: string; args: Record<string, unknown> }) => Promise<{ text: string; isError: boolean }>;
 }
 
 const DECISION_ERRORS: Record<'deny' | 'not_now', DropErrorCode> = { deny: 'E_DENIED', not_now: 'E_NOT_NOW' };
@@ -244,6 +248,46 @@ export class NodeEngine extends EventEmitter {
       ownerKind: this.options.ownerKind,
     });
     return invite.nodeId;
+  }
+
+  // ---- linked assistants (T2.13) -----------------------------------------------------------------------------
+
+  links(): AgentLink[] {
+    return this.options.store.links();
+  }
+
+  /** The user approved, in the app, that this assistant asks the team in their name through this gateway. */
+  async linkAssistant(gateway: NodeId, sessionId: string, clientName: string): Promise<void> {
+    const others = this.links().filter((link) => !(link.gateway === gateway && link.clientName === clientName));
+    this.options.store.saveLinks([...others, { gateway, clientName, linkedAt: new Date(this.now()).toISOString() }]);
+    await this.send(gateway, { type: 'link_grant', sessionId, clientName });
+    this.log({ event: 'assistant_linked', peer: gateway });
+    this.changed();
+  }
+
+  unlinkAssistant(gateway: NodeId, clientName: string): boolean {
+    const links = this.links();
+    const kept = links.filter((link) => !(link.gateway === gateway && link.clientName === clientName));
+    this.options.store.saveLinks(kept);
+    this.changed();
+    return kept.length < links.length;
+  }
+
+  private async onAgentCall(from: NodeId, message: MessageOf<'agent_call'>): Promise<void> {
+    if (!this.links().some((link) => link.gateway === from)) return;
+    const handler = this.options.onAgentCall;
+    const reply = handler
+      ? await handler({ tool: message.tool, args: message.args }).catch(() => ({
+          text: 'Erreur du Node.',
+          isError: true,
+        }))
+      : { text: "Ce Node n'accepte pas les assistants reliés.", isError: true };
+    await this.send(from, {
+      type: 'agent_reply',
+      callId: message.callId,
+      text: reply.text.slice(0, 60_000),
+      isError: reply.isError,
+    });
   }
 
   // ---- team (T2.9) -------------------------------------------------------------------------------------------
@@ -467,6 +511,12 @@ export class NodeEngine extends EventEmitter {
         return this.onPairAccept(from, message);
       case 'team_roster':
         return this.onTeamRoster(from, message);
+      case 'agent_call':
+        return this.onAgentCall(from, message);
+      case 'link_grant':
+      case 'agent_reply':
+        // Addressed to a gateway, never to a node.
+        return;
       case 'catalog_request':
         await this.send(from, { type: 'catalog', cards: await this.ownCards() });
         return;
@@ -843,7 +893,10 @@ export class NodeEngine extends EventEmitter {
 
   private isKnown(nodeId: NodeId): boolean {
     return (
-      nodeId === this.identity.nodeId || this.pairing.has(nodeId) || this.peers().some((peer) => peer.nodeId === nodeId)
+      nodeId === this.identity.nodeId ||
+      this.pairing.has(nodeId) ||
+      this.peers().some((peer) => peer.nodeId === nodeId) ||
+      this.links().some((link) => link.gateway === nodeId)
     );
   }
 
