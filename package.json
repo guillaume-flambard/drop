@@ -4,10 +4,10 @@
   "type": "module",
   "packageManager": "pnpm@11.27.0",
   "engines": {
-    "node": ">=22"
+    "node": ">=22.13"
   },
   "scripts": {
-    "lint": "eslint .",
+    "lint": "eslint . --max-warnings 0 && prettier --check .",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
     "format": "prettier --write .",

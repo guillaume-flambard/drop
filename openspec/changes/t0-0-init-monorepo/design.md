@@ -12,10 +12,16 @@ pnpm 11.27.0 installé (12.10.1 publié).
 
 ## Decisions
 
+- **Contrat modifié après review** (gstack `/review`, passes adverses Claude et Codex) : plancher Node `>=22.13`,
+  couverture complète, lint typé sans désactivation en ligne, format dans `lint`, tests focalisés refusés, clés et
+  `.env.example` ignorés. Delta dans `specs/monorepo-tooling/spec.md` ; `skip_specs` retiré.
+
 - **TypeScript 6.0.x, pas 7.** typescript-eslint 8.71 refuse TypeScript `>=6.1`. Choisir TypeScript 7 casserait le
   lint, qui est un contrôle obligatoire.
-- **L'outillage vit à la racine.** `eslint .`, `tsc --noEmit -p tsconfig.json` (qui inclut `packages/*/src` et
-  `packages/*/test`) et `vitest run` avec `projects` couvrent tout le dépôt. Les packages ne définissent pas de script
+- **L'outillage vit à la racine.** `eslint . --max-warnings 0 && prettier --check .`, `tsc --noEmit -p tsconfig.json`
+  (qui inclut tout `**/*.{ts,tsx,mts,cts}` hors dépendances et sorties) et `vitest run` (qui inclut tout
+  `**/*.{test,spec}.*`, avec `allowOnly: false`) couvrent tout le dépôt. Un test de couverture compare la liste git des
+  fichiers à ce que tsc et vitest voient réellement. Les packages ne définissent pas de script
   `lint`, `typecheck` ni `test`. `includeWorkspaceRoot: true` fait tourner les scripts racine par `pnpm -r`. On évite
   ainsi les doubles exécutions et la recursion d'un script racine qui appellerait `pnpm -r`. Écarté : un script par
   package, qui donne N configurations à maintenir et une commande racine qui doublerait les tests.
@@ -27,6 +33,9 @@ pnpm 11.27.0 installé (12.10.1 publié).
 
 ## Risks / Trade-offs
 
-- [`vitest` avec `projects: ['packages/*']` échoue s'il n'y a aucun package] : la racine est le seul projet tant que
-  `packages/` est vide, et on vérifie le comportement quand le premier package arrive (T0.1).
+- [Imports entre packages : un `exports` vers `dist/` casse le contrôle sans build, ou valide un `dist/` périmé] :
+  convention à trancher en T1.1, premier package importé par d'autres (voir « À décider » dans DECISIONS).
+- [Le `tsconfig.json` propre à un package n'est jamais lu par le contrôle racine] : un package qui a besoin d'options
+  différentes (`jsx`, `lib: ["dom"]`) devra l'ajouter dans la config racine. On revoit ce point si cela arrive.
+- [Lint typé plus lent] : accepté, car il bloque `any` implicite et promesses flottantes sur des entrées non fiables.
 - [`git check-ignore` exige un dépôt git] : le test le lance sur le dépôt réel, qui existe (`ecf96a8`).

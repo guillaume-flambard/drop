@@ -15,12 +15,12 @@ Tâche T0.0 de l'index. Aucune autre tâche ne peut se clore sans les contrôles
 
 ### New Capabilities
 
-Aucune. Le contrat `monorepo-tooling` existe déjà (change `migrate-spec-kit`). Cette change l'implémente sans le
-modifier (`skip_specs: true`).
+Aucune.
 
 ### Modified Capabilities
 
-Aucune.
+- `monorepo-tooling` : la review a montré que le contrat d'origine laissait des trous (fichiers hors contrôle,
+  `any` contournable, Node trop bas, clés commitables). Le delta resserre le contrat ; détail dans design.md.
 
 ## Non-goals
 

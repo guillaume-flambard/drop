@@ -4,6 +4,10 @@ coverage/
 *.tsbuildinfo
 .DS_Store
 
-# Local drop identities and secrets: never committed
-.drop*/
+# Local drop identities, keys and secrets: never committed
+.drop*
 .env*
+*.pem
+*.key
+id_ed25519*
+.npmrc
