@@ -134,8 +134,9 @@ Format : `D<n> — date — décision — raison`. Les agents ajoutent ici toute
     médiane d'au moins **10 minutes perdues** par blocage YES.
   - **NO-GO** : moins de **0,2** blocage YES par dev-jour actif **ou** une médiane de moins de **5 minutes**.
   - **Entre les deux** : prolonger la mesure de 2 semaines, puis trancher avec les mêmes seuils.
-  Les deux chiffres sont lus dans `blocked-observer report` (`yesPerActiveDay` et `medianPainMinutesYes`), sur
-  l'agrégat des exports relus de chaque développeur. Les signaux bruts non classés ne comptent pas : au 2026-10-08,
+  Les deux chiffres sont lus dans `blocked-observer report --merge <exports…>` (`yesPerActiveDay` et
+  `medianPainMinutesYes`), sur l'agrégat des exports relus de chaque développeur ; la commande applique ces seuils et
+  donne le verdict (T0.6). Les signaux bruts non classés ne comptent pas : au 2026-10-08,
   Guillaume en a 202 sur 23 jours actifs côté Codex, aucun encore classé.
 
 ## À décider par l'humain

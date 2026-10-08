@@ -10,6 +10,7 @@ const USAGE = `blocked-observer <command>
   list [--since 7d]         table of events (imports new Codex blocks first; --no-codex to skip)
   classify <id>             classification, minutes lost, note
   report [--since 30d]      summary per active day (imports new Codex blocks first)
+  report --merge <exports…> pool several developers' exports and apply the go/no-go threshold (D24)
   export --out file.json    export after reviewing every event
   print-instructions        snippet for AGENTS.md / CLAUDE.md`;
 
@@ -132,6 +133,21 @@ switch (command) {
     break;
   }
   case 'report': {
+    if (rest[0] === '--merge') {
+      const files = rest.slice(1);
+      if (files.length === 0) throw new Error('blocked-observer report --merge <export.json>…');
+      const { readFileSync } = await import('node:fs');
+      const path = await import('node:path');
+      const { mergeExports, parseExport } = await import('./merge.ts');
+      const merged = mergeExports(
+        files.map((file) => ({
+          name: path.basename(file, '.json'),
+          payload: parseExport(JSON.parse(readFileSync(file, 'utf8'))),
+        })),
+      );
+      process.stdout.write(`${JSON.stringify(merged, null, 2)}\n`);
+      break;
+    }
     await syncCodex(rest);
     const { values } = parseArgs({
       args: rest,
@@ -173,7 +189,8 @@ switch (command) {
     }
     rl.close();
     const reviewed = applyReview(events, decisions, shortHash);
-    writeFileSync(values.out, `${JSON.stringify(reviewed, null, 2)}\n`);
+    const { exportPayload } = await import('./merge.ts');
+    writeFileSync(values.out, `${JSON.stringify(exportPayload(reviewed, store.activity()), null, 2)}\n`);
     process.stdout.write(`${String(reviewed.length)} events written to ${values.out}\n`);
     break;
   }

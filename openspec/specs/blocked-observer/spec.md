@@ -286,3 +286,20 @@ le fixer.
 - **WHEN** la mesure est lancée
 - **THEN** `docs/DECISIONS.md` contient déjà le seuil go/no-go, écrit par l'humain
 - **AND** aucun fichier du kit (code, config, doc) ne fixe de valeur de seuil
+
+### Requirement: Agrégation de plusieurs développeurs
+L'export MUST contenir les jours actifs du développeur, sous forme de dates seulement, avec ses événements relus.
+`report --merge <exports…>` MUST additionner les dev-jours actifs et les événements de plusieurs exports, vérifier
+l'échantillon (au moins 3 développeurs avec 10 jours actifs chacun) et appliquer le seuil go/no-go de D24.
+
+#### Scenario: Verdict sur un échantillon suffisant
+- **WHEN** trois exports de 10 jours actifs chacun totalisent 0,6 blocage YES par dev-jour et une médiane de 12 minutes
+- **THEN** le rapport donne le verdict `GO`
+
+#### Scenario: Échantillon insuffisant
+- **WHEN** un seul export est fourni, ou qu'un développeur a moins de 10 jours actifs
+- **THEN** le verdict est `INSUFFICIENT_SAMPLE`, quels que soient les chiffres
+
+#### Scenario: Ancien format refusé
+- **WHEN** un export est un simple tableau d'événements, sans jours actifs
+- **THEN** il est refusé avec un message qui demande de réexporter

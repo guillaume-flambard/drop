@@ -3,5 +3,6 @@ export * from './codex.ts';
 export * from './hook.ts';
 export * from './install.ts';
 export * from './mcp.ts';
+export * from './merge.ts';
 export * from './patterns.ts';
 export * from './store.ts';

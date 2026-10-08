@@ -58,4 +58,17 @@ node packages/blocked-observer/src/cli.ts export --out blocages.json
 ```
 
 L'export montre chaque événement un par un. Tu peux le retirer, et pour chaque champ texte (ressource, propriétaire,
-action, note) le garder, le remplacer par son empreinte ou le supprimer. Seul ce que tu as gardé est écrit.
+action, note) le garder, le remplacer par son empreinte ou le supprimer. Seul ce que tu as gardé est écrit. Le
+fichier contient aussi tes jours actifs, sous forme de dates seulement, sans identifiant de session.
+
+## Rassembler plusieurs testeurs
+
+Chaque testeur envoie son export relu. Ensuite :
+
+```bash
+node packages/blocked-observer/src/cli.ts report --merge guillaume.json ana.json yan.json
+```
+
+Le rapport additionne les dev-jours actifs et les blocages, donne une ligne par testeur, vérifie l'échantillon (au
+moins 3 testeurs avec 10 jours actifs chacun) et applique le seuil D24. Le verdict est `GO`, `NO_GO`, `EXTEND`
+(prolonger de 2 semaines) ou `INSUFFICIENT_SAMPLE`.
