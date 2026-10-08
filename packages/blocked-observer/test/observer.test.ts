@@ -329,6 +329,7 @@ describe('report and linking', () => {
       painMinutes: 45,
       yesBlocks: 3,
       yesPerActiveDay: 0.75,
+      medianPainMinutesYes: 15,
     });
   });
 

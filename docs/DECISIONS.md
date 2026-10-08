@@ -125,11 +125,21 @@ Format : `D<n> — date — décision — raison`. Les agents ajoutent ici toute
   vient de `activity.json` : un jour avec au moins un appel d'outil Claude Code ou une session Codex, pas seulement un
   jour avec un blocage. `report_blocked` lit la session dans `CLAUDE_SESSION_ID` ou `CODEX_SESSION_ID` quand l'agent
   l'expose ; sinon le rapprochement A↔B n'a pas de session commune et reste vide.
+- **D24** — Seuil go/no-go de l'étape 0, fixé par Guillaume le 2026-10-08, avant la mesure. Un « blocage YES » est
+  un événement classé `YES_*` par `classify` pendant un entretien : une réponse bornée, donnée par le propriétaire de
+  la ressource, l'aurait débloqué.
+  - **Échantillon** : au moins 3 développeurs qui codent avec des agents, Guillaume compris, et au moins 10 jours
+    actifs chacun, avec leurs blocages classés en entretien.
+  - **GO** (lancer le pilote) : au moins **0,5 blocage YES par dev-jour actif** (un tous les deux jours) **et** une
+    médiane d'au moins **10 minutes perdues** par blocage YES.
+  - **NO-GO** : moins de **0,2** blocage YES par dev-jour actif **ou** une médiane de moins de **5 minutes**.
+  - **Entre les deux** : prolonger la mesure de 2 semaines, puis trancher avec les mêmes seuils.
+  Les deux chiffres sont lus dans `blocked-observer report` (`yesPerActiveDay` et `medianPainMinutesYes`), sur
+  l'agrégat des exports relus de chaque développeur. Les signaux bruts non classés ne comptent pas : au 2026-10-08,
+  Guillaume en a 202 sur 23 jours actifs côté Codex, aucun encore classé.
 
 ## À décider par l'humain
 
-- **Seuil go/no-go de l'étape 0** : à écrire ici avant de lancer la mesure (blocages « YES » par dev-jour actif,
-  minutes perdues par blocage).
 - **Nom de produit** : à vérifier (nom + domaine) avant le pilote.
 - **Points ouverts**, à trancher au début de la tâche citée. Ce sont les incohérences héritées du kit d'origine,
   relevées pendant la migration, plus la convention d'import relevée en review de T0.0 :
