@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Le guide de drop : comprendre le parcours, l'architecture, la confidentialité et les prérequis pour essayer le prototype."
+    />
+    <meta name="theme-color" content="#2548ed" />
+    <title>Le guide · drop</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#contenu">Aller au contenu</a>
+    <header class="site-header">
+      <div class="wrap header-inner">
+        <a class="logo" href="index.html" aria-label="drop, accueil"
+          ><img src="favicon.svg" width="34" height="34" alt="" />drop</a
+        >
+        <nav class="nav" aria-label="Navigation principale">
+          <a class="desktop-link" href="index.html#principe">Le principe</a
+          ><a href="guide.html" aria-current="page">Le guide</a><a href="avancement.html">Avancement</a
+          ><span class="header-note">Un projet Memo Labs</span>
+        </nav>
+      </div>
+    </header>
+    <main id="contenu" class="wrap">
+      <div class="page-title">
+        <span class="pill">Documentation du prototype</span>
+        <h1>Une question.<br />Tout un chemin de confiance.</h1>
+        <p>
+          Voici ce qui se passe entre « il me manque une information » et « je peux continuer ». Sans avoir besoin de
+          connaître les protocoles.
+        </p>
+      </div>
+      <div class="doc-layout">
+        <nav class="toc" aria-label="Sommaire du guide">
+          <a href="#parcours">Le parcours</a><a href="#architecture">Les pièces du système</a
+          ><a href="#confidentialite">Qui reçoit quoi ?</a><a href="#essayer">Essayer le prototype</a
+          ><a href="#questions">Questions fréquentes</a><a href="#sources">Aller plus loin</a>
+        </nav>
+        <article class="article">
+          <section id="parcours">
+            <h2>La réponse traverse.<br />Le propriétaire décide.</h2>
+            <p>
+              Guillaume veut savoir si le dépôt de Julie gère le mode sombre. Son agent lui pose la question via une
+              capacité publiée par Julie. Elle voit la demande, choisit de l'autoriser, puis relit la réponse avant
+              qu'elle parte.
+            </p>
+            <figure>
+              <img
+                src="diagrams/journey.svg"
+                width="1120"
+                height="390"
+                alt="Cinq étapes : demander, autoriser, exécuter avec les outils prévus, relire les réponses sensibles, recevoir le résultat."
+              />
+              <figcaption>
+                La relecture concerne les capacités sensibles.
+                <a href="diagrams/journey.svg">Ouvrir le schéma en grand</a>.
+              </figcaption>
+            </figure>
+            <ol>
+              <li>
+                <strong>Une question et une raison.</strong> L'agent choisit dans les capacités disponibles. L'entrée
+                est validée avant l'envoi.
+              </li>
+              <li>
+                <strong>Un accord pour cette demande.</strong> Le propriétaire peut autoriser une fois, refuser ou
+                répondre plus tard.
+              </li>
+              <li>
+                <strong>Une exécution encadrée.</strong> Les outils, le budget et la forme de la réponse sont fixés par
+                la capacité.
+              </li>
+              <li>
+                <strong>Une relecture quand c'est sensible.</strong> Les réponses sur le code ou sur un serveur MCP
+                repassent par le propriétaire.
+              </li>
+              <li>
+                <strong>Une réponse et une trace.</strong> Le demandeur reçoit le résultat autorisé. Le reçu signé
+                conserve des empreintes et des métadonnées.
+              </li>
+            </ol>
+            <div class="note">
+              <p>
+                <strong>Et si la réponse est non ?</strong> Un refus termine cette demande. « Pas maintenant » ne
+                déclenche aucune relance automatique. Une demande expirée n'est pas exécutée.
+              </p>
+            </div>
+          </section>
+          <section id="architecture">
+            <h2>Chacun garde son environnement.</h2>
+            <p>
+              Un <strong>Node</strong> est le processus drop qui tourne sur une machine. Il porte son identité et ses
+              demandes. Le <strong>relais</strong> permet à deux Nodes de se joindre à distance. Le
+              <strong>runner</strong> exécute une action chez le propriétaire.
+            </p>
+            <figure>
+              <img
+                src="diagrams/architecture.svg"
+                width="1120"
+                height="390"
+                alt="L'agent demandeur passe par un connecteur et son Node. Un relais route l'enveloppe chiffrée vers le Node du propriétaire, qui gère le consentement et l'exécution."
+              />
+              <figcaption>
+                Celui qui approuve peut être sur une autre machine que celle qui exécute.
+                <a href="diagrams/architecture.svg">Ouvrir le schéma en grand</a>.
+              </figcaption>
+            </figure>
+            <h3>Une capacité, c'est un contrat d'action.</h3>
+            <p>
+              Elle décrit ce que l'on peut demander, les outils utilisables, le résultat attendu, sa sensibilité et son
+              budget. Une question reçue ne peut pas élargir la liste des outils.
+            </p>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Capacité</th>
+                    <th>Ce qui revient</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><code>production.error_summary</code></td>
+                    <td>État du service, compteurs et catégories d'erreurs. Sans modèle.</td>
+                  </tr>
+                  <tr>
+                    <td><code>repo.answer</code></td>
+                    <td>Réponse courte, verdict et noms de fichiers. Avec relecture.</td>
+                  </tr>
+                  <tr>
+                    <td><code>mcp.answer.&lt;nom&gt;</code></td>
+                    <td>Réponse courte et noms de sources d'un outil connecté. Avec relecture.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <h3>L'agent a trois outils.</h3>
+            <pre><code>list_capabilities   Découvrir les capacités
+request_drop        Envoyer une demande
+get_drop_result     Récupérer la réponse</code></pre>
+            <p>
+              MCP est le format de connexion entre l'agent et ces outils. Le connecteur parle à l'API locale du Node ;
+              c'est le Node qui rejoint le relais.
+            </p>
+          </section>
+          <section id="confidentialite">
+            <h2>Qui reçoit quoi ?</h2>
+            <p>
+              La promesse porte sur le partage d'une réponse autorisée. Pour l'évaluer, il faut aussi regarder le chemin
+              du contexte utilisé pour fabriquer cette réponse.
+            </p>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Destinataire</th>
+                    <th>Informations reçues</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Le demandeur</td>
+                    <td>La sortie bornée et autorisée, sans accès permanent aux sources.</td>
+                  </tr>
+                  <tr>
+                    <td>Le relais</td>
+                    <td>Du contenu chiffré et les métadonnées nécessaires au routage.</td>
+                  </tr>
+                  <tr>
+                    <td>Le propriétaire</td>
+                    <td>La question et sa raison ; il utilise ses propres accès.</td>
+                  </tr>
+                  <tr>
+                    <td>Un fournisseur LLM distant</td>
+                    <td>La question et les résultats d'outils transmis au modèle.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="note">
+              <p>
+                <strong>Localité et confidentialité sont deux sujets distincts.</strong> Le fournisseur configuré par
+                défaut est OpenRouter. Si un modèle distant est utilisé, du contexte peut lui être transmis. Un modèle
+                local compatible peut être configuré.
+              </p>
+            </div>
+            <p>
+              Le contrôle des outils, la validation du résultat, le scanner de secrets et la relecture forment plusieurs
+              protections. Ils ne constituent pas un audit indépendant ou une garantie absolue contre une fuite. Les
+              outils MCP partagés doivent être examinés par le propriétaire.
+            </p>
+          </section>
+          <section id="essayer">
+            <h2>Essayer, côté développeur.</h2>
+            <p>
+              Le prototype se lance depuis le dépôt. L’installation locale des connecteurs existe. Le paquet npm public
+              et l’app Mac restent à distribuer.
+            </p>
+            <h3>1. Vérifier les prérequis</h3>
+            <p>
+              Un clone du dépôt, Node <strong>22.18 ou supérieur</strong> et pnpm <strong>11.27.0</strong>, version
+              déclarée lors de ce bilan.
+            </p>
+            <pre><code>pnpm install
+pnpm -r lint
+pnpm -r typecheck
+pnpm -r test</code></pre>
+            <p>
+              Les tests utilisent des données locales et des fournisseurs simulés. Aucune clé de modèle n'est
+              nécessaire.
+            </p>
+            <h3>2. Rejouer la démo</h3>
+            <pre><code>bash scripts/demo-local.sh</code></pre>
+            <p>
+              Le script démarre un relais et trois Nodes temporaires sur les ports 7790 à 7793. Il joue un résumé
+              d'erreurs puis une question sur un dépôt.
+            </p>
+            <div class="note">
+              <p>
+                <strong>La deuxième partie utilise OpenRouter.</strong> Elle demande le réseau et une clé dans
+                <code>OPENROUTER_API_KEY</code>, ou dans l'entrée macOS <code>OpenRouter API Key</code>. La durée dépend
+                du fournisseur. Le script arrête ses processus à la fin et conserve le dossier temporaire.
+              </p>
+            </div>
+            <h3>3. Connecter son agent</h3>
+            <p>
+              Le Node doit être initialisé, autorisé sur un relais et lancé avec <code>serve</code>. Le guide
+              téléchargeable détaille ces étapes et renvoie aux configurations Claude Code et Codex du dépôt.
+            </p>
+            <a class="button" href="downloads/GUIDE.md" download>Télécharger le guide complet</a>
+          </section>
+          <section id="questions">
+            <h2>Quelques questions utiles.</h2>
+            <details>
+              <summary>Qui paie le modèle ?</summary>
+              <p>
+                Le demandeur peut financer une demande avec une clé plafonnée et chiffrée pour l'exécuteur, si le
+                financement est configuré. Le propriétaire peut aussi utiliser sa propre clé. Le payeur et le coût
+                annoncé sont indiqués avant l'accord.
+              </p>
+            </details>
+            <details>
+              <summary>Est-ce que drop fonctionne avec Figma ou Notion ?</summary>
+              <p>
+                La capacité générique mcp.answer peut utiliser un serveur MCP déjà configuré chez le propriétaire. La
+                liste d'outils est fixée à la publication. Les usages réels chez Julie et Natha restent une étape de
+                validation, pas une intégration certifiée pour chaque outil.
+              </p>
+            </details>
+            <details>
+              <summary>Est-ce que toute l'équipe est découverte automatiquement ?</summary>
+              <p>
+                Un annuaire signé est maintenant implémenté. Rejoindre l’équipe par invitation propage les membres et
+                leur appairage ; la commande team montre leurs agents et leurs capacités. L’app Mac et les demandes
+                multiples restent à construire.
+              </p>
+            </details>
+            <details>
+              <summary>Est-ce un produit prêt à déployer en entreprise ?</summary>
+              <p>
+                Le cœur a été implémenté et démontré. Il reste notamment l’app Mac, la distribution publique, les essais
+                utilisateurs et une dette de traçabilité entre specs et tests. Le bilan donne les preuves et les limites
+                précises.
+              </p>
+            </details>
+          </section>
+          <section id="sources">
+            <h2>Une documentation que l'on peut vérifier.</h2>
+            <p>
+              Le dépôt conserve le code, les contrats OpenSpec, les décisions et les captures de démonstration. Ce guide
+              décrit le fonctionnement ; les specs restent la source normative.
+            </p>
+            <div class="download-row">
+              <a href="downloads/GUIDE.md" download>Guide en Markdown</a
+              ><a href="downloads/AVANCEMENT.md" download>Bilan en Markdown</a
+              ><a href="avancement.html">Lire le bilan sur le site</a>
+            </div>
+            <p class="date">Documentation fondée sur le dépôt au 8 octobre 2026.</p>
+          </section>
+        </article>
+      </div>
+    </main>
+    <footer class="footer">
+      <div class="wrap footer-inner">
+        <a class="logo" href="index.html">drop</a>
+        <div class="footer-links">
+          <a href="guide.html">Documentation</a><a href="avancement.html">État du projet</a
+          ><a href="guide.html#essayer">Essayer le prototype</a>
+        </div>
+        <span>Nom de code, par Memo Labs.</span>
+      </div>
+    </footer>
+  </body>
+</html>

@@ -209,6 +209,8 @@ Format : `D<n> — date — décision — raison`. Les agents ajoutent ici toute
   optionnelle propre à la plateforme. `drop install` copie `drop-mcp.mjs` dans `DROP_HOME/bin` et le déclare avec le
   chemin absolu de node, parce que Claude Desktop et Cursor lancent les serveurs avec un PATH minimal.
 
+- **D30** : T2.6a, documentation et vitrine locale (2026-10-08, demande de Guillaume). Trois pages HTML/CSS, sans framework ni dépendance supplémentaire, une simulation pédagogique sans connexion aux Nodes et trois SVG partagés avec les guides. `scripts/site.ts` assemble une allowlist publique dans `dist/site` et prévisualise sur `127.0.0.1` ; le dépôt entier n’est jamais servi. Les exports Markdown pointent vers le snapshot de code analysé. Le bilan est daté et distingue les tests, la traçabilité des specs et les démonstrations historiques. T2.6 garde la vidéo et la publication sur le domaine prévu, soumise au point d’arrêt humain existant. La demande autorise la rédaction et la réalisation immédiates ; les lignes déjà en cours n’ont pas été requalifiées. Le passage de T2.9 et T2.5 à done pendant cette session est intégré au bilan, au commit `cacf1cc`.
+
 ## À décider par l'humain
 
 - **Nom de produit** : à vérifier (nom + domaine) avant le pilote.

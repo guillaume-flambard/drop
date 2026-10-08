@@ -7,6 +7,8 @@
     "node": ">=22.18"
   },
   "scripts": {
+    "site:build": "node scripts/site.ts build",
+    "site:preview": "node scripts/site.ts preview",
     "lint": "eslint . --max-warnings 0 && prettier --check .",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
