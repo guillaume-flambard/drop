@@ -149,7 +149,8 @@ describe('monorepo tooling', () => {
 
     const javascript = trackedFiles(/\.(js|mjs|cjs|jsx)$/).filter((file) => !/^[^/]+\.config\.js$/.test(file));
     expect(javascript).toEqual([]);
-    expect((readJson('tsconfig.base.json').compilerOptions as Record<string, unknown>).skipLibCheck).toBe(false);
+    // skipLibCheck spares third-party declarations (the MCP SDK needs DOM types); so no declaration file may be ours.
+    expect(trackedFiles(/\.d\.(ts|mts|cts)$/)).toEqual([]);
 
     const testFiles = trackedFiles(/\.(test|spec)\.(ts|tsx|mts|cts)$/);
     const collected = run('pnpm', ['exec', 'vitest', 'list', '--filesOnly']);

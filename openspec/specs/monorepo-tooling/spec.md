@@ -91,7 +91,7 @@ avant d'être ajoutée.
 
 ### Requirement: Couverture complète des contrôles
 La vérification de types MUST couvrir tout fichier `.ts`, `.tsx`, `.mts` et `.cts` du dépôt hors dépendances, sorties
-et outillage OpenSpec, déclarations `.d.ts` comprises (`skipLibCheck` désactivé). Les tests MUST collecter tout
+et outillage OpenSpec, aucun fichier de déclaration `.d.ts` écrit à la main (`skipLibCheck` épargne ceux des dépendances). Les tests MUST collecter tout
 `*.test.*` et `*.spec.*` de ces extensions. Seuls les fichiers de config racine `*.config.js` MAY être en JavaScript.
 
 #### Scenario: AC: aucun fichier hors contrôle
