@@ -160,6 +160,29 @@ Format : `D<n> — date — décision — raison`. Les agents ajoutent ici toute
   - **Constat à garder** : sur le poste de Guillaume, qui travaille seul, les vrais refus portent sur sa propre
     infrastructure. Le signal « ressource de quelqu'un d'autre » ne peut venir que de testeurs en équipe.
 
+- **D26** — Étape 2 : installable chez n'importe qui (2026-10-08, demande de Guillaume). Constat : installer drop chez
+  quelqu'un demandait six gestes de développeur, dont une PR sur lab-infra pour l'allowlist du relais. Choix :
+  - **Propriétaire** : une app Mac (Tauri, barre de menus, Node embarqué), parce qu'une designer comme Julie
+    n'installera pas Node. Signer et notariser demande un compte Apple Developer (99 $ par an), à prendre par Guillaume.
+    Cela lève le hors-périmètre « application de barre de menu native » de la vision pour l'étape 2.
+  - **Demandeur** : les chemins d'installation que chaque client fournit déjà : `.mcpb` pour Claude Desktop
+    ([doc](https://claude.com/docs/connectors/building/mcpb)), lien d'installation Cursor
+    ([doc](https://cursor.com/docs/mcp/install-links.md)), `codex mcp add` ([doc](https://developers.openai.com/codex/mcp))
+    et `claude mcp add`.
+  - **Cas d'usage** : une capacité générique `mcp.answer` répond à partir d'un serveur MCP du propriétaire, avec des
+    outils en lecture seule fixés à la publication (règle D19 inchangée : la requête ne choisit jamais un outil).
+    Figma pour Julie (serveur local `http://127.0.0.1:3845/mcp`,
+    [doc](https://developers.figma.com/docs/figma-mcp-server/local-server-installation)) ; Notion, Linear ou Jira,
+    GitHub et une base de données pour Natha.
+  - **Relais** : admission par invitation signée, l'allowlist ne sert plus qu'à l'amorçage.
+  - **Nom** : « drop » reste le nom provisoire du site et de l'app.
+- **D27** — Le demandeur paie le modèle (2026-10-08, remplace D21 pour l'étape 2 ; c'est l'option C gardée en
+  réserve). Une designer n'a pas de clé de modèle. Le demandeur crée pour une demande une clé plafonnée (OpenRouter le
+  permet avec une clé de gestion et un `limit` en dollars,
+  [doc](https://openrouter.ai/docs/guides/overview/auth/management-api-keys.md)), la chiffre pour l'exécuteur avec le
+  reste de la demande, et l'exécuteur la jette après l'exécution. La perte maximale est le plafond, affiché sur la
+  carte de consentement. Le propriétaire peut toujours configurer sa propre clé (D21), qui passe alors en premier.
+
 ## À décider par l'humain
 
 - **Nom de produit** : à vérifier (nom + domaine) avant le pilote.
