@@ -4,6 +4,7 @@ import { z } from 'zod';
 import type { NodeEngine } from './engine.ts';
 import { renderPanel } from './panel.ts';
 import { routeQuestion, takesQuestion } from './route.ts';
+import { teamAgent } from './a2a-inbound.ts';
 import { renderInbox, renderPage } from './ui.ts';
 
 export interface LocalApiOptions {
@@ -100,9 +101,14 @@ export function startLocalApi(options: LocalApiOptions): Promise<LocalApi> {
   const now = options.now ?? Date.now;
   let boundPort = options.port;
 
-  const authorized = (req: IncomingMessage, url: URL): boolean => {
+  const localHost = (req: IncomingMessage): boolean => {
     const host = req.headers.host ?? '';
-    if (host !== `127.0.0.1:${String(boundPort)}` && host !== `localhost:${String(boundPort)}`) return false;
+    return host === `127.0.0.1:${String(boundPort)}` || host === `localhost:${String(boundPort)}`;
+  };
+  const team = teamAgent({ engine, refreshCatalogs: options.refreshCatalogs });
+
+  const authorized = (req: IncomingMessage, url: URL): boolean => {
+    if (!localHost(req)) return false;
     const header = req.headers.authorization ?? '';
     const bearer = header.startsWith('Bearer ') ? header.slice('Bearer '.length) : '';
     const query = url.searchParams.get('token') ?? '';
@@ -111,6 +117,11 @@ export function startLocalApi(options: LocalApiOptions): Promise<LocalApi> {
 
   const handle = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     const url = new URL(req.url ?? '/', 'http://127.0.0.1');
+    // The A2A agent card (T2.14) is public to local clients, as A2A expects: it names the token the calls need.
+    if ((req.method ?? 'GET') === 'GET' && url.pathname === '/.well-known/agent-card.json' && localHost(req)) {
+      json(res, 200, team.cardJson(`http://127.0.0.1:${String(boundPort)}/a2a`));
+      return;
+    }
     if (!authorized(req, url)) {
       json(res, 401, { error: 'unauthorized' });
       return;
@@ -150,6 +161,10 @@ export function startLocalApi(options: LocalApiOptions): Promise<LocalApi> {
       } catch {
         json(res, 404, { error: 'E_UNKNOWN_CAPABILITY', message: 'no such capability among paired peers' });
       }
+      return;
+    }
+    if (method === 'POST' && path === '/a2a') {
+      await team.endpoint.handle(req, res, await readBody(req));
       return;
     }
     if (method === 'POST' && path === '/ask') {

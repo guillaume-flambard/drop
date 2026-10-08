@@ -1,5 +1,6 @@
 import type { CapabilityImpl } from '@drop/runner';
 import { errorSummary } from './error-summary.ts';
+import { a2aAnswer } from './a2a-answer.ts';
 import { mcpAnswer } from './mcp-answer.ts';
 import { repoAnswer } from './repo-answer.ts';
 
@@ -65,4 +66,15 @@ export {
   type McpServerConfig,
 } from './mcp-answer.ts';
 
-export const capabilities: CapabilityImpl[] = [errorSummary, repoAnswer, mcpAnswer];
+export {
+  a2aAnswer,
+  A2aAnswerConfigSchema,
+  createA2aAnswer,
+  frameForAgent,
+  type A2aAnswerConfig,
+  type A2aAnswerDeps,
+  type A2aAnswerInput,
+  type A2aAnswerOutput,
+} from './a2a-answer.ts';
+
+export const capabilities: CapabilityImpl[] = [errorSummary, repoAnswer, mcpAnswer, a2aAnswer];
