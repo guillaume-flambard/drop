@@ -3,15 +3,18 @@ import { z } from 'zod';
 /**
  * Provider-agnostic chat client over the OpenAI-compatible `/chat/completions` API, spoken by Ollama, OpenRouter,
  * Groq, Gemini, Mistral, OpenAI and Anthropic. No SDK: one fetch. The API key is read from an environment variable
- * named in the owner's config, so it never sits in a config file, a message or a receipt.
+ * named in the owner's config, so it never sits in a config file, a message or a receipt. A keyless provider such as
+ * local Ollama sets `apiKeyEnv: null`.
  */
 export const ProviderConfigSchema = z.object({
-  baseUrl: z.url().default('http://127.0.0.1:11434/v1'),
-  model: z.string().min(1).default('qwen3:0.6b'),
+  // Default (D20): a free OpenRouter model, measured at 6-14 s with correct tool use. Ollama stays one baseUrl away.
+  baseUrl: z.url().default('https://openrouter.ai/api/v1'),
+  model: z.string().min(1).default('nvidia/nemotron-3-super-120b-a12b:free'),
   apiKeyEnv: z
     .string()
     .regex(/^[A-Z][A-Z0-9_]*$/)
-    .optional(),
+    .nullable()
+    .default('OPENROUTER_API_KEY'),
   inputUsdPerMTok: z.number().nonnegative().default(0),
   outputUsdPerMTok: z.number().nonnegative().default(0),
 });

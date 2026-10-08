@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
-# Local end-to-end demo with real processes: a relay, a "VPS" node that executes production.error_summary on a
-# fixture log, and a "Guillaume" node that requests through the MCP server and approves. Everything on 127.0.0.1.
+# Local end-to-end demo with real processes, on 127.0.0.1:
+#  - a relay;
+#  - "VPS", which executes production.error_summary on a fixture log (deterministic, no LLM), approved by Guillaume;
+#  - "Julie", which executes repo.answer on her own fixture repo with her own LLM key (high sensitivity: she reviews
+#    the answer before it leaves);
+#  - "Guillaume", who asks both through the MCP server, like Claude Code would.
+# repo.answer uses OpenRouter's free nemotron model with OPENROUTER_API_KEY (taken from the macOS keychain entry
+# 'OpenRouter API Key' when not set). Julie's key pays; Guillaume's agent spends nothing.
 # Usage: scripts/demo-local.sh [workdir]   (default: a new temp dir; nothing outside it is touched)
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -29,28 +35,47 @@ cat > "$WORK/error-summary.json" <<CFG
   "errorLineRegex": "\\\\b(ERROR|FATAL)\\\\b", "degradedThreshold": 2 }
 CFG
 
-step "Init two nodes"
+mkdir -p "$WORK/julie-repo/src" "$WORK/julie-repo/docs"
+cat > "$WORK/julie-repo/src/theme.ts" <<'TS'
+export type Theme = 'light' | 'dark';
+export function currentTheme(): Theme {
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+TS
+echo "Le thème suit la préférence du système (clair ou sombre). Pas encore de bouton pour forcer un thème." > "$WORK/julie-repo/docs/theme.md"
+echo "STRIPE_SECRET=sk_live_this_must_never_leave" > "$WORK/julie-repo/.env"
+cat > "$WORK/repo-answer.json" <<CFG
+{ "repoPath": "$WORK/julie-repo" }
+CFG
+
+step "Init three nodes"
 DROP_HOME="$WORK/vps" $DROP init --name VPS --kind machine --relay ws://127.0.0.1:7790/v1 --port 7791
 DROP_HOME="$WORK/mac" $DROP init --name Guillaume --kind human --relay ws://127.0.0.1:7790/v1 --port 7792
-VPS_ID="$(node -e "console.log(JSON.parse(require('fs').readFileSync('$WORK/vps/identity.json','utf8')).nodeId)")"
-MAC_ID="$(node -e "console.log(JSON.parse(require('fs').readFileSync('$WORK/mac/identity.json','utf8')).nodeId)")"
+DROP_HOME="$WORK/julie" $DROP init --name Julie --kind human --relay ws://127.0.0.1:7790/v1 --port 7793
+node_id() { node -e "console.log(JSON.parse(require('fs').readFileSync('$1/identity.json','utf8')).nodeId)"; }
+VPS_ID="$(node_id "$WORK/vps")"; MAC_ID="$(node_id "$WORK/mac")"; JULIE_ID="$(node_id "$WORK/julie")"
 
-step "Relay allowing both nodes"
-printf '{ "port": 7790, "allowedNodeIds": ["%s", "%s"] }\n' "$VPS_ID" "$MAC_ID" > "$WORK/relay.config.json"
+step "Relay allowing the three nodes"
+printf '{ "port": 7790, "allowedNodeIds": ["%s", "%s", "%s"] }\n' "$VPS_ID" "$MAC_ID" "$JULIE_ID" > "$WORK/relay.config.json"
 $RELAY serve --config="$WORK/relay.config.json" > "$WORK/relay.log" 2>&1 & PIDS+=($!)
 sleep 1
 
 step "VPS publishes production.error_summary, approved by Guillaume"
 DROP_HOME="$WORK/vps" $DROP publish production.error_summary --approver "$MAC_ID" --config "$WORK/error-summary.json"
 
-step "Start both daemons"
-DROP_HOME="$WORK/vps" $DROP serve > "$WORK/vps.log" 2>&1 & PIDS+=($!)
-DROP_HOME="$WORK/mac" $DROP serve > "$WORK/mac.log" 2>&1 & PIDS+=($!)
+step "Julie publishes repo.answer on her repo, approved by herself"
+DROP_HOME="$WORK/julie" $DROP publish repo.answer --approver "$JULIE_ID" --config "$WORK/repo-answer.json"
+
+step "Start the three daemons (only Julie's has an LLM key)"
+OPENROUTER_API_KEY="${OPENROUTER_API_KEY:-$(security find-generic-password -a "$USER" -s 'OpenRouter API Key' -w 2>/dev/null || true)}"
+DROP_HOME="$WORK/vps" env -u OPENROUTER_API_KEY $DROP serve > "$WORK/vps.log" 2>&1 & PIDS+=($!)
+DROP_HOME="$WORK/mac" env -u OPENROUTER_API_KEY $DROP serve > "$WORK/mac.log" 2>&1 & PIDS+=($!)
+DROP_HOME="$WORK/julie" OPENROUTER_API_KEY="$OPENROUTER_API_KEY" $DROP serve > "$WORK/julie.log" 2>&1 & PIDS+=($!)
 sleep 2
 
-step "Pairing: the VPS invites, Guillaume pairs"
-CODE="$(DROP_HOME="$WORK/vps" $DROP invite | head -1)"
-DROP_HOME="$WORK/mac" $DROP pair "$CODE"
+step "Pairing: the VPS and Julie each invite, Guillaume pairs"
+DROP_HOME="$WORK/mac" $DROP pair "$(DROP_HOME="$WORK/vps" $DROP invite | head -1)"
+DROP_HOME="$WORK/mac" $DROP pair "$(DROP_HOME="$WORK/julie" $DROP invite | head -1)"
 sleep 1
 DROP_HOME="$WORK/mac" $DROP peers
 
@@ -82,3 +107,32 @@ DROP_HOME="$WORK/mac" $DROP receipts
 
 step "Leak check: no log fragment in what the requester received"
 if grep -R -E "alice@example|sk-ant-|9f1c2b7e|10\.0\.0\.7|42\.00" "$WORK/mac" >/dev/null 2>&1; then echo "LEAK FOUND"; exit 1; else echo "no leak"; fi
+
+step "Agent side (MCP): ask Julie's repo a question"
+OUT="$(DROP_HOME="$WORK/mac" $PROBE request '{"capability_id":"repo.answer","input":{"question":"Est-ce que l implementation de Julie gere deja le mode sombre ?"},"purpose":"Savoir si je dois coder le mode sombre ou réutiliser le sien"}')"
+echo "$OUT"
+DROP_ID="$(echo "$OUT" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>console.log(JSON.parse(s).drop_id))")"
+sleep 1
+
+step "Julie: pending request, then she allows once"
+DROP_HOME="$WORK/julie" $DROP pending
+DROP_HOME="$WORK/julie" $DROP approve "$DROP_ID"
+
+step "Julie: the answer comes back to her first (high sensitivity)"
+for i in $(seq 1 60); do
+  PENDING="$(DROP_HOME="$WORK/julie" $DROP pending)"
+  if echo "$PENDING" | grep -q "à relire"; then break; fi
+  sleep 2
+done
+echo "$PENDING"
+DROP_HOME="$WORK/julie" $DROP review "$DROP_ID" send
+
+step "Agent side (MCP): get_drop_result"
+DROP_HOME="$WORK/mac" $PROBE result "$DROP_ID"
+
+step "Julie's receipts (she paid; cost in USD)"
+sleep 1
+DROP_HOME="$WORK/julie" $DROP receipts
+
+step "Leak check: Julie's .env never reached Guillaume"
+if grep -R "sk_live_this_must_never_leave" "$WORK/mac" >/dev/null 2>&1; then echo "LEAK FOUND"; exit 1; else echo "no leak"; fi

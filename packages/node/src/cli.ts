@@ -145,6 +145,7 @@ switch (command) {
         title?: string;
         purpose?: string;
         inputPreview?: string;
+        output?: unknown;
       }[];
     };
     if (pending.length === 0) process.stdout.write('nothing pending\n');
@@ -152,7 +153,7 @@ switch (command) {
       process.stdout.write(
         item.kind === 'approval'
           ? `${item.dropId}  ${item.requestedBy?.displayName ?? ''}: ${item.card?.title ?? ''}\n  « ${item.inputPreview ?? ''} »\n  Pourquoi : ${item.purpose ?? ''}\n`
-          : `${item.dropId}  à relire : ${item.title ?? ''}\n`,
+          : `${item.dropId}  à relire : ${item.title ?? ''}\n${JSON.stringify(item.output, null, 2)}\n`,
       );
     }
     break;

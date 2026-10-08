@@ -25,13 +25,13 @@ La config propriétaire MUST déclarer `repoPath: string`, `allow: string[]` (gl
 
 ### Requirement: Config propriétaire du fournisseur de modèle
 La config MUST désigner le modèle par un fournisseur compatible OpenAI (`provider.baseUrl`, `provider.model`), quel qu'il
-soit : Ollama local, OpenRouter, Groq, Gemini, Mistral, OpenAI ou Anthropic. Par défaut : Ollama local
-(`http://127.0.0.1:11434/v1`) et `qwen3:0.6b`, gratuit et sans clé. `maxTurns` vaut 15 et `maxUsd` 0,50 par défaut.
+soit : Ollama local, OpenRouter, Groq, Gemini, Mistral, OpenAI ou Anthropic. Par défaut : OpenRouter et
+`nvidia/nemotron-3-super-120b-a12b:free` (gratuit), clé dans `OPENROUTER_API_KEY`. `maxTurns` 15, `maxUsd` 0,50.
 
 #### Scenario: Valeurs par défaut du modèle
 <!-- openspec-guard:non-testable reason="Couvert par le schéma de config ; vérifié par le test de bout en bout de la capacité" -->
 - **WHEN** la config ne précise ni fournisseur ni limites
-- **THEN** la capacité appelle Ollama local avec `qwen3:0.6b`, `maxTurns` 15 et `maxUsd` 0,50
+- **THEN** la capacité appelle OpenRouter avec ce modèle gratuit, `maxTurns` 15 et `maxUsd` 0,50
 
 ### Requirement: Schéma d'entrée
 

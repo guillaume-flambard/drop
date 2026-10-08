@@ -84,6 +84,11 @@ Format : `D<n> — date — décision — raison`. Les agents ajoutent ici toute
   `nvidia/nemotron-3-super-120b-a12b:free` : 6 à 14 s, outils utilisés, réponses justes, 0 $. `gemma-4-31b-it:free` et
   `laguna-s-2.1:free` répondent HTTP 429 (quota gratuit saturé) : `scripts/probe-provider.ts` teste un modèle avant
   de le configurer.
+- **D20** — Fournisseur par défaut de `repo.answer` : OpenRouter, `nvidia/nemotron-3-super-120b-a12b:free`, clé
+  dans `OPENROUTER_API_KEY` (2026-10-08, demande de Guillaume ; mesures en D19). `apiKeyEnv: null` avec
+  `baseUrl: http://127.0.0.1:11434/v1` pour Ollama local, sans clé. Seul le Node propriétaire de la capacité a la clé :
+  dans la démo, les daemons du VPS et de Guillaume tournent sans `OPENROUTER_API_KEY`. Un modèle gratuit coûte 0 $ ;
+  le reçu ne porte alors pas de `costUsd`.
 
 ## À décider par l'humain
 
