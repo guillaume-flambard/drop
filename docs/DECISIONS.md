@@ -79,7 +79,11 @@ Format : `D<n> — date — décision — raison`. Les agents ajoutent ici toute
   3 000 et couvre toute la sortie (`answer` reste limité à 1 500), ce qui tranche le point ouvert de T1.13 ; un
   snapshot trop gros échoue en `E_BUDGET`. Mesure réelle avec `qwen3:0.6b`, le seul modèle Ollama installé : la
   boucle répond en 1 à 3 s, mais le modèle n'appelle aucun outil et répond « unknown ». Le circuit est validé, le
-  modèle est trop petit. Il faut un modèle plus grand (local, ou gratuit dans le cloud) pour une vraie réponse.
+  modèle est trop petit. Mesures suivantes, mêmes deux questions : `qwen3:8b` local met 60 à 166 s, appelle
+  parfois les outils et cite un fichier faux. OpenRouter gratuit (clé déjà dans le trousseau, `OPENROUTER_API_KEY`) avec
+  `nvidia/nemotron-3-super-120b-a12b:free` : 6 à 14 s, outils utilisés, réponses justes, 0 $. `gemma-4-31b-it:free` et
+  `laguna-s-2.1:free` répondent HTTP 429 (quota gratuit saturé) : `scripts/probe-provider.ts` teste un modèle avant
+  de le configurer.
 
 ## À décider par l'humain
 
