@@ -30,6 +30,8 @@ if (action === 'tools') {
   await call('get_drop_result', { drop_id: argument, wait_seconds: 5 });
 } else if (action === 'request-many') {
   await call('request_drops', JSON.parse(argument) as Record<string, unknown>);
+} else if (action === 'ask') {
+  await call('ask_team', { question: argument });
 } else if (action === 'results') {
   await call('get_drop_results', { drop_ids: argument.split(','), wait_seconds: 5 });
 }

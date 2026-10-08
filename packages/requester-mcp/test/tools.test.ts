@@ -13,12 +13,14 @@ const capability: CapabilityView = {
 };
 
 const requestDrop = vi.fn(() => Promise.resolve({ dropId: 'd1', owner: 'VPS' }));
+const noAsk = () => Promise.resolve({ asked: [], helpers: [] });
 
 function fakeNode(drop?: DropView) {
   requestDrop.mockClear();
   const node: LocalNode = {
     capabilities: vi.fn(() => Promise.resolve([capability])),
     requestDrop,
+    ask: noAsk,
     drop: vi.fn(() =>
       Promise.resolve(
         drop ?? {
@@ -153,6 +155,7 @@ describe('requester MCP tools', () => {
     const node: LocalNode = {
       capabilities: () => Promise.resolve([]),
       requestDrop,
+      ask: noAsk,
       drop: (dropId) => Promise.resolve(views[dropId] ?? views.a ?? ({} as DropView)),
     };
     const result = await createTools(node, 'codex').getDropResults({ drop_ids: ['a', 'b', 'c'], wait_seconds: 0 });
@@ -162,5 +165,59 @@ describe('requester MCP tools', () => {
     expect(text).toContain('<drop_result>{"answer":"2 PR ouvertes"}</drop_result>');
     expect(text).toContain('Julie (« Répondre à partir de mon Figma ») : en attente (awaiting_approval)');
     expect(text).toContain('Sami (« Répondre à partir de mon CRM ») : E_DENIED, Refusé');
+  });
+
+  it('ask_team tells who was asked and why, or who can help when nothing matches (T2.12)', async () => {
+    const asked = {
+      asked: [
+        {
+          dropId: 'a',
+          ownerName: 'Julie',
+          title: 'Répondre à partir de mon Figma',
+          reason: 'la question parle de bouton',
+          online: true,
+        },
+        {
+          dropId: 'b',
+          ownerName: 'Natha',
+          title: 'Répondre à partir de mon GitHub',
+          reason: 'la question parle de pr',
+          online: false,
+        },
+      ],
+      helpers: [],
+    };
+    const calls: unknown[] = [];
+    const node: LocalNode = {
+      capabilities: () => Promise.resolve([]),
+      requestDrop,
+      drop: () => Promise.reject(new Error('unused')),
+      ask: (body) => {
+        calls.push(body);
+        return Promise.resolve(asked);
+      },
+    };
+    const sent =
+      (await createTools(node, 'other').askTeam({ question: 'Le bouton de paiement est-il prêt ?' })).content[0]
+        ?.text ?? '';
+    expect(calls).toEqual([{ question: 'Le bouton de paiement est-il prêt ?', purpose: undefined, agent: 'other' }]);
+    expect(sent).toContain('- Julie (« Répondre à partir de mon Figma »), parce que la question parle de bouton');
+    expect(sent).toContain('Natha');
+    expect(sent).toContain('hors ligne');
+    expect(sent).toContain('{"drop_ids":["a","b"]}');
+
+    const nobody: LocalNode = {
+      ...node,
+      ask: () =>
+        Promise.resolve({
+          asked: [],
+          helpers: [{ ownerName: 'Julie', title: 'Répondre à partir de mon Figma', online: true }],
+        }),
+    };
+    const refused =
+      (await createTools(nobody, 'other').askTeam({ question: 'Quel temps fera-t-il demain ?' })).content[0]?.text ??
+      '';
+    expect(refused).toContain("je n'ai rien envoyé");
+    expect(refused).toContain('- Julie : Répondre à partir de mon Figma');
   });
 });

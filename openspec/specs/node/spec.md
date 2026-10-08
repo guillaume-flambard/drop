@@ -128,6 +128,27 @@ aucune liste ne choisit un outil ni n'autorise une demande : chaque demande pass
 - **WHEN** un pair qui n'est pas de l'équipe envoie une liste d'une autre équipe avec un inconnu
 - **THEN** ni la liste des membres ni les pairs ne changent
 
+### Requirement: Routage d'une question
+`POST /ask { question, purpose?, agent }` SHALL choisir au plus trois capacités qui prennent une question libre, par des
+règles sans modèle (D32) : un prénom cité dans la question l'emporte ; sinon les mots de la question sont comparés au
+genre de chaque outil partagé (Figma, code, GitHub, Notion, Linear, Jira, CRM, base de données…). Le Node MUST envoyer
+une demande à chacune et MUST n'en envoyer aucune quand rien ne correspond.
+
+#### Scenario: Mots de la question
+<!-- openspec-guard:test="routing a plain question to the right people (T2.12, D32) > matches the words of the question to the kind of each shared tool" -->
+- **WHEN** la question parle de la couleur d'un bouton sur la maquette, ou des PR, des tickets et du contrat client
+- **THEN** elle part vers Figma, ou vers GitHub, Linear et le CRM
+
+#### Scenario: Prénom ou rien
+<!-- openspec-guard:test="routing a plain question to the right people (T2.12, D32) > a first name wins, accents and case do not matter, and nothing is sent when nothing matches" -->
+- **WHEN** la question cite « sami », ou ne correspond à aucun outil
+- **THEN** elle part vers l'outil de Sami, ou nulle part
+
+#### Scenario: Question libre seulement
+<!-- openspec-guard:test="routing a plain question to the right people (T2.12, D32) > only capabilities that take a free-text question can be asked" -->
+- **WHEN** une capacité demande des champs précis (`service`, `window`)
+- **THEN** le routage ne la choisit jamais
+
 ### Requirement: Commande drop peers
 `drop peers` SHALL lister les pairs.
 
