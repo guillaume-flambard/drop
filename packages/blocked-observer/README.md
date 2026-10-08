@@ -18,9 +18,9 @@ La commande **affiche** ce qu'il faut ajouter, sans rien modifier. Tu copies cha
 2. **Claude Code, le hook** : le bloc JSON, à fusionner dans `~/.claude/settings.json`. Il écoute `PostToolUse`
    (outil réussi) et `PostToolUseFailure` (outil en échec : c'est là qu'arrivent la plupart des 401 et 403).
 3. **Codex, l'outil `report_blocked`** : le bloc `[mcp_servers.blocked-observer]`, dans `~/.codex/config.toml`.
-4. **Codex, les événements** : Codex n'a pas de hook. Lance de temps en temps
-   `node packages/blocked-observer/src/cli.ts import-codex --since 7d`, qui lit tes logs de session locaux
-   (`~/.codex/sessions`).
+4. **Codex, les événements** : Codex n'a pas de hook. `list` et `report` importent d'abord les nouveaux blocages
+   de tes logs de session locaux (`~/.codex/sessions`, 30 derniers jours, sans doublon). `import-codex --since 7d`
+   le fait à la demande.
 5. **Dans le `AGENTS.md` ou `CLAUDE.md` des repos observés**, la phrase affichée par `print-instructions`.
 
 ## Ce qui est collecté

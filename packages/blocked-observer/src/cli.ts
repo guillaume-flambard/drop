@@ -7,9 +7,9 @@ const USAGE = `blocked-observer <command>
   hook                      Claude Code hook entry (PostToolUse and PostToolUseFailure)
   import-codex [--since 7d] import blocks from local Codex session logs
   install                   print (never apply) the Claude Code and Codex configuration
-  list [--since 7d]         table of events
+  list [--since 7d]         table of events (imports new Codex blocks first; --no-codex to skip)
   classify <id>             classification, minutes lost, note
-  report [--since 30d]      summary per active day
+  report [--since 30d]      summary per active day (imports new Codex blocks first)
   export --out file.json    export after reviewing every event
   print-instructions        snippet for AGENTS.md / CLAUDE.md`;
 
@@ -50,6 +50,17 @@ if (command === 'hook') {
 const { ObserverStore } = await import('./store.ts');
 const store = new ObserverStore();
 
+/** Codex has no hook: list and report first pull in new Codex blocks (idempotent), unless --no-codex is given. */
+async function syncCodex(args: string[]): Promise<void> {
+  if (args.includes('--no-codex') || process.env.BLOCKED_OBSERVER_NO_CODEX === '1') return;
+  try {
+    const { codexSessionsDir, importCodex } = await import('./codex.ts');
+    importCodex(store, codexSessionsDir(), Date.now() - 30 * 86_400_000);
+  } catch (error) {
+    store.logError('E_CODEX_IMPORT', error instanceof Error ? error.message : 'codex import failed');
+  }
+}
+
 switch (command) {
   case 'mcp': {
     const { StdioServerTransport } = await import('@modelcontextprotocol/sdk/server/stdio.js');
@@ -59,7 +70,10 @@ switch (command) {
     break;
   }
   case 'import-codex': {
-    const { values } = parseArgs({ args: rest, options: { since: { type: 'string' } } });
+    const { values } = parseArgs({
+      args: rest,
+      options: { since: { type: 'string' }, 'no-codex': { type: 'boolean' } },
+    });
     const { codexSessionsDir, importCodex } = await import('./codex.ts');
     const { added, files } = importCodex(store, codexSessionsDir(), since(values.since ?? '7d'));
     process.stdout.write(`${String(files)} Codex session files read, ${String(added)} new events\n`);
@@ -76,7 +90,11 @@ switch (command) {
     break;
   }
   case 'list': {
-    const { values } = parseArgs({ args: rest, options: { since: { type: 'string' } } });
+    await syncCodex(rest);
+    const { values } = parseArgs({
+      args: rest,
+      options: { since: { type: 'string' }, 'no-codex': { type: 'boolean' } },
+    });
     const from = since(values.since);
     const events = store.events().filter((event) => Date.parse(event.ts) >= from);
     if (events.length === 0) process.stdout.write('no event\n');
@@ -114,7 +132,11 @@ switch (command) {
     break;
   }
   case 'report': {
-    const { values } = parseArgs({ args: rest, options: { since: { type: 'string' } } });
+    await syncCodex(rest);
+    const { values } = parseArgs({
+      args: rest,
+      options: { since: { type: 'string' }, 'no-codex': { type: 'boolean' } },
+    });
     const { buildReport, linkEvents } = await import('./analysis.ts');
     const linked = linkEvents(store.events());
     store.replaceEvents(linked);
