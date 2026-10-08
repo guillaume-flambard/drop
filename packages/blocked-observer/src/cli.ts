@@ -8,7 +8,7 @@ const USAGE = `blocked-observer <command>
   import-codex [--since 7d] import blocks from local Codex session logs
   install                   print (never apply) the Claude Code and Codex configuration
   list [--since 7d]         table of events (imports new Codex blocks first; --no-codex to skip)
-  classify <id>             classification, minutes lost, note
+  classify <id>             a few yes/no questions that lead to the classification, then minutes lost and a note
   report [--since 30d]      summary per active day (imports new Codex blocks first)
   report --merge <exports…> pool several developers' exports and apply the go/no-go threshold (D24)
   export --out file.json    export after reviewing every event (--classified-only: skip unclassified events)
@@ -19,6 +19,25 @@ function since(value: string | undefined): number {
   const match = /^(\d+)([hd])$/.exec(value);
   if (!match) throw new Error('--since expects e.g. 24h or 7d');
   return Date.now() - Number(match[1]) * (match[2] === 'd' ? 86_400_000 : 3_600_000);
+}
+
+/**
+ * Line prompts that also work with piped input: `rl.question` drops lines that arrive before it is called, the async
+ * iterator buffers them.
+ */
+function prompter(): { ask: (question: string) => Promise<string>; close: () => void } {
+  const rl = createInterface({ input: process.stdin, terminal: false });
+  const lines = rl[Symbol.asyncIterator]();
+  return {
+    ask: async (question) => {
+      process.stdout.write(question);
+      const next = await lines.next();
+      return next.done ? '' : next.value;
+    },
+    close: () => {
+      rl.close();
+    },
+  };
 }
 
 async function readStdin(): Promise<string> {
@@ -76,8 +95,10 @@ switch (command) {
       options: { since: { type: 'string' }, 'no-codex': { type: 'boolean' } },
     });
     const { codexSessionsDir, importCodex } = await import('./codex.ts');
-    const { added, files } = importCodex(store, codexSessionsDir(), since(values.since ?? '7d'));
-    process.stdout.write(`${String(files)} Codex session files read, ${String(added)} new events\n`);
+    const { added, removed, files } = importCodex(store, codexSessionsDir(), since(values.since ?? '7d'));
+    process.stdout.write(
+      `${String(files)} Codex session files read, ${String(added)} new events, ${String(removed)} noise events removed\n`,
+    );
     break;
   }
   case 'install': {
@@ -113,23 +134,37 @@ switch (command) {
   case 'classify': {
     const prefix = rest[0];
     if (!prefix) throw new Error('blocked-observer classify <id>');
-    const { CLASSIFICATIONS } = await import('./store.ts');
+    const { QUESTIONS, REASONS, classificationFrom } = await import('./codebook.ts');
     const events = store.events();
     const event = events.find((candidate) => candidate.id.startsWith(prefix));
     if (!event) throw new Error(`no event ${prefix}`);
-    process.stdout.write(`${JSON.stringify(event, null, 2)}\n`);
-    const rl = createInterface({ input: process.stdin, output: process.stdout });
-    CLASSIFICATIONS.forEach((name, index) => process.stdout.write(`  ${String(index + 1)}. ${name}\n`));
-    const choice = CLASSIFICATIONS[Number(await rl.question('classification (1-8): ')) - 1];
-    if (!choice) throw new Error('invalid classification');
-    const minutes = Number(await rl.question('minutes lost: '));
-    const note = await rl.question('note (optional): ');
+    process.stdout.write(`${JSON.stringify(event, null, 2)}\n\nGrille : docs/CLASSIFICATION.md\n`);
+    const rl = prompter();
+    const yes = async (question: string) => (await rl.ask(`${question} [o/n] `)).trim().toLowerCase().startsWith('o');
+    const answers: Parameters<typeof classificationFrom>[0] = { blocked: await yes(QUESTIONS.blocked) };
+    if (answers.blocked) answers.someoneElse = await yes(QUESTIONS.someoneElse);
+    if (answers.someoneElse) answers.accessFine = await yes(QUESTIONS.accessFine);
+    if (answers.someoneElse && !answers.accessFine) answers.shareFine = await yes(QUESTIONS.shareFine);
+    if (answers.someoneElse && !answers.accessFine && !answers.shareFine) {
+      process.stdout.write(`${QUESTIONS.reason}\n`);
+      REASONS.forEach((entry, index) => process.stdout.write(`  ${String(index + 1)}. ${entry.label}\n`));
+      const picked = REASONS[Number(await rl.ask('raison (1-4) : ')) - 1];
+      if (picked) answers.reason = picked.reason;
+    }
+    const choice = classificationFrom(answers);
+    if (!choice) {
+      rl.close();
+      throw new Error('invalid answer');
+    }
+    const minutes =
+      choice === 'NOT_A_BLOCK' ? 0 : Number(await rl.ask('minutes perdues (attente et contournement) : '));
+    const note = await rl.ask('note (optionnelle) : ');
     rl.close();
     event.classification = choice;
     if (Number.isFinite(minutes) && minutes >= 0) event.pain_minutes = minutes;
     if (note.trim() !== '') event.note = note.trim();
     store.replaceEvents(events);
-    process.stdout.write('saved\n');
+    process.stdout.write(`${choice}, saved\n`);
     break;
   }
   case 'report': {
@@ -181,14 +216,14 @@ switch (command) {
     if (events.length < all.length) {
       process.stdout.write(`${String(all.length - events.length)} unclassified events left out\n`);
     }
-    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    const rl = prompter();
     const decisions = new Map<
       string,
       { keep: false } | { keep: true; remove: (typeof TEXT_FIELDS)[number][]; hash: (typeof TEXT_FIELDS)[number][] }
     >();
     for (const event of events) {
       process.stdout.write(`\n${JSON.stringify(event, null, 2)}\n`);
-      if ((await rl.question('keep this event? [Y/n] ')).trim().toLowerCase() === 'n') {
+      if ((await rl.ask('keep this event? [Y/n] ')).trim().toLowerCase() === 'n') {
         decisions.set(event.id, { keep: false });
         continue;
       }
@@ -196,7 +231,7 @@ switch (command) {
       const hash: (typeof TEXT_FIELDS)[number][] = [];
       for (const field of TEXT_FIELDS) {
         if (event[field] === undefined) continue;
-        const answer = (await rl.question(`${field}: keep, hash or remove? [k/h/r] `)).trim().toLowerCase();
+        const answer = (await rl.ask(`${field}: keep, hash or remove? [k/h/r] `)).trim().toLowerCase();
         if (answer === 'r') remove.push(field);
         if (answer === 'h') hash.push(field);
       }

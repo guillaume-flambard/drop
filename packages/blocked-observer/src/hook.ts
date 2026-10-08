@@ -1,3 +1,4 @@
+import { claudeNoise } from './noise.ts';
 import { detectPattern } from './patterns.ts';
 import { newId, shortHash, type LightStore } from './light.ts';
 
@@ -47,7 +48,7 @@ export function handleHookInput(
     const tool = typeof input.tool_name === 'string' ? input.tool_name : 'unknown';
     store.touch(now.toISOString().slice(0, 10), 'claude', session);
     const pattern = detectPattern(event === 'PostToolUseFailure' ? text(input.error) : text(input.tool_response));
-    if (!pattern) return { recorded: false };
+    if (!pattern || claudeNoise(event, tool, input.tool_input)) return { recorded: false };
     const resource = targetedResource(tool, input.tool_input);
     store.append({
       id: newId(),

@@ -155,14 +155,6 @@
       "file": "openspec/specs/blocked-observer/spec.md"
     },
     {
-      "id": "sg_9a1e6b8898bdb180",
-      "reason": "missing-selector",
-      "verdict": "fail",
-      "capability": "blocked-observer",
-      "scenario": "Classification d'un événement",
-      "file": "openspec/specs/blocked-observer/spec.md"
-    },
-    {
       "id": "sg_9ff8f29b4150e346",
       "reason": "missing-selector",
       "verdict": "fail",

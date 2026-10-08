@@ -8,13 +8,18 @@ import { describe, expect, it } from 'vitest';
 import {
   applyReview,
   buildReport,
+  classificationFrom,
+  claudeNoise,
+  codexNoise,
   createObserverServer,
   detectPattern,
   handleHookInput,
+  isReadOnlyCommand,
   linkEvents,
   ObserverStore,
   parseCodexSessions,
   PATTERNS,
+  REASONS,
   REPORT_BLOCKED_DESCRIPTION,
   shortHash,
   type ObservedEvent,
@@ -353,5 +358,76 @@ describe('export review', () => {
     expect(a1 && 'resource' in a1).toBe(false);
     expect(a1?.attempted_action).toBe(`sha256:${shortHash('lire')}`);
     expect(JSON.stringify(out)).not.toContain('Datadog');
+  });
+});
+
+describe('noise filter (D25)', () => {
+  it('drops a refusal word that the agent only read in a file, a web page or its own tests', () => {
+    for (const command of [
+      "sed -n '1,200p' docs/api.md",
+      "rtk nl -ba ROADMAP.md | rtk sed -n '75,95p;145,165p'",
+      'git show origin/main:stacks/stacks.tsv | grep -n auth',
+      'for f in a b; do cat "$f"; done',
+      'rtk npm run build && rtk npm test',
+      '/bin/cat AGENTS.md',
+    ])
+      expect(isReadOnlyCommand(command), command).toBe(true);
+    expect(codexNoise('exec', 'tools.web__run({search_query:[{q:"x"}]})', '401 Unauthorized')).toBe(true);
+    expect(codexNoise('exec', 'tools.exec_command({cmd:"cat notes.md"})', 'status code 401')).toBe(true);
+    expect(claudeNoise('PostToolUse', 'Read', { file_path: '/x' })).toBe(true);
+  });
+
+  it('keeps a refusal from a command that reached a resource or failed', () => {
+    for (const command of [
+      'gh api repos/acme/infra/branches/main/protection',
+      'ssh lab "docker logs kollio-api"',
+      "sed -i 's/a/b/' file",
+      'cat a && curl https://api.example.com',
+      "echo 'x; curl evil'",
+    ])
+      expect(isReadOnlyCommand(command), command).toBe(command === "echo 'x; curl evil'");
+    expect(codexNoise('exec', 'tools.exec_command({cmd:"cat secret"})', 'Permission denied\n"exit_code":1')).toBe(
+      false,
+    );
+    expect(claudeNoise('PostToolUseFailure', 'Read', { file_path: '/x' })).toBe(false);
+    expect(claudeNoise('PostToolUse', 'Bash', { command: 'curl -i https://api.example.com' })).toBe(false);
+  });
+});
+
+describe('classify as a decision tree (D25)', () => {
+  it('each path of the questions leads to exactly one code', () => {
+    expect(classificationFrom({ blocked: false })).toBe('NOT_A_BLOCK');
+    expect(classificationFrom({ blocked: true, someoneElse: false })).toBe('NO_HUMAN_REQUIRED');
+    expect(classificationFrom({ blocked: true, someoneElse: true, accessFine: true })).toBe('NO_ACCESS_IS_FINE');
+    expect(classificationFrom({ blocked: true, someoneElse: true, accessFine: false, shareFine: true })).toBe(
+      'NO_SHARE_IS_FINE',
+    );
+    const reasons = REASONS.map((entry) =>
+      classificationFrom({
+        blocked: true,
+        someoneElse: true,
+        accessFine: false,
+        shareFine: false,
+        reason: entry.reason,
+      }),
+    );
+    expect(reasons).toEqual(['YES_SENSITIVE_DATA', 'YES_PRIVILEGED_ACTION', 'YES_LOCAL_CONTEXT', 'YES_TEMPORARY']);
+    expect(classificationFrom({ blocked: true })).toBeUndefined();
+  });
+
+  it('the classify command asks the questions and saves the code, minutes and note', () => {
+    const store = freshStore();
+    store.append({ id: 'evt12345', ts: '2026-10-08T10:00:00Z', source: 'report', agent: 'codex', resource: 'repo' });
+    const run = spawnSync(process.execPath, [CLI, 'classify', 'evt1'], {
+      input: 'o\no\nn\nn\n3\n15\nbranche locale de Julie\n',
+      env: { ...process.env, BLOCKED_OBSERVER_HOME: store.root, BLOCKED_OBSERVER_NO_CODEX: '1' },
+      encoding: 'utf8',
+    });
+    expect(run.stdout).toContain('YES_LOCAL_CONTEXT, saved');
+    expect(store.events()[0]).toMatchObject({
+      classification: 'YES_LOCAL_CONTEXT',
+      pain_minutes: 15,
+      note: 'branche locale de Julie',
+    });
   });
 });

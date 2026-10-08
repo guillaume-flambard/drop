@@ -47,9 +47,13 @@ Dans `~/.blocked-observer/` (mode 0700), modifiable par `BLOCKED_OBSERVER_HOME` 
 
 ```bash
 node packages/blocked-observer/src/cli.ts list --since 7d        # les événements
-node packages/blocked-observer/src/cli.ts classify <id>          # après l'entretien : type de blocage, minutes perdues
+node packages/blocked-observer/src/cli.ts classify <id>          # le jour même ou en entretien : questions oui/non, minutes perdues
 node packages/blocked-observer/src/cli.ts report --since 30d     # synthèse par jour actif
 ```
+
+`classify` pose quelques questions oui/non et en déduit le code. La grille complète, avec un exemple par code et
+la façon de mener l'entretien : [`docs/CLASSIFICATION.md`](../../docs/CLASSIFICATION.md). Les sorties que l'agent
+a seulement lues (fichiers, tests, recherche web) sont filtrées avant (D25).
 
 ## Exporter
 
