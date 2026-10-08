@@ -183,6 +183,22 @@ Format : `D<n> — date — décision — raison`. Les agents ajoutent ici toute
   reste de la demande, et l'exécuteur la jette après l'exécution. La perte maximale est le plafond, affiché sur la
   carte de consentement. Le propriétaire peut toujours configurer sa propre clé (D21), qui passe alors en premier.
 
+- **D28** — Vision produit de l'étape 2, dictée par Guillaume le 2026-10-08. « Il faut que ce soit très très simple. »
+  - **Qui paie** : par défaut le demandeur (D27). Plus tard, chaque entreprise choisit sa règle : compte d'entreprise,
+    clé différente, abonnement plutôt que clé API, autre modèle. La règle de paiement doit donc rester un réglage,
+    pas un choix codé en dur. Un abonnement (Claude, ChatGPT) contredit aujourd'hui la règle « clé API uniquement »
+    d'AGENTS.md : à trancher le jour où une entreprise le demande.
+  - **Installation en trois secondes** : l'app détecte seule les agents installés (Claude Code, Codex, Cursor, Claude
+    Desktop) et leurs serveurs MCP, propose de partager ces outils et d'installer drop dans ces agents.
+  - **Équipe** : l'app montre les autres membres de l'équipe inscrits, leurs agents et leurs outils disponibles, sans
+    appairage un par un.
+  - **Demandes multiples** : un scénario type, « où en est le projet X ? », part vers plusieurs personnes à la fois
+    (GitHub chez l'un, Figma chez l'autre, un CRM chez un troisième) ; chacune accepte, l'agent assemble. Le demandeur
+    peut être n'importe qui, pas seulement le patron.
+  - **Suivi discret** : l'app de la barre de menus permet d'accepter, refuser, suivre les demandes en cours, et voir
+    qui est connecté avec quels outils. Ce panneau reste à dessiner.
+  - **Plus tard** : un RAG d'entreprise.
+
 ## À décider par l'humain
 
 - **Nom de produit** : à vérifier (nom + domaine) avant le pilote.
