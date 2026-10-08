@@ -13,11 +13,11 @@ implémenter qui appartient à une autre ligne.
 | ID | Tâche (périmètre) | Capacités OpenSpec | Change | Dépend de | Statut |
 | --- | --- | --- | --- | --- | --- |
 | T0.0 | Initialiser le monorepo : pnpm workspaces, TypeScript strict, eslint, prettier, vitest, scripts `lint`/`typecheck`/`test` à la racine, `.gitignore` (inclut `.drop*/`, `.env*`) | `monorepo-tooling` | `t0-0-init-monorepo` | — | done |
-| T0.1 | `blocked-observer` : schéma d'événement, stockage JSONL, serveur MCP stdio avec `report_blocked` | `blocked-observer` | `t0-1-observer-mcp` | T0.0 | todo |
-| T0.2 | `blocked-observer hook` pour Claude Code + fichier de motifs + tests (aucun extrait de sortie stocké) | `blocked-observer` | `t0-2-observer-claude-hook` | T0.1 | todo |
-| T0.3 | `blocked-observer import-codex` (vérifier d'abord l'emplacement et le format des logs Codex ; sinon `blocked` + note dans DECISIONS) | `blocked-observer` | `t0-3-observer-codex-import` | T0.1 | todo |
-| T0.4 | CLI `list`, `classify`, `report`, `export` (avec relecture), `install`, `print-instructions` + rapprochement A/B | `blocked-observer` | `t0-4-observer-cli` | T0.2 | todo |
-| T0.5 | `packages/blocked-observer/README.md` pour les testeurs : installation en 5 minutes (Claude Code et Codex), ce qui est collecté, ce qui ne l'est pas, comment exporter | `blocked-observer` | `t0-5-observer-readme` | T0.4 | todo |
+| T0.1 | `blocked-observer` : schéma d'événement, stockage JSONL, serveur MCP stdio avec `report_blocked` | `blocked-observer` | `t0-1-observer-mcp` | T0.0 | done |
+| T0.2 | `blocked-observer hook` pour Claude Code + fichier de motifs + tests (aucun extrait de sortie stocké) | `blocked-observer` | `t0-2-observer-claude-hook` | T0.1 | done |
+| T0.3 | `blocked-observer import-codex` (vérifier d'abord l'emplacement et le format des logs Codex ; sinon `blocked` + note dans DECISIONS) | `blocked-observer` | `t0-3-observer-codex-import` | T0.1 | done |
+| T0.4 | CLI `list`, `classify`, `report`, `export` (avec relecture), `install`, `print-instructions` + rapprochement A/B | `blocked-observer` | `t0-4-observer-cli` | T0.2 | done |
+| T0.5 | `packages/blocked-observer/README.md` pour les testeurs : installation en 5 minutes (Claude Code et Codex), ce qui est collecté, ce qui ne l'est pas, comment exporter | `blocked-observer` | `t0-5-observer-readme` | T0.4 | done |
 
 **Point d'arrêt humain** : écrire le seuil go/no-go dans `docs/DECISIONS.md`, lancer la mesure, faire les entretiens.
 L'étape 1 peut commencer en parallèle pour le prototype, mais pas le pilote.
