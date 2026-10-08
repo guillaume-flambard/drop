@@ -58,6 +58,7 @@ qu'aucune identité locale, clé ni jeton ne puisse être commité par erreur.
 - **WHEN** on crée `.drop-test/identity.json`, `.drop-key`, `.env.local`, `secret.pem`, `id_ed25519` et `.npmrc` à la racine
 - **THEN** `git check-ignore` les reconnaît tous comme ignorés
 - **AND** `.env.example` est ignoré lui aussi, à la racine comme dans un package
+- **AND** aucun fichier suivi par git (ajouté de force) ne correspond à un motif ignoré
 
 ### Requirement: Dépendances hors stack consignées
 Toute dépendance hors de la stack imposée par AGENTS.md MUST être consignée dans `docs/DECISIONS.md` avec sa raison
@@ -73,17 +74,20 @@ avant d'être ajoutée.
 - **WHEN** une dépendance hors stack n'est citée dans aucune entrée `D<n>`, même si elle apparaît ailleurs dans le fichier
 - **THEN** le contrôle la signale
 - **AND** une dépendance nommée `@drop/*` n'est exemptée que si sa version utilise le protocole `workspace:`
+- **AND** une dépendance de la stack imposée déclarée par alias (`npm:`, `git+`, `file:`…) n'est pas exemptée
 
 ## ADDED Requirements
 
 ### Requirement: Couverture complète des contrôles
 La vérification de types MUST couvrir tout fichier `.ts`, `.tsx`, `.mts` et `.cts` du dépôt hors dépendances, sorties
-et outillage OpenSpec. Les tests MUST collecter tout fichier `*.test.*` et `*.spec.*` de ces extensions, où qu'il soit.
+et outillage OpenSpec, déclarations `.d.ts` comprises (`skipLibCheck` désactivé). Les tests MUST collecter tout
+`*.test.*` et `*.spec.*` de ces extensions. Seuls les fichiers de config racine `*.config.js` MAY être en JavaScript.
 
 #### Scenario: AC: aucun fichier hors contrôle
 <!-- openspec-guard:test="monorepo tooling > every TypeScript file is typechecked and every test file is collected" -->
 - **WHEN** on liste les fichiers TypeScript et de test suivis par git
 - **THEN** chacun figure dans la liste des fichiers vérifiés et dans la liste des tests collectés
+- **AND** aucun fichier JavaScript n'existe hors des `*.config.js` de la racine
 
 ### Requirement: Tests focalisés refusés
 Un test focalisé (`it.only`, `describe.only`) MUST faire échouer `pnpm test`, en local comme en CI, au lieu d'ignorer
@@ -105,9 +109,10 @@ couvre, et un script local ferait tourner deux configurations différentes.
 
 ### Requirement: Lint typé
 Le lint MUST utiliser les règles qui exigent les types (`no-unsafe-*`, `no-floating-promises`, `no-misused-promises`)
-sur tout fichier TypeScript, pour bloquer un `any` implicite et une promesse non gérée.
+sur tout fichier TypeScript, pour bloquer un `any` implicite et une promesse non gérée, y compris une promesse
+écartée par `void`.
 
 #### Scenario: Promesse flottante refusée
-<!-- openspec-guard:test="monorepo tooling > lint rejects a floating promise and an unsafe any from JSON.parse" -->
-- **WHEN** un fichier TypeScript appelle une fonction asynchrone sans gérer sa promesse, ou affecte le résultat de `JSON.parse` à une valeur typée
+<!-- openspec-guard:test="monorepo tooling > lint rejects a floating promise, a void-discarded promise and an unsafe any from JSON.parse" -->
+- **WHEN** un fichier TypeScript appelle une fonction asynchrone sans gérer sa promesse, écarte une promesse par `void`, ou affecte le résultat de `JSON.parse` à une valeur typée
 - **THEN** le lint signale une erreur

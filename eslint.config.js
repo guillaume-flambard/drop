@@ -18,10 +18,13 @@ export default defineConfig(
     },
     rules: {
       '@typescript-eslint/no-explicit-any': 'error',
+      // `void promise` must not silence an unhandled rejection.
+      '@typescript-eslint/no-floating-promises': ['error', { ignoreVoid: false }],
     },
   },
   {
-    files: ['**/*.{js,mjs,cjs}'],
+    // Only root tooling config may be JavaScript; product code is TypeScript (checked by test/tooling.test.ts).
+    files: ['*.config.js'],
     extends: [tseslint.configs.disableTypeChecked],
   },
 );
