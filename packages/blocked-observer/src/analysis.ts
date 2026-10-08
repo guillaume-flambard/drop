@@ -30,9 +30,20 @@ export interface Report {
   painMinutes: number;
   yesBlocks: number;
   yesPerActiveDay: number;
+  /** Median minutes lost per YES block that has pain_minutes; the go/no-go threshold (D24) reads it. */
+  medianPainMinutesYes: number | null;
 }
 
 const round = (value: number): number => Math.round(value * 100) / 100;
+
+function median(values: number[]): number | null {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 1
+    ? (sorted[middle] ?? null)
+    : round(((sorted[middle - 1] ?? 0) + (sorted[middle] ?? 0)) / 2);
+}
 
 /** "Jour actif" = a day with at least one Claude Code hook call or one Codex session (spec 02). */
 export function buildReport(events: ObservedEvent[], activity: Activity, sinceMs = 0): Report {
@@ -50,12 +61,16 @@ export function buildReport(events: ObservedEvent[], activity: Activity, sinceMs
   const byClassification: Report['byClassification'] = {};
   let painMinutes = 0;
   let yesBlocks = 0;
+  const yesPain: number[] = [];
   for (const event of inRange) {
     bySource[event.source] = (bySource[event.source] ?? 0) + 1;
     const key = event.classification ?? 'UNCLASSIFIED';
     byClassification[key] = (byClassification[key] ?? 0) + 1;
     painMinutes += event.pain_minutes ?? 0;
-    if (event.classification?.startsWith('YES_')) yesBlocks += 1;
+    if (event.classification?.startsWith('YES_')) {
+      yesBlocks += 1;
+      if (event.pain_minutes !== undefined) yesPain.push(event.pain_minutes);
+    }
   }
   return {
     activeDays,
@@ -66,6 +81,7 @@ export function buildReport(events: ObservedEvent[], activity: Activity, sinceMs
     painMinutes,
     yesBlocks,
     yesPerActiveDay: activeDays === 0 ? 0 : round(yesBlocks / activeDays),
+    medianPainMinutesYes: median(yesPain),
   };
 }
 
