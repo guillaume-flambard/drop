@@ -136,11 +136,12 @@ En v1, un redémarrage du relais SHALL entraîner la perte de la file d'attente 
 - **THEN** ces enveloppes sont perdues et ne sont pas livrées
 
 ### Requirement: Fichier de configuration du relais
-Le relais SHALL lire `relay.config.json` de la forme `{ port, allowedNodeIds: string[], maxQueuePerNode, rateLimitPerMinute }`.
+Le relais SHALL lire `relay.config.json` de la forme `{ port, allowedNodeIds: string[], maxQueuePerNode, rateLimitPerMinute, admittedPath?, maxAdmissionsPerSponsorPerDay? }`. Sans `admittedPath`, les admissions par invitation durent jusqu'au redémarrage.
 
 #### Scenario: Configuration chargée
+<!-- openspec-guard:test="relay > reads relay.config.json, with the admission settings optional" -->
 - **WHEN** le relais démarre avec un `relay.config.json` valide
-- **THEN** il écoute sur `port` et applique `allowedNodeIds`, `maxQueuePerNode` et `rateLimitPerMinute`
+- **THEN** il écoute sur `port` et applique `allowedNodeIds`, `maxQueuePerNode`, `rateLimitPerMinute` et, s'ils sont fournis, `admittedPath` et `maxAdmissionsPerSponsorPerDay`
 
 ### Requirement: Commande drop relay allow
 `drop relay allow <nodeId>` SHALL ajouter `nodeId` à `allowedNodeIds` en éditant `relay.config.json`. En v1, la prise en compte MUST nécessiter un redémarrage du relais.

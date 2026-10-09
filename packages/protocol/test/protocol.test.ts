@@ -23,6 +23,7 @@ import {
   verifyCard,
   verifyDetached,
   verifyReceipt,
+  type Admission,
   type CapabilityCard,
   type Envelope,
   type Identity,
@@ -229,6 +230,9 @@ describe('cards, receipts, invites, lifecycle, schemas', () => {
     expect(await verifyAdmission({ ...ticket, sponsor: bob.nodeId }, NOW)).toBe('bad_signature');
     expect(await verifyAdmission({ ...ticket, expiresAt: ticket.expiresAt + 1 }, NOW)).toBe('bad_signature');
     expect(await verifyAdmission({ v: 1 }, NOW)).toBe('invalid');
+    const forever = { ...ticket, expiresAt: NOW + 365 * ADMISSION_TTL_MS };
+    const longLived = { ...forever, sig: await signDetached(alice, canonical(omitSig(forever))) };
+    expect(await verifyAdmission(longLived, NOW)).toBe('too_long');
     const invite = createInvite(alice, 'wss://relay.example', NOW, ticket);
     expect(decodeInvite(encodeInvite(invite), NOW).admission).toEqual(ticket);
   });
@@ -272,4 +276,8 @@ async function sealRaw(sender: Identity, recipient: Identity, plain: string): Pr
     body: Buffer.from(body).toString('base64url'),
     sig: '',
   });
+}
+
+function omitSig({ v, sponsor, nonce, expiresAt }: Admission): Omit<Admission, 'sig'> {
+  return { v, sponsor, nonce, expiresAt };
 }
