@@ -83,6 +83,11 @@ Le Node MUST conserver au plus 16 384 identifiants reçus, sans contenu, pendant
 - **WHEN** un marqueur récent est perdu alors que le dossier et l'horloge existent encore
 - **THEN** le Node détecte l'écart avec l'empreinte durable et refuse toute nouvelle admission
 
+#### Scenario: AC: version anti-rejeu perdue
+<!-- openspec-guard:test="bounded received drops > fails closed if replay version and clock disappear while integrity remains" -->
+- **WHEN** le fichier de version manque alors que l'horloge ou l'empreinte indique un stockage déjà utilisé
+- **THEN** le Node refuse l'admission sans réinitialiser l'état anti-rejeu
+
 #### Scenario: AC: doublon d'une demande terminée
 <!-- openspec-guard:test="replay admission through the engine > answers a duplicate of a finished request with its recorded outcome" -->
 - **WHEN** le même demandeur renvoie une demande déjà refusée ou échouée
