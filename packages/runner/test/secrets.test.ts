@@ -51,6 +51,36 @@ describe('scanSecrets: each pattern detects', () => {
   });
 });
 
+describe('scanSecrets: the patterns named in the spec', () => {
+  it('flags a PEM private key header', () => {
+    expect(scanSecrets(`x\n${fake.pemPkcs8}\n`)).toContain('pem_private_key');
+  });
+
+  it('flags an Anthropic key', () => {
+    expect(scanSecrets(`token ${fake.anthropic}`)).toContain('anthropic_key');
+  });
+
+  it('flags GitHub, Slack and AWS tokens', () => {
+    expect(scanSecrets([fake.github, fake.slack, fake.aws])).toEqual(
+      expect.arrayContaining(['github_token', 'slack_token', 'aws_access_key']),
+    );
+  });
+
+  it('flags a JWT', () => {
+    expect(scanSecrets(`Bearer ${fake.jwt}`)).toContain('jwt');
+  });
+
+  it('flags a PASSWORD= assignment', () => {
+    expect(scanSecrets('PASSWORD=hunter2')).toContain('credential_assignment');
+  });
+
+  it('flags a string of more than 32 characters with an entropy above 4.5', () => {
+    expect(fake.highEntropy.length).toBeGreaterThan(32);
+    expect(shannonEntropy(fake.highEntropy)).toBeGreaterThan(ENTROPY_THRESHOLD);
+    expect(scanSecrets(`blob ${fake.highEntropy} end`)).toContain('high_entropy');
+  });
+});
+
 describe('scanSecrets: ordinary values stay clean', () => {
   const clean = [
     '2026-10-08T12:34:56.789Z',

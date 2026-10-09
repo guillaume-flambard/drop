@@ -12,6 +12,7 @@ import {
   type Identity,
 } from '@drop/protocol';
 import {
+  allowNode,
   RelayClient,
   readRelayConfig,
   revokeNode,
@@ -330,5 +331,166 @@ describe('relay', () => {
     const third = client(relay, c, await createAdmission(julie));
     await until(() => third.statuses.includes('unauthorized'));
     expect(logs).toContainEqual(expect.objectContaining({ event: 'admission', outcome: 'global_quota' }));
+  });
+});
+
+/** Authenticates by hand on a raw socket, to send frames the regular client would refuse to build. */
+function rawAuthed(relay: RelayHandle, identity: Identity, options: { autoPong?: boolean } = {}) {
+  const socket = new WebSocket(relay.url, { autoPong: options.autoPong ?? true });
+  const frames: { type: string; [key: string]: unknown }[] = [];
+  const closed = new Promise<number>((resolve) => {
+    socket.on('close', (code) => {
+      resolve(code);
+    });
+  });
+  const ready = new Promise<void>((resolve, reject) => {
+    socket.on('message', (data) => {
+      const frame = JSON.parse(Buffer.isBuffer(data) ? data.toString('utf8') : '{}') as {
+        type: string;
+        challenge?: string;
+      };
+      frames.push(frame);
+      if (frame.type === 'challenge')
+        void signDetached(identity, frame.challenge ?? '').then((sig) => {
+          socket.send(JSON.stringify({ type: 'auth', nodeId: identity.nodeId, sig }));
+        }, reject);
+      if (frame.type === 'ready') resolve();
+    });
+  });
+  cleanups.push(() => {
+    socket.terminate();
+  });
+  return { socket, frames, ready, closed };
+}
+
+describe('relay contract', () => {
+  it('opens every connection with a 32-byte challenge', async () => {
+    const alice = await generateIdentity('Alice');
+    const { relay } = await relayFor([alice]);
+    const first = await new Promise<{ type: string; challenge: string }>((resolve) => {
+      const socket = new WebSocket(relay.url);
+      cleanups.push(() => {
+        socket.terminate();
+      });
+      socket.once('message', (data) => {
+        resolve(
+          JSON.parse(Buffer.isBuffer(data) ? data.toString('utf8') : '{}') as { type: string; challenge: string },
+        );
+      });
+    });
+    expect(first.type).toBe('challenge');
+    expect(first.challenge).toMatch(/^[A-Za-z0-9_-]+$/);
+    expect(Buffer.from(first.challenge, 'base64url')).toHaveLength(32);
+  });
+
+  it('refuses an envelope that breaks the schema, and routes one whose body it cannot read, unchanged', async () => {
+    const alice = await generateIdentity('Alice');
+    const bob = await generateIdentity('Bob');
+    const { relay, logs } = await relayFor([alice, bob]);
+    const a = rawAuthed(relay, alice);
+    const b = client(relay, bob);
+    await Promise.all([a.ready, b.instance.waitReady()]);
+    a.socket.send(JSON.stringify({ type: 'envelope', envelope: { to: bob.nodeId, body: 'x' } }));
+    await until(() => a.frames.some((frame) => frame.type === 'error' && frame.error === 'E_SCHEMA'));
+    expect(b.received).toEqual([]);
+    // The relay holds no key: a body that is not even a sealed box goes through untouched.
+    const valid = await sealEnvelope(alice, bob.nodeId, { type: 'catalog_request' });
+    const opaque = { ...valid, body: Buffer.from('not a sealed box at all').toString('base64url') };
+    a.socket.send(JSON.stringify({ type: 'envelope', envelope: opaque }));
+    await until(() => b.received.length === 1);
+    expect(b.received[0]).toEqual(opaque);
+    expect(logs).toContainEqual(
+      expect.objectContaining({ event: 'envelope', outcome: 'E_SCHEMA', nodeId: alice.nodeId }),
+    );
+  });
+
+  it('logs the id, from, to, size and outcome of each envelope, and keeps no copy once delivered', async () => {
+    const alice = await generateIdentity('Alice');
+    const bob = await generateIdentity('Bob');
+    const { relay, logs } = await relayFor([alice, bob]);
+    const a = client(relay, alice);
+    const b = client(relay, bob);
+    await Promise.all([a.instance.waitReady(), b.instance.waitReady()]);
+    const envelope = await sealEnvelope(alice, bob.nodeId, { type: 'catalog_request' });
+    expect(await a.instance.send(envelope)).toBe('delivered');
+    expect(logs).toContainEqual({
+      event: 'envelope',
+      outcome: 'delivered',
+      id: envelope.id,
+      from: alice.nodeId,
+      to: bob.nodeId,
+      size: expect.any(Number) as number,
+    });
+    // Bob comes back: nothing is delivered twice, the relay kept nothing.
+    b.instance.close();
+    const again = client(relay, bob);
+    await again.instance.waitReady();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(again.received).toEqual([]);
+  });
+
+  it('caps the queue of an offline node at maxQueuePerNode', async () => {
+    const alice = await generateIdentity('Alice');
+    const bob = await generateIdentity('Bob');
+    const relay = await startRelay(
+      { port: 0, allowedNodeIds: [alice.nodeId, bob.nodeId], maxQueuePerNode: 3, rateLimitPerMinute: 100 },
+      { logger: () => undefined },
+    );
+    cleanups.push(() => relay.close());
+    const a = client(relay, alice);
+    await a.instance.waitReady();
+    const outcomes: string[] = [];
+    for (let index = 0; index < 4; index += 1)
+      outcomes.push(await a.instance.send(await sealEnvelope(alice, bob.nodeId, { type: 'catalog_request' })));
+    expect(outcomes).toEqual(['queued', 'queued', 'queued', 'E_QUEUE_FULL']);
+    const b = client(relay, bob);
+    await until(() => b.received.length === 3);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(b.received).toHaveLength(3);
+  });
+
+  it('loses its queue when it restarts, as v1 assumes', async () => {
+    const alice = await generateIdentity('Alice');
+    const bob = await generateIdentity('Bob');
+    const first = await startRelay(
+      { port: 0, allowedNodeIds: [alice.nodeId, bob.nodeId] },
+      { logger: () => undefined },
+    );
+    const a = client(first, alice);
+    await a.instance.waitReady();
+    expect(await a.instance.send(await sealEnvelope(alice, bob.nodeId, { type: 'catalog_request' }))).toBe('queued');
+    const port = first.port;
+    await first.close();
+    const second = await startRelay({ port, allowedNodeIds: [alice.nodeId, bob.nodeId] }, { logger: () => undefined });
+    cleanups.push(() => second.close());
+    const b = client(second, bob);
+    await b.instance.waitReady();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(b.received).toEqual([]);
+  });
+
+  it('closes a node that misses two pings', async () => {
+    const alice = await generateIdentity('Alice');
+    const relay = await startRelay(
+      { port: 0, allowedNodeIds: [alice.nodeId] },
+      { logger: () => undefined, pingIntervalMs: 20 },
+    );
+    cleanups.push(() => relay.close());
+    const mute = rawAuthed(relay, alice, { autoPong: false });
+    await mute.ready;
+    expect(await mute.closed).toBeGreaterThan(0);
+  });
+
+  it('drop-relay allow adds a node to relay.config.json, which a restart applies', async () => {
+    const alice = await generateIdentity('Alice');
+    const dir = mkdtempSync(join(tmpdir(), 'relay-allow-'));
+    const configPath = join(dir, 'relay.config.json');
+    writeFileSync(configPath, JSON.stringify({ port: 0, allowedNodeIds: [] }));
+    expect(allowNode(configPath, alice.nodeId)).toBe(true);
+    expect(allowNode(configPath, alice.nodeId)).toBe(false);
+    expect(readRelayConfig(configPath).allowedNodeIds).toEqual([alice.nodeId]);
+    const relay = await startRelay(readRelayConfig(configPath), { logger: () => undefined });
+    cleanups.push(() => relay.close());
+    await client(relay, alice).instance.waitReady();
   });
 });
