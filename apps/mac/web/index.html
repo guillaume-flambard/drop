@@ -148,6 +148,10 @@
           'Le moteur local ne répond pas dans le délai prévu. Vérifie la configuration, puis réessaie.',
         ],
         E_TOKEN: ['Panneau inaccessible', 'Le jeton local manque. Vérifie les droits du dossier drop, puis réessaie.'],
+        E_PANEL: [
+          'Panneau inaccessible',
+          'La fenêtre de drop ne s’ouvre pas. Quitte puis rouvre l’app ; si le problème persiste, réinstalle un paquet vérifié.',
+        ],
         E_RESTART: ['Moteur arrêté', 'La reprise automatique a échoué. Vérifie le journal local, puis réessaie.'],
       };
       const code = new URLSearchParams(location.search).get('state');
