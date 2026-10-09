@@ -1,7 +1,7 @@
 ## MODIFIED Requirements
 
 ### Requirement: Demandes reçues persistantes
-Le Node MUST conserver au plus 16 384 identifiants de demandes reçues, sans leur contenu, pendant 30 minutes, avec un horodatage durable empêchant leur rejeu après redémarrage ou recul d'horloge. Il MUST refuser avant consentement les UUIDv7 trop vieux (>30 min) ou futurs (>5 min), les doublons et toute admission dont le stockage est saturé, verrouillé, illisible ou non durable. Une demande interrompue nécessite un nouvel identifiant et un nouvel accord.
+Le Node MUST conserver au plus 16 384 identifiants reçus, sans contenu, pendant 30 minutes. Une horloge et une empreinte des marqueurs durables MUST empêcher leur rejeu après redémarrage, recul d'horloge ou perte partielle. Le Node MUST refuser avant accord les UUIDv7 vieux (>30 min) ou futurs (>5 min), les doublons et les admissions dont le stockage est saturé, verrouillé, illisible, incomplet ou non durable. Une demande interrompue exige un nouvel identifiant et un nouvel accord.
 
 #### Scenario: AC: ancien consentement après redémarrage
 <!-- openspec-guard:test="private restart > rejects a previously received drop after restart before any consent can be reused" -->
@@ -77,6 +77,11 @@ Le Node MUST conserver au plus 16 384 identifiants de demandes reçues, sans leu
 <!-- openspec-guard:test="bounded received drops > fails closed if the marker directory disappears after a durable claim" -->
 - **WHEN** le dossier des marqueurs manque après une première admission T3.1b
 - **THEN** le Node refuse toute nouvelle admission sans recréer ce dossier
+
+#### Scenario: AC: marqueur anti-rejeu isolé perdu
+<!-- openspec-guard:test="bounded received drops > fails closed if one recent marker disappears while the directory remains" -->
+- **WHEN** un marqueur récent est perdu alors que le dossier et l'horloge existent encore
+- **THEN** le Node détecte l'écart avec l'empreinte durable et refuse toute nouvelle admission
 
 #### Scenario: AC: doublon d'une demande terminée
 <!-- openspec-guard:test="replay admission through the engine > answers a duplicate of a finished request with its recorded outcome" -->

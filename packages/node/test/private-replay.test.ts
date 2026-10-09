@@ -29,6 +29,12 @@ function fillMarkers(root: string, at: number, count: number): void {
   }
 }
 
+/** Replays a pre-integrity T3.1b home when testing the one-time version-1 migration. */
+function asVersion1ReplayHome(root: string): void {
+  unlinkSync(join(root, 'received-drops-integrity'));
+  writeFileSync(join(root, 'received-drops-version'), '1\n');
+}
+
 /** One owner node on a real DropHome, a paired requester, and every reply and log line captured. */
 async function ownerNode(root: string, now = NOW) {
   const clock = { now };
@@ -192,6 +198,7 @@ describe('bounded received drops', () => {
       expect(home.claimDrop(uuidv7(NOW), NOW)).toBe('claimed');
       const dropId = uuidv7(NOW);
       writeFileSync(join(root, 'received-drops', dropId.toUpperCase()), '');
+      asVersion1ReplayHome(root);
       expect(home.claimDrop(dropId, NOW)).toBe('duplicate');
       expect(readdirSync(join(root, 'received-drops'))).toContain(dropId);
       expect(readdirSync(join(root, 'received-drops'))).not.toContain(dropId.toUpperCase());
@@ -207,6 +214,7 @@ describe('bounded received drops', () => {
       expect(home.claimDrop(uuidv7(NOW), NOW)).toBe('claimed');
       const legacy = '550e8400-e29b-41d4-a716-446655440000';
       writeFileSync(join(root, 'received-drops', legacy), '');
+      asVersion1ReplayHome(root);
       expect(home.claimDrop(uuidv7(NOW + 1), NOW + 1)).toBe('claimed');
       expect(readdirSync(join(root, 'received-drops'))).not.toContain(legacy);
     } finally {
@@ -225,6 +233,7 @@ describe('bounded received drops', () => {
         const suffix = index.toString(16).padStart(12, '0');
         writeFileSync(join(dir, `${prefix}${suffix}`), '');
       }
+      asVersion1ReplayHome(root);
       expect(home.claimDrop(uuidv7(NOW), NOW)).toBe('capacity');
       expect(readdirSync(dir)).toHaveLength(MAX_RECEIVED_DROPS);
       const later = NOW + 31 * 60_000;
@@ -242,6 +251,7 @@ describe('bounded received drops', () => {
       expect(home.claimDrop(uuidv7(NOW), NOW)).toBe('claimed');
       const legacy = ['00000000-0000-0000-0000-000000000000', 'FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF'];
       for (const name of legacy) writeFileSync(join(root, 'received-drops', name), '');
+      asVersion1ReplayHome(root);
       expect(home.claimDrop(uuidv7(NOW + 1), NOW + 1)).toBe('claimed');
       for (const name of legacy) expect(readdirSync(join(root, 'received-drops'))).not.toContain(name);
     } finally {
@@ -274,6 +284,19 @@ describe('bounded received drops', () => {
       expect(home.claimDrop(dropId, NOW)).toBe('claimed');
       rmSync(join(root, 'received-drops'), { recursive: true });
       expect(() => new DropHome(root).claimDrop(dropId, NOW)).toThrow('E_REPLAY_STATE missing markers');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('fails closed if one recent marker disappears while the directory remains', () => {
+    const root = mkdtempSync(join(tmpdir(), 'drop-replay-missing-marker-'));
+    try {
+      const home = new DropHome(root);
+      const dropId = uuidv7(NOW);
+      expect(home.claimDrop(dropId, NOW)).toBe('claimed');
+      unlinkSync(join(root, 'received-drops', dropId));
+      expect(() => new DropHome(root).claimDrop(dropId, NOW)).toThrow('E_REPLAY_STATE marker integrity');
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

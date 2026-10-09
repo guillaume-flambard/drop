@@ -26,7 +26,7 @@ Quitter drop avant de remplacer l'app. Faire une sauvegarde **cohérente** du do
 
 ## Retour arrière
 
-Une simple réinstallation de l'ancien `.app` ne suffit pas toujours : les migrations de stockage peuvent rendre l'état local incompatible avec une ancienne version. Suivre [la procédure de persistance et de retour arrière du profil privé](PRIVATE_PROFILE.md), notamment les marqueurs anti-rejeu de T3.1b. Si des demandes ont été reçues depuis la mise à jour, ne pas redémarrer une ancienne version avec la même identité sans restaurer un instantané complet et cohérent pris avant ces demandes, ou créer une nouvelle identité et réappairer les pairs. Tester ce chemin avant toute distribution large.
+Une simple réinstallation de l'ancien `.app` ne suffit pas toujours : les migrations de stockage peuvent rendre l'état local incompatible avec une ancienne version. Suivre [la procédure de persistance et de retour arrière du profil privé](PRIVATE_PROFILE.md), notamment les marqueurs anti-rejeu de T3.1b. Après toute demande reçue par T3.1b, ne pas redémarrer une ancienne version avec la même identité : créer une nouvelle identité et réappairer les pairs. Un instantané avec la même identité n'est admissible que s'il précède toute admission T3.1b et qu'aucune demande n'a été reçue depuis. Tester ce chemin avant toute distribution large.
 
 ## Recette manuelle T3.4
 
