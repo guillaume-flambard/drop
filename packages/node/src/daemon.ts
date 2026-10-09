@@ -1,11 +1,19 @@
-import { capabilities } from '@drop/capabilities';
+import {
+  capabilities,
+  connectMcp,
+  createMcpAnswer,
+  findAgentServer,
+  mcpAnswer,
+  type ConnectOptions,
+} from '@drop/capabilities';
 import { NodeIdSchema } from '@drop/protocol';
 import { RelayClient } from '@drop/relay';
 import { NodeEngine, type InboxItem } from './engine.ts';
 import { detectAgents } from './detect.ts';
 import { openRouterFunder } from './funding.ts';
 import { install } from './install.ts';
-import { isAgentKind, shareDetected } from './share.ts';
+import { isAgentKind, ShareError, shareDetected } from './share.ts';
+import { OAuthSignIns, oauthRedirect, oauthStore, openInBrowser, runtimeOAuth } from './oauth.ts';
 import { runAgentCall } from './assistant.ts';
 import { startLocalApi, type LocalApi } from './api.ts';
 import type { DropHome } from './home.ts';
@@ -34,11 +42,18 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
   const log = options.log ?? ((line: string) => process.stderr.write(`${line}\n`));
   // The engine is built before the relay client that delivers to it; the transport reads the client lazily.
   const link: { relay?: RelayClient; apiPort?: number } = {};
+  // OAuth sign-ins to remote MCP servers (T2.17): the browser comes back to this node's API, on its bound port.
+  const redirectUrl = () => oauthRedirect(link.apiPort ?? config.apiPort);
+  const store = oauthStore(home);
+  const signIns = new OAuthSignIns({ store, redirectUrl });
+  const oauth: ConnectOptions = { oauth: (serverUrl) => runtimeOAuth(store, redirectUrl())(serverUrl) };
   const engine = new NodeEngine({
     identity,
     ownerKind: config.ownerKind,
     store: home,
-    capabilities,
+    capabilities: capabilities.map((impl) =>
+      impl === mcpAnswer ? createMcpAnswer({ connect: (server) => connectMcp(server, process.env, oauth) }) : impl,
+    ),
     transport: { send: (envelope) => (link.relay ? link.relay.send(envelope) : Promise.resolve('offline')) },
     log: (entry) => {
       log(JSON.stringify({ at: new Date().toISOString(), ...entry }));
@@ -113,7 +128,11 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
       },
       share: async (body) => {
         if (!isAgentKind(body.agent)) throw new Error(`unknown agent ${body.agent}`);
-        return shareDetected(home, { agent: body.agent, server: body.server, label: body.label, tools: body.tools });
+        return shareDetected(
+          home,
+          { agent: body.agent, server: body.server, label: body.label, tools: body.tools },
+          oauth,
+        );
       },
       unshare: (capabilityId) => home.unpublish(capabilityId),
       install: (agent, remove) => {
@@ -127,7 +146,20 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
         return { ok: true, trusted: config.gateways.includes(gateway) };
       },
       unlink: (gateway, client) => engine.unlinkAssistant(NodeIdSchema.parse(gateway), client),
+      connect: async (agent, server) => {
+        if (!isAgentKind(agent)) throw new Error(`unknown agent ${agent}`);
+        const declared = findAgentServer(agent, server);
+        if (declared?.transport !== 'http' || !declared.url)
+          throw new ShareError(`${server} n’est pas un serveur en ligne : il n’y a rien à connecter.`);
+        if (Object.keys(declared.headers).some((name) => name.toLowerCase() === 'authorization'))
+          throw new ShareError(`${server} a déjà un jeton dans sa configuration : drop l’utilise.`);
+        const started = await signIns.start(declared.url);
+        if (started.connected) return { connected: true };
+        openInBrowser(started.authorizationUrl);
+        return { authorizationUrl: started.authorizationUrl };
+      },
     },
+    oauthCallback: (state, code) => signIns.complete(state, code),
     refreshCatalogs: async () => {
       await engine.refreshCatalogs();
       await new Promise((resolve) => setTimeout(resolve, 1500));
