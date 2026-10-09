@@ -22,6 +22,7 @@ const sourceFiles: Record<string, string> = {
   'downloads/OPEN_SOURCE.md': 'docs/OPEN_SOURCE.md',
   'downloads/ACCEPTANCE.md': 'docs/ACCEPTANCE.md',
   'downloads/PRIVATE_PROFILE.md': 'docs/PRIVATE_PROFILE.md',
+  'downloads/HERMES.md': 'docs/HERMES.md',
 };
 const contentTypes: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',

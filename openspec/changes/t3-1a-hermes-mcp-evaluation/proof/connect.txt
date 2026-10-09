@@ -1,0 +1,166 @@
+26    +++ exited with 0 +++
+19    connect(19, {sa_family=AF_INET, sin_port=htons(39801), sin_addr=inet_addr("127.0.0.1")}, 16) = -1 EINPROGRESS (Operation now in progress)
+19    connect(22, {sa_family=AF_INET, sin_port=htons(39801), sin_addr=inet_addr("127.0.0.1")}, 16) = -1 EINPROGRESS (Operation now in progress)
+27    +++ exited with 0 +++
+18    --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=27, si_uid=0, si_status=0, si_utime=0, si_stime=0} ---
+28    +++ exited with 0 +++
+18    --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=28, si_uid=0, si_status=0, si_utime=0, si_stime=0} ---
+29    +++ exited with 0 +++
+18    --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=29, si_uid=0, si_status=0, si_utime=0, si_stime=0} ---
+34    +++ exited with 0 +++
+44    +++ exited with 0 +++
+48    +++ exited with 0 +++
+46    +++ exited with 0 +++
+50    +++ exited with 0 +++
+49    +++ exited with 0 +++
+36    +++ exited with 0 +++
+42    +++ exited with 0 +++
+47    +++ exited with 0 +++
+45    +++ exited with 0 +++
+43    +++ exited with 0 +++
+37    +++ exited with 0 +++
+35    +++ exited with 0 +++
+38    +++ exited with 0 +++
+41    +++ exited with 0 +++
+32    +++ exited with 0 +++
+40    +++ exited with 0 +++
+33    +++ exited with 0 +++
+31    +++ exited with 0 +++
+39    +++ exited with 0 +++
+30    +++ killed by SIGKILL +++
+18    --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_KILLED, si_pid=30, si_uid=0, si_status=SIGKILL, si_utime=35 /* 0.35 s */, si_stime=376 /* 3.76 s */} ---
+51    +++ exited with 0 +++
+18    --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=51, si_uid=0, si_status=0, si_utime=0, si_stime=0} ---
+52    +++ exited with 128 +++
+18    --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=52, si_uid=0, si_status=128, si_utime=0, si_stime=0} ---
+53    +++ exited with 0 +++
+18    --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=53, si_uid=0, si_status=0, si_utime=0, si_stime=0} ---
+54    +++ exited with 0 +++
+55    +++ exited with 0 +++
+56    +++ exited with 0 +++
+57    +++ exited with 0 +++
+58    +++ exited with 0 +++
+59    +++ exited with 0 +++
+60    +++ exited with 0 +++
+61    +++ exited with 0 +++
+62    +++ exited with 0 +++
+63    +++ exited with 0 +++
+64    +++ exited with 0 +++
+65    +++ exited with 0 +++
+66    +++ exited with 0 +++
+67    +++ exited with 0 +++
+68    +++ exited with 0 +++
+69    +++ exited with 0 +++
+70    +++ exited with 0 +++
+71    +++ exited with 0 +++
+72    +++ exited with 0 +++
+73    +++ exited with 0 +++
+74    +++ exited with 0 +++
+75    +++ exited with 0 +++
+76    +++ exited with 0 +++
+77    +++ exited with 0 +++
+78    +++ exited with 0 +++
+79    +++ exited with 0 +++
+80    +++ exited with 0 +++
+81    +++ exited with 0 +++
+82    +++ exited with 0 +++
+83    +++ exited with 0 +++
+95    +++ exited with 0 +++
+87    connect(18, {sa_family=AF_INET, sin_port=htons(41551), sin_addr=inet_addr("127.0.0.1")}, 16) = -1 EINPROGRESS (Operation now in progress)
+87    connect(19, {sa_family=AF_INET, sin_port=htons(41551), sin_addr=inet_addr("127.0.0.1")}, 16) = -1 EINPROGRESS (Operation now in progress)
+18    connect(15, {sa_family=AF_UNIX, sun_path="/var/run/nscd/socket"}, 110) = -1 ENOENT (No such file or directory)
+18    connect(15, {sa_family=AF_UNIX, sun_path="/var/run/nscd/socket"}, 110) = -1 ENOENT (No such file or directory)
+101   +++ exited with 0 +++
+18    connect(21, {sa_family=AF_INET, sin_port=htons(11435), sin_addr=inet_addr("127.0.0.1")}, 16) = -1 EINPROGRESS (Operation now in progress)
+18    connect(21, {sa_family=AF_INET, sin_port=htons(11435), sin_addr=inet_addr("127.0.0.1")}, 16 <unfinished ...>
+105   +++ exited with 0 +++
+18    <... connect resumed>)            = -1 EINPROGRESS (Operation now in progress)
+106   +++ exited with 0 +++
+18    connect(21, {sa_family=AF_INET, sin_port=htons(11435), sin_addr=inet_addr("127.0.0.1")}, 16) = -1 EINPROGRESS (Operation now in progress)
+18    connect(21, {sa_family=AF_INET, sin_port=htons(11435), sin_addr=inet_addr("127.0.0.1")}, 16 <unfinished ...>
+107   +++ exited with 0 +++
+18    <... connect resumed>)            = -1 EINPROGRESS (Operation now in progress)
+18    connect(21, {sa_family=AF_INET, sin_port=htons(11435), sin_addr=inet_addr("127.0.0.1")}, 16) = -1 EINPROGRESS (Operation now in progress)
+108   +++ exited with 0 +++
+109   +++ exited with 0 +++
+104   +++ exited with 0 +++
+103   --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=104, si_uid=0, si_status=0, si_utime=2 /* 0.02 s */, si_stime=2 /* 0.02 s */} ---
+18    connect(21, {sa_family=AF_INET, sin_port=htons(11435), sin_addr=inet_addr("127.0.0.1")}, 16) = -1 EINPROGRESS (Operation now in progress)
+110   +++ exited with 0 +++
+18    connect(21, {sa_family=AF_INET, sin_port=htons(11435), sin_addr=inet_addr("127.0.0.1")}, 16) = -1 EINPROGRESS (Operation now in progress)
+111   +++ exited with 0 +++
+18    connect(21, {sa_family=AF_INET, sin_port=htons(11435), sin_addr=inet_addr("127.0.0.1")}, 16) = -1 EINPROGRESS (Operation now in progress)
+113   +++ exited with 0 +++
+18    connect(21, {sa_family=AF_INET, sin_port=htons(11435), sin_addr=inet_addr("127.0.0.1")}, 16) = -1 EINPROGRESS (Operation now in progress)
+114   +++ exited with 0 +++
+112   +++ exited with 0 +++
+103   --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=112, si_uid=0, si_status=0, si_utime=3 /* 0.03 s */, si_stime=2 /* 0.02 s */} ---
+115   +++ exited with 0 +++
+103   --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=115, si_uid=0, si_status=0, si_utime=12 /* 0.12 s */, si_stime=5 /* 0.05 s */} ---
+129   +++ exited with 0 +++
+103   --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=129, si_uid=0, si_status=0, si_utime=14 /* 0.14 s */, si_stime=5 /* 0.05 s */} ---
+130   +++ exited with 0 +++
+103   --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=130, si_uid=0, si_status=0, si_utime=3 /* 0.03 s */, si_stime=2 /* 0.02 s */} ---
+103   +++ exited with 0 +++
+132   +++ exited with 0 +++
+131   --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=132, si_uid=0, si_status=0, si_utime=0, si_stime=0} ---
+131   connect(19, {sa_family=AF_INET, sin_port=htons(11435), sin_addr=inet_addr("127.0.0.1")}, 16) = -1 EINPROGRESS (Operation now in progress)
+133   +++ exited with 0 +++
+131   +++ exited with 0 +++
+87    connect(18, {sa_family=AF_INET, sin_port=htons(41551), sin_addr=inet_addr("127.0.0.1")}, 16) = -1 EINPROGRESS (Operation now in progress)
+135   +++ exited with 0 +++
+134   +++ exited with 0 +++
+136   connect(19, {sa_family=AF_INET, sin_port=htons(11435), sin_addr=inet_addr("127.0.0.1")}, 16) = -1 EINPROGRESS (Operation now in progress)
+137   +++ exited with 0 +++
+136   +++ exited with 0 +++
+138   connect(19, {sa_family=AF_INET, sin_port=htons(11435), sin_addr=inet_addr("127.0.0.1")}, 16) = -1 EINPROGRESS (Operation now in progress)
+139   +++ exited with 0 +++
+140   connect(20, {sa_family=AF_INET, sin_port=htons(11435), sin_addr=inet_addr("127.0.0.1")}, 16) = -1 EINPROGRESS (Operation now in progress)
+141   +++ exited with 0 +++
+140   +++ exited with 0 +++
+138   +++ exited with 0 +++
+100   +++ exited with 0 +++
+92    +++ exited with 0 +++
+91    +++ exited with 0 +++
+90    +++ exited with 0 +++
+89    +++ exited with 0 +++
+88    +++ exited with 0 +++
+93    +++ exited with 0 +++
+87    +++ exited with 0 +++
+84    --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=87, si_uid=0, si_status=0, si_utime=21 /* 0.21 s */, si_stime=9 /* 0.09 s */} ---
+86    +++ exited with 0 +++
+94    +++ exited with 0 +++
+84    --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=94, si_uid=0, si_status=0, si_utime=4 /* 0.04 s */, si_stime=2 /* 0.02 s */} ---
+84    +++ exited with 0 +++
+85    +++ exited with 0 +++
+127   +++ exited with 0 +++
+98    +++ killed by SIGKILL +++
+99    +++ killed by SIGKILL +++
+96    +++ killed by SIGKILL +++
+25    +++ killed by SIGKILL +++
+24    +++ killed by SIGKILL +++
+22    +++ killed by SIGKILL +++
+21    +++ killed by SIGKILL +++
+97    +++ killed by SIGKILL +++
+20    +++ killed by SIGKILL +++
+23    +++ killed by SIGKILL +++
+19    +++ killed by SIGKILL +++
+18    --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_KILLED, si_pid=19, si_uid=0, si_status=SIGKILL, si_utime=38 /* 0.38 s */, si_stime=15 /* 0.15 s */} ---
+142   +++ exited with 0 +++
+144   +++ exited with 0 +++
+102   +++ exited with 0 +++
+143   +++ exited with 0 +++
+126   +++ exited with 0 +++
+124   +++ exited with 0 +++
+123   +++ exited with 0 +++
+122   +++ exited with 0 +++
+121   +++ exited with 0 +++
+119   +++ exited with 0 +++
+145   +++ exited with 0 +++
+128   +++ exited with 0 +++
+125   +++ exited with 0 +++
+120   +++ exited with 0 +++
+118   +++ exited with 0 +++
+117   +++ exited with 0 +++
+116   +++ exited with 0 +++
+18    +++ exited with 0 +++
