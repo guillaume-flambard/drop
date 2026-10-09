@@ -277,6 +277,19 @@ Format : `D<n> — date — décision — raison`. Les agents ajoutent ici toute
   et `agent_call` : passerelle et Nodes se mettent à jour ensemble, ce qui convient tant que la passerelle n'est pas
   ouverte au public. Les adresses de retour de Claude et ChatGPT sont à revérifier dans leur aide officielle au
   premier essai réel.
+- **D37** — Site public (2026-10-09, T2.6, choix de Guillaume). Trois pages s'ajoutent au site de T2.6a :
+  « Démarrer en 5 minutes », « Cas d'usage », « Sécurité » ; l'accueil gagne la démo réelle en trois captures et une
+  section d'installation. Tant que l'app n'est pas notarisée (T2.4) et que npm est bloqué (T2.11), `site/site.json`
+  est en `beta` : un accès sur invitation, aucun lien de téléchargement ; passer à `open` affiche l'app Mac, le
+  `.mcpb` et les guides, sans autre changement. `contact` reste vide tant que Guillaume n'a pas choisi l'adresse à
+  publier. Le site est servi par l'image drop (`node scripts/site.ts serve`, rendu en mémoire, aucune écriture),
+  sur l'hôte public seulement, avec HSTS et la politique de contenu sans script ; il sert aussi les fichiers de
+  mise à jour de l'app (D35) depuis `SITE_RELEASES_DIR`, par nom exact. Hors de ce dépôt, dans
+  `lab-infra/stacks/drop` : un service `drop-site` (même image, cette commande, le dossier des releases en volume)
+  et les routes Traefik de `drop.memolabs.dev` : `/v1` et `/health` vers le relais ; `/oauth`, `/mcp`,
+  `/.well-known/oauth-*` et `/gateway` vers la passerelle ; tout le reste vers le site. La vidéo n'est pas tournée :
+  l'accueil montre les captures de la démo du 8 octobre et l'annonce pour les premiers essais (T2.7). Les exports
+  Markdown pointent vers le dépôt, qui est privé : à revoir avant la mise en ligne.
 
 ## À décider par l'humain
 

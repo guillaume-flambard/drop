@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Ce que drop protège et comment : chiffrement de bout en bout, consentement à chaque demande, outils fixés avant le modèle, sorties contrôlées. Et ses limites."
+    />
+    <meta name="theme-color" content="#2548ed" />
+    <title>Sécurité · drop</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#contenu">Aller au contenu</a>
+    <header class="site-header">
+      <div class="wrap header-inner">
+        <a class="logo" href="index.html" aria-label="drop, accueil"
+          ><img src="favicon.svg" width="34" height="34" alt="" />drop</a
+        >
+        <nav class="nav" aria-label="Navigation principale">
+          <a href="demarrer.html">Démarrer</a><a class="desktop-link" href="cas.html">Cas d'usage</a
+          ><a class="desktop-link" href="securite.html" aria-current="page">Sécurité</a><a href="guide.html">Le guide</a
+          ><a href="avancement.html">Avancement</a><span class="header-note">Un projet Memo Labs</span>
+        </nav>
+      </div>
+    </header>
+    <main id="contenu" class="wrap">
+      <div class="page-title">
+        <span class="pill">Sécurité</span>
+        <h1>Partager une réponse<br />reste une décision.</h1>
+        <p>Ce que drop protège, comment, et ce qu'il ne protège pas. Sans jargon, mais sans rien cacher.</p>
+      </div>
+      <div class="doc-layout">
+        <nav class="toc" aria-label="Sommaire">
+          <a href="#principe">Le principe</a><a href="#chiffrement">Chiffrement</a
+          ><a href="#consentement">Consentement</a><a href="#outils">Outils fixés</a
+          ><a href="#sorties">Sorties contrôlées</a><a href="#cles">Vos clés</a
+          ><a href="#assistants">Claude et ChatGPT</a><a href="#modele">Le modèle</a><a href="#limites">Les limites</a>
+        </nav>
+        <article class="article">
+          <section id="principe">
+            <h2>La réponse, pas l'accès.</h2>
+            <p>
+              Personne ne reçoit d'accès aux outils d'un autre. Une demande précise traverse, son propriétaire décide,
+              et seul le résultat qu'il a autorisé revient. Tout ce qui suit sert cette règle.
+            </p>
+          </section>
+          <section id="chiffrement">
+            <h2>Chiffré de bout en bout.</h2>
+            <p>
+              Chaque Node a sa paire de clés. Les messages sont signés (Ed25519) et chiffrés pour leur destinataire
+              (X25519). Le relais les transporte sans pouvoir les lire ; il voit l'expéditeur, le destinataire, la
+              taille et l'heure. Un message ne vit pas plus de 15 minutes et ne peut pas être rejoué.
+            </p>
+          </section>
+          <section id="consentement">
+            <h2>Chaque demande est une décision.</h2>
+            <p>
+              La carte de consentement dit qui demande, pourquoi, ce qu'il recevra et ce qu'il ne recevra jamais, le
+              coût et l'expiration. Sans décision en 10 minutes, la demande expire. Pour une capacité sensible, le
+              propriétaire relit la réponse et peut en retirer des champs avant l'envoi.
+            </p>
+          </section>
+          <section id="outils">
+            <h2>Les outils sont fixés avant le modèle.</h2>
+            <p>
+              Ce qu'un modèle peut utiliser est fixé par la capacité au moment où le propriétaire la publie : par
+              exemple deux outils en lecture de son Figma. La question du demandeur est traitée comme une donnée, jamais
+              comme une instruction, et ne peut pas ajouter d'outil. Les fichiers d'un dépôt se lisent dans une copie,
+              selon une liste de chemins autorisés.
+            </p>
+          </section>
+          <section id="sorties">
+            <h2>Chaque sortie est contrôlée.</h2>
+            <p>
+              Une réponse doit respecter la forme annoncée sur la carte ; sinon elle est rejetée, pas corrigée. Elle
+              passe ensuite par un détecteur de secrets (clés, jetons, mots de passe).
+            </p>
+          </section>
+          <section id="cles">
+            <h2>Les clés restent sur votre Mac.</h2>
+            <p>
+              Votre identité vit dans <code>~/.drop</code>, lisible par vous seul. Le Node n'écoute que sur votre propre
+              machine, derrière un jeton ; il se connecte au relais en sortie. Les reçus et les journaux gardent des
+              empreintes et des métadonnées, jamais le contenu ni un secret.
+            </p>
+          </section>
+          <section id="assistants">
+            <h2>Avec Claude et ChatGPT.</h2>
+            <p>
+              Ces assistants n'acceptent que des connecteurs en ligne : le leur passe par la passerelle de drop. Elle
+              voit les questions et les réponses en clair, comme Claude ou ChatGPT eux-mêmes, et n'en garde rien. Elle
+              ne détient aucune clé d'équipe : chaque appel est transmis à votre Mac, qui décide.
+            </p>
+            <p>
+              La liaison se confirme dans votre app, qui affiche le domaine où partira l'autorisation. Une liaison
+              truquée, qui se ferait passer pour Claude en renvoyant ailleurs, est refusée. Un assistant relié se retire
+              d'un clic, et lui seul est coupé.
+            </p>
+          </section>
+          <section id="modele">
+            <h2>Le modèle qui répond voit le contexte.</h2>
+            <p>
+              Quand une réponse demande un modèle, il tourne chez le propriétaire, avec le fournisseur qu'il a choisi.
+              Un modèle distant reçoit ce qui est nécessaire à ses appels : exécution chez soi ne veut pas dire
+              traitement entièrement local. Par défaut, le demandeur paie avec une clé plafonnée, créée pour sa seule
+              demande et jetée ensuite.
+            </p>
+          </section>
+          <section id="limites">
+            <h2>Ce que drop ne garantit pas.</h2>
+            <ul>
+              <li>Le détecteur de secrets est un filtre, pas une preuve : le jugement du propriétaire compte.</li>
+              <li>Le relais voit qui parle à qui, et quand.</li>
+              <li>drop est un prototype : il n'a pas encore été audité par un tiers.</li>
+            </ul>
+            <!-- if:contact -->
+            <p>Une faille ou un doute ? Écrivez à <a href="mailto:{{contact}}">{{contact}}</a>.</p>
+            <!-- /if:contact -->
+            <p><a href="guide.html#confidentialite">Qui reçoit quoi, en détail</a></p>
+          </section>
+        </article>
+      </div>
+    </main>
+    <footer class="footer">
+      <div class="wrap footer-inner">
+        <a class="logo" href="index.html">drop</a>
+        <div class="footer-links">
+          <a href="demarrer.html">Démarrer</a><a href="cas.html">Cas d'usage</a><a href="securite.html">Sécurité</a
+          ><a href="guide.html">Documentation</a><a href="avancement.html">État du projet</a>
+        </div>
+        <span>Nom de code, par Memo Labs.</span>
+      </div>
+    </footer>
+  </body>
+</html>
