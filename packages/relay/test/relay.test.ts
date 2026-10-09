@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import {
   createAdmission,
   generateIdentity,
+  MAX_ENVELOPE_BYTES,
   sealEnvelope,
   signDetached,
   type Envelope,
@@ -180,6 +181,68 @@ describe('relay', () => {
       outcomes.push(await a.instance.send(await sealEnvelope(alice, bob.nodeId, { type: 'catalog_request' })));
     }
     expect(outcomes).toEqual(['queued', 'queued', 'queued', 'E_RATE']);
+  });
+
+  it('keeps a node rate limit after reconnect', async () => {
+    const alice = await generateIdentity('Alice');
+    const bob = await generateIdentity('Bob');
+    const { relay } = await relayFor([alice, bob], { rateLimitPerMinute: 2 });
+    const first = client(relay, alice);
+    await first.instance.waitReady();
+    for (let index = 0; index < 2; index += 1) {
+      expect(await first.instance.send(await sealEnvelope(alice, bob.nodeId, { type: 'catalog_request' }))).toBe(
+        'queued',
+      );
+    }
+    first.instance.close();
+    const second = client(relay, alice);
+    await second.instance.waitReady();
+    expect(await second.instance.send(await sealEnvelope(alice, bob.nodeId, { type: 'catalog_request' }))).toBe(
+      'E_RATE',
+    );
+  });
+
+  it('counts oversized envelopes against the sender rate limit', async () => {
+    const alice = await generateIdentity('Alice');
+    const bob = await generateIdentity('Bob');
+    const { relay } = await relayFor([alice, bob], { rateLimitPerMinute: 1 });
+    const a = client(relay, alice);
+    await a.instance.waitReady();
+    const oversized = await sealEnvelope(alice, bob.nodeId, { type: 'catalog_request' });
+    oversized.body = 'A'.repeat(MAX_ENVELOPE_BYTES);
+    expect(await a.instance.send(oversized)).toBe('E_TOO_LARGE');
+    expect(await a.instance.send(await sealEnvelope(alice, bob.nodeId, { type: 'catalog_request' }))).toBe('E_RATE');
+  });
+
+  it('counts malformed authenticated frames before parsing', async () => {
+    const alice = await generateIdentity('Alice');
+    const bob = await generateIdentity('Bob');
+    const { relay } = await relayFor([alice, bob], { rateLimitPerMinute: 1 });
+    const socket = new WebSocket(relay.url);
+    cleanups.push(() => {
+      socket.terminate();
+    });
+    const frames: { type?: string; challenge?: string; error?: string; id?: string }[] = [];
+    socket.on('message', (data) => {
+      const frame = JSON.parse(Buffer.isBuffer(data) ? data.toString('utf8') : '') as (typeof frames)[number];
+      frames.push(frame);
+      if (frame.type === 'challenge' && frame.challenge) {
+        void signDetached(alice, frame.challenge)
+          .then((sig) => {
+            socket.send(JSON.stringify({ type: 'auth', nodeId: alice.nodeId, sig }));
+          })
+          .catch(() => {
+            frames.push({ error: 'E_AUTH_TEST' });
+          });
+      }
+    });
+    await until(() => frames.some((frame) => frame.type === 'ready'));
+    socket.send('not-json');
+    await until(() => frames.some((frame) => frame.error === 'E_SCHEMA'));
+    const envelope = await sealEnvelope(alice, bob.nodeId, { type: 'catalog_request' });
+    socket.send(JSON.stringify({ type: 'envelope', envelope }));
+    await until(() => frames.some((frame) => frame.id === envelope.id));
+    expect(frames.find((frame) => frame.id === envelope.id)?.error).toBe('E_RATE');
   });
 
   it('no body field in the logs', async () => {

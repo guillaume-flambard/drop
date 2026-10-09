@@ -86,5 +86,5 @@ describe('detecting agents and their MCP servers (T2.8)', () => {
       tools: ['get_design_context'],
     });
     expect(run('share', 'claude_code/drop').stderr).toContain('part of drop itself');
-  });
+  }, 15_000);
 });

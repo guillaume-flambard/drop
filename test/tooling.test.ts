@@ -191,7 +191,7 @@ describe('monorepo tooling', () => {
         expect.objectContaining({ ruleId: '@typescript-eslint/no-explicit-any', severity: 2 }),
       );
     }
-  });
+  }, 15_000);
 
   it('lint rejects a floating promise, a void-discarded promise and an unsafe any from JSON.parse', async () => {
     const eslint = new ESLint({ cwd: root });

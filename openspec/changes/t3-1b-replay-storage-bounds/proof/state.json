@@ -1,0 +1,57 @@
+{
+  "change": "t3-1b-replay-storage-bounds",
+  "phase": "VERIFYING",
+  "status": "VERIFYING",
+  "requirements": [
+    "REQ-1 UUIDv7 for new drop requests",
+    "REQ-2 bounded durable anti-replay across restart and clock rollback",
+    "REQ-3 per-node relay rate across reconnect"
+  ],
+  "acceptance": {
+    "protocol_uuidv7": "passed",
+    "protocol_uppercase_canonicalization": "passed",
+    "node_expiry_future": "passed",
+    "node_restart_rollback": "passed",
+    "node_saturation": "passed",
+    "node_corruption": "passed",
+    "node_case_replay_and_migration": "passed",
+    "relay_malformed_frame_quota": "passed",
+    "relay_oversized_frame_quota": "passed",
+    "relay_reconnect": "passed"
+  },
+  "workGraph": {
+    "P0-1": "DONE",
+    "P0-2": "DONE",
+    "P0-3": "DONE",
+    "P1-1": "DONE",
+    "P1-2": "VERIFYING",
+    "P1-3": "TODO",
+    "P1-4": "DONE",
+    "P1-5": "DONE",
+    "P1-6": "DONE",
+    "P1-7": "DONE"
+  },
+  "risks": [
+    {
+      "id": "R-1",
+      "severity": "high",
+      "status": "closed_by_tests_and_independent_review",
+      "description": "Replay and quota bypasses fixed; targeted adversarial tests and independent rereview found no remaining P0/P1"
+    }
+  ],
+  "verification": {
+    "targetedTests": "passed",
+    "lint": "passed",
+    "typecheck": "passed",
+    "fullTests": "passed_276_of_276",
+    "openspecValidate": "passed",
+    "guard": "passed_378_criteria_101_linked_baseline_plus0_minus0",
+    "review": "independent_passed_gstack_incomplete_completed_false",
+    "cso": "partial_recheck_cannot_certify_closure"
+  },
+  "remaining": [
+    "Formal gstack review completion",
+    "Archive and index after formal review",
+    "Final closure commit"
+  ]
+}

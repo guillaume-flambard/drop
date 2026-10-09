@@ -4,8 +4,10 @@ import { CapabilityIdSchema, SignedCapabilityCardSchema } from './capability.ts'
 import { NodeIdSchema, OwnerKindSchema } from './identity.ts';
 import { DropStateSchema } from './lifecycle.ts';
 import { ReceiptSchema } from './receipt.ts';
+import { uuidv7Timestamp } from './encoding.ts';
 
 const DropId = z.uuid();
+const NewDropId = DropId.refine((id) => uuidv7Timestamp(id) !== undefined).transform((id) => id.toLowerCase());
 const Timestamp = z.number().int().nonnegative();
 
 export const RequestedBySchema = z.object({
@@ -56,6 +58,7 @@ export const DropErrorCodeSchema = z.enum([
   'E_DENIED',
   'E_NOT_NOW',
   'E_EXPIRED',
+  'E_RATE',
   'E_BUDGET',
   'E_OUTPUT_INVALID',
   'E_SECRET_DETECTED',
@@ -103,7 +106,7 @@ export const MessageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('catalog'), cards: z.array(SignedCapabilityCardSchema) }),
   z.object({
     type: z.literal('drop_request'),
-    dropId: DropId,
+    dropId: NewDropId,
     capabilityId: CapabilityIdSchema,
     capabilityVersion: z.string(),
     input: z.unknown(),

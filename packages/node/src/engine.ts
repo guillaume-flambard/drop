@@ -8,11 +8,14 @@ import {
   isDropError,
   openEnvelope,
   ReplayCache,
+  REPLAY_WINDOW_MS,
+  MAX_CLOCK_SKEW_MS,
   sealEnvelope,
   sha256Hex,
   signCard,
   signReceipt,
   uuidv7,
+  uuidv7Timestamp,
   verifyCard,
   verifyReceipt,
   type CapabilityCard,
@@ -46,7 +49,7 @@ export interface Transport {
 
 export interface NodeStore {
   /** Persistent stores refuse a previously received drop, even after process restart. */
-  claimDrop?(dropId: string): boolean;
+  claimDrop?(dropId: string, now: number): 'claimed' | 'duplicate' | 'expired' | 'capacity';
   peers(): Peer[];
   savePeer(peer: Peer): void;
   published(): Published[];
@@ -603,6 +606,17 @@ export class NodeEngine extends EventEmitter {
   }
 
   private async onDropRequest(from: NodeId, message: MessageOf<'drop_request'>): Promise<void> {
+    const requestTime = uuidv7Timestamp(message.dropId);
+    const now = this.now();
+    if (requestTime === undefined || requestTime < now - REPLAY_WINDOW_MS || requestTime > now + MAX_CLOCK_SKEW_MS) {
+      await this.send(from, {
+        type: 'drop_error',
+        dropId: message.dropId,
+        code: 'E_EXPIRED',
+        message: 'Demande expirée ou horloge désynchronisée.',
+      });
+      return;
+    }
     if (this.options.privateProfile && this.options.payer === 'owner' && message.funding) {
       await this.send(from, {
         type: 'drop_error',
@@ -634,16 +648,29 @@ export class NodeEngine extends EventEmitter {
       });
       return;
     }
-    if (this.options.store.claimDrop && !this.options.store.claimDrop(message.dropId)) {
-      await this.send(from, {
-        type: 'drop_error',
-        dropId: message.dropId,
-        code: 'E_DENIED',
-        message: 'Demande déjà reçue ; créez une nouvelle demande.',
-      });
-      return;
+    if (this.options.store.claimDrop) {
+      let claim: ReturnType<NonNullable<NodeStore['claimDrop']>>;
+      try {
+        claim = this.options.store.claimDrop(message.dropId, now);
+      } catch {
+        this.log({ event: 'drop_rejected', code: 'E_REPLAY_STATE', dropId: message.dropId, peer: from });
+        claim = 'capacity';
+      }
+      if (claim !== 'claimed') {
+        await this.send(from, {
+          type: 'drop_error',
+          dropId: message.dropId,
+          code: claim === 'duplicate' ? 'E_DENIED' : claim === 'expired' ? 'E_EXPIRED' : 'E_RATE',
+          message:
+            claim === 'duplicate'
+              ? 'Demande déjà reçue ; créez une nouvelle demande.'
+              : claim === 'expired'
+                ? 'Demande expirée ou horloge désynchronisée.'
+                : 'Trop de demandes reçues ; réessayez plus tard.',
+        });
+        return;
+      }
     }
-    const now = this.now();
     const drop: ExecutorDrop = {
       dropId: message.dropId,
       requester: from,

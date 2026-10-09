@@ -3,12 +3,16 @@ import {
   appendFileSync,
   chmodSync,
   closeSync,
+  fsyncSync,
   openSync,
   existsSync,
   mkdirSync,
   readdirSync,
   readFileSync,
   rmSync,
+  renameSync,
+  rmdirSync,
+  unlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { homedir } from 'node:os';
@@ -26,7 +30,12 @@ import {
   ReceiptSchema,
   type Identity,
   type Receipt,
+  MAX_CLOCK_SKEW_MS,
+  REPLAY_WINDOW_MS,
+  uuidv7Timestamp,
 } from '@drop/protocol';
+
+export const MAX_RECEIVED_DROPS = 16_384;
 
 export const NodeConfigSchema = z
   .object({
@@ -94,6 +103,28 @@ function writePrivate(path: string, content: string): void {
   chmodSync(path, 0o600);
 }
 
+function syncDirectory(path: string): void {
+  const fd = openSync(path, 'r');
+  try {
+    fsyncSync(fd);
+  } finally {
+    closeSync(fd);
+  }
+}
+
+function writeDurablePrivate(path: string, content: string): void {
+  const temporary = `${path}.${randomBytes(8).toString('hex')}.tmp`;
+  const fd = openSync(temporary, 'wx', 0o600);
+  try {
+    writeFileSync(fd, content);
+    fsyncSync(fd);
+  } finally {
+    closeSync(fd);
+  }
+  renameSync(temporary, path);
+  syncDirectory(join(path, '..'));
+}
+
 /** Everything a node keeps on disk under DROP_HOME. Private keys and the local token are mode 0600. */
 export class DropHome {
   readonly root: string;
@@ -117,16 +148,92 @@ export class DropHome {
     writePrivate(join(this.root, 'local-token'), randomBytes(32).toString('base64url'));
   }
 
-  /** Durable metadata tombstone: pending requests also cannot regain consent after a restart. */
-  claimDrop(dropId: string): boolean {
-    if (!/^[0-9a-f-]{36}$/i.test(dropId)) throw new Error('E_SCHEMA invalid drop id');
+  /** Bounded, durable tombstones: a past consent cannot be regained after restart or clock rollback. */
+  claimDrop(dropId: string, now: number = Date.now()): 'claimed' | 'duplicate' | 'expired' | 'capacity' {
+    const timestamp = uuidv7Timestamp(dropId);
+    if (timestamp === undefined || !Number.isSafeInteger(now) || now < 0) return 'expired';
+    const canonicalDropId = dropId.toLowerCase();
+    const lock = join(this.root, 'received-drops.lock');
+    try {
+      mkdirSync(lock, { mode: 0o700 });
+    } catch {
+      throw new Error('E_REPLAY_STATE claim locked or unavailable');
+    }
+    try {
+      return this.claimDropLocked(canonicalDropId, now, timestamp);
+    } finally {
+      rmdirSync(lock);
+    }
+  }
+
+  private claimDropLocked(
+    dropId: string,
+    now: number,
+    timestamp: number,
+  ): 'claimed' | 'duplicate' | 'expired' | 'capacity' {
     const dir = join(this.root, 'received-drops');
     mkdirSync(dir, { recursive: true, mode: 0o700 });
+    const clockPath = join(this.root, 'received-drops-clock');
+    let highWater = 0;
+    if (existsSync(clockPath)) {
+      const raw = readFileSync(clockPath, 'utf8').trim();
+      if (!/^(0|[1-9][0-9]*)$/.test(raw)) throw new Error('E_REPLAY_STATE corrupt clock');
+      highWater = Number(raw);
+      if (!Number.isSafeInteger(highWater)) throw new Error('E_REPLAY_STATE corrupt clock');
+    }
+    if (now > highWater || !existsSync(clockPath)) {
+      highWater = Math.max(now, highWater);
+      writeDurablePrivate(clockPath, `${String(highWater)}\n`);
+    }
+    const floor = highWater - REPLAY_WINDOW_MS;
+    let count = 0;
+    let removed = false;
+    const entries = readdirSync(dir, { withFileTypes: true });
+    const names = new Set(entries.map((entry) => entry.name));
+    const retained = new Set<string>();
+    for (const entry of entries) {
+      if (!entry.isFile()) throw new Error('E_REPLAY_STATE unexpected marker');
+      const markerTime = uuidv7Timestamp(entry.name);
+      if (markerTime === undefined) {
+        // Legacy UUIDv4 claims cannot be admitted by the new protocol.
+        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(entry.name)) {
+          throw new Error('E_REPLAY_STATE unexpected marker');
+        }
+        unlinkSync(join(dir, entry.name));
+        removed = true;
+      } else if (markerTime < floor) {
+        unlinkSync(join(dir, entry.name));
+        removed = true;
+      } else {
+        const canonicalName = entry.name.toLowerCase();
+        if (retained.has(canonicalName) || (entry.name !== canonicalName && names.has(canonicalName))) {
+          unlinkSync(join(dir, entry.name));
+          removed = true;
+          continue;
+        }
+        retained.add(canonicalName);
+        if (entry.name !== canonicalName) {
+          renameSync(join(dir, entry.name), join(dir, canonicalName));
+          removed = true;
+        }
+        count += 1;
+      }
+    }
+    if (removed) syncDirectory(dir);
+    if (timestamp < floor || timestamp > highWater + MAX_CLOCK_SKEW_MS) return 'expired';
+    if (existsSync(join(dir, dropId))) return 'duplicate';
+    if (count >= MAX_RECEIVED_DROPS) return 'capacity';
     try {
-      closeSync(openSync(join(dir, dropId), 'wx', 0o600));
-      return true;
+      const fd = openSync(join(dir, dropId), 'wx', 0o600);
+      try {
+        fsyncSync(fd);
+      } finally {
+        closeSync(fd);
+      }
+      syncDirectory(dir);
+      return 'claimed';
     } catch (error) {
-      if (error instanceof Error && 'code' in error && error.code === 'EEXIST') return false;
+      if (error instanceof Error && 'code' in error && error.code === 'EEXIST') return 'duplicate';
       throw error;
     }
   }
