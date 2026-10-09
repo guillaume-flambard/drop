@@ -47,9 +47,32 @@ export interface Transport {
   send(envelope: Envelope): Promise<string>;
 }
 
+export type DropClaim = 'claimed' | 'duplicate' | 'expired' | 'capacity';
+
+const CLAIM_ERRORS: Record<Exclude<DropClaim, 'claimed'>, { code: DropErrorCode; message: string }> = {
+  duplicate: { code: 'E_DENIED', message: 'Demande déjà reçue ; créez une nouvelle demande.' },
+  expired: { code: 'E_EXPIRED', message: 'Demande expirée ou horloge désynchronisée.' },
+  capacity: { code: 'E_RATE', message: 'Trop de demandes reçues ; réessayez plus tard.' },
+};
+
+/** Stable log reason for a replay-store failure: our own E_REPLAY_STATE text or the fs error code, never a path. */
+function replayFailureReason(error: unknown): string {
+  const prefix = 'E_REPLAY_STATE ';
+  if (error instanceof Error && error.message.startsWith(prefix)) return error.message.slice(prefix.length);
+  if (error instanceof Error && 'code' in error && typeof error.code === 'string') return error.code;
+  return 'unknown';
+}
+
+/** Executor states in which a drop has not sent its outcome yet; only these are echoed to a duplicate request. */
+const UNSETTLED_STATES: readonly DropState[] = ['awaiting_approval', 'approved', 'running', 'in_review'];
+
 export interface NodeStore {
-  /** Persistent stores refuse a previously received drop, even after process restart. */
-  claimDrop?(dropId: string, now: number): 'claimed' | 'duplicate' | 'expired' | 'capacity';
+  /**
+   * Persistent anti-replay: 'duplicate' for a known id, 'expired' outside the freshness window measured against a
+   * durable high-water clock, 'capacity' when the bounded store is full. A throw (lock, corruption, I/O) is treated
+   * by the engine as 'capacity', so the request is refused before consent.
+   */
+  claimDrop?(dropId: string, now: number): DropClaim;
   peers(): Peer[];
   savePeer(peer: Peer): void;
   published(): Published[];
@@ -115,6 +138,8 @@ interface ExecutorDrop {
   expiresAt: number;
   reviewExpiresAt?: number;
   output?: Record<string, unknown> | undefined;
+  /** The refusal or failure sent to the requester, replayed verbatim to a duplicate request. */
+  error?: { code: DropErrorCode; message: string };
   toolCalls: { name: string; count: number }[];
   costUsd: number;
   reviewed: boolean;
@@ -132,6 +157,8 @@ export interface CatalogEntry {
 export interface EngineLogEntry {
   event: string;
   code?: string;
+  /** Stable cause behind a code, e.g. which replay-store check failed. Never a path or payload. */
+  reason?: string;
   dropId?: string;
   peer?: string;
 }
@@ -606,15 +633,23 @@ export class NodeEngine extends EventEmitter {
   }
 
   private async onDropRequest(from: NodeId, message: MessageOf<'drop_request'>): Promise<void> {
+    // Before any other check, freshness included, so a duplicate never fails a drop the owner may have approved.
+    const active = this.executing.get(message.dropId);
+    if (active) {
+      await this.answerDuplicate(from, active);
+      return;
+    }
     const requestTime = uuidv7Timestamp(message.dropId);
     const now = this.now();
     if (requestTime === undefined || requestTime < now - REPLAY_WINDOW_MS || requestTime > now + MAX_CLOCK_SKEW_MS) {
-      await this.send(from, {
-        type: 'drop_error',
-        dropId: message.dropId,
+      this.log({
+        event: 'drop_rejected',
         code: 'E_EXPIRED',
-        message: 'Demande expirée ou horloge désynchronisée.',
+        reason: 'request_clock_skew',
+        dropId: message.dropId,
+        peer: from,
       });
+      await this.send(from, { type: 'drop_error', dropId: message.dropId, ...CLAIM_ERRORS.expired });
       return;
     }
     if (this.options.privateProfile && this.options.payer === 'owner' && message.funding) {
@@ -637,7 +672,6 @@ export class NodeEngine extends EventEmitter {
       });
       return;
     }
-    if (this.executing.has(message.dropId)) return;
     const validated = validateInput(built.impl, message.input);
     if (!validated.ok) {
       await this.send(from, {
@@ -649,25 +683,31 @@ export class NodeEngine extends EventEmitter {
       return;
     }
     if (this.options.store.claimDrop) {
-      let claim: ReturnType<NonNullable<NodeStore['claimDrop']>>;
+      let claim: DropClaim;
       try {
         claim = this.options.store.claimDrop(message.dropId, now);
-      } catch {
-        this.log({ event: 'drop_rejected', code: 'E_REPLAY_STATE', dropId: message.dropId, peer: from });
+      } catch (error) {
+        this.log({
+          event: 'drop_rejected',
+          code: 'E_REPLAY_STATE',
+          reason: replayFailureReason(error),
+          dropId: message.dropId,
+          peer: from,
+        });
         claim = 'capacity';
       }
-      if (claim !== 'claimed') {
-        await this.send(from, {
-          type: 'drop_error',
+      if (claim === 'expired') {
+        // The id passed the wall-clock window above, so only a persisted replay clock ahead of it can refuse it.
+        this.log({
+          event: 'drop_rejected',
+          code: 'E_EXPIRED',
+          reason: 'replay_clock_ahead',
           dropId: message.dropId,
-          code: claim === 'duplicate' ? 'E_DENIED' : claim === 'expired' ? 'E_EXPIRED' : 'E_RATE',
-          message:
-            claim === 'duplicate'
-              ? 'Demande déjà reçue ; créez une nouvelle demande.'
-              : claim === 'expired'
-                ? 'Demande expirée ou horloge désynchronisée.'
-                : 'Trop de demandes reçues ; réessayez plus tard.',
+          peer: from,
         });
+      }
+      if (claim !== 'claimed') {
+        await this.send(from, { type: 'drop_error', dropId: message.dropId, ...CLAIM_ERRORS[claim] });
         return;
       }
     }
@@ -817,9 +857,20 @@ export class NodeEngine extends EventEmitter {
   private onRequesterUpdate(from: NodeId, message: MessageOf<'drop_status' | 'drop_result' | 'drop_error'>): void {
     const drop = this.outbound.get(message.dropId);
     if (drop?.executor !== from) return;
-    if (message.type === 'drop_status') drop.state = message.state;
-    // The drop is over: delete the capped key minted for it (D27).
-    if (message.type !== 'drop_status' && this.options.funder) {
+    // A result settles the drop for good. A recorded error yields only to a real result: a duplicate refusal may
+    // overtake it. Status updates never claim an outcome; only drop_result, drop_error and receipt do.
+    if (drop.result) return;
+    const settled = drop.error !== undefined;
+    if (message.type === 'drop_status') {
+      if (!settled && UNSETTLED_STATES.includes(message.state)) {
+        drop.state = message.state;
+        this.changed();
+      }
+      return;
+    }
+    if (message.type === 'drop_error' && settled) return;
+    // The drop is over: delete the capped key minted for it (D27), once.
+    if (!settled && this.options.funder) {
       this.options.funder.release(drop.dropId).catch(() => {
         this.log({ event: 'funding', code: 'E_FUNDING_RELEASE', dropId: drop.dropId });
       });
@@ -827,6 +878,7 @@ export class NodeEngine extends EventEmitter {
     if (message.type === 'drop_result') {
       drop.state = 'delivered';
       drop.result = { output: message.output, outputSchemaHash: message.outputSchemaHash };
+      delete drop.error;
     }
     if (message.type === 'drop_error') {
       drop.state =
@@ -851,7 +903,8 @@ export class NodeEngine extends EventEmitter {
   }
 
   private async deliver(drop: ExecutorDrop, output: Record<string, unknown>): Promise<void> {
-    drop.state = 'delivered';
+    // The state moves only once the result is handed to the transport, so a duplicate answered meanwhile can only
+    // learn the unsettled state, never a refusal that would overtake the result.
     drop.timestamps.delivered = this.now();
     await this.send(drop.requester, {
       type: 'drop_result',
@@ -859,6 +912,7 @@ export class NodeEngine extends EventEmitter {
       output,
       outputSchemaHash: sha256Hex(drop.card.outputSchema),
     });
+    drop.state = 'delivered';
     await this.writeReceipt(drop, 'allow_once', sha256Hex(output));
     drop.state = 'receipted';
     drop.output = undefined;
@@ -871,7 +925,8 @@ export class NodeEngine extends EventEmitter {
     text: string,
     decision: Receipt['decision'],
   ): Promise<void> {
-    await this.send(drop.requester, { type: 'drop_error', dropId: drop.dropId, code, message: text });
+    drop.error = { code, message: text };
+    await this.send(drop.requester, { type: 'drop_error', dropId: drop.dropId, ...drop.error });
     await this.writeReceipt(drop, decision, undefined, code);
     drop.output = undefined;
     this.changed();
@@ -904,6 +959,17 @@ export class NodeEngine extends EventEmitter {
     const recipients = new Set([drop.requester, unsigned.approver]);
     recipients.delete(this.identity.nodeId);
     for (const nodeId of recipients) await this.send(nodeId, { type: 'receipt', receipt });
+  }
+
+  /**
+   * Never leaves a requester waiting in silence. An unsettled drop reports its current state; a refused or failed
+   * one replays the same error; a delivered one gets the duplicate refusal, which its real result overrides
+   * (see onRequesterUpdate). Another peer reusing the id learns nothing about the drop.
+   */
+  private async answerDuplicate(from: NodeId, drop: ExecutorDrop): Promise<void> {
+    if (drop.requester === from && UNSETTLED_STATES.includes(drop.state)) return this.status(drop);
+    const error = drop.requester === from && drop.error ? drop.error : CLAIM_ERRORS.duplicate;
+    await this.send(from, { type: 'drop_error', dropId: drop.dropId, ...error });
   }
 
   private async status(drop: ExecutorDrop): Promise<void> {

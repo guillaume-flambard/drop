@@ -63,6 +63,29 @@ describe('drop request id', () => {
     });
     expect(parsed).toMatchObject({ type: 'drop_request', dropId: id });
   });
+
+  it('publishes the UUIDv7 constraint in the exported JSON Schema', () => {
+    const find = (node: unknown): unknown => {
+      if (typeof node !== 'object' || node === null) return undefined;
+      const properties = (node as { properties?: Record<string, { const?: unknown }> }).properties;
+      if (properties?.type?.const === 'drop_request') return (properties as Record<string, unknown>).dropId;
+      for (const child of Object.values(node)) {
+        const found = find(child);
+        if (found !== undefined) return found;
+      }
+      return undefined;
+    };
+    const dropId = find(protocolJsonSchemas()) as { type?: unknown; pattern?: unknown } | undefined;
+    expect(dropId?.type).toBe('string');
+    const pattern = new RegExp(String(dropId?.pattern));
+    for (const accepted of [uuidv7(NOW), uuidv7(NOW).toUpperCase()]) expect(pattern.test(accepted)).toBe(true);
+    for (const refused of [
+      '550e8400-e29b-41d4-a716-446655440000',
+      '00000000-0000-0000-0000-000000000000',
+      'ffffffff-ffff-ffff-ffff-ffffffffffff',
+    ])
+      expect(pattern.test(refused)).toBe(false);
+  });
 });
 
 async function pair(): Promise<{ alice: Identity; bob: Identity }> {

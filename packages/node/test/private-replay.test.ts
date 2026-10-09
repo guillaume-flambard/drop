@@ -1,14 +1,115 @@
-import { mkdirSync, mkdtempSync, readdirSync, rmdirSync, rmSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readdirSync, rmdirSync, rmSync, unlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { generateIdentity, openEnvelope, ReplayCache, sealEnvelope, uuidv7, type Envelope } from '@drop/protocol';
-import { DropHome } from '../src/home.ts';
+import {
+  generateIdentity,
+  openEnvelope,
+  ReplayCache,
+  sealEnvelope,
+  uuidv7,
+  type Envelope,
+  type Message,
+} from '@drop/protocol';
+import { DropHome, MAX_RECEIVED_DROPS, REPLAY_LOCK_OWNER } from '../src/home.ts';
 import { privateConfig } from '../src/private-config.ts';
-import { NodeEngine } from '../src/engine.ts';
+import { NodeEngine, type EngineLogEntry } from '../src/engine.ts';
 import { fakeCapability } from './helpers.ts';
 
 const NOW = 1_791_460_000_000;
+
+/** Fills received-drops with live UUIDv7 markers sharing the timestamp of `at`. */
+function fillMarkers(root: string, at: number, count: number): void {
+  const dir = join(root, 'received-drops');
+  mkdirSync(dir, { recursive: true });
+  const prefix = uuidv7(at).slice(0, 24);
+  for (let index = 0; index < count; index += 1) {
+    writeFileSync(join(dir, `${prefix}${(index + 1).toString(16).padStart(12, '0')}`), '');
+  }
+}
+
+/** One owner node on a real DropHome, a paired requester, and every reply and log line captured. */
+async function ownerNode(root: string, now = NOW) {
+  const owner = await generateIdentity('Owner');
+  const requester = await generateIdentity('Requester');
+  const other = await generateIdentity('Other');
+  const home = new DropHome(root);
+  home.init(owner, privateConfig('ws://127.0.0.1:7780/v1', 'human', 0));
+  for (const peer of [requester, other]) {
+    home.savePeer({
+      nodeId: peer.nodeId,
+      displayName: peer.displayName,
+      ownerKind: 'human',
+      pairedAt: new Date(now).toISOString(),
+    });
+  }
+  home.publish({
+    capabilityId: 'test.state',
+    approverNodeIds: [owner.nodeId],
+    config: {},
+    publishedAt: new Date(now).toISOString(),
+  });
+  const replies: Envelope[] = [];
+  const logs: EngineLogEntry[] = [];
+  const engine = new NodeEngine({
+    identity: owner,
+    ownerKind: 'human',
+    store: home,
+    capabilities: [fakeCapability('test.state', 'low')],
+    transport: {
+      send: (envelope) => {
+        replies.push(envelope);
+        return Promise.resolve('delivered');
+      },
+    },
+    log: (entry) => logs.push(entry),
+    now: () => now,
+  });
+  const send = async (dropId: string, sender = requester) =>
+    engine.handleEnvelope(
+      await sealEnvelope(
+        sender,
+        owner.nodeId,
+        {
+          type: 'drop_request',
+          dropId,
+          capabilityId: 'test.state',
+          capabilityVersion: '1.0.0',
+          input: { mode: 'ok' },
+          purpose: 'Test replay',
+          requestedBy: { nodeId: sender.nodeId, displayName: sender.displayName, agent: 'codex' },
+        },
+        { now },
+      ),
+    );
+  const lastReply = async (recipient = requester): Promise<Message> =>
+    (
+      await openEnvelope(recipient, replies.at(-1), {
+        isKnownPeer: (id) => id === owner.nodeId,
+        replay: new ReplayCache(),
+        now,
+      })
+    ).message;
+  const errorsTo = async (recipient = requester): Promise<Message[]> => {
+    const messages: Message[] = [];
+    for (const envelope of replies.filter((candidate) => candidate.to === recipient.nodeId)) {
+      const { message } = await openEnvelope(recipient, envelope, {
+        isKnownPeer: (id) => id === owner.nodeId,
+        replay: new ReplayCache(),
+        now,
+      });
+      if (message.type === 'drop_error') messages.push(message);
+    }
+    return messages;
+  };
+  return { home, engine, replies, logs, send, lastReply, errorsTo, requester, other };
+}
+
+function deadPid(): number {
+  const child = spawnSync(process.execPath, ['-e', '']);
+  return child.pid;
+}
 
 describe('bounded received drops', () => {
   it('rejects stale and future identifiers before writing a marker', () => {
@@ -59,6 +160,7 @@ describe('bounded received drops', () => {
       mkdirSync(lock, { mode: 0o700 });
       const dropId = uuidv7(NOW);
       expect(() => home.claimDrop(dropId, NOW)).toThrow('E_REPLAY_STATE');
+      expect(readdirSync(root)).not.toContain('received-drops');
       rmdirSync(lock);
       expect(home.claimDrop(dropId, NOW)).toBe('claimed');
     } finally {
@@ -120,10 +222,247 @@ describe('bounded received drops', () => {
         writeFileSync(join(dir, `${prefix}${suffix}`), '');
       }
       expect(home.claimDrop(uuidv7(NOW), NOW)).toBe('capacity');
+      expect(readdirSync(dir)).toHaveLength(MAX_RECEIVED_DROPS);
+      const later = NOW + 31 * 60_000;
+      expect(home.claimDrop(uuidv7(later), later)).toBe('claimed');
+      expect(readdirSync(dir)).toHaveLength(1);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
   }, 60_000);
+
+  it('deletes legacy nil and max UUID markers instead of blocking admission', () => {
+    const root = mkdtempSync(join(tmpdir(), 'drop-replay-nil-'));
+    try {
+      const home = new DropHome(root);
+      expect(home.claimDrop(uuidv7(NOW), NOW)).toBe('claimed');
+      const legacy = ['00000000-0000-0000-0000-000000000000', 'FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF'];
+      for (const name of legacy) writeFileSync(join(root, 'received-drops', name), '');
+      expect(home.claimDrop(uuidv7(NOW + 1), NOW + 1)).toBe('claimed');
+      for (const name of legacy) expect(readdirSync(join(root, 'received-drops'))).not.toContain(name);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('fails closed if the durable replay clock disappears after migration and pruning', () => {
+    const root = mkdtempSync(join(tmpdir(), 'drop-replay-missing-clock-'));
+    try {
+      const home = new DropHome(root);
+      const dropId = uuidv7(NOW);
+      expect(home.claimDrop(dropId, NOW)).toBe('claimed');
+      const later = NOW + 31 * 60_000;
+      expect(home.claimDrop(uuidv7(later), later)).toBe('claimed');
+      expect(readdirSync(join(root, 'received-drops'))).not.toContain(dropId);
+      unlinkSync(join(root, 'received-drops-clock'));
+      expect(() => home.claimDrop(dropId, NOW)).toThrow('E_REPLAY_STATE missing clock');
+      expect(readdirSync(join(root, 'received-drops'))).not.toContain(dropId);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('ignores operating system and foreign entries in the marker directory', () => {
+    const root = mkdtempSync(join(tmpdir(), 'drop-replay-foreign-'));
+    try {
+      const home = new DropHome(root);
+      expect(home.claimDrop(uuidv7(NOW), NOW)).toBe('claimed');
+      const dir = join(root, 'received-drops');
+      writeFileSync(join(dir, '.DS_Store'), '');
+      writeFileSync(join(dir, '._backup'), '');
+      mkdirSync(join(dir, 'Archive'));
+      expect(home.claimDrop(uuidv7(NOW + 1), NOW + 1)).toBe('claimed');
+      expect(readdirSync(dir)).toEqual(expect.arrayContaining(['.DS_Store', '._backup', 'Archive']));
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('still fails closed on a marker-shaped entry that is not a file', () => {
+    const root = mkdtempSync(join(tmpdir(), 'drop-replay-marker-dir-'));
+    try {
+      const home = new DropHome(root);
+      expect(home.claimDrop(uuidv7(NOW), NOW)).toBe('claimed');
+      mkdirSync(join(root, 'received-drops', uuidv7(NOW)));
+      expect(() => home.claimDrop(uuidv7(NOW + 1), NOW + 1)).toThrow('E_REPLAY_STATE');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('reclaims only its own replay lock and refuses an old foreign lock', () => {
+    const root = mkdtempSync(join(tmpdir(), 'drop-replay-stale-lock-'));
+    try {
+      const home = new DropHome(root);
+      const lock = join(root, 'received-drops.lock');
+      mkdirSync(lock, { mode: 0o700 });
+      writeFileSync(join(lock, 'owner'), REPLAY_LOCK_OWNER);
+      expect(home.claimDrop(uuidv7(NOW), NOW)).toBe('claimed');
+      expect(readdirSync(root)).not.toContain('received-drops.lock');
+      // Age and PID cannot prove an owner is dead across slow disks or container PID namespaces.
+      for (const [index, owner] of [`${String(deadPid())} 00\n`, ''].entries()) {
+        mkdirSync(lock, { mode: 0o700 });
+        writeFileSync(join(lock, 'owner'), owner);
+        expect(() => home.claimDrop(uuidv7(NOW + index + 1), NOW + index + 1)).toThrow('E_REPLAY_STATE claim locked');
+        const old = new Date(Date.now() - 5 * 60_000);
+        utimesSync(lock, old, old);
+        expect(() => home.claimDrop(uuidv7(NOW + index + 1), NOW + index + 1)).toThrow('E_REPLAY_STATE claim locked');
+        expect(readdirSync(lock)).toEqual(['owner']);
+        rmSync(lock, { recursive: true });
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('never takes over a foreign replay lock even when its takeover sentinel is old', () => {
+    const root = mkdtempSync(join(tmpdir(), 'drop-replay-takeover-'));
+    try {
+      const home = new DropHome(root);
+      const lock = join(root, 'received-drops.lock');
+      mkdirSync(lock, { mode: 0o700 });
+      const old = new Date(Date.now() - 5 * 60_000);
+      utimesSync(lock, old, old);
+      mkdirSync(`${lock}.takeover`, { mode: 0o700 });
+      expect(() => home.claimDrop(uuidv7(NOW), NOW)).toThrow('E_REPLAY_STATE claim locked');
+      expect(readdirSync(root)).toContain('received-drops.lock');
+      utimesSync(`${lock}.takeover`, old, old);
+      expect(() => home.claimDrop(uuidv7(NOW), NOW)).toThrow('E_REPLAY_STATE claim locked');
+      expect(readdirSync(root)).toContain('received-drops.lock');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps a replay lock owned by another live process', () => {
+    const root = mkdtempSync(join(tmpdir(), 'drop-replay-live-lock-'));
+    try {
+      const home = new DropHome(root);
+      const lock = join(root, 'received-drops.lock');
+      mkdirSync(lock, { mode: 0o700 });
+      writeFileSync(join(lock, 'owner'), `${String(process.ppid)}\n`);
+      expect(() => home.claimDrop(uuidv7(NOW), NOW)).toThrow('E_REPLAY_STATE claim locked');
+      expect(readdirSync(lock)).toEqual(['owner']);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('requires manual removal of an ownerless replay lock before admission resumes', () => {
+    const root = mkdtempSync(join(tmpdir(), 'drop-replay-ownerless-lock-'));
+    try {
+      const home = new DropHome(root);
+      const lock = join(root, 'received-drops.lock');
+      mkdirSync(lock, { mode: 0o700 });
+      expect(() => home.claimDrop(uuidv7(NOW), NOW)).toThrow('E_REPLAY_STATE claim locked');
+      const old = new Date(Date.now() - 5 * 60_000);
+      utimesSync(lock, old, old);
+      expect(() => home.claimDrop(uuidv7(NOW), NOW)).toThrow('E_REPLAY_STATE claim locked');
+      rmSync(lock, { recursive: true });
+      expect(home.claimDrop(uuidv7(NOW), NOW)).toBe('claimed');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('replay admission through the engine', () => {
+  it('reports a full replay store as E_RATE before consent', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'drop-replay-engine-full-'));
+    try {
+      const node = await ownerNode(root);
+      fillMarkers(root, NOW, MAX_RECEIVED_DROPS);
+      await node.send(uuidv7(NOW));
+      expect(node.engine.pending()).toHaveLength(0);
+      expect(readdirSync(join(root, 'received-drops'))).toHaveLength(MAX_RECEIVED_DROPS);
+      expect(await node.lastReply()).toMatchObject({ type: 'drop_error', code: 'E_RATE' });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }, 60_000);
+
+  it('refuses a request after clock rollback with E_EXPIRED and logs that the replay clock is ahead', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'drop-replay-engine-rollback-'));
+    try {
+      const node = await ownerNode(root);
+      const ahead = NOW + 31 * 60_000;
+      expect(node.home.claimDrop(uuidv7(ahead), ahead)).toBe('claimed');
+      await node.send(uuidv7(NOW));
+      expect(node.engine.pending()).toHaveLength(0);
+      expect(await node.lastReply()).toMatchObject({ type: 'drop_error', code: 'E_EXPIRED' });
+      expect(node.logs).toContainEqual(
+        expect.objectContaining({ event: 'drop_rejected', code: 'E_EXPIRED', reason: 'replay_clock_ahead' }),
+      );
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('logs the replay store failure cause without a path', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'drop-replay-engine-cause-'));
+    try {
+      const node = await ownerNode(root);
+      writeFileSync(join(root, 'received-drops-clock'), 'corrupt');
+      await node.send(uuidv7(NOW));
+      expect(node.logs).toContainEqual(
+        expect.objectContaining({ event: 'drop_rejected', code: 'E_REPLAY_STATE', reason: 'corrupt clock' }),
+      );
+      expect(JSON.stringify(node.logs)).not.toContain(root);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('answers a duplicate of an active request with its current state', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'drop-replay-engine-active-'));
+    try {
+      const node = await ownerNode(root);
+      const dropId = uuidv7(NOW);
+      await node.send(dropId);
+      expect(node.engine.pending()).toHaveLength(1);
+      const before = node.replies.length;
+      await node.send(dropId);
+      expect(node.replies.length).toBeGreaterThan(before);
+      expect(await node.lastReply()).toEqual({ type: 'drop_status', dropId, state: 'awaiting_approval' });
+      expect(node.engine.pending()).toHaveLength(1);
+      // The active check runs before capability lookup: unpublishing must not turn a duplicate into a failure.
+      node.home.unpublish('test.state');
+      await node.send(dropId);
+      expect(await node.lastReply()).toEqual({ type: 'drop_status', dropId, state: 'awaiting_approval' });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('refuses another peer reusing an active drop id without revealing its state', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'drop-replay-engine-other-'));
+    try {
+      const node = await ownerNode(root);
+      const dropId = uuidv7(NOW);
+      await node.send(dropId);
+      await node.send(dropId, node.other);
+      expect(await node.lastReply(node.other)).toMatchObject({ type: 'drop_error', dropId, code: 'E_DENIED' });
+      expect(node.engine.pending()).toHaveLength(1);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('answers a duplicate of a finished request with its recorded outcome', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'drop-replay-engine-finished-'));
+    try {
+      const node = await ownerNode(root);
+      const dropId = uuidv7(NOW);
+      await node.send(dropId);
+      expect(await node.engine.decide(dropId, 'not_now')).toBe(true);
+      const [outcome] = await node.errorsTo();
+      expect(outcome).toMatchObject({ type: 'drop_error', dropId, code: 'E_NOT_NOW' });
+      await node.send(dropId);
+      expect(await node.errorsTo()).toEqual([outcome, outcome]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('private replay admission', () => {

@@ -67,6 +67,10 @@ export function readRelayConfig(path: string): RelayConfig {
   return config;
 }
 
+const RATE_WINDOW_MS = 60_000;
+/** A client frame serializes the envelope id within this prefix; E_RATE reads no further. */
+const RATE_ID_PREFIX_BYTES = 256;
+
 const defaultLogger: RelayLogger = (entry) => {
   process.stdout.write(`${JSON.stringify({ at: new Date().toISOString(), ...entry })}\n`);
 };
@@ -146,14 +150,17 @@ export function startRelay(config: RelayConfig, options: RelayOptions = {}): Pro
     return live;
   };
 
+  const recentSends = (nodeId: string): number[] => {
+    const windowStart = now() - RATE_WINDOW_MS;
+    const current = (sentByNode.get(nodeId) ?? []).filter((at) => at > windowStart);
+    if (current.length) sentByNode.set(nodeId, current);
+    else sentByNode.delete(nodeId);
+    return current;
+  };
+
+  // Only the sender's window is pruned per frame; idle nodes are swept by the pinger below.
   const charge = (nodeId: string): boolean => {
-    const minuteAgo = now() - 60_000;
-    for (const [nodeId, entries] of sentByNode) {
-      const current = entries.filter((at) => at > minuteAgo);
-      if (current.length) sentByNode.set(nodeId, current);
-      else sentByNode.delete(nodeId);
-    }
-    const sent = sentByNode.get(nodeId) ?? [];
+    const sent = recentSends(nodeId);
     if (sent.length >= settings.rateLimitPerMinute) return false;
     sent.push(now());
     sentByNode.set(nodeId, sent);
@@ -256,7 +263,7 @@ export function startRelay(config: RelayConfig, options: RelayOptions = {}): Pro
       }
       if (!charge(connection.nodeId)) {
         // Read only a bounded prefix to associate valid client sends with E_RATE without parsing an exhausted frame.
-        const prefix = Buffer.isBuffer(data) ? data.subarray(0, 256).toString('utf8') : '';
+        const prefix = Buffer.isBuffer(data) ? data.subarray(0, RATE_ID_PREFIX_BYTES).toString('utf8') : '';
         const rawId = /"id"\s*:\s*"([0-9a-f-]{36})"/i.exec(prefix)?.[1];
         const id = rawId && z.uuid().safeParse(rawId).success ? rawId : undefined;
         send(socket, { type: 'error', ...(id ? { id } : {}), error: 'E_RATE' });
@@ -289,6 +296,7 @@ export function startRelay(config: RelayConfig, options: RelayOptions = {}): Pro
       connection.missedPings += 1;
       connection.socket.ping();
     }
+    for (const nodeId of [...sentByNode.keys()]) recentSends(nodeId);
   }, options.pingIntervalMs ?? 25_000);
 
   return new Promise((resolve, reject) => {

@@ -4,10 +4,10 @@ import { CapabilityIdSchema, SignedCapabilityCardSchema } from './capability.ts'
 import { NodeIdSchema, OwnerKindSchema } from './identity.ts';
 import { DropStateSchema } from './lifecycle.ts';
 import { ReceiptSchema } from './receipt.ts';
-import { uuidv7Timestamp } from './encoding.ts';
 
 const DropId = z.uuid();
-const NewDropId = DropId.refine((id) => uuidv7Timestamp(id) !== undefined).transform((id) => id.toLowerCase());
+// overwrite keeps the UUIDv7 pattern in the exported JSON Schema, unlike refine/transform.
+const NewDropId = z.uuidv7().overwrite((id) => id.toLowerCase());
 const Timestamp = z.number().int().nonnegative();
 
 export const RequestedBySchema = z.object({

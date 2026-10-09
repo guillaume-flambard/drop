@@ -60,6 +60,54 @@ describe('end to end, in memory: relay and three nodes', () => {
     expect(m.executor.store.receiptList[0]).toMatchObject({ decision: 'deny', toolCalls: [] });
   });
 
+  it('a late executor update cannot rewrite a finished outbound drop', async () => {
+    const m = await setup();
+    const dropId = await ask(m, LOW, 'ok');
+    await m.approver.engine.decide(dropId, 'deny');
+    await until(() => m.requester.engine.drop(dropId)?.state === 'denied');
+    for (const message of [
+      { type: 'drop_error' as const, dropId, code: 'E_EXPIRED' as const, message: 'Demande expirée.' },
+      { type: 'drop_status' as const, dropId, state: 'awaiting_approval' as const },
+    ]) {
+      await m.requester.engine.handleEnvelope(
+        await sealEnvelope(m.executor.identity, m.requester.identity.nodeId, message, { now: m.clock.now }),
+      );
+    }
+    expect(m.requester.engine.drop(dropId)).toMatchObject({ state: 'denied', error: { code: 'E_DENIED' } });
+  });
+
+  it('a real result still lands after an overtaking refusal or a premature delivered status, and funding is released once', async () => {
+    const released: string[] = [];
+    mesh = await startMesh([fakeCapability(LOW, 'low')], {
+      requester: {
+        funder: {
+          mint: () => Promise.resolve(undefined),
+          release: (id) => {
+            released.push(id);
+            return Promise.resolve();
+          },
+        },
+      },
+    });
+    const m = mesh;
+    const dropId = await ask(m, LOW, 'ok');
+    const forge = async (message: Parameters<typeof sealEnvelope>[2]) =>
+      m.requester.engine.handleEnvelope(
+        await sealEnvelope(m.executor.identity, m.requester.identity.nodeId, message, { now: m.clock.now }),
+      );
+    await forge({ type: 'drop_status', dropId, state: 'delivered' });
+    expect(m.requester.engine.drop(dropId)?.state).toBe('awaiting_approval');
+    await forge({ type: 'drop_error', dropId, code: 'E_DENIED', message: 'Demande déjà reçue.' });
+    expect(m.requester.engine.drop(dropId)?.state).toBe('denied');
+    await m.approver.engine.decide(dropId, 'allow_once');
+    await until(() => m.requester.engine.drop(dropId)?.state === 'receipted');
+    expect(m.requester.engine.drop(dropId)?.result?.output).toEqual({ status: 'ok', detail: 'tout va bien' });
+    expect(m.requester.engine.drop(dropId)?.error).toBeUndefined();
+    await forge({ type: 'drop_error', dropId, code: 'E_EXPIRED', message: 'Demande expirée.' });
+    expect(m.requester.engine.drop(dropId)?.state).toBe('receipted');
+    expect(released).toEqual([dropId]);
+  });
+
   it('not now: the requester receives E_NOT_NOW', async () => {
     const m = await setup();
     const dropId = await ask(m, LOW, 'ok');
