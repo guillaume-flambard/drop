@@ -260,6 +260,23 @@ Format : `D<n> — date — décision — raison`. Les agents ajoutent ici toute
   (procédure dans `apps/mac/README.md`) ; seule la clé publique, `apps/mac/updater.pub`, entre dans le dépôt. Hors de
   ce dépôt : une route statique `/updates` dans `lab-infra/stacks/drop`. Le manifeste est validé sans zod pour ne pas
   ajouter de dépendance à la racine.
+- **D36** — Durcissement de la passerelle (2026-10-09, T2.13, plan accepté par Guillaume). Trois trous relevés en
+  revue. (1) Hameçonnage du consentement : le nom de l'assistant vient de l'enregistrement dynamique, ouvert à tous ;
+  un tiers pouvait enregistrer « Claude » avec sa propre adresse de retour et faire autoriser sa session par la
+  victime, puis interroger l'équipe en son nom. Le lien `drop://link` porte désormais `client_id` et le domaine de
+  retour, affichés par la page et le panneau (avertissement si ce n'est ni `claude.ai`, ni `chatgpt.com`, ni
+  `chat.openai.com`) ; `link_grant` répète ce qui a été affiché, et la passerelle refuse s'il ne correspond pas à la
+  session. Un lien truqué ne peut donc pas afficher `claude.ai` pour une session qui renvoie ailleurs. (2) Retrait :
+  `agent_call` porte `clientId`, et le Node n'exécute que les appels d'un assistant encore relié ; les liens
+  enregistrés avant gardent leur portée sur toute la passerelle. (3) Abus : un client sans jeton est oublié après
+  24 h, et au-delà de 1 000 clients sans jeton ou de 1 000 sessions ouvertes, le plus ancien est oublié. Le plan
+  accepté prévoyait un 503 ; il a été remplacé en cours de réalisation, parce qu'un 503 laissait 1 000 requêtes par
+  jour bloquer tous les nouveaux utilisateurs, alors que l'éviction oblige à dépasser en continu le rythme d'une vraie
+  connexion. L'état
+  persisté est validé par un schéma zod au lieu de `z.any()`. Changement de protocole incompatible pour `link_grant`
+  et `agent_call` : passerelle et Nodes se mettent à jour ensemble, ce qui convient tant que la passerelle n'est pas
+  ouverte au public. Les adresses de retour de Claude et ChatGPT sont à revérifier dans leur aide officielle au
+  premier essai réel.
 
 ## À décider par l'humain
 

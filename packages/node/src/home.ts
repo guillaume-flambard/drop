@@ -60,9 +60,22 @@ export type Published = z.infer<typeof PublishedSchema>;
 export const AgentLinkSchema = z.object({
   gateway: NodeIdSchema,
   clientName: z.string().min(1).max(80),
+  /** The assistant's OAuth client at the gateway (D36). Links saved before it speak for any client of the gateway. */
+  clientId: z.string().optional(),
+  /** The domain the user saw the assistant's answers return to, e.g. claude.ai. */
+  redirectHost: z.string().optional(),
   linkedAt: z.string(),
 });
 export type AgentLink = z.infer<typeof AgentLinkSchema>;
+
+/** What the panel shows and the user approves when an assistant asks to be linked (T2.13, D36). */
+export const LinkRequestSchema = z.object({
+  sessionId: z.string().regex(/^[A-Za-z0-9_-]{16,64}$/),
+  clientId: z.string().regex(/^[A-Za-z0-9_-]{8,64}$/),
+  clientName: z.string().min(1).max(80),
+  redirectHost: z.string().min(1).max(253),
+});
+export type LinkRequest = z.infer<typeof LinkRequestSchema>;
 
 /** This node's team and the members it knows (T2.9). */
 export const TeamStateSchema = z.object({ team: TeamSchema, members: z.array(TeamMemberSchema) });
