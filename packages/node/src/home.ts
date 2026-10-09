@@ -238,6 +238,8 @@ export class DropHome {
     const integrityPath = join(this.root, 'received-drops-integrity');
     const clockExists = existsSync(clockPath);
     const versionExists = existsSync(versionPath);
+    const integrityExists = existsSync(integrityPath);
+    if (!versionExists && (clockExists || integrityExists)) throw new Error('E_REPLAY_STATE missing version');
     // The clock/version prove that this home has admitted requests. Recreating a lost marker directory would
     // silently reopen consent for a recent request whose tombstone was in that directory.
     if (!existsSync(dir) && (clockExists || versionExists)) throw new Error('E_REPLAY_STATE missing markers');
@@ -247,7 +249,6 @@ export class DropHome {
       if (version !== '1\n' && version !== '2\n') throw new Error('E_REPLAY_STATE corrupt version');
       if (!clockExists) throw new Error('E_REPLAY_STATE missing clock');
     }
-    const integrityExists = existsSync(integrityPath);
     if (version === '2\n' && !integrityExists) throw new Error('E_REPLAY_STATE missing integrity');
     let highWater = 0;
     if (clockExists) {

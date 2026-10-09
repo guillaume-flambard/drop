@@ -302,6 +302,23 @@ describe('bounded received drops', () => {
     }
   });
 
+  it('fails closed if replay version and clock disappear while integrity remains', () => {
+    const root = mkdtempSync(join(tmpdir(), 'drop-replay-missing-version-'));
+    try {
+      const home = new DropHome(root);
+      const dropId = uuidv7(NOW);
+      expect(home.claimDrop(dropId, NOW)).toBe('claimed');
+      const later = NOW + 31 * 60_000;
+      expect(home.claimDrop(uuidv7(later), later)).toBe('claimed');
+      expect(readdirSync(join(root, 'received-drops'))).not.toContain(dropId);
+      unlinkSync(join(root, 'received-drops-version'));
+      unlinkSync(join(root, 'received-drops-clock'));
+      expect(() => new DropHome(root).claimDrop(dropId, NOW)).toThrow('E_REPLAY_STATE missing version');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('ignores operating system and foreign entries in the marker directory', () => {
     const root = mkdtempSync(join(tmpdir(), 'drop-replay-foreign-'));
     try {
@@ -443,6 +460,7 @@ describe('replay admission through the engine', () => {
     try {
       const node = await ownerNode(root);
       mkdirSync(join(root, 'received-drops'));
+      writeFileSync(join(root, 'received-drops-version'), '1\n');
       writeFileSync(join(root, 'received-drops-clock'), 'corrupt');
       await node.send(uuidv7(NOW));
       expect(node.logs).toContainEqual(
