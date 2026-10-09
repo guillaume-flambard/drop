@@ -235,6 +235,88 @@ describe('relay', () => {
     expect(await a.instance.send(await sealEnvelope(alice, bob.nodeId, { type: 'catalog_request' }))).toBe('E_RATE');
   });
 
+  it('counts a frame rejected by the WebSocket payload limit before reconnect', async () => {
+    const alice = await generateIdentity('Alice');
+    const bob = await generateIdentity('Bob');
+    const { relay, logs } = await relayFor([alice, bob], { rateLimitPerMinute: 1 });
+    const socket = new WebSocket(relay.url);
+    cleanups.push(() => {
+      socket.terminate();
+    });
+    let ready = false;
+    let closed = false;
+    socket.on('message', (data) => {
+      const frame = JSON.parse(Buffer.isBuffer(data) ? data.toString('utf8') : '') as {
+        type: string;
+        challenge?: string;
+      };
+      if (frame.type === 'challenge' && frame.challenge) {
+        void signDetached(alice, frame.challenge).then(
+          (sig) => {
+            socket.send(JSON.stringify({ type: 'auth', nodeId: alice.nodeId, sig }));
+          },
+          () => {
+            socket.close();
+          },
+        );
+      }
+      if (frame.type === 'ready') ready = true;
+    });
+    socket.on('close', () => {
+      closed = true;
+    });
+    await until(() => ready);
+    socket.send('X'.repeat(MAX_ENVELOPE_BYTES * 2 + 1));
+    await until(() => closed);
+    const reconnected = client(relay, alice);
+    await reconnected.instance.waitReady();
+    expect(await reconnected.instance.send(await sealEnvelope(alice, bob.nodeId, { type: 'catalog_request' }))).toBe(
+      'E_RATE',
+    );
+    expect(logs).toContainEqual(expect.objectContaining({ nodeId: alice.nodeId, outcome: 'E_TOO_LARGE' }));
+  });
+
+  it('counts invalid UTF-8 frames rejected by WebSocket before reconnect', async () => {
+    const alice = await generateIdentity('Alice');
+    const bob = await generateIdentity('Bob');
+    const { relay, logs } = await relayFor([alice, bob], { rateLimitPerMinute: 1 });
+    const socket = new WebSocket(relay.url);
+    cleanups.push(() => {
+      socket.terminate();
+    });
+    let ready = false;
+    let closed = false;
+    socket.on('message', (data) => {
+      const frame = JSON.parse(Buffer.isBuffer(data) ? data.toString('utf8') : '') as {
+        type: string;
+        challenge?: string;
+      };
+      if (frame.type === 'challenge' && frame.challenge) {
+        void signDetached(alice, frame.challenge).then(
+          (sig) => {
+            socket.send(JSON.stringify({ type: 'auth', nodeId: alice.nodeId, sig }));
+          },
+          () => {
+            socket.close();
+          },
+        );
+      }
+      if (frame.type === 'ready') ready = true;
+    });
+    socket.on('close', () => {
+      closed = true;
+    });
+    await until(() => ready);
+    socket.send(Buffer.from([0xff]), { binary: false });
+    await until(() => closed);
+    const reconnected = client(relay, alice);
+    await reconnected.instance.waitReady();
+    expect(await reconnected.instance.send(await sealEnvelope(alice, bob.nodeId, { type: 'catalog_request' }))).toBe(
+      'E_RATE',
+    );
+    expect(logs).toContainEqual(expect.objectContaining({ nodeId: alice.nodeId, outcome: 'E_SCHEMA' }));
+  });
+
   it('counts malformed authenticated frames before parsing', async () => {
     const alice = await generateIdentity('Alice');
     const bob = await generateIdentity('Bob');
