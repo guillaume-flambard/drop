@@ -430,3 +430,16 @@ L'écran de relecture MUST afficher le texte long tel quel, échappé.
 #### Scenario: Texte avec balises
 - **WHEN** un champ de sortie contient du HTML
 - **THEN** il est affiché littéralement, sans interprétation ni troncature
+
+### Requirement: Retour de connexion OAuth sur l'API locale
+L'API locale SHALL accepter `GET /oauth/callback?state=…&code=…` sans son jeton, puisque le navigateur ne peut pas
+l'envoyer, mais seulement avec l'en-tête `Host` de l'API, et MUST n'échanger le code que pour une connexion en cours
+dont le `state`, à usage unique, a moins de 10 minutes (T2.17, D39). La page de réponse n'autorise aucune ressource
+(`default-src 'none'`). `POST /ui/admin/connect { agent, server }`, derrière le jeton, démarre la connexion à un serveur
+détecté et ouvre la page dans le navigateur (macOS, https seulement). Un refus de partage pour OAuth porte le code
+`E_SHARE_OAUTH`.
+
+#### Scenario: Retour du navigateur
+<!-- openspec-guard:test="remote MCP servers behind OAuth (T2.17) > takes the sign-in callback on the local API without its token, for a pending state only" -->
+- **WHEN** le navigateur revient avec un `state` en cours, un `state` inconnu, sans code, avec un refus, ou par un autre hôte
+- **THEN** seul le premier échange le code ; les autres reçoivent une page d'erreur ou 401, et `/ui/admin/connect` exige le jeton

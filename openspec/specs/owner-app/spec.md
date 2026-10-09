@@ -70,3 +70,13 @@ la signature porte une autre version que celle de l'app.
 <!-- openspec-guard:non-testable reason="App native : à vérifier à la main à la première version publiée sur drop.memolabs.dev/updates" -->
 - **WHEN** une version plus récente est publiée
 - **THEN** le menu de l'icône affiche « Mettre à jour vers x.y.z », et seul un clic télécharge, vérifie la signature, installe et relance l'app avec son Node
+
+### Requirement: Connexion proposée dans le panneau
+Quand le partage d'un outil échoue avec `E_SHARE_OAUTH`, le panneau SHALL proposer « Se connecter à <serveur> », qui
+démarre la connexion de drop (T2.17). Le lien de secours vers la page de connexion MUST n'être affiché que s'il est en
+https.
+
+#### Scenario: Outil qui demande une connexion
+<!-- openspec-guard:test="menu bar panel and its admin routes (T2.4) > offers to sign in when a shared server needs OAuth, and links only an https sign-in page (T2.17)" -->
+- **WHEN** Natha partage Notion avant d'y avoir connecté drop
+- **THEN** le panneau propose « Se connecter à notion », et n'affiche la page de connexion qu'en https

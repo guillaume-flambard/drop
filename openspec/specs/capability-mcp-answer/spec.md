@@ -100,3 +100,23 @@ D38).
 - **WHEN** Natha partage un serveur qui exige OAuth, un serveur qui refuse son jeton, un serveur éteint, un outil absent ou un outil destructif
 - **THEN** le partage échoue avec un message qui nomme la cause, et aucune capacité n'est publiée
 - **AND** le même serveur partagé avec des outils offerts et en lecture est publié
+
+### Requirement: Serveurs distants avec OAuth
+Pour un serveur MCP distant qui exige OAuth et accepte l'enregistrement dynamique (Notion par exemple), drop SHALL
+s'enregistrer comme son propre client (nom « drop »), puis obtenir ses jetons par le code d'autorisation avec PKCE
+S256, une fois, dans le navigateur du propriétaire (T2.17, D39). Les jetons MUST rester sous `DROP_HOME/oauth`
+(dossier 0700, un fichier 0600 par serveur), ne jamais être journalisés ni envoyés à un pair, et être rafraîchis
+quand ils expirent. Une exécution ou un partage MUST ne jamais lancer de connexion ni s'enregistrer : sans jetons
+valides, ils échouent comme un serveur qui exige OAuth. Un jeton déjà configuré dans l'agent passe en premier. Les
+outils utilisables restent ceux choisis au partage.
+
+#### Scenario: Connexion unique puis rafraîchissement
+<!-- openspec-guard:test="remote MCP servers behind OAuth (T2.17) > signs in once (registration, PKCE, consent), keeps the tokens 0600, refreshes them, and stops when revoked" -->
+- **WHEN** Natha connecte drop à son serveur Notion, puis que le jeton d'accès expire, puis que la connexion est révoquée
+- **THEN** drop s'enregistre une fois sous le nom « drop », garde ses jetons en 0600, les rafraîchit à l'expiration, et échoue comme un serveur OAuth après la révocation
+- **AND** avant la connexion, un appel échoue sans rien enregistrer ; un `state` inconnu ou déjà utilisé est refusé
+
+#### Scenario: Partage après connexion
+<!-- openspec-guard:test="remote MCP servers behind OAuth (T2.17) > drop share uses the tokens of a sign-in, and says how to sign in before one" -->
+- **WHEN** Natha partage le serveur Notion avant, puis après la connexion de drop
+- **THEN** le premier partage indique `drop connect claude_code/notion`, le second publie les outils en lecture du serveur

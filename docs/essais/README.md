@@ -6,17 +6,17 @@ les points marqués « à vérifier » le sont sur place, avant de commencer.
 
 ## Ce que drop sait brancher aujourd'hui
 
-`mcp.answer` répond à partir d'un serveur MCP **stdio**, ou **HTTP avec des en-têtes fixes** (un jeton). Il ne sait
-pas encore se connecter à un serveur qui demande une connexion **OAuth** : c'est le cas des serveurs distants
-officiels de Notion et de Figma, et de Linear par défaut. Depuis T2.16, le partage d'un tel serveur échoue avec un
-message clair ; T2.17 dira s'il faut l'apprendre. Il faut donc brancher chaque outil comme ci-dessous, avant l'essai.
+`mcp.answer` répond à partir d'un serveur MCP **stdio**, ou **HTTP** avec un jeton dans un en-tête. Pour un serveur
+distant qui demande une connexion **OAuth** et accepte l'enregistrement dynamique, comme celui de Notion, drop se
+connecte lui-même, une fois (`drop connect` ou le bouton « Se connecter » du panneau, T2.17). Le serveur distant de
+Figma reste fermé aux clients qu'il n'a pas approuvés. Il faut donc brancher chaque outil comme ci-dessous.
 
 | Outil  | Branchement pour drop                                                                                    | Outils à partager                                                         | Limites connues                                                                                                                                                         |
 | ------ | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Figma  | Serveur local de l'app de bureau : `http://127.0.0.1:3845/mcp`, activé dans Dev Mode, sans jeton          | `get_metadata`, `get_design_context`, `get_variable_defs`, `get_screenshot` | Siège Dev ou Full exigé : sinon 6 appels d'outil par mois. L'app Figma doit être ouverte. Les outils lisent la sélection ou un lien : la question doit contenir le lien. |
 | GitHub | Serveur distant en lecture : `https://api.githubcopilot.com/mcp/readonly`, en-tête `Authorization: Bearer` | Ceux que le serveur marque en lecture (choix par défaut de `drop share`)   | Jeton à grain fin, en lecture, limité aux dépôts de l'essai.                                                                                                            |
 | Linear | Serveur distant en lecture : `https://mcp.linear.app/mcp/readonly`, clé d'API en `Authorization: Bearer`   | Ceux que le serveur marque en lecture                                     | À vérifier sur place : la doc de Linear n'était pas joignable d'ici. La clé agit sous une seule identité.                                                               |
-| Notion | Serveur local `npx -y @notionhq/notion-mcp-server`, variable `NOTION_TOKEN` d'une intégration en lecture | `retrieve-a-page`, `retrieve-page-markdown`, `retrieve-a-block`…          | **Pas de recherche** : ce serveur marque toute requête POST comme destructive, dont `post-search` et `query-data-source`, et drop retire ces outils. Voir D38.         |
+| Notion | Serveur distant `https://mcp.notion.com/mcp`, déclaré sans jeton, puis « Se connecter » dans drop (T2.17). Repli : serveur local `@notionhq/notion-mcp-server` avec `NOTION_TOKEN` | Les outils que le serveur distant marque en lecture ; vérifier que la recherche en fait partie | À vérifier sur place : premier essai réel de la connexion OAuth (D39). En repli local, **pas de recherche** (D38). |
 | Base   | Serveur stdio de la base de Natha, avec un **rôle en lecture seule**                                     | L'outil de requête du serveur                                             | Type de base et serveur à choisir avec Natha. Jamais l'utilisateur de l'application.                                                                                     |
 
 Sources, lues le 9 octobre 2026 : [Figma MCP server guide](https://github.com/figma/mcp-server-guide),
@@ -57,10 +57,12 @@ la frame sélectionnée chez Julie. Noter ce qui se passe : c'est la limite du s
 2. Créer les accès en lecture, chacun dans la variable d'environnement de l'agent qui déclare le serveur :
    - GitHub : jeton à grain fin, lecture seule, dépôts de l'essai ;
    - Linear : clé d'API en lecture ;
-   - Notion : intégration « Read content » seulement, partagée sur les pages de l'essai ;
+   - Notion : rien à créer pour le serveur distant ; Natha se connecte depuis drop et choisit les pages dans Notion
+     (en repli, une intégration « Read content » seulement, partagée sur les pages de l'essai) ;
    - base : un rôle `drop_reader` en lecture seule sur les tables de l'essai.
 3. Déclarer les quatre serveurs dans l'agent de Natha (Claude Code par exemple), puis les partager depuis l'onglet
-   Mes outils. Pour Notion, choisir explicitement les outils de lecture du tableau.
+   Mes outils. Pour Notion, « Se connecter » d'abord, puis partager. En repli local, choisir explicitement les outils
+   de lecture du tableau.
 4. Vérifier chaque source seule, par une question simple de Guillaume, avant le scénario complet.
 
 **Scénario N1, « Où en est le projet Atlas ? ».** Guillaume demande à son équipe, en une phrase. Attendu : drop

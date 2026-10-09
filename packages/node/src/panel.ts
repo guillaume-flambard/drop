@@ -82,6 +82,9 @@ code { font: 11px ui-monospace, monospace; word-break: break-all; }
   var tab = 'requests';
   var notice = '';
   var info = '';
+  // A shared server that needs an OAuth sign-in (T2.17): the panel offers it, then the owner shares again.
+  var signInOffer = null;
+  var signInLink = '';
 
   function api(method, path, body, form) {
     var headers = { Authorization: 'Bearer ' + token };
@@ -89,7 +92,10 @@ code { font: 11px ui-monospace, monospace; word-break: break-all; }
     if (form) { headers['Content-Type'] = 'application/x-www-form-urlencoded'; payload = new URLSearchParams(form).toString(); }
     else if (body !== undefined) { headers['Content-Type'] = 'application/json'; payload = JSON.stringify(body); }
     return fetch(path, { method: method, headers: headers, body: payload }).then(function (res) {
-      return res.json().then(function (data) { if (!res.ok) throw new Error((data && data.message) || 'erreur'); return data; });
+      return res.json().then(function (data) {
+        if (!res.ok) { var error = new Error((data && data.message) || 'erreur'); error.code = data && data.code; throw error; }
+        return data;
+      });
     });
   }
 
@@ -246,7 +252,11 @@ code { font: 11px ui-monospace, monospace; word-break: break-all; }
             el('button', { class: 'switch', role: 'switch', 'aria-checked': shared ? 'true' : 'false', 'aria-label': (shared ? 'Ne plus partager ' : 'Partager ') + server.name,
               onclick: function () {
                 var call = shared ? api('POST', '/ui/admin/unshare', { capabilityId: shared }) : api('POST', '/ui/admin/share', { agent: agent.agent, server: server.name });
-                call.then(render, function (error) { notice = error.message; render(); });
+                call.then(render, function (error) {
+                  notice = error.message;
+                  if (error.code === 'E_SHARE_OAUTH') signInOffer = { agent: agent.agent, server: server.name };
+                  render();
+                });
               } }, el('span', {}))));
         });
         view.appendChild(card);
@@ -267,6 +277,21 @@ code { font: 11px ui-monospace, monospace; word-break: break-all; }
     });
   }
 
+  function signInCard(offer) {
+    return el('div', { class: 'card' },
+      el('div', { text: 'drop doit se connecter à ' + offer.server + ' une fois, en ton nom. Le jeton reste sur ce Mac.' }),
+      el('button', { class: 'act fill', onclick: function () {
+        signInOffer = null;
+        api('POST', '/ui/admin/connect', offer).then(function (data) {
+          info = data.connected
+            ? 'drop est déjà connecté à ' + offer.server + ' : partage-le de nouveau.'
+            : 'Termine la connexion dans ton navigateur, puis partage ' + offer.server + ' de nouveau.';
+          signInLink = data.authorizationUrl || '';
+          render();
+        }, function (error) { notice = error.message; render(); });
+      } }, 'Se connecter à ' + offer.server));
+  }
+
   function render() {
     var view = document.getElementById('view');
     ['requests', 'team', 'tools'].forEach(function (name) {
@@ -276,6 +301,12 @@ code { font: 11px ui-monospace, monospace; word-break: break-all; }
     next.id = 'view';
     if (notice) { next.appendChild(el('div', { class: 'error', text: notice })); notice = ''; }
     if (info) { next.appendChild(el('div', { class: 'card', text: info })); info = ''; }
+    if (signInOffer) next.appendChild(signInCard(signInOffer));
+    // The sign-in page comes from the remote server: shown as a link only if it is https, never javascript: or else.
+    if (signInLink.indexOf('https://') === 0) {
+      next.appendChild(el('a', { class: 'act', href: signInLink, target: '_blank', rel: 'noopener noreferrer', text: 'Ouvrir la page de connexion' }));
+      signInLink = '';
+    }
     if (linkRequest) {
       api('GET', '/ui/admin/tools').then(function (tools) { linkCard(next, tools); view.replaceWith(next); });
       return;
