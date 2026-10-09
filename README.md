@@ -4,13 +4,13 @@
 
 Votre agent a besoin d'une information chez un collègue. Il pose une question précise ; le propriétaire autorise une fois ; une capacité s'exécute dans son environnement ; seule la réponse autorisée revient.
 
-`drop` est un nom de code. Cap adopté : A2A/MCP, installation privée sans service externe imposé, app Mac de barre de menus sous Tauri 2, puis Windows et Linux. Le prototype existe ; le profil privé complet et le raccordement groupé en deux confirmations restent à livrer. Le [bilan daté](docs/AVANCEMENT.md) distingue le code, les tests, les démonstrations et le travail restant.
+`drop` est un nom de code. Cap adopté : A2A/MCP, installation privée sans service externe imposé, app Mac de barre de menus sous Tauri 2, puis Windows et Linux. Le runtime privé fonctionne avec un relais interne et une politique réseau explicite. Le raccordement groupé en deux confirmations reste à livrer. Le [bilan daté](docs/AVANCEMENT.md) distingue le code, les tests, les démonstrations et le travail restant.
 
 ## Le socle et son modèle
 
 Le code du projet est sous [Apache-2.0](LICENSE). Community vise l'auto-hébergement, les modèles internes, le consentement et les contrôles essentiels sans taxe par demande. L'accompagnement, l'intégration et la maintenance peuvent être payants ; une administration d'organisation reste à valider. Le dépôt est encore privé, sans installateur public annoncé. Voir [le cadre open source](docs/OPEN_SOURCE.md).
 
-Le prototype amorce encore le relais du lab dans l'app Mac et utilise OpenRouter par défaut pour les capacités LLM. La cible privée doit supprimer ces dépendances imposées et empêcher qu'un financement change l'endpoint du propriétaire. L'A2A existant ne suffit pas à prouver cette propriété.
+Le nouveau profil utilise un relais local ou interne choisi par le propriétaire. Les destinations modèle, MCP HTTP et A2A sont limitées à des origines privées explicites, sans redirection ni repli cloud. Le modèle doit être choisi ; aucun poids n’est téléchargé automatiquement. Le financement ne remplace plus son endpoint. Voir le [démarrage et les limites du profil privé](docs/PRIVATE_PROFILE.md), notamment le refus du DNS et des serveurs source MCP stdio non isolés.
 
 ## Commencer par comprendre
 

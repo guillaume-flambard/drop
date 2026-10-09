@@ -45,13 +45,13 @@ TS
 echo "Le thème suit la préférence du système (clair ou sombre). Pas encore de bouton pour forcer un thème." > "$WORK/julie-repo/docs/theme.md"
 echo "STRIPE_SECRET=sk_live_this_must_never_leave" > "$WORK/julie-repo/.env"
 cat > "$WORK/repo-answer.json" <<CFG
-{ "repoPath": "$WORK/julie-repo" }
+{ "repoPath": "$WORK/julie-repo", "provider": { "baseUrl": "https://openrouter.ai/api/v1", "model": "nvidia/nemotron-3-super-120b-a12b:free", "apiKeyEnv": "OPENROUTER_API_KEY" } }
 CFG
 
 step "Init three nodes"
-DROP_HOME="$WORK/vps" $DROP init --name VPS --kind machine --relay ws://127.0.0.1:7790/v1 --port 7791
-DROP_HOME="$WORK/mac" $DROP init --name Guillaume --kind human --relay ws://127.0.0.1:7790/v1 --port 7792
-DROP_HOME="$WORK/julie" $DROP init --name Julie --kind human --relay ws://127.0.0.1:7790/v1 --port 7793
+DROP_HOME="$WORK/vps" $DROP init --profile legacy --name VPS --kind machine --relay ws://127.0.0.1:7790/v1 --port 7791
+DROP_HOME="$WORK/mac" $DROP init --profile legacy --name Guillaume --kind human --relay ws://127.0.0.1:7790/v1 --port 7792
+DROP_HOME="$WORK/julie" $DROP init --profile legacy --name Julie --kind human --relay ws://127.0.0.1:7790/v1 --port 7793
 node_id() { node -e "console.log(JSON.parse(require('fs').readFileSync('$1/identity.json','utf8')).nodeId)"; }
 VPS_ID="$(node_id "$WORK/vps")"; MAC_ID="$(node_id "$WORK/mac")"; JULIE_ID="$(node_id "$WORK/julie")"
 

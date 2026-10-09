@@ -71,7 +71,10 @@ describe('detecting agents and their MCP servers (T2.8)', () => {
     const dropHome = join(home, '.drop');
     const env = { ...process.env, HOME: home, DROP_HOME: dropHome };
     const run = (...args: string[]) => spawnSync(process.execPath, [cli, ...args], { env, encoding: 'utf8' });
-    expect(run('init', '--name', 'Julie', '--kind', 'human', '--relay', 'wss://relay.example/v1').status).toBe(0);
+    expect(
+      run('init', '--profile', 'legacy', '--name', 'Julie', '--kind', 'human', '--relay', 'wss://relay.example/v1')
+        .status,
+    ).toBe(0);
     const shared = run('share', 'claude_code/figma');
     expect(shared.stdout).toContain('published mcp.answer.figma');
     const published = JSON.parse(readFileSync(join(dropHome, 'capabilities', 'mcp.answer.figma.json'), 'utf8')) as {

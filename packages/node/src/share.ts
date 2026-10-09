@@ -35,7 +35,11 @@ export async function shareDetected(home: DropHome, request: ShareRequest): Prom
   const source = { transport: 'agent' as const, agent: agent.agent, name: server.name };
   let tools = request.tools?.filter(Boolean) ?? [];
   if (tools.length === 0) {
-    const client = await connectMcp(source);
+    const client = await connectMcp(
+      source,
+      process.env,
+      home.config().profile === 'private' ? home.config().network : undefined,
+    );
     try {
       const listed = (await client.listTools()).tools;
       tools = listed.filter((tool) => tool.annotations?.readOnlyHint === true).map((tool) => tool.name);

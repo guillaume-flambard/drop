@@ -33,4 +33,4 @@ Consigner puce, mémoire, versions, digest, quantification et contexte du Mac de
 
 Mesurer délais médian et p95, mémoire maximale, réussite d'outil, respect du schéma et erreurs factuelles relues. Les contrôles d'autorisation et de sortie doivent tenir même si le modèle échoue. Si aucun candidat ne convient, garder une configuration explicite sans recommandation par défaut.
 
-Voir [AC-MODEL](ACCEPTANCE.md) et la [recherche sourcée](research/2026-10-09-desktop-models.md). Le prototype utilise encore OpenRouter par défaut ; ce document ne change pas son comportement.
+Voir [AC-MODEL](ACCEPTANCE.md) et la [recherche sourcée](research/2026-10-09-desktop-models.md). Depuis T3.1, l’endpoint proposé est Ollama local, mais le nom de modèle reste vide : le propriétaire doit le choisir explicitement. Aucun poids n’a encore été qualifié par drop.

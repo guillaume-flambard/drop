@@ -4,7 +4,7 @@
 
 Votre agent a besoin d'une information détenue par un collègue. Avec drop, il lui adresse une demande précise. Le collègue choisit de l'autoriser ; son environnement exécute une action définie à l'avance ; votre agent reçoit la réponse autorisée.
 
-`drop` est un nom de code. Cap adopté le 9 octobre 2026 : collaboration A2A/MCP dans l'infrastructure du client, app Mac de barre de menus, socle Community sous Apache-2.0. Le prototype existe ; le profil privé complet et le raccordement groupé restent à construire. Le [bilan daté](AVANCEMENT.md) précise les preuves.
+`drop` est un nom de code. Cap adopté le 9 octobre 2026 : collaboration A2A/MCP dans l'infrastructure du client, app Mac de barre de menus, socle Community sous Apache-2.0. Le runtime privé est implémenté ; le raccordement groupé reste à construire. Le [bilan daté](AVANCEMENT.md) précise les preuves.
 
 ## La cible privée
 
@@ -83,13 +83,13 @@ La distinction essentielle est **qui reçoit quoi**.
 | Propriétaire / exécuteur                | Question et raison de la demande ; accès à ses propres sources                                        |
 | Fournisseur du modèle, s'il est distant | Question et contexte transmis au modèle, notamment les résultats des outils qu'il utilise             |
 
-**Exécution locale ne signifie pas modèle local.** Le fournisseur configuré par défaut dans le code est OpenRouter. Avec un fournisseur distant, des extraits du dépôt ou des résultats MCP peuvent lui être transmis pendant le raisonnement. Un modèle local compatible peut être configuré, mais il faut vérifier sa capacité à utiliser les outils et la qualité de ses réponses.
+**Le propriétaire choisit son modèle.** L’URL proposée est Ollama sur loopback, sans choix implicite de modèle ni téléchargement. Le profil privé impose des origines privées explicites et refuse redirections, DNS et serveurs source MCP stdio. Les services internes doivent eux-mêmes être isolés par le client. Il reste à qualifier un vrai modèle et ses outils. Voir [le guide du profil privé](PRIVATE_PROFILE.md).
 
 Le chiffrement protège le transport entre Nodes. Les listes d'outils, schémas, budgets, filtres et relectures limitent ce qui est exécuté et renvoyé. Ils ne constituent ni un audit de sécurité indépendant, ni un bac à sable système, ni une garantie absolue contre la divulgation. Les annotations de lecture seule d'un serveur MCP ne remplacent pas l'examen des outils que l'on choisit de partager.
 
 ## Qui paie le modèle ?
 
-**Comportement historique à encadrer dans T3.1.** Le profil privé cible fixe le modèle et sa destination chez le propriétaire : une clé de financement ne doit pas les remplacer. Ce contrôle n'est pas encore livré.
+**Contrôle livré en T3.1.** Le financement ne remplace ni le modèle ni l’endpoint du propriétaire. Un financement incompatible est refusé avant appel ; en profil privé payé par le propriétaire, toute clé reçue est refusée avant consentement.
 
 Le financement par le demandeur est implémenté : une clé plafonnée est créée pour la demande et transmise chiffrée à l'exécuteur. Elle n'est pas écrite sur son disque. Le coût annoncé et le payeur apparaissent sur la carte ; le cycle de fin de demande prévoit la révocation de la clé. Ce chemin dépend d'une configuration de financement valide.
 
@@ -173,6 +173,6 @@ La commande `share <agent>/<serveur>` permet ensuite de publier une source exist
 
 ## Pour contribuer
 
-Les critères du futur profil privé sont dans [ACCEPTANCE](ACCEPTANCE.md), à promouvoir dans les specs lors de leur implémentation. Le contrat normatif est dans [openspec/specs](../openspec/specs/). La vision, l'architecture et ce guide sont descriptifs. [TASKS.md](TASKS.md) fixe l'ordre du travail ; [DECISIONS.md](DECISIONS.md) conserve les choix et leurs évolutions ; [AGENTS.md](../AGENTS.md) décrit la méthode de contribution.
+Les critères du produit sont dans [ACCEPTANCE](ACCEPTANCE.md). Ceux de T3.1 sont implémentés dans les specs ; les autres restent à vérifier dans leurs chantiers. Le contrat normatif est dans [openspec/specs](../openspec/specs/). La vision, l'architecture et ce guide sont descriptifs. [TASKS.md](TASKS.md) fixe l'ordre du travail ; [DECISIONS.md](DECISIONS.md) conserve les choix et leurs évolutions ; [AGENTS.md](../AGENTS.md) décrit la méthode de contribution.
 
 Sources principales de ce guide : [CLI](../packages/node/src/cli.ts), [outils MCP](../packages/requester-mcp/src/tools.ts), [registre des capacités](../packages/capabilities/src/index.ts), [pipeline](../packages/runner/src/run.ts), [fournisseur du modèle](../packages/capabilities/src/llm.ts), [cycle de vie](../packages/protocol/src/lifecycle.ts), [démo](../scripts/demo-local.sh).

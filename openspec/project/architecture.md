@@ -18,7 +18,7 @@ Agent d’entreprise A2A ↔ interface A2A du Node
 Capacité a2a.answer → agent A2A approuvé dans le périmètre du client
 ```
 
-Le relais relie les postes sans exposer de port entrant sur chaque runner. Il peut vivre sur un poste pour une démonstration, un serveur interne ou un environnement privé du client. Une VM ou un conteneur est la voie simple à éprouver dans T3.1 ; Kubernetes n’est pas requis. La découverte LAN et le pair-à-pair direct ne sont pas des prérequis.
+Le relais relie les postes sans exposer de port entrant sur chaque runner. Il peut vivre sur un poste pour une démonstration, un serveur interne ou un environnement privé du client. Une recette conteneur sans Internet est vérifiée dans T3.1 ; Kubernetes n’est pas requis. La découverte LAN et le pair-à-pair direct ne sont pas des prérequis.
 
 Un laptop peut héberger le relais de test et plusieurs Nodes. Une équipe répartie nécessite une connectivité vers son relais (réseau ou VPN choisi par elle). « Hors ligne » signifie Internet bloqué avec connectivité interne disponible, modèles et dépendances présents. On ne peut pas joindre un collègue devenu injoignable.
 
@@ -75,6 +75,6 @@ Le runner n’écoute aucun port. L’API du Node écoute localement et reste au
 
 ## Écart avec le prototype au début de T3.0
 
-L’app Mac amorce encore le relais du lab en dur. Le runner choisit OpenRouter par défaut et le financement peut fournir un endpoint. Les installeurs raccordent individuellement les agents ; la transaction groupée avec restauration reste à construire. A2A entrant et sortant existent, sans démontrer la conformité à tout A2A ni la souveraineté de bout en bout.
+T3.1 remplace le bootstrap Mac public par un relais loopback ou explicitement configuré. Le runtime privé propose Ollama local et exige un modèle explicite ; le financement ne remplace plus sa destination. Les transports privés autorisent des IP privées littérales exactes, sans DNS, redirection ni proxy implicite. Les sources MCP stdio non isolées sont refusées. Voir [PRIVATE_PROFILE](../../docs/PRIVATE_PROFILE.md). Les installeurs raccordent individuellement les agents ; la transaction groupée avec restauration reste à construire. A2A entrant et sortant existent, sans démontrer la conformité à tout A2A ni la souveraineté de bout en bout.
 
-T3.1 enlève les dépendances externes imposées du profil privé. T3.2 qualifie les modèles. T3.3 réalise le raccordement. T3.4 termine l’app distribuable. T3.5 apporte les preuves d’ensemble. Ordre et reprise des anciens chantiers : [TASKS](../../docs/TASKS.md).
+T3.1 prouve le cycle privé dans un conteneur sans Internet, avec deux Nodes et des fixtures MCP/modèle ; cela ne qualifie pas un vrai modèle ni tous les agents tiers. T3.2 qualifie les modèles. T3.3 réalise le raccordement. T3.4 termine l’app distribuable. T3.5 apporte les preuves d’ensemble. Ordre et reprise des anciens chantiers : [TASKS](../../docs/TASKS.md).

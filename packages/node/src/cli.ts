@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { privateConfig, migratePrivate, rollbackPrivate } from './private-config.ts';
+import { PrivateNetworkSchema } from '@drop/protocol';
 import { readFileSync } from 'node:fs';
 import { parseArgs } from 'node:util';
 import { z } from 'zod';
@@ -15,7 +17,10 @@ import { costLine } from './ui.ts';
 const AgentKindSchema = z.enum(AGENTS);
 
 const USAGE = `drop <command>
-  init --name <name> --kind human|team|machine|service --relay <wss://…> [--port 7781]
+  init --name <name> [--kind human|team|machine|service] [--relay <internal URL>] [--port 7781]
+       [--profile private|legacy] [--network <policy.json>]
+  migrate-private --relay <url> [--network <policy.json>]  stop daemon first; backs up config
+  rollback-private               stop daemon first; restores unchanged migrated config
   serve                          daemon: relay, local API, consent UI, runner
   invite                         print a one-time pairing code (daemon must run)
   pair <code>                    pair with the node that issued the code (daemon must run)
@@ -92,18 +97,43 @@ switch (command) {
         kind: { type: 'string' },
         relay: { type: 'string' },
         port: { type: 'string' },
+        network: { type: 'string' },
+        profile: { type: 'string' },
       },
     });
-    if (!values.name || !values.relay) fail('drop init --name <name> --kind human --relay wss://…');
+    if (!values.name) fail('drop init --name <name> [--relay <internal URL>]');
+    if (values.profile && !['private', 'legacy'].includes(values.profile)) fail('unknown profile');
+    const relayUrl = values.relay ?? 'ws://127.0.0.1:7780/v1';
+    const network = values.network
+      ? PrivateNetworkSchema.parse(JSON.parse(readFileSync(values.network, 'utf8')))
+      : undefined;
     const ownerKind = OwnerKindSchema.parse(values.kind ?? 'human');
     const identity = await generateIdentity(values.name);
     home.init(
       identity,
-      NodeConfigSchema.parse({ relayUrl: values.relay, ownerKind, apiPort: Number(values.port ?? 7781) }),
+      values.profile === 'legacy'
+        ? NodeConfigSchema.parse({ relayUrl, ownerKind, apiPort: Number(values.port ?? 7781) })
+        : privateConfig(relayUrl, ownerKind, Number(values.port ?? 7781), network),
     );
     process.stdout.write(
       `initialized ${home.root}\nnodeId ${identity.nodeId}\njoin the relay: \`drop pair <invite code>\` from a member (or, for a first node, ask the relay operator to run: drop-relay allow ${identity.nodeId})\n`,
     );
+    break;
+  }
+  case 'migrate-private': {
+    const { values } = parseArgs({ args: rest, options: { relay: { type: 'string' }, network: { type: 'string' } } });
+    if (!values.relay) fail('migrate-private requires --relay');
+    migratePrivate(
+      home,
+      values.relay,
+      values.network ? PrivateNetworkSchema.parse(JSON.parse(readFileSync(values.network, 'utf8'))) : undefined,
+    );
+    process.stdout.write('private profile configured; restart the daemon; backup: private-migration.json\n');
+    break;
+  }
+  case 'rollback-private': {
+    rollbackPrivate(home);
+    process.stdout.write('previous configuration restored; restart the daemon\n');
     break;
   }
   case 'serve': {
@@ -285,7 +315,11 @@ switch (command) {
     const raw: unknown = JSON.parse(readFileSync(values.config ?? fail('drop mcp-tools --config <file.json>'), 'utf8'));
     // Only the server part is needed here: the tool list may still be empty while the owner is choosing.
     const server = McpAnswerConfigSchema.shape.server.parse((raw as { server?: unknown }).server);
-    const client = await connectMcp(server);
+    const client = await connectMcp(
+      server,
+      process.env,
+      home.config().profile === 'private' ? home.config().network : undefined,
+    );
     try {
       for (const tool of (await client.listTools()).tools) {
         const hint = tool.annotations?.destructiveHint

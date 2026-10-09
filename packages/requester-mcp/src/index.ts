@@ -3,9 +3,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { localNodeFromEnv } from './client.ts';
 import { createRequesterServer } from './server.ts';
 
-export * from './client.ts';
-export * from './server.ts';
-export * from './tools.ts';
+export * from './library.ts';
 
 // Started as a process (`node packages/requester-mcp/src/index.ts`), not when imported by tests.
 if (import.meta.main) {

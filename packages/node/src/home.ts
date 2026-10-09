@@ -2,6 +2,8 @@ import { randomBytes } from 'node:crypto';
 import {
   appendFileSync,
   chmodSync,
+  closeSync,
+  openSync,
   existsSync,
   mkdirSync,
   readdirSync,
@@ -14,6 +16,8 @@ import { join } from 'node:path';
 import { z } from 'zod';
 import { FundingConfigSchema } from './funding.ts';
 import {
+  PrivateNetworkSchema,
+  assertPrivateDestination,
   TeamMemberSchema,
   TeamSchema,
   IdentitySchema,
@@ -24,17 +28,30 @@ import {
   type Receipt,
 } from '@drop/protocol';
 
-export const NodeConfigSchema = z.object({
-  relayUrl: z.string(),
-  ownerKind: OwnerKindSchema,
-  apiPort: z.number().int().min(0).max(65535).default(7781),
-  /** Gateways this node trusts to carry its assistants' calls (T2.13); the app warns about any other one. */
-  gateways: z.array(NodeIdSchema).default([]),
-  /** As executor: who pays the model of the capabilities run here (D27: the requester, by default). */
-  payer: z.enum(['requester', 'owner']).default('requester'),
-  /** As requester: how this node pays for its drops (D27). Absent: it sends no key, the owner's config applies. */
-  funding: FundingConfigSchema.optional(),
-});
+export const NodeConfigSchema = z
+  .object({
+    relayUrl: z.string(),
+    profile: z.enum(['legacy', 'private']).default('legacy'),
+    network: PrivateNetworkSchema.optional(),
+    ownerKind: OwnerKindSchema,
+    apiPort: z.number().int().min(0).max(65535).default(7781),
+    /** Gateways this node trusts to carry its assistants' calls (T2.13); the app warns about any other one. */
+    gateways: z.array(NodeIdSchema).default([]),
+    /** As executor: who pays the model of the capabilities run here (D27: the requester, by default). */
+    payer: z.enum(['requester', 'owner']).default('requester'),
+    /** As requester: how this node pays for its drops (D27). Absent: it sends no key, the owner's config applies. */
+    funding: FundingConfigSchema.optional(),
+  })
+  .superRefine((config, ctx) => {
+    if (config.profile !== 'private') return;
+    try {
+      if (!config.network || config.funding || config.gateways.length) throw new Error('policy');
+      assertPrivateDestination(config.relayUrl, config.network);
+      if (!['ws:', 'wss:'].includes(new URL(config.relayUrl).protocol)) throw new Error('relay');
+    } catch {
+      ctx.addIssue({ code: 'custom', message: 'E_DENIED invalid private profile' });
+    }
+  });
 export type NodeConfig = z.infer<typeof NodeConfigSchema>;
 
 export const PeerSchema = z.object({
@@ -98,6 +115,20 @@ export class DropHome {
     writeFileSync(join(this.root, 'config.json'), `${JSON.stringify(config, null, 2)}\n`);
     writeFileSync(join(this.root, 'peers.json'), '[]\n');
     writePrivate(join(this.root, 'local-token'), randomBytes(32).toString('base64url'));
+  }
+
+  /** Durable metadata tombstone: pending requests also cannot regain consent after a restart. */
+  claimDrop(dropId: string): boolean {
+    if (!/^[0-9a-f-]{36}$/i.test(dropId)) throw new Error('E_SCHEMA invalid drop id');
+    const dir = join(this.root, 'received-drops');
+    mkdirSync(dir, { recursive: true, mode: 0o700 });
+    try {
+      closeSync(openSync(join(dir, dropId), 'wx', 0o600));
+      return true;
+    } catch (error) {
+      if (error instanceof Error && 'code' in error && error.code === 'EEXIST') return false;
+      throw error;
+    }
   }
 
   identity(): Identity {

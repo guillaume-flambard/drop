@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       name="description"
-      content="État de drop au 9 octobre 2026 : socle A2A et MCP existant, profil privé et connexion simplifiée à construire, ouverture du dépôt préparée."
+      content="État de drop au 9 octobre 2026 : socle A2A et MCP existant, runtime privé vérifié et connexion simplifiée à construire, ouverture du dépôt préparée."
     />
     <meta name="theme-color" content="#2548ed" />
     <title>Où en est le projet ? · drop</title>
@@ -50,9 +50,9 @@
             </p>
             <div class="note">
               <p>
-                <strong>C’est l’objectif du prochain parcours, pas l’état livré.</strong> Le bootstrap Mac actuel
-                utilise le relais du lab et OpenRouter par défaut. La mise à jour des documents et de cette vitrine ne
-                change pas le runtime.
+                <strong>Le premier socle privé est vérifié.</strong> Deux Nodes, un relais et des fixtures MCP/modèle
+                fonctionnent dans un conteneur sans Internet. Le bootstrap Mac choisit désormais un relais local ou
+                configuré. Un vrai modèle, deux utilisateurs et la distribution Mac restent à qualifier.
               </p>
             </div>
             <figure>
@@ -103,7 +103,7 @@
                   <tr>
                     <td>App Mac en barre de menus</td>
                     <td>Premier shell Tauri existant</td>
-                    <td>Bootstrap lié au lab ; distribution signée et parcours privé encore à livrer.</td>
+                    <td>Bootstrap privé vérifié ; distribution signée et parcours complet encore à livrer.</td>
                   </tr>
                   <tr>
                     <td>Détection de quatre agents</td>
@@ -127,8 +127,9 @@
             <h2>La simplicité repose sur quelques preuves solides.</h2>
             <ol>
               <li>
-                <strong>Livrer le profil privé.</strong> Relais choisi par l’organisation, destinations autorisées,
-                aucun repli cloud ni changement implicite d’endpoint par le financement.
+                <strong>Socle privé implémenté (T3.1).</strong> Destinations autorisées, aucun repli cloud, financement
+                sans substitution, migration et révocation vérifiées. IP privées explicites ; pas de DNS ni de source
+                MCP stdio.
               </li>
               <li>
                 <strong>Qualifier les modèles et la connexion locale.</strong> Réutiliser un modèle existant, mesurer
@@ -202,7 +203,8 @@
               d’acceptation et leurs preuves déterminent ce que l’on peut annoncer.
             </p>
             <div class="download-row">
-              <a href="downloads/AVANCEMENT.md" download>Télécharger le bilan sourcé</a
+              <a href="downloads/PRIVATE_PROFILE.md" download>Installer le profil privé</a
+              ><a href="downloads/AVANCEMENT.md" download>Télécharger le bilan sourcé</a
               ><a href="downloads/ACCEPTANCE.md" download>Critères d’acceptation</a
               ><a href="downloads/OPEN_SOURCE.md" download>Plan d’ouverture</a>
             </div>

@@ -53,6 +53,24 @@ function fakeFunder(): Funder & { released: string[] } {
 }
 
 describe('the requester pays with a capped key (T2.3, D27)', () => {
+  it('refuses unsolicited funding in an owner-paid private profile before consent', async () => {
+    const seen: (Funding | undefined)[] = [];
+    const m = (mesh = await startMesh([keyWitness(seen)], {
+      requester: { funder: fakeFunder() },
+      executor: { privateProfile: true, payer: 'owner' },
+    }));
+    const drop = await m.requester.engine.requestDrop({
+      capabilityId: 'test.paid_answer',
+      input: { question: 'État du projet ?' },
+      purpose: 'Test privé',
+      agent: 'codex',
+    });
+    await until(() => m.requester.engine.drop(drop.dropId)?.error?.code === 'E_DENIED');
+    expect(m.approver.engine.pending()).toEqual([]);
+    expect(seen).toEqual([]);
+    expect(JSON.stringify(m.executor.store.receiptList)).not.toContain(KEY);
+  });
+
   it('sends the key to the executor only, shows who pays on the card, and deletes the key when the drop ends', async () => {
     const seen: (Funding | undefined)[] = [];
     const funder = fakeFunder();
