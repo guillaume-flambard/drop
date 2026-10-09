@@ -51,6 +51,7 @@ export {
 } from './agents.ts';
 export {
   connectMcp,
+  McpConnectError,
   createMcpAnswer,
   mcpAnswer,
   McpAnswerConfigSchema,
