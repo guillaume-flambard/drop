@@ -1,7 +1,7 @@
 {
   "change": "t3-1b-replay-storage-bounds",
   "phase": "VERIFYING",
-  "status": "BLOCKED_EXTERNAL_REVIEW",
+  "status": "VERIFYING_FORMAL_REVIEW_PENDING",
   "requirements": [
     "REQ-1 UUIDv7 for new drop requests",
     "REQ-2 bounded durable anti-replay across restart and clock rollback",
@@ -19,6 +19,8 @@
     "node_missing_clock_after_migration": "passed",
     "relay_malformed_frame_quota": "passed",
     "relay_oversized_frame_quota": "passed",
+    "relay_websocket_payload_limit_quota": "passed",
+    "relay_websocket_invalid_utf8_quota": "passed",
     "relay_reconnect": "passed"
   },
   "workGraph": {
@@ -33,14 +35,15 @@
     "P1-6": "DONE",
     "P1-7": "DONE",
     "P1-8": "DONE",
-    "P1-9": "DONE"
+    "P1-9": "DONE",
+    "P1-10": "DONE"
   },
   "risks": [
     {
       "id": "R-1",
       "severity": "high",
       "status": "mitigated_pending_final_review",
-      "description": "Replay and quota bypasses fixed; foreign lock age takeover and missing clock after migration now fail closed, pending fresh review"
+      "description": "Replay and quota bypasses fixed, including ws pre-message errors; foreign lock age takeover and missing clock after migration fail closed, pending formal scoped review"
     },
     {
       "id": "R-2",
@@ -53,14 +56,14 @@
     "targetedTests": "passed",
     "lint": "passed",
     "typecheck": "passed",
-    "fullTests": "passed_294_of_294_commit_56c396c",
+    "fullTests": "passed_345_of_345_current_worktree",
     "openspecValidate": "passed",
-    "guard": "passed_390_criteria_113_linked_baseline_plus0_minus0",
-    "review": "gstack_completed_true_converged_false_3_cycles;_fresh_review_blocked_by_claude_session_limit_until_18h20_Paris",
+    "guard": "passed_428_criteria_153_linked_baseline_plus0_minus0",
+    "review": "independent_scoped_review_and_adversarial_no_P0_P1;_formal_gstack_log_pending_for_final_diff",
     "cso": "finished_partial_run_1791554996421-68b812ec9550df5c;_one_high_memory_growth_finding;_semgrep_not_assessed"
   },
   "remaining": [
-    "Fresh gstack /review after Claude session limit resets at 18:20 Europe/Paris; resolve any findings",
+    "Formal gstack /review bound to final T3.1b diff; resolve any findings",
     "T3.1c mitigates HIGH memory availability finding; formal closure is still blocked by partial CSO coverage and blocks T3.5, not the T3.1b replay-store contract",
     "CSO completeness remains partial: Semgrep Docker socket unavailable and snapshot exclusions",
     "Archive and mark T3.1b done only after required review validates its own contract"

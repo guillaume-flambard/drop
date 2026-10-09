@@ -217,6 +217,21 @@ export function startRelay(config: RelayConfig, options: RelayOptions = {}): Pro
       if (connection) connection.missedPings = 0;
     });
 
+    socket.on('error', (error: Error) => {
+      // ws rejects oversized or invalid frames before 'message'; account for authenticated attempts.
+      const code = 'code' in error ? error.code : undefined;
+      if (connection && typeof code === 'string' && code.startsWith('WS_ERR_')) {
+        const outcome = charge(connection.nodeId)
+          ? code === 'WS_ERR_UNSUPPORTED_MESSAGE_LENGTH'
+            ? 'E_TOO_LARGE'
+            : 'E_SCHEMA'
+          : 'E_RATE';
+        log({ event: 'envelope', outcome, nodeId: connection.nodeId });
+        return;
+      }
+      log({ event: 'disconnect', outcome: 'socket_error', ...(connection ? { nodeId: connection.nodeId } : {}) });
+    });
+
     socket.on('message', (data) => {
       if (!connection) {
         const frame = parseFrame(ClientFrameSchema, data);

@@ -16,6 +16,8 @@
 - [x] 3.1 Écrire le test de reconnexion sous quota épuisé, porter le compteur sur l'identité authentifiée et vérifier les tests relais ciblés.
 - [x] 3.2 Compter les enveloppes rejetées pour taille excessive dans le quota de leur identité et vérifier par un test d'intégration.
 - [x] 3.3 Compter les trames malformées après authentification avant parsing, avec test de régression contre le contournement constaté par revue indépendante.
+- [x] 3.4 Gérer sans erreur non interceptée les trames refusées par `ws` avant `message` et les compter pour l'identité authentifiée ; test rouge puis vert après reconnexion.
+- [x] 3.5 Compter aussi les trames UTF-8 invalides rejetées en amont par `ws` ; test rouge puis vert après reconnexion.
 
 ## 4. Vérification
 
