@@ -99,6 +99,7 @@ function json(res: ServerResponse, status: number, body: unknown): void {
 }
 
 function sameToken(given: string, expected: string): boolean {
+  if (!given.trim() || !expected.trim()) return false;
   const a = Buffer.from(given);
   const b = Buffer.from(expected);
   return a.length === b.length && timingSafeEqual(a, b);
@@ -126,6 +127,7 @@ function parseForm(body: string): URLSearchParams {
  * which blocks DNS rebinding.
  */
 export function startLocalApi(options: LocalApiOptions): Promise<LocalApi> {
+  if (!options.token.trim()) return Promise.reject(new Error('E_TOKEN local token empty'));
   const { engine } = options;
   const now = options.now ?? Date.now;
   let boundPort = options.port;

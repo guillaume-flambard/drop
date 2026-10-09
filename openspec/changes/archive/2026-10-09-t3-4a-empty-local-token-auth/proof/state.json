@@ -1,0 +1,39 @@
+{
+  "change": "t3-4a-empty-local-token-auth",
+  "phase": "READY_FOR_MANUAL_ACCEPTANCE",
+  "status": "READY_FOR_MANUAL_ACCEPTANCE",
+  "acceptance": {
+    "AC: requête sans jeton refusée": "passed: api test and runtime HTTP 401",
+    "AC: jeton local absent ou vide au démarrage": "passed: local-token test and runtime E_TOKEN before listener",
+    "AC: présentation vide refusée": "passed: API UI SSE test",
+    "AC: jeton valide préservé": "passed: API test and runtime HTTP 200"
+  },
+  "workGraph": {
+    "1.1": "DONE",
+    "1.2": "DONE",
+    "2.1": "DONE",
+    "2.2": "DONE",
+    "3.1": "DONE",
+    "3.2": "DONE"
+  },
+  "risks": [
+    {
+      "id": "R-1",
+      "severity": "high",
+      "status": "closed",
+      "description": "Avant correction, un jeton configuré vide permettait une requête locale sans authentification ; reproduit sur /ui/admin/status."
+    },
+    {
+      "id": "R-2",
+      "severity": "medium",
+      "status": "closed",
+      "description": "Un échec trop tardif du démarrage aurait laissé le relais ou l'API actifs ; validation déplacée avant toute ouverture."
+    }
+  ],
+  "verification": {
+    "reproduction": "fichier local-token vide; GET /ui/admin/status sans jeton => HTTP 200 avant correction; tests rouges ciblés: 2 échecs attendus, 10 réussites",
+    "automated": "pnpm_lint_typecheck_test_green_343_tests_36_files_after_spec_sync;_openspec_strict_and_16_specs_green;_change_guard_5_of_5;_canonical_guard_426_criteria_151_linked_256_baseline_19_skip;_baseline_plus_0_minus_2;_runtime_smoke_green",
+    "review": "gstack_targeted_security_testing_maintainability_and_adversarial_reviews_no_findings;_cso_run_1791567885700-ebe8013a38ab1992_no_supported_findings_relevant_code_assessed_global_partial_unrelated_inputs;_codex_outside_optional_unavailable"
+  },
+  "remaining": []
+}

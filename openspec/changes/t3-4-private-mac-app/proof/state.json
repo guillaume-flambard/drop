@@ -26,7 +26,7 @@
     { "id": "R-4", "severity": "medium", "status": "open", "description": "Le retour arrière manuel peut être incompatible avec les migrations de l'état anti-rejeu sans instantané complet cohérent." },
     { "id": "R-5", "severity": "high", "status": "closed", "description": "Une panne pendant la fenêtre de démarrage après réponse HTTP produisait E_START sans utiliser la borne de reprise. Le chemin E_START consomme maintenant les deux mêmes tentatives ; essai isolé avec configuration invalide : deux réessais puis E_RESTART." },
     { "id": "R-6", "severity": "medium", "status": "mitigated_pending_manual", "description": "Une erreur de jeton ou de WebView après santé du Node était remplacée par E_RESTART. La coque arrête maintenant le Node avec E_TOKEN/E_PANEL ; un jeton vide donne E_TOKEN seul et aucun listener dans l'essai isolé. Le WebView réel reste à vérifier." },
-    { "id": "R-7", "severity": "high", "status": "open", "description": "L'API locale autorise une requête sans jeton si DROP_HOME/local-token est vide ; la coque Mac refuse maintenant ce lancement mais l'API Node autonome doit être corrigée dans T3.4a avant T3.5." }
+    { "id": "R-7", "severity": "high", "status": "closed", "description": "L'API Node autonome refusait un jeton local vide ; corrigé et vérifié dans T3.4a (tests, binaire, relectures ciblées)." }
   ],
   "verification": {
     "typescript": "passed_338_of_338_35_files_lint_typecheck_2026-10-09",
@@ -42,7 +42,6 @@
   "remaining": [
     "Exécuter la recette veille et le bouton Réessayer dans le WebView réel",
     "Exécuter la recette VoiceOver et focus sur le vrai WebView",
-    "Corriger l'acceptation d'un jeton vide dans l'API locale (T3.4a) avant la preuve d'ensemble",
     "Configurer les justificatifs Apple, construire un paquet signé/notarisé et l'installer sur un Mac propre",
     "Jouer le refus, le hors ligne, le paquet altéré et le retour arrière",
     "Terminer les revues formelles et la garde canonique après synchronisation des specs"

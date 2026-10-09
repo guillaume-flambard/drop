@@ -14,7 +14,7 @@ afterEach(async () => {
   api = undefined;
 });
 
-async function startApi(engine?: NodeEngine): Promise<LocalApi> {
+async function startApi(engine?: NodeEngine, token = TOKEN): Promise<LocalApi> {
   engine ??= new NodeEngine({
     identity: await generateIdentity('Guillaume'),
     ownerKind: 'human',
@@ -24,7 +24,7 @@ async function startApi(engine?: NodeEngine): Promise<LocalApi> {
   });
   api = await startLocalApi({
     engine,
-    token: TOKEN,
+    token,
     port: 0,
     relayUrl: 'ws://127.0.0.1:1/v1',
     refreshCatalogs: () => Promise.resolve(),
@@ -139,6 +139,28 @@ describe('local API', () => {
     expect(await get(port, '/peers', { Host: `127.0.0.1:${String(port)}`, Authorization: `Bearer ${TOKEN}` })).toBe(
       200,
     );
+  });
+
+  it('rejects an empty configured local token before listening', async () => {
+    await expect(startApi(undefined, '')).rejects.toThrow('E_TOKEN');
+    await expect(startApi(undefined, '   ')).rejects.toThrow('E_TOKEN');
+  });
+
+  it('rejects missing and empty presented tokens', async () => {
+    const { port } = await startApi();
+    const host = { Host: `127.0.0.1:${String(port)}` };
+    for (const path of ['/peers', '/app', '/ui/events']) {
+      expect(await get(port, path, host)).toBe(401);
+      expect(await get(port, path, { ...host, Authorization: 'Bearer ' })).toBe(401);
+      expect(await get(port, `${path}?token=`, host)).toBe(401);
+    }
+  });
+
+  it('preserves authenticated local API and panel access', async () => {
+    const { port } = await startApi();
+    const host = { Host: `127.0.0.1:${String(port)}` };
+    expect(await get(port, '/peers', { ...host, Authorization: `Bearer ${TOKEN}` })).toBe(200);
+    expect(await get(port, `/app?token=${TOKEN}`, host)).toBe(200);
   });
 
   it('refuses a foreign Host header even with the token (DNS rebinding)', async () => {

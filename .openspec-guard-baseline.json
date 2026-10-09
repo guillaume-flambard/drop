@@ -691,14 +691,6 @@
       "file": "openspec/specs/node/spec.md"
     },
     {
-      "id": "sg_1e6eeb9d28c16ada",
-      "reason": "missing-selector",
-      "verdict": "fail",
-      "capability": "node",
-      "scenario": "Fichier du jeton",
-      "file": "openspec/specs/node/spec.md"
-    },
-    {
       "id": "sg_2a32fb2e2d669cd5",
       "reason": "missing-selector",
       "verdict": "fail",
@@ -816,14 +808,6 @@
       "verdict": "fail",
       "capability": "node",
       "scenario": "Valeur par défaut",
-      "file": "openspec/specs/node/spec.md"
-    },
-    {
-      "id": "sg_62f1df8a8d312ccc",
-      "reason": "missing-selector",
-      "verdict": "fail",
-      "capability": "node",
-      "scenario": "AC: requête sans jeton refusée",
       "file": "openspec/specs/node/spec.md"
     },
     {
