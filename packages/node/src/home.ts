@@ -317,7 +317,14 @@ export class DropHome {
   }
 
   localToken(): string {
-    return readFileSync(join(this.root, 'local-token'), 'utf8').trim();
+    let token: string;
+    try {
+      token = readFileSync(join(this.root, 'local-token'), 'utf8').trim();
+    } catch {
+      throw new Error('E_TOKEN local token unavailable');
+    }
+    if (!token) throw new Error('E_TOKEN local token empty');
+    return token;
   }
 
   peers(): Peer[] {

@@ -31,6 +31,7 @@ export interface DaemonOptions {
 export async function startDaemon(home: DropHome, options: DaemonOptions = {}): Promise<Daemon> {
   const identity = home.identity();
   const config = home.config();
+  const token = home.localToken();
   const log = options.log ?? ((line: string) => process.stderr.write(`${line}\n`));
   // The engine is built before the relay client that delivers to it; the transport reads the client lazily.
   const link: { relay?: RelayClient; apiPort?: number } = {};
@@ -59,7 +60,7 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
     onAgentCall: (call) =>
       config.profile === 'private'
         ? Promise.reject(new DropError('E_DENIED', 'E_DENIED cloud gateway disabled'))
-        : runAgentCall(`http://127.0.0.1:${String(link.apiPort ?? config.apiPort)}`, home.localToken(), call),
+        : runAgentCall(`http://127.0.0.1:${String(link.apiPort ?? config.apiPort)}`, token, call),
     onAdmission: (ticket) => {
       home.savePendingAdmission(ticket);
       link.relay?.retryNow();
@@ -93,7 +94,7 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
 
   const api = await startLocalApi({
     engine,
-    token: home.localToken(),
+    token,
     port: options.apiPort ?? config.apiPort,
     relayUrl: config.relayUrl,
     ...(process.env.DROP_SHELL_INSTANCE ? { shellInstance: process.env.DROP_SHELL_INSTANCE } : {}),
@@ -142,8 +143,8 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
     },
   });
   link.apiPort = api.port;
-  const uiUrl = `http://127.0.0.1:${String(api.port)}/?token=${home.localToken()}`;
-  const panelUrl = `http://127.0.0.1:${String(api.port)}/app?token=${home.localToken()}`;
+  const uiUrl = `http://127.0.0.1:${String(api.port)}/?token=${token}`;
+  const panelUrl = `http://127.0.0.1:${String(api.port)}/app?token=${token}`;
 
   if (options.notifications ?? true) {
     engine.on('approval', (item: Extract<InboxItem, { kind: 'approval' }>) => {
