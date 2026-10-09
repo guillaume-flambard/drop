@@ -14,6 +14,7 @@ import {
 import {
   RelayClient,
   readRelayConfig,
+  revokeNode,
   RelayConfigSchema,
   startRelay,
   type RelayHandle,
@@ -27,12 +28,18 @@ afterEach(async () => {
 
 async function relayFor(
   identities: Identity[],
-  extra: { rateLimitPerMinute?: number; admittedPath?: string; maxAdmissionsPerSponsorPerDay?: number } = {},
+  extra: {
+    rateLimitPerMinute?: number;
+    admittedPath?: string;
+    revokedPath?: string;
+    maxAdmissionsPerSponsorPerDay?: number;
+    maxAdmissionsPerDay?: number;
+  } = {},
 ) {
   const logs: RelayLogEntry[] = [];
   const relay = await startRelay(
     { port: 0, allowedNodeIds: identities.map((identity) => identity.nodeId), ...extra },
-    { logger: (entry) => logs.push(entry) },
+    { logger: (entry) => logs.push(entry), revocationPollMs: 20 },
   );
   cleanups.push(() => relay.close());
   return { relay, logs };
@@ -76,6 +83,7 @@ describe('relay', () => {
       maxQueuePerNode: 100,
       rateLimitPerMinute: 60,
       maxAdmissionsPerSponsorPerDay: 20,
+      maxAdmissionsPerDay: 100,
     });
     const full = join(dir, 'full.json');
     const admittedPath = join(dir, 'admitted.json');
@@ -260,5 +268,67 @@ describe('relay', () => {
     expect(outcomes).toEqual(
       expect.arrayContaining(['sponsor_not_admitted', 'bad_signature', 'admitted', 'sponsor_quota']),
     );
+  });
+
+  it('revokes a node without a restart: cut off at once, never back, and no longer a sponsor (T2.19)', async () => {
+    const [julie, natha, paul] = await Promise.all(['Julie', 'Natha', 'Paul'].map((name) => generateIdentity(name)));
+    if (!julie || !natha || !paul) throw new Error('identities');
+    const dir = mkdtempSync(join(tmpdir(), 'relay-revoke-'));
+    const revokedPath = join(dir, 'revoked.json');
+    const { relay, logs } = await relayFor([julie], { admittedPath: join(dir, 'admitted.json'), revokedPath });
+    const n = client(relay, natha, await createAdmission(julie));
+    await n.instance.waitReady();
+
+    revokeNode(revokedPath, natha.nodeId);
+    expect(statSync(revokedPath).mode & 0o777).toBe(0o600);
+    await until(() => n.statuses.includes('unauthorized'));
+    expect(logs).toContainEqual(
+      expect.objectContaining({ event: 'revocation', outcome: 'revoked', nodeId: natha.nodeId }),
+    );
+
+    // A fresh ticket from an admitted sponsor does not bring a revoked node back, and its own tickets are worthless.
+    const again = client(relay, natha, await createAdmission(julie));
+    await until(() => again.statuses.includes('unauthorized'));
+    const viaNatha = client(relay, paul, await createAdmission(natha));
+    await until(() => viaNatha.statuses.includes('unauthorized'));
+    const outcomes = logs.filter((entry) => entry.event === 'admission').map((entry) => entry.outcome);
+    expect(outcomes).toEqual(expect.arrayContaining(['revoked', 'sponsor_not_admitted']));
+    // Julie, who invited her, keeps her place.
+    const j = client(relay, julie);
+    await j.instance.waitReady();
+  });
+
+  it('revoking with --with-invited also cuts off the nodes it admitted, transitively (T2.19)', async () => {
+    const [julie, natha, paul, zoe] = await Promise.all(
+      ['Julie', 'Natha', 'Paul', 'Zoé'].map((name) => generateIdentity(name)),
+    );
+    if (!julie || !natha || !paul || !zoe) throw new Error('identities');
+    const dir = mkdtempSync(join(tmpdir(), 'relay-cascade-'));
+    const revokedPath = join(dir, 'revoked.json');
+    const { relay } = await relayFor([julie], { admittedPath: join(dir, 'admitted.json'), revokedPath });
+    const n = client(relay, natha, await createAdmission(julie));
+    await n.instance.waitReady();
+    const p = client(relay, paul, await createAdmission(natha));
+    await p.instance.waitReady();
+    const z = client(relay, zoe, await createAdmission(julie));
+    await z.instance.waitReady();
+
+    revokeNode(revokedPath, natha.nodeId, { withInvited: true });
+    await until(() => n.statuses.includes('unauthorized') && p.statuses.includes('unauthorized'));
+    expect(z.statuses).not.toContain('unauthorized');
+    expect(readFileSync(revokedPath, 'utf8')).toContain('"withInvited": true');
+  });
+
+  it('caps admissions per day across all sponsors (T2.19)', async () => {
+    const [julie, bob, a, b, c] = await Promise.all(
+      ['Julie', 'Bob', 'A', 'B', 'C'].map((name) => generateIdentity(name)),
+    );
+    if (!julie || !bob || !a || !b || !c) throw new Error('identities');
+    const { relay, logs } = await relayFor([julie, bob], { maxAdmissionsPerDay: 2 });
+    await client(relay, a, await createAdmission(julie)).instance.waitReady();
+    await client(relay, b, await createAdmission(bob)).instance.waitReady();
+    const third = client(relay, c, await createAdmission(julie));
+    await until(() => third.statuses.includes('unauthorized'));
+    expect(logs).toContainEqual(expect.objectContaining({ event: 'admission', outcome: 'global_quota' }));
   });
 });
