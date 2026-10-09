@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { sealEnvelope } from '@drop/protocol';
+import { openEnvelope, ReplayCache, sealEnvelope } from '@drop/protocol';
 import { allReceiptsValid, fakeCapability, startMesh, until, type Mesh } from './helpers.ts';
 
 const LOW = 'test.service_state';
@@ -172,6 +172,69 @@ describe('end to end, in memory: relay and three nodes', () => {
     expect(m.requester.engine.drop(dropId)?.result?.output).toEqual({ status: 'ok' });
     await until(() => m.executor.store.receiptList.length === 1);
     expect(m.executor.store.receiptList[0]?.reviewed).toBe(true);
+  });
+
+  it('records one result and receipt when the approver repeats a review decision concurrently', async () => {
+    const m = await setup();
+    const dropId = await ask(m, HIGH, 'ok');
+    await m.approver.engine.decide(dropId, 'allow_once');
+    await until(() => m.approver.engine.pending().some((item) => item.kind === 'review'));
+    const outgoing: Parameters<typeof m.executor.transport.send>[0][] = [];
+    const originalSend = m.executor.transport.send.bind(m.executor.transport);
+    m.executor.transport.send = (envelope) => {
+      outgoing.push(envelope);
+      return originalSend(envelope);
+    };
+    const decision = { type: 'review_decision' as const, dropId, decision: 'send' as const };
+    const first = await sealEnvelope(m.approver.identity, m.executor.identity.nodeId, decision, { now: m.clock.now });
+    const second = await sealEnvelope(m.approver.identity, m.executor.identity.nodeId, decision, { now: m.clock.now });
+    await Promise.all([m.executor.engine.handleEnvelope(first), m.executor.engine.handleEnvelope(second)]);
+    expect(m.executor.store.receiptList).toHaveLength(1);
+    expect(m.executor.store.receiptList[0]).toMatchObject({ dropId, decision: 'allow_once' });
+    let results = 0;
+    for (const envelope of outgoing.filter((item) => item.to === m.requester.identity.nodeId)) {
+      const opened = await openEnvelope(m.requester.identity, envelope, {
+        isKnownPeer: (id) => id === m.executor.identity.nodeId,
+        replay: new ReplayCache(),
+        now: m.clock.now,
+      });
+      if (opened.message.type === 'drop_result') results += 1;
+    }
+    expect(results).toBe(1);
+    await until(() => m.requester.engine.drop(dropId)?.state === 'receipted');
+  });
+
+  it('does not expire a review while its accepted result is being sent', async () => {
+    const m = await setup();
+    const dropId = await ask(m, HIGH, 'ok');
+    await m.approver.engine.decide(dropId, 'allow_once');
+    await until(() => m.approver.engine.pending().some((item) => item.kind === 'review'));
+    let releaseSend: (() => void) | undefined;
+    let sending = false;
+    const gate = new Promise<void>((resolve) => {
+      releaseSend = resolve;
+    });
+    const originalSend = m.executor.transport.send.bind(m.executor.transport);
+    m.executor.transport.send = async (envelope) => {
+      sending = true;
+      await gate;
+      return originalSend(envelope);
+    };
+    const decision = await sealEnvelope(
+      m.approver.identity,
+      m.executor.identity.nodeId,
+      { type: 'review_decision', dropId, decision: 'send' },
+      { now: m.clock.now },
+    );
+    const pending = m.executor.engine.handleEnvelope(decision);
+    await until(() => sending);
+    m.clock.now += 10 * 60_000 + 1;
+    await m.executor.engine.tick();
+    expect(m.executor.store.receiptList).toEqual([]);
+    releaseSend?.();
+    await pending;
+    expect(m.executor.store.receiptList).toHaveLength(1);
+    expect(m.executor.store.receiptList[0]).toMatchObject({ dropId, decision: 'allow_once' });
   });
 
   it('a node that is not an approver cannot decide', async () => {

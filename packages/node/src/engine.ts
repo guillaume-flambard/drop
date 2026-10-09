@@ -637,7 +637,7 @@ export class NodeEngine extends EventEmitter {
         drop.state = 'expired';
         drop.funding = undefined;
         await this.fail(drop, 'E_EXPIRED', 'La demande a expiré sans décision.', 'expired');
-      } else if (drop.state === 'in_review' && (drop.reviewExpiresAt ?? Infinity) <= now) {
+      } else if (drop.state === 'in_review' && !drop.reviewed && (drop.reviewExpiresAt ?? Infinity) <= now) {
         drop.state = 'failed';
         await this.fail(drop, 'E_EXPIRED', "La relecture a expiré : rien n'a été envoyé.", 'allow_once');
       }
@@ -977,7 +977,7 @@ export class NodeEngine extends EventEmitter {
 
   private async onReviewDecision(from: NodeId, message: MessageOf<'review_decision'>): Promise<void> {
     const drop = this.executing.get(message.dropId);
-    if (drop?.state !== 'in_review' || drop.approver !== from || !drop.output) return;
+    if (drop?.state !== 'in_review' || drop.reviewed || drop.approver !== from || !drop.output) return;
     drop.reviewed = true;
     if (message.decision === 'discard') {
       drop.state = 'failed';

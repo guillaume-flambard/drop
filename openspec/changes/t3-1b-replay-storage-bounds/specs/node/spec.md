@@ -102,3 +102,13 @@ Le Node MUST conserver au plus 16 384 identifiants de demandes reçues, sans leu
 <!-- openspec-guard:test="end to end, in memory: relay and three nodes > a late executor update cannot rewrite a finished outbound drop" -->
 - **WHEN** un `drop_error` ou un `drop_status` arrive après l'issue finale d'une demande
 - **THEN** le demandeur conserve l'issue déjà reçue
+
+#### Scenario: AC: décision de relecture reçue deux fois
+<!-- openspec-guard:test="end to end, in memory: relay and three nodes > records one result and receipt when the approver repeats a review decision concurrently" -->
+- **WHEN** deux décisions de relecture pour la même demande arrivent pendant l'envoi du résultat
+- **THEN** l'exécuteur n'émet qu'un résultat et un reçu
+
+#### Scenario: AC: délai de relecture pendant l'envoi
+<!-- openspec-guard:test="end to end, in memory: relay and three nodes > does not expire a review while its accepted result is being sent" -->
+- **WHEN** la relecture acceptée est en cours d'envoi et son délai expire
+- **THEN** l'exécuteur ne produit pas de reçu d'expiration contradictoire
