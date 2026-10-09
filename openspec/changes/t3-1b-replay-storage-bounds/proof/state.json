@@ -17,6 +17,9 @@
     "node_case_replay_and_migration": "passed",
     "node_foreign_lock_age": "passed",
     "node_missing_clock_after_migration": "passed",
+    "node_missing_marker_directory": "passed_full_suite",
+    "node_partial_marker_loss": "passed_full_suite",
+    "node_missing_version_after_purge": "passed_full_suite",
     "relay_malformed_frame_quota": "passed",
     "relay_oversized_frame_quota": "passed",
     "relay_websocket_payload_limit_quota": "passed",
@@ -44,7 +47,8 @@
     "P1-10": "DONE",
     "P1-11": "DONE",
     "P1-12": "DONE",
-    "P1-13": "DONE"
+    "P1-13": "DONE",
+    "P1-14": "DONE"
   },
   "risks": [
     {
@@ -70,14 +74,14 @@
     "targetedTests": "passed",
     "lint": "passed",
     "typecheck": "passed",
-    "fullTests": "passed_350_of_350_current_worktree",
+    "fullTests": "passed_353_of_353_current_worktree",
     "openspecValidate": "passed",
-    "guard": "passed_433_criteria_158_linked_baseline_plus0_minus0",
-    "review": "scoped_independent_specialists_found_uncorrelated_E_RATE_and_temp_leak;_red_green_fixes_and_independent_recheck_no_new_P0_P1;_formal_gstack_pass_pending",
+    "guard": "passed_436_criteria_161_linked_baseline_plus0_minus0",
+    "review": "isolated_gstack_cycles_found_missing_marker_directory_partial_marker_loss_and_missing_version;_all_red_green_fixed;_three_edit_cycle_limit_reached_before_final_zero_edit_pass;_formal_review_pending",
     "cso": "run_1791572557316-4a4997eecdb7bea6_finished_partial_snapshot_only_no_security_domains_assessed;_prior_HIGH_memory_finding_remains_open_in_T3.1c"
   },
   "remaining": [
-    "Formal gstack /review bound to final T3.1b diff; resolve any findings",
+    "Formal gstack /review bound to final T3.1b diff b0d9cb5; final zero-edit pass remains after the three-cycle review limit",
     "T3.1c mitigates HIGH memory availability finding; formal closure is still blocked by partial CSO coverage and blocks T3.5, not the T3.1b replay-store contract",
     "T3.1d owns relay E_RATE retry and outbound quota after the isolated adversarial pass identified possible result loss",
     "CSO completeness remains partial: Semgrep Docker socket unavailable and snapshot exclusions",

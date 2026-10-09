@@ -11,6 +11,7 @@
 - [x] 2.3 Empêcher deux processus partageant un `DROP_HOME` de dépasser la borne, avec test de verrou concurrent et refus fermé.
 - [x] 2.4 Normaliser la casse des UUIDv7 avant admission et persistance pour qu'un même identifiant ne crée jamais deux marqueurs sur Linux ; vérifier par test lower/upper.
 - [x] 2.5 Sérialiser la décision de relecture acceptée face à un doublon et à `tick()` ; tests de non-régression rouges puis verts sur le résultat et le reçu.
+- [x] 2.6 Refuser les restaurations partielles du stockage anti-rejeu après admission (dossier, marqueur isolé, version/horloge) ; écrire les tests rouges puis verts et préciser le retour arrière avec nouvelle identité.
 
 ## 3. Relais
 
