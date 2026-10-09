@@ -112,3 +112,13 @@ Le Node MUST conserver au plus 16 384 identifiants de demandes reçues, sans leu
 <!-- openspec-guard:test="end to end, in memory: relay and three nodes > does not expire a review while its accepted result is being sent" -->
 - **WHEN** la relecture acceptée est en cours d'envoi et son délai expire
 - **THEN** l'exécuteur ne produit pas de reçu d'expiration contradictoire
+
+## ADDED Requirements
+
+### Requirement: Nettoyage des écritures anti-rejeu échouées
+Le Node MUST supprimer le fichier temporaire d'une écriture durable échouée, afin qu'une panne répétée n'accumule pas de fichiers hors de la borne anti-rejeu.
+
+#### Scenario: AC: échec répété de l'écriture durable
+<!-- openspec-guard:test="replay clock write failures > does not accumulate temporary files when durable writes repeatedly fail" -->
+- **WHEN** la synchronisation de l'horloge échoue plusieurs fois avant le renommage
+- **THEN** le Node refuse chaque demande sans laisser de fichier temporaire supplémentaire

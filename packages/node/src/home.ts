@@ -114,15 +114,28 @@ function syncDirectory(path: string): void {
 
 function writeDurablePrivate(path: string, content: string): void {
   const temporary = `${path}.${randomBytes(8).toString('hex')}.tmp`;
-  const fd = openSync(temporary, 'wx', 0o600);
   try {
-    writeFileSync(fd, content);
-    fsyncSync(fd);
-  } finally {
-    closeSync(fd);
+    const fd = openSync(temporary, 'wx', 0o600);
+    try {
+      writeFileSync(fd, content);
+      fsyncSync(fd);
+    } finally {
+      closeSync(fd);
+    }
+    renameSync(temporary, path);
+    syncDirectory(join(path, '..'));
+  } catch (error) {
+    try {
+      unlinkSync(temporary);
+    } catch (cleanupError) {
+      if (errorCode(cleanupError) !== 'ENOENT') {
+        throw new AggregateError([error, cleanupError], 'E_REPLAY_STATE temp cleanup failed', {
+          cause: cleanupError,
+        });
+      }
+    }
+    throw error;
   }
-  renameSync(temporary, path);
-  syncDirectory(join(path, '..'));
 }
 
 const UUID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

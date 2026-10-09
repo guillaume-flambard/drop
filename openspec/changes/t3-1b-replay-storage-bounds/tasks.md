@@ -19,6 +19,8 @@
 - [x] 3.3 Compter les trames malformées après authentification avant parsing, avec test de régression contre le contournement constaté par revue indépendante.
 - [x] 3.4 Gérer sans erreur non interceptée les trames refusées par `ws` avant `message` et les compter pour l'identité authentifiée ; test rouge puis vert après reconnexion.
 - [x] 3.5 Compter aussi les trames UTF-8 invalides rejetées en amont par `ws` ; test rouge puis vert après reconnexion.
+- [x] 3.6 Fermer la connexion après un refus `E_RATE`, y compris avec identifiant absent ou trompeur, pour libérer les envois en attente ; tests des deux trames.
+- [x] 3.7 Supprimer le fichier temporaire d'horloge si son écriture durable échoue ; test d'injection de panne répétée sans accumulation.
 
 ## 4. Vérification
 

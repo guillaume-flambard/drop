@@ -23,7 +23,10 @@
     "relay_websocket_invalid_utf8_quota": "passed",
     "node_duplicate_review_decision": "passed_full_suite",
     "node_review_expiry_while_sending": "passed_full_suite",
-    "relay_reconnect": "passed"
+    "relay_reconnect": "passed",
+    "relay_uncorrelated_rate_close": "passed_full_suite",
+    "relay_decoy_id_rate_close": "passed_full_suite",
+    "replay_clock_temp_cleanup": "passed_full_suite"
   },
   "workGraph": {
     "P0-1": "DONE",
@@ -39,7 +42,9 @@
     "P1-8": "DONE",
     "P1-9": "DONE",
     "P1-10": "DONE",
-    "P1-11": "DONE"
+    "P1-11": "DONE",
+    "P1-12": "DONE",
+    "P1-13": "DONE"
   },
   "risks": [
     {
@@ -65,11 +70,11 @@
     "targetedTests": "passed",
     "lint": "passed",
     "typecheck": "passed",
-    "fullTests": "passed_347_of_347_current_worktree;_first_parallel_run_detect_timeout_then_targeted_2_of_2_passed",
+    "fullTests": "passed_350_of_350_current_worktree",
     "openspecValidate": "passed",
-    "guard": "passed_430_criteria_155_linked_baseline_plus0_minus0",
-    "review": "two_isolated_formal_passes_incomplete;_first_found_review_race_now_fixed;_independent_current_source_race_review_no_P0_P1;_final_formal_pass_pending",
-    "cso": "finished_partial_run_1791554996421-68b812ec9550df5c;_one_high_memory_growth_finding;_semgrep_not_assessed"
+    "guard": "passed_433_criteria_158_linked_baseline_plus0_minus0",
+    "review": "scoped_independent_specialists_found_uncorrelated_E_RATE_and_temp_leak;_red_green_fixes_and_independent_recheck_no_new_P0_P1;_formal_gstack_pass_pending",
+    "cso": "run_1791572557316-4a4997eecdb7bea6_finished_partial_snapshot_only_no_security_domains_assessed;_prior_HIGH_memory_finding_remains_open_in_T3.1c"
   },
   "remaining": [
     "Formal gstack /review bound to final T3.1b diff; resolve any findings",
