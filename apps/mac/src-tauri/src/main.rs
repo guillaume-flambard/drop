@@ -113,6 +113,9 @@ fn ensure_identity(app: &AppHandle) -> Result<(), &'static str> {
 }
 
 fn start_daemon(app: &AppHandle, marker: &str, port: u16) -> Result<(), &'static str> {
+    if panel_url(port, &[]).is_none() {
+        return Err("E_TOKEN");
+    }
     if TcpStream::connect(("127.0.0.1", port)).is_ok() {
         return Err("E_PORT");
     }
@@ -140,8 +143,12 @@ fn api_port() -> Result<u16, &'static str> {
 
 fn panel_url(port: u16, extra: &[(&str, String)]) -> Option<Url> {
     let token = fs::read_to_string(drop_home().join("local-token")).ok()?;
+    let token = token.trim();
+    if token.is_empty() {
+        return None;
+    }
     let mut url = Url::parse(&format!("http://127.0.0.1:{port}/app")).ok()?;
-    url.query_pairs_mut().append_pair("token", token.trim());
+    url.query_pairs_mut().append_pair("token", token);
     for (key, value) in extra {
         url.query_pairs_mut().append_pair(key, value);
     }
@@ -247,6 +254,9 @@ fn supervise(app: AppHandle) {
             .and_then(|port| {
                 start_daemon(&app, &marker, port)?;
                 if wait_for_daemon(&app, port, &marker) {
+                    let url = panel_url(port, &[]).ok_or("E_TOKEN")?;
+                    let window = app.get_webview_window("panel").ok_or("E_PANEL")?;
+                    window.navigate(url).map_err(|_| "E_PANEL")?;
                     Ok(port)
                 } else {
                     Err("E_START")
@@ -254,26 +264,19 @@ fn supervise(app: AppHandle) {
             });
         match result {
             Ok(port) => {
-                if let (Some(window), Some(url)) =
-                    (app.get_webview_window("panel"), panel_url(port, &[]))
-                {
-                    *app.state::<Daemon>()
-                        .verified_port
+                *app.state::<Daemon>()
+                    .verified_port
+                    .lock()
+                    .expect("verified port") = Some(port);
+                app.state::<Daemon>().ready.store(true, Ordering::SeqCst);
+                let links = std::mem::take(
+                    &mut *app
+                        .state::<Daemon>()
+                        .pending_links
                         .lock()
-                        .expect("verified port") = Some(port);
-                    let _ = window.navigate(url);
-                    app.state::<Daemon>().ready.store(true, Ordering::SeqCst);
-                    let links = std::mem::take(
-                        &mut *app
-                            .state::<Daemon>()
-                            .pending_links
-                            .lock()
-                            .expect("link queue"),
-                    );
-                    open_links(&app, links);
-                } else {
-                    show_splash(&app, "E_TOKEN");
-                }
+                        .expect("link queue"),
+                );
+                open_links(&app, links);
                 let mut failed_checks = 0u8;
                 while app.state::<Daemon>().ready.load(Ordering::SeqCst)
                     && !app.state::<Daemon>().stopping.load(Ordering::SeqCst)
@@ -318,7 +321,15 @@ fn supervise(app: AppHandle) {
             Err(code) => {
                 eprintln!("drop shell {code}");
                 stop_daemon(&app);
-                show_splash(&app, code);
+                if code == "E_START" && restarts < 2 {
+                    restarts += 1;
+                    eprintln!("drop shell E_START: retry {restarts}/2");
+                    continue;
+                }
+                if code == "E_START" {
+                    eprintln!("drop shell E_RESTART");
+                }
+                show_splash(&app, if code == "E_START" { "E_RESTART" } else { code });
             }
         }
         // A persistent failure remains visible until the user explicitly retries from the tray menu.

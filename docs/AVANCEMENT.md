@@ -2,7 +2,7 @@
 
 **Bilan du 9 octobre 2026.** T3.1 implémente le profil privé sur la base de T3.0/T3.0a. Ce bilan ne certifie ni un serveur distant ni une distribution publique.
 
-**Le runtime privé est implémenté et son cycle fonctionne sans Internet avec des fixtures internes.** Le raccordement en deux confirmations est vérifié dans le panneau local sur fixtures et attend une recette humaine sur Mac ; son usage dans une app distribuée reste à valider. La qualification d’un vrai modèle et la distribution Mac restent à livrer. Tauri existe déjà sur Mac ; son bootstrap choisit désormais un relais privé.
+**Le runtime privé est implémenté et son cycle fonctionne sans Internet avec des fixtures internes.** Le raccordement en deux confirmations est vérifié dans le panneau local sur fixtures et attend une recette humaine sur Mac ; son usage dans une app distribuée reste à valider. La qualification d’un vrai modèle et la distribution Mac restent à livrer. Tauri existe déjà sur Mac ; son bootstrap choisit désormais un relais privé. Une anomalie d’authentification locale lorsque le fichier de jeton est vide est confirmée et suivie en T3.4a avant la preuve d’ensemble ; la coque Mac bloque ce lancement.
 
 ![Chantiers : fondation, profil privé, modèles, connexion, Mac et preuves, puis publication et ports](diagrams/roadmap.svg)
 
