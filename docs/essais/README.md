@@ -8,8 +8,8 @@ les points marqués « à vérifier » le sont sur place, avant de commencer.
 
 `mcp.answer` répond à partir d'un serveur MCP **stdio**, ou **HTTP avec des en-têtes fixes** (un jeton). Il ne sait
 pas encore se connecter à un serveur qui demande une connexion **OAuth** : c'est le cas des serveurs distants
-officiels de Notion et de Figma, et de Linear par défaut. Un tel serveur se partage sans erreur, mais chaque demande
-échoue (T2.16, T2.17). Il faut donc brancher chaque outil comme ci-dessous, avant l'essai.
+officiels de Notion et de Figma, et de Linear par défaut. Depuis T2.16, le partage d'un tel serveur échoue avec un
+message clair ; T2.17 dira s'il faut l'apprendre. Il faut donc brancher chaque outil comme ci-dessous, avant l'essai.
 
 | Outil  | Branchement pour drop                                                                                    | Outils à partager                                                         | Limites connues                                                                                                                                                         |
 | ------ | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
