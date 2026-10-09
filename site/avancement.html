@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       name="description"
-      content="Bilan vérifié de drop au 8 octobre 2026 : prototype démontré, 229 tests réussis, app Mac et distribution publique encore à construire."
+      content="Bilan vérifié de drop au 9 octobre 2026 : prototype démontré, étape 2 construite, 264 tests réussis, essais réels encore à faire."
     />
     <meta name="theme-color" content="#2548ed" />
     <title>Où en est le projet ? · drop</title>
@@ -29,7 +29,7 @@
     </header>
     <main id="contenu" class="wrap">
       <div class="page-title">
-        <span class="pill">Bilan du 8 octobre 2026</span>
+        <span class="pill">Bilan du 9 octobre 2026</span>
         <h1>Ce qui tourne.<br />Ce qui reste à construire.</h1>
         <p>Le cœur fonctionne et a été démontré. L’app Mac et la distribution publique sont les prochains chantiers.</p>
       </div>
@@ -42,14 +42,14 @@
           <section id="chiffres">
             <h2>Un prototype déjà tangible.</h2>
             <div class="metrics">
-              <div class="metric"><strong>25 / 32</strong><span>Tâches produit déclarées faites</span></div>
-              <div class="metric"><strong>229</strong><span>Tests réussis lors de l'analyse</span></div>
-              <div class="metric"><strong>3</strong><span>Familles de capacités implémentées</span></div>
+              <div class="metric"><strong>33 / 41</strong><span>Tâches produit déclarées faites</span></div>
+              <div class="metric"><strong>264</strong><span>Tests réussis lors de l'analyse</span></div>
+              <div class="metric"><strong>4</strong><span>Familles de capacités implémentées</span></div>
             </div>
             <p>
-              Les 32 tâches comprennent aussi deux lignes en cours, quatre à faire et une bloquée sur la publication
-              npm. Ce décompte exclut le travail de présentation de ce site. Il ne mesure ni l'effort restant, ni la
-              couverture des tests.
+              Les 41 tâches comprennent aussi six lignes en cours et deux bloquées ; aucune n'est à faire sans un geste
+              humain (signature, déploiement, essais). Ce décompte ne mesure ni l'effort restant, ni la couverture des
+              tests.
             </p>
             <figure>
               <img
@@ -87,19 +87,24 @@
                     <td>Démo Mac + VPS conservée, avec Claude Code et Codex</td>
                   </tr>
                   <tr>
-                    <td>Questions via MCP</td>
+                    <td>Questions via un outil MCP ou un agent A2A</td>
                     <td>Implémentées</td>
-                    <td>Tests avec serveur factice et modèle simulé</td>
+                    <td>Tests avec serveurs factices et modèle simulé</td>
                   </tr>
                   <tr>
-                    <td>Financement et détection locale</td>
-                    <td>Implémentés</td>
-                    <td>Code et tests automatisés</td>
+                    <td>Équipe, demandes multiples, installation</td>
+                    <td>Implémentées</td>
+                    <td>Code et tests, dont les fichiers assemblés réellement lancés</td>
                   </tr>
                   <tr>
-                    <td>Annuaire et installation locale</td>
-                    <td>Implémentés</td>
-                    <td>Code et tests, ajoutés pendant cette analyse</td>
+                    <td>App Mac, passerelle Claude et ChatGPT, site</td>
+                    <td>Construits</td>
+                    <td>Tests ; l'app compile pour macOS sans avoir été lancée par nos tests</td>
+                  </tr>
+                  <tr>
+                    <td>Outils en ligne avec connexion (Notion…)</td>
+                    <td>Construits</td>
+                    <td>Tests contre un serveur OAuth factice conforme ; essai réel à faire</td>
                   </tr>
                   <tr>
                     <td>Usage chez Julie et Natha</td>
@@ -121,34 +126,34 @@
             <h2>De l'essai technique à l'usage en équipe.</h2>
             <ol>
               <li>
-                <strong>Clore l'admission par invitation.</strong> Le code et les tests existent ; la tâche T2.1 reste
-                en cours dans l'index.
+                <strong>Signer l’app Mac.</strong> Elle est construite, avec ses mises à jour signées ; il reste la
+                notarisation et la clé de mise à jour.
               </li>
               <li>
-                <strong>Construire l’app Mac.</strong> L’annuaire et l’appairage par invitation existent. La barre de
-                menus doit rendre le consentement et le suivi accessibles sans terminal.
+                <strong>Déployer sur le serveur.</strong> La passerelle pour Claude et ChatGPT, le site et le dossier
+                des mises à jour attendent leur configuration sur le serveur du lab.
               </li>
               <li>
-                <strong>Distribuer les connecteurs du demandeur.</strong> L’installation locale est implémentée. La
-                publication npm attend le nom du produit et l’accord du propriétaire.
+                <strong>Jouer les usages chez les testeurs.</strong> Le protocole des essais chez Julie et Natha est
+                écrit : outils à brancher, scénarios, captures, vidéo et mesures.
               </li>
               <li>
-                <strong>Jouer les usages chez les testeurs.</strong> L’annuaire permet désormais de construire les
-                demandes multiples. Les essais chez Julie et Natha dépendent aussi de la distribution.
+                <strong>Publier les connecteurs du demandeur.</strong> La publication npm attend le nom du produit et
+                l’accord du propriétaire.
               </li>
             </ol>
             <p>
-              La vidéo, le parcours d’installation final et la mise en ligne publique restent dans la tâche du site
-              final. La présente version est une vitrine et une documentation en prévisualisation.
+              La vidéo sera tournée pendant les essais. La mise en ligne du site reste soumise à l’accord du
+              propriétaire.
             </p>
           </section>
           <section id="vigilance">
             <h2>Les points encore ouverts.</h2>
             <h3>Les tests passent. Leur lien avec les specs reste incomplet.</h3>
             <p>
-              Le contrôle OpenSpec compte 327 critères, dont 313 testables.
-              <strong>54 sont explicitement reliés à un test</strong>, 259 sont gelés dans la baseline et 14 sont
-              déclarés non testables. Les 17,3 % obtenus mesurent la traçabilité des critères, pas la couverture du
+              Le contrôle OpenSpec compte 370 critères, dont 354 testables.
+              <strong>96 sont explicitement reliés à un test</strong>, 258 sont gelés dans la baseline et 16 sont
+              déclarés non testables. Les 27,1 % obtenus mesurent la traçabilité des critères, pas la couverture du
               code.
             </p>
             <h3>Le pilote attend une mesure du besoin.</h3>
@@ -160,16 +165,17 @@
             <h3>Le cadre de sécurité demande une lecture précise.</h3>
             <p>
               Le contenu entre Nodes est chiffré. Les outils et sorties sont contrôlés. Un fournisseur de modèle distant
-              peut toutefois recevoir le contexte utilisé pour répondre. Ce prototype ne constitue pas une garantie
-              absolue contre la divulgation.
+              peut toutefois recevoir le contexte utilisé pour répondre, et la passerelle voit en clair les échanges des
+              utilisateurs de Claude et ChatGPT. Ce prototype ne constitue pas une garantie absolue contre la
+              divulgation.
             </p>
-            <a class="text-link" href="guide.html#confidentialite">Lire ce qui est transmis à chaque destinataire</a>
+            <a class="text-link" href="securite.html">Ce que drop protège, et ses limites</a>
           </section>
           <section id="methode">
             <h2>Un état daté, des sources accessibles.</h2>
             <p>
               Cette analyse repose sur l'index des tâches, les décisions, les implémentations, les tests et les traces
-              de démonstration du dépôt, au commit <code>cacf1cc</code>. Elle ne certifie pas l'état actuel du serveur
+              de démonstration du dépôt, au commit <code>00fe39a</code>. Elle ne certifie pas l'état actuel du serveur
               distant.
             </p>
             <pre><code>pnpm -r lint
@@ -180,7 +186,7 @@ pnpm -r test</code></pre>
               sources par composant, les écarts de documentation et les prochaines dépendances.
             </p>
             <a class="button" href="downloads/AVANCEMENT.md" download>Télécharger le bilan sourcé</a>
-            <p class="date">Photographie du 8 octobre 2026, non recalculée à l'ouverture.</p>
+            <p class="date">Photographie du 9 octobre 2026, non recalculée à l'ouverture.</p>
           </section>
         </article>
       </div>

@@ -1,78 +1,72 @@
 # Où en est drop ?
 
-**Bilan du 8 octobre 2026.** Référence analysée : commit `cacf1cc`. Les chiffres produit ci-dessous excluent T2.6a, la présente documentation. Ce document décrit les preuves du dépôt ; il ne certifie pas l'état actuel du serveur distant.
+**Bilan du 9 octobre 2026.** Référence analysée : commit `00fe39a` sur `main`. Ce document décrit les preuves du dépôt ; il ne certifie pas l'état actuel du serveur distant.
 
-**Le cœur fonctionne et a été démontré. Le produit reste un prototype destiné aux développeurs.** L’annuaire d’équipe et l’installation locale des connecteurs sont maintenant implémentés. L’app Mac et la distribution publique restent à construire. La mesure qui doit justifier un pilote n'est pas encore démontrée comme concluante.
+**Le cœur fonctionne et a été démontré ; l'étape 2 est construite, pas encore essayée.** L'app Mac, ses mises à jour signées, la passerelle pour Claude et ChatGPT, la connexion OAuth aux outils en ligne et le site existent dans le code et passent leurs tests. Aucune tâche n'est à faire sans un geste humain : signer l'app, déployer dans `lab-infra`, essayer chez Julie et Natha. La mesure qui doit justifier un pilote n'est pas encore démontrée comme concluante.
 
-![Avancement : mesure outillée, prototype démontré, app Mac et distribution publique à construire](diagrams/roadmap.svg)
+![Avancement : mesure outillée, prototype démontré, étape 2 construite, essais à faire](diagrams/roadmap.svg)
 
 ## Les chiffres, avec leur sens
 
-| Mesure actualisée après les nouveaux commits | Résultat | Ce que cela prouve |
+| Mesure | Résultat | Ce que cela prouve |
 | --- | --- | --- |
-| Tâches produit de l'index | 25 `done`, 2 `doing`, 4 `todo`, 1 `blocked`, sur 32 | État déclaré de la feuille de route, pas pourcentage d'effort |
-| Tests exécutés | 229 réussis dans 20 fichiers | Les cas automatisés passent sur ce poste, dont trois nouveaux tests du site |
+| Tâches produit de l'index | 33 `done`, 6 `doing`, 2 `blocked`, aucune `todo`, sur 41 | État déclaré de la feuille de route, pas pourcentage d'effort |
+| Tests exécutés | 264 réussis dans 29 fichiers | Les cas automatisés passent sur ce poste et en CI |
 | Lint et types | Réussite | Les contrôles statiques du dépôt passent |
-| Critères OpenSpec | 327, dont 313 testables | Taille du contrat suivi par le garde |
-| Critères reliés à un test | 54 sur 313, soit 17,3 % | Traçabilité explicite des specs, pas couverture du code |
-| Critères gelés dans la baseline | 259 | Dette connue non bloquante pour le garde, pas preuve de conformité |
+| Critères OpenSpec | 370, dont 354 testables | Taille du contrat suivi par le garde |
+| Critères reliés à un test | 96 sur 354, soit 27,1 % | Traçabilité explicite des specs, pas couverture du code |
+| Critères gelés dans la baseline | 258 | Dette connue non bloquante pour le garde, pas preuve de conformité |
 
-Sources : [index](TASKS.md), [tests](../packages/), [baseline](../.openspec-guard-baseline.json). `openspec-guard` trouve 197 titres statiques et signale trois titres non lisibles statiquement ; Vitest exécute davantage de cas, notamment paramétrés.
+Sources : [index](TASKS.md), [tests](../packages/), [baseline](../.openspec-guard-baseline.json). `openspec-guard` trouve 232 titres statiques ; Vitest exécute davantage de cas.
 
 ## Ce qui existe
 
 | Partie | État observé | Preuves dans le dépôt |
 | --- | --- | --- |
-| Mesure des blocages | MCP, hook Claude Code, import Codex, classification, export et agrégation implémentés | [Guide observer](../packages/blocked-observer/README.md), [tests](../packages/blocked-observer/test/) |
-| Protocole | Identités, signature, chiffrement, schémas et protection contre le rejeu | [Sources](../packages/protocol/src/), [tests](../packages/protocol/test/protocol.test.ts) |
-| Relais | Routage WebSocket et admission ; invitations implémentées et testées | [Relais](../packages/relay/src/), [test d'admission](../packages/node/test/admission.test.ts) |
-| Node et consentement | CLI, API locale, notification, autorisation et relecture web | [Node](../packages/node/src/), [test complet](../packages/node/test/e2e.test.ts) |
+| Mesure des blocages | MCP, hook Claude Code, import Codex, classification, export et agrégation | [Guide observer](../packages/blocked-observer/README.md), [tests](../packages/blocked-observer/test/) |
+| Protocole | Identités, signature, chiffrement, schémas, rejeu, tickets d'admission bornés à 24 h | [Sources](../packages/protocol/src/), [tests](../packages/protocol/test/protocol.test.ts) |
+| Relais | Routage, admission par invitation, révocation sans redémarrage, plafonds d'admission | [Relais](../packages/relay/src/), [tests](../packages/relay/test/relay.test.ts) |
+| Node et consentement | CLI, API locale, notification, autorisation et relecture | [Node](../packages/node/src/), [test complet](../packages/node/test/e2e.test.ts) |
 | Exécution et filtres | Validation, budget, répertoire temporaire et scanner de secrets | [Runner](../packages/runner/src/), [tests](../packages/runner/test/) |
-| Trois familles de capacités | Résumé d'erreurs, question sur un dépôt, question via un serveur MCP | [Registre](../packages/capabilities/src/index.ts), [tests](../packages/capabilities/test/) |
-| Agent demandeur | Trois outils MCP, validation locale et résultat présenté comme une donnée | [Guide](../packages/requester-mcp/README.md), [tests](../packages/requester-mcp/test/tools.test.ts) |
-| Paiement par le demandeur | Création et transmission d'une clé plafonnée, cycle de révocation testé | [Implémentation](../packages/node/src/funding.ts), [tests](../packages/node/test/funding.test.ts) |
-| Détection des outils | Configurations Claude Code, Codex, Cursor et Claude Desktop lues ; partage via CLI | [Détection](../packages/node/src/detect.ts), [tests](../packages/node/test/detect.test.ts) |
-| Annuaire d’équipe | Adhésion par invitation, propagation des membres, appairage et catalogue | [Tests à quatre Nodes](../packages/node/test/team.test.ts), commit `9765ad1` |
-| Installation locale | `drop install`, fichiers assemblés et génération `.mcpb` | [Installation](../packages/node/src/install.ts), [tests](../packages/node/test/install.test.ts), [bundle](../scripts/bundle.ts), commit `cacf1cc` |
+| Capacités | Résumé d'erreurs, dépôt, serveur MCP, agent A2A | [Registre](../packages/capabilities/src/index.ts), [tests](../packages/capabilities/test/) |
+| Outils en ligne | Partage vérifié ; connexion OAuth de drop, jetons gardés sur le poste | [Partage](../packages/node/src/share.ts), [OAuth](../packages/capabilities/src/mcp-oauth.ts), [tests](../packages/node/test/oauth.test.ts) |
+| Équipe et demandes | Annuaire, demandes multiples, « demander à mon équipe » | [Tests d'équipe](../packages/node/test/team.test.ts), [outils](../packages/requester-mcp/src/) |
+| Installation | `drop install`, fichiers assemblés vérifiés, `.mcpb` | [Installation](../packages/node/src/install.ts), [test du bundle](../test/bundle.test.ts) |
+| App Mac | Barre de menus, panneau, liens `drop://`, mises à jour signées proposées dans le menu | [App](../apps/mac/), [manifeste](../scripts/mac-updates.ts) |
+| Claude et ChatGPT | Passerelle OAuth, liaison confirmée dans l'app, durcie contre l'hameçonnage | [Passerelle](../packages/gateway/src/), [tests](../packages/gateway/test/gateway.test.ts) |
+| Site | Accueil, démarrage, cas d'usage, sécurité ; mode bêta ; service public testé | [Site](../site/), [tests](../test/site.test.ts) |
 
-Le support générique d'un serveur MCP ne prouve pas qu'une intégration métier réelle fonctionne chez chaque utilisateur. Les tests de `mcp.answer` utilisent notamment un serveur factice et un fournisseur de modèle simulé.
+Le code Rust de l'app compile pour macOS arm64 sans être lancé ici. Les intégrations en ligne (Notion, Linear, GitHub) sont testées contre des serveurs factices conformes, pas contre les vrais services.
 
 ## Ce qui a été montré en conditions réelles
 
-La [démo conservée dans le dépôt](demo/README.md) rapporte deux passages, avec Claude Code puis Codex, via le relais du lab :
-
-- Une question sur les erreurs de Traefik, exécutée sur le VPS et autorisée depuis le Mac.
-- Une question sur le mode sombre du dépôt de démonstration de Julie, suivie d'une relecture avant envoi.
-- Des captures du consentement et des reçus des deux côtés.
-
-Le Node nommé Julie et son dépôt de démonstration tournaient sur le Mac de Guillaume. Ce n'est pas un déploiement chez Julie. Le test de compréhension auprès d'une personne extérieure n'a pas été fait : la démo le dit explicitement. T1.14 reste donc `doing`.
+La [démo conservée dans le dépôt](demo/README.md) rapporte deux passages, avec Claude Code puis Codex, via le relais du lab : une question sur les erreurs de Traefik exécutée sur le VPS, une question sur le dépôt de démonstration de Julie avec relecture avant envoi, et les reçus des deux côtés. Le Node nommé Julie tournait sur le Mac de Guillaume : ce n'est pas un déploiement chez Julie. Rien de l'étape 2 n'a encore été essayé en conditions réelles.
 
 ## Ce qui reste à livrer
 
-| Tâche | Ce qu'il manque | Condition ou dépendance |
+| Tâche | Ce qu'il manque | Qui |
 | --- | --- | --- |
-| T1.14 | Test humain de compréhension en 30 secondes | Une personne extérieure à la construction |
-| T2.4 | App Mac de barre de menus et distribution signée | T2.1, T2.2, T2.8 et T2.9 |
-| T2.6 | Vidéo, parcours d’installation final et site public | T2.4, T2.5 ; mise en ligne soumise à accord |
-| T2.11 | Publication npm utilisable sans chemin local | `blocked` : nom du produit et accord de publication attendus |
-| T2.10 | Une question adressée à plusieurs personnes | T2.9 |
-| T2.7 | Essais réels chez Julie et Natha | T2.3, T2.4, T2.5 et T2.10 |
-
-T2.6a ajoute une vitrine et la documentation en prévisualisation. Elle ne publie pas les installateurs et ne remplace pas les essais utilisateurs.
+| T1.14 | Test de compréhension en 30 secondes | Une personne extérieure |
+| T2.4 | Signature, notarisation, clé de mise à jour, dessin du panneau de suivi | Guillaume (compte Apple) |
+| T2.13 | Déploiement de la passerelle, premier lien avec Claude et ChatGPT | Guillaume, `lab-infra` (`docs/deploiement-lab.md`) |
+| T2.6 | Mise en ligne, adresse de contact, vidéo | Guillaume (accord de publication) |
+| T2.17 | Premier essai avec un vrai compte Notion | Guillaume |
+| T2.7 | Essais chez Julie et Natha | Julie, Natha, [protocole](essais/README.md) |
+| T2.11, T2.20 | Publication npm ; passerelle de confiance par défaut | `blocked` : nom du produit ; identifiant de la passerelle |
 
 ## Les quatre points à garder visibles
 
-**1. Le besoin n'est pas encore validé.** D24 exige au moins trois développeurs et dix jours actifs chacun. Le GO demande au moins 0,5 blocage qualifié par développeur-jour et une médiane d'au moins dix minutes perdues. Le dépôt ne fournit pas ici d'agrégat qualifié satisfaisant ces conditions. Les 62 événements mentionnés en D25 sont un signal brut sur un poste, pas une validation de marché.
+**1. Le besoin n'est pas encore validé.** D24 exige au moins trois développeurs et dix jours actifs chacun. Le GO demande au moins 0,5 blocage qualifié par développeur-jour et une médiane d'au moins dix minutes perdues. Le dépôt ne fournit pas d'agrégat qualifié satisfaisant ces conditions.
 
-**2. Les tests ne couvrent pas formellement tout le contrat.** Les 259 critères gelés doivent être reliés à une preuve, ou corrigés si le contrat est devenu obsolète. Un garde vert avec baseline signifie absence de régression par rapport à cette baseline.
+**2. Les tests ne couvrent pas formellement tout le contrat.** Les 258 critères gelés doivent être reliés à une preuve, ou corrigés si le contrat est devenu obsolète. Un garde vert avec baseline signifie absence de régression par rapport à cette baseline.
 
-**3. La documentation historique a pris du retard sur le code.** L'architecture parle encore de Caddy, d'un TTL fixe de dix minutes et de `get_result`. D22 documente Traefik ; le relais utilise l'expiration de l'enveloppe ; l'outil s'appelle `get_drop_result`. D26 étend le périmètre à l'app Mac et aux outils MCP, contrairement aux exclusions initiales de la vision. Le présent guide cite le code et les décisions applicables, sans réécrire les contrats.
+**3. La documentation historique a pris du retard sur le code.** L'architecture parle encore de Caddy et de `get_result` ; D22 documente Traefik, l'outil s'appelle `get_drop_result`. Les décisions D26 à D40 étendent le périmètre initial (app Mac, outils MCP, assistants grand public).
 
-**4. La confidentialité doit être formulée précisément.** Le demandeur reçoit une sortie bornée et les accès du propriétaire ne lui sont pas transmis. Mais si le modèle est distant, les résultats des outils utilisés par ce modèle sont envoyés à ce fournisseur. Le scanner de secrets est un filtre, pas une preuve qu'aucune information sensible ne peut sortir. Voir le [guide de confidentialité](GUIDE.md#ce-qui-circule-et-ce-qui-reste-chez-soi).
+**4. La confidentialité doit être formulée précisément.** Le demandeur reçoit une sortie bornée et les accès du propriétaire ne lui sont pas transmis. Mais un modèle distant reçoit les résultats des outils qu'il appelle, et la passerelle voit en clair les questions et réponses des utilisateurs de Claude et ChatGPT. Le scanner de secrets est un filtre, pas une preuve. Voir la [page Sécurité](../site/securite.html) et le [guide](GUIDE.md#ce-qui-circule-et-ce-qui-reste-chez-soi).
 
 ## Le prochain chemin utile
 
-L'ordre et les dépendances restent ceux de [TASKS.md](TASKS.md). Pour rendre le prototype utilisable par quelqu'un d'autre, le chemin passe par l’app Mac (l’admission par invitation est close depuis le 2026-10-09) et la distribution publique. L’annuaire et l’installation locale ont été ajoutés pendant cette analyse et sont inclus dans ce bilan. Les essais chez les testeurs viennent ensuite. La mesure du besoin peut continuer pendant ces travaux, sans présumer le GO.
+Tout ce qui reste passe par un geste humain : signer l'app et déployer dans `lab-infra` (liste complète dans `docs/deploiement-lab.md`), puis les essais chez Julie et Natha selon le [protocole](essais/README.md). La mesure du besoin peut continuer pendant ce temps, sans présumer le GO.
 
 ## Reproduire le bilan
 
