@@ -42,6 +42,8 @@ L'ancien bilan `cacf1cc` est conservé dans l'historique Git. Ses chiffres de te
 
 L'ordre unique est [TASKS](TASKS.md). Prochain chantier : T3.1, supprimer les dépendances externes imposées et prouver les frontières réseau du profil privé. Puis qualification de modèle et connexion, finition Mac, preuve d'ensemble, préparation de publication, Windows et Linux. Les anciennes tâches en cours ont été remises à `todo` avec leur reprise explicite ; elles ne sont pas déclarées terminées.
 
+Deux évaluations complémentaires sont maintenant inscrites : **T3.1a**, Hermes comme agent demandeur via MCP, et **T3.2a**, adaptateurs AI SDK directs / passerelle LiteLLM privée. Aucun n’est installé ni intégré ; ils ne bloquent pas le parcours privé. Les critères incluent erreurs, destinations réseau et absence de dépendance cloud obligatoire. Le client actuel reste celui de la première preuve.
+
 D24 exige au moins trois développeurs et dix jours actifs chacun. Le GO exige au moins 0,5 blocage YES par développeur-jour et une médiane de dix minutes perdues. Aucun agrégat qualifié concluant n'est apporté par cette documentation.
 
 Le dépôt demeure privé. Avant ouverture : audit de l'historique et des artefacts, attributions tierces, séparation de la CI du lab, signalement privé opérationnel, paquets vérifiés et accord du propriétaire. Voir [OPEN_SOURCE](OPEN_SOURCE.md).

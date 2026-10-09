@@ -66,3 +66,16 @@ Conception adoptée le 9 octobre 2026. **Tous les critères ci-dessous restent �
 | AC-LINUX-01 | T3.8        | WebKitGTK, GNOME/KDE, X11/Wayland vérifiés ; panneau accessible sans tray ; corpus commun vert                                        |
 
 Les preuves se construisent chantier par chantier, sans recopier les coches d'une plateforme vers une autre. D24 et l'acceptation humaine restent distincts des tests techniques.
+
+## Évaluations complémentaires, non bloquantes
+
+Ces critères restent à vérifier ; aucune intégration ni adoption de dépendance n’est livrée par cette note. D39 conserve les sources. L’ordre reste dans TASKS.
+
+| Critère        | Responsable | Résultat et preuve attendus                                                                                                                                                                                                                              |
+| -------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| AC-HERMES-01   | T3.1a       | Dans un profil de test isolé, Hermes charge le connecteur MCP stdio drop et demande une réponse ; l’accord la livre, le refus et l’expiration ne livrent rien. Versions et configuration expurgée documentées.                                           |
+| AC-HERMES-02   | T3.1a       | Modèle explicitement local/interne, destinations observées, aucun service Nous imposé et aucune collecte de mémoire/config personnelle ; panne sans repli distant. Sinon consigner l’écart sans annoncer la compatibilité privée.                        |
+| AC-HERMES-03   | T3.1a       | Aucun outil supplémentaire accordé au runner ; aucune détection automatique déclarée livrée. Conclure intégrer/adapter/différer, avec travail restant, coût de maintenance et voie de retrait du raccordement de test.                                   |
+| AC-PROVIDER-01 | T3.2a       | Comparer client actuel, AI SDK direct et LiteLLM privé sur un même corpus : texte, outils, schéma invalide, annulation, timeout, authentification et comptage des coûts. Matrice par fournisseur et version, sans promesse de compatibilité universelle. |
+| AC-PROVIDER-02 | T3.2a       | Aucun passage obligatoire par Vercel AI Gateway ou autre cloud ; endpoint du propriétaire inchangé, clés expurgées, fallback contrôlé et budget respecté. Observer aussi les destinations de la passerelle choisie.                                      |
+| AC-PROVIDER-03 | T3.2a       | Rapport de licence, dépendances, taille/complexité du paquet et coûts API distincts du logiciel gratuit. Décision explicite dans DECISIONS avant tout SDK runtime ; conserver le client actuel si aucun gain ne justifie la migration.                   |
