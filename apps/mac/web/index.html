@@ -2,23 +2,175 @@
 <html lang="fr">
   <head>
     <meta charset="utf-8" />
-    <title>drop</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>drop — démarrage</title>
     <style>
+      :root {
+        color-scheme: light dark;
+        --ground: #f7f6f3;
+        --ink: #1a1a19;
+        --soft: #55534e;
+        --accent: #0e5f58;
+        --edge: #dad8d2;
+        --warn: #9a3412;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --ground: #1c1c1b;
+          --ink: #f2f1ee;
+          --soft: #c9c6be;
+          --accent: #5cc2b5;
+          --edge: #4b4944;
+          --warn: #f0a27a;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
       body {
         margin: 0;
+        min-height: 100vh;
+        background: var(--ground);
+        color: var(--ink);
         font:
-          13px system-ui,
+          14px/1.5 system-ui,
+          -apple-system,
           sans-serif;
+      }
+      header {
+        padding: 20px 24px;
+        border-bottom: 1px solid var(--edge);
+        font-size: 18px;
+        font-weight: 650;
+        letter-spacing: -0.02em;
+      }
+      main {
+        padding: 36px 24px;
+        max-width: 34rem;
+      }
+      h1 {
+        font-size: 21px;
+        line-height: 1.22;
+        letter-spacing: -0.025em;
+        margin: 0 0 12px;
+      }
+      p {
+        color: var(--soft);
+        margin: 0 0 18px;
+        max-width: 36ch;
+      }
+      .status {
         display: flex;
         align-items: center;
-        justify-content: center;
-        height: 100vh;
-        color: #55534e;
-        background: #f7f6f3;
+        gap: 10px;
+        margin-bottom: 26px;
+      }
+      .dot {
+        width: 9px;
+        height: 9px;
+        flex: none;
+        border-radius: 50%;
+        background: var(--accent);
+      }
+      .dot.error {
+        background: var(--warn);
+      }
+      button {
+        min-height: 40px;
+        padding: 0 16px;
+        border: 1px solid var(--accent);
+        border-radius: 9px;
+        color: var(--ground);
+        background: var(--accent);
+        font: inherit;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      button:hover {
+        filter: brightness(1.08);
+      }
+      button:focus-visible {
+        outline: 3px solid var(--accent);
+        outline-offset: 3px;
+      }
+      button:disabled {
+        opacity: 0.6;
+        cursor: wait;
+      }
+      small {
+        display: block;
+        margin-top: 16px;
+        color: var(--soft);
+      }
+      ::selection {
+        background: var(--accent);
+        color: var(--ground);
       }
     </style>
   </head>
   <body>
-    Démarrage de drop…
+    <header>drop</header>
+    <main>
+      <div class="status" role="status" aria-live="polite">
+        <span class="dot" id="status-dot" aria-hidden="true"></span><span id="state">Démarrage local…</span>
+      </div>
+      <h1 id="title">Préparation de ton espace</h1>
+      <p id="detail">Le moteur démarre sur ce Mac. Les échanges passent par l’infrastructure que tu as choisie.</p>
+      <button id="retry" type="button" hidden>Réessayer</button>
+      <small id="hint" hidden
+        >Tu peux aussi choisir « Réessayer le démarrage » dans le menu drop de la barre de menus.</small
+      >
+    </main>
+    <script>
+      const states = {
+        E_INIT: [
+          'Identité non initialisée',
+          'La création de ton espace local a échoué. Vérifie les droits du dossier drop, puis réessaie.',
+        ],
+        E_CONFIG: [
+          'Configuration illisible',
+          'Le port local manque ou la configuration est invalide. Corrige-la, puis réessaie.',
+        ],
+        E_PORT: [
+          'Port local déjà utilisé',
+          'Un autre programme utilise le port de drop. Ferme-le ou choisis un autre port dans la configuration, puis réessaie.',
+        ],
+        E_LOG: [
+          'Journal inaccessible',
+          'drop ne peut pas écrire son journal local. Vérifie les droits du dossier drop, puis réessaie.',
+        ],
+        E_SPAWN: [
+          'Moteur introuvable',
+          'Le moteur embarqué ne démarre pas. Réinstalle un paquet Mac vérifié, puis réessaie.',
+        ],
+        E_START: [
+          'Moteur indisponible',
+          'Le moteur local ne répond pas dans le délai prévu. Vérifie la configuration, puis réessaie.',
+        ],
+        E_TOKEN: ['Panneau inaccessible', 'Le jeton local manque. Vérifie les droits du dossier drop, puis réessaie.'],
+        E_RESTART: ['Moteur arrêté', 'La reprise automatique a échoué. Vérifie le journal local, puis réessaie.'],
+      };
+      const code = new URLSearchParams(location.search).get('state');
+      if (code && states[code]) {
+        document.getElementById('state').textContent = 'Démarrage interrompu';
+        document.getElementById('status-dot').classList.add('error');
+        document.getElementById('title').textContent = states[code][0];
+        document.getElementById('detail').textContent = states[code][1];
+        document.getElementById('retry').hidden = false;
+        document.getElementById('hint').hidden = false;
+        document.getElementById('hint').append(' Code de diagnostic : ' + code + '.');
+      }
+      document.getElementById('retry').addEventListener('click', async () => {
+        const button = document.getElementById('retry');
+        button.disabled = true;
+        try {
+          await window.__TAURI_INTERNALS__.invoke('retry_daemon');
+          document.getElementById('state').textContent = 'Nouvelle tentative…';
+        } catch {
+          button.disabled = false;
+          document.getElementById('state').textContent = 'Utilise « Réessayer le démarrage » dans le menu drop.';
+        }
+      });
+    </script>
   </body>
 </html>

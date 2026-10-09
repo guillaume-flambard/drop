@@ -17,7 +17,7 @@
 | A2A entrant                                      | [Adaptateur](../packages/a2a/), commit `0e9caa8`                                             | SDK 1.3.0 ciblant A2A 1.0 ; pas une certification de tout le standard               |
 | Questions d'équipe et demandes multiples         | [Connecteur MCP](../packages/requester-mcp/)                                                 | Routage borné, pas un orchestrateur général                                         |
 | Détection et installation individuelles          | [Détection](../packages/node/src/detect.ts), [installation](../packages/node/src/install.ts) | Quatre adaptateurs ; transaction groupée réversible à construire                    |
-| Shell Mac de barre de menus                      | [Tauri](../apps/mac/)                                                                        | Bootstrap privé ; distribution signée non qualifiée                                                         |
+| Shell Mac de barre de menus                      | [Tauri](../apps/mac/)                                                                        | T3.4 en cours : reprise bornée, erreur actionnable et clavier améliorés ; distribution signée et recette VoiceOver non qualifiées |
 | Financement demandeur et passerelle grand public | [Financement](../packages/node/src/funding.ts), [gateway](../packages/gateway/)              | Financement sans substitution ; passerelle exclue du profil privé |
 | Mesure du besoin                                 | [Observer](../packages/blocked-observer/)                                                    | D24 attend toujours un agrégat qualifié concluant                                   |
 

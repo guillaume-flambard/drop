@@ -96,6 +96,7 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
     token: home.localToken(),
     port: options.apiPort ?? config.apiPort,
     relayUrl: config.relayUrl,
+    ...(process.env.DROP_SHELL_INSTANCE ? { shellInstance: process.env.DROP_SHELL_INSTANCE } : {}),
     admin: {
       status: () => ({ displayName: identity.displayName, nodeId: identity.nodeId, relayConnected: relay.connected }),
       tools: () => {

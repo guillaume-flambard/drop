@@ -15,6 +15,8 @@ export interface LocalApiOptions {
   /** Fetches fresh catalogs when the cache is older than 60 s; resolves when answers arrived or timed out. */
   refreshCatalogs: () => Promise<void>;
   relayUrl: string;
+  /** Opaque process instance marker used only by the Mac shell to recognize its own child. */
+  shellInstance?: string;
   now?: () => number;
   /** Owner actions of the app's panel (T2.4), wired by the daemon; absent in tests of the drop routes. */
   admin?: AdminHooks;
@@ -87,8 +89,13 @@ const AskBody = z.object({
 const MAX_BODY_BYTES = 128 * 1024;
 
 function json(res: ServerResponse, status: number, body: unknown): void {
-  res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
-  res.end(JSON.stringify(body));
+  const payload = JSON.stringify(body);
+  res.writeHead(status, {
+    'Content-Type': 'application/json; charset=utf-8',
+    'Cache-Control': 'no-store',
+    'Content-Length': Buffer.byteLength(payload),
+  });
+  res.end(payload);
 }
 
 function sameToken(given: string, expected: string): boolean {
@@ -142,6 +149,15 @@ export function startLocalApi(options: LocalApiOptions): Promise<LocalApi> {
     // The A2A agent card (T2.14) is public to local clients, as A2A expects: it names the token the calls need.
     if ((req.method ?? 'GET') === 'GET' && url.pathname === '/.well-known/agent-card.json' && localHost(req)) {
       json(res, 200, team.cardJson(`http://127.0.0.1:${String(boundPort)}/a2a`));
+      return;
+    }
+    if (
+      (req.method ?? 'GET') === 'GET' &&
+      url.pathname === '/_shell/health' &&
+      options.shellInstance &&
+      localHost(req)
+    ) {
+      json(res, 200, { instance: options.shellInstance });
       return;
     }
     if (!authorized(req, url)) {
