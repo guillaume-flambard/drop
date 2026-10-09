@@ -470,6 +470,22 @@ describe('replay admission through the engine', () => {
     }
   });
 
+  it('expires a finished-error summary within 30 minutes even for a future UUIDv7', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'drop-replay-engine-future-summary-'));
+    try {
+      const node = await ownerNode(root);
+      const dropId = uuidv7(NOW + 5 * 60_000);
+      await node.send(dropId);
+      expect(await node.engine.decide(dropId, 'not_now')).toBe(true);
+      expect(node.engine.memoryStats().completedErrors).toBe(1);
+      node.clock.now = NOW + 30 * 60_000 + 1;
+      await node.engine.tick();
+      expect(node.engine.memoryStats().completedErrors).toBe(0);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('frees a delivered request without reopening its durable replay marker', async () => {
     const root = mkdtempSync(join(tmpdir(), 'drop-replay-engine-delivered-memory-'));
     try {

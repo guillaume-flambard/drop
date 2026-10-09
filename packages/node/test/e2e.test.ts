@@ -91,6 +91,7 @@ describe('end to end, in memory: relay and three nodes', () => {
     });
     const m = mesh;
     const dropId = await ask(m, LOW, 'ok');
+    await until(() => m.requester.engine.drop(dropId)?.state === 'awaiting_approval');
     const forge = async (message: Parameters<typeof sealEnvelope>[2]) =>
       m.requester.engine.handleEnvelope(
         await sealEnvelope(m.executor.identity, m.requester.identity.nodeId, message, { now: m.clock.now }),

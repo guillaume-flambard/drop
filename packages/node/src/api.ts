@@ -197,9 +197,15 @@ export function startLocalApi(options: LocalApiOptions): Promise<LocalApi> {
           });
           asked.push({ dropId: drop.dropId, ...route });
         } catch (error) {
-          if (!isDropError(error, 'E_RATE')) throw error;
-          json(res, 429, { error: 'E_RATE', message: 'Trop de demandes actives.', asked });
-          return;
+          if (isDropError(error, 'E_RATE')) {
+            json(res, 429, { error: 'E_RATE', message: 'Trop de demandes actives.', asked });
+            return;
+          }
+          if (isDropError(error, 'E_TOO_LARGE')) {
+            json(res, 413, { error: 'E_TOO_LARGE', message: 'Enveloppe trop grande.', asked });
+            return;
+          }
+          throw error;
         }
       }
       const helpers = catalog

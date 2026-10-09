@@ -53,6 +53,11 @@ export interface Transport {
   send(envelope: Envelope): Promise<string>;
 }
 
+interface QueuedEnvelope {
+  envelope: Envelope;
+  order: number;
+}
+
 export type DropClaim = 'claimed' | 'duplicate' | 'expired' | 'capacity';
 
 const CLAIM_ERRORS: Record<Exclude<DropClaim, 'claimed'>, { code: DropErrorCode; message: string }> = {
@@ -212,7 +217,10 @@ export class NodeEngine extends EventEmitter {
   >();
   private readonly outbound = new Map<string, OutboundDrop>();
   private readonly inbox = new Map<string, InboxItem>();
-  private readonly outbox: Envelope[] = [];
+  private readonly outbox: QueuedEnvelope[] = [];
+  private outboxInFlight: QueuedEnvelope | undefined;
+  private outboxFlush: Promise<void> | undefined;
+  private nextOutboxOrder = 0;
 
   constructor(options: EngineOptions) {
     super();
@@ -238,7 +246,7 @@ export class NodeEngine extends EventEmitter {
       completedErrors: this.completedErrors.size,
       outbound: this.outbound.size,
       inbox: this.inbox.size,
-      outbox: this.outbox.length,
+      outbox: this.outbox.length + (this.outboxInFlight ? 1 : 0),
     };
   }
 
@@ -494,7 +502,7 @@ export class NodeEngine extends EventEmitter {
           requestedBy: { nodeId: this.identity.nodeId, displayName: this.identity.displayName, agent: request.agent },
           ...(funding ? { funding } : {}),
         },
-        false,
+        { queueOffline: false },
       );
     } catch (error) {
       await this.abandonOutbound(dropId, funding);
@@ -579,20 +587,40 @@ export class NodeEngine extends EventEmitter {
 
   /** Re-sends envelopes that could not leave while the relay was unreachable. */
   async flushOutbox(): Promise<void> {
-    const pending = this.outbox.splice(0);
-    for (const envelope of pending) {
+    if (this.outboxFlush) return this.outboxFlush;
+    const operation = this.drainOutbox();
+    this.outboxFlush = operation;
+    try {
+      await operation;
+    } finally {
+      this.outboxFlush = undefined;
+    }
+  }
+
+  private async drainOutbox(): Promise<void> {
+    // Keep only order numbers: an evicted envelope must not remain retained by this snapshot.
+    const pendingOrders = this.outbox.map((queued) => queued.order);
+    for (const order of pendingOrders) {
+      const index = this.outbox.findIndex((queued) => queued.order === order);
+      if (index < 0) continue;
+      const [queued] = this.outbox.splice(index, 1);
+      if (!queued) continue;
+      const { envelope } = queued;
       if (envelope.exp <= this.now()) continue;
+      this.outboxInFlight = queued;
       let outcome: string;
       try {
         outcome = await this.options.transport.send(envelope);
       } catch {
         this.log({ event: 'send_failed', code: 'E_RUNNER', reason: 'transport_exception', peer: envelope.to });
         outcome = 'offline';
+      } finally {
+        this.outboxInFlight = undefined;
       }
       if (outcome === 'offline' || outcome === 'E_RATE' || outcome === 'E_QUEUE_FULL') {
         if (outcome !== 'offline')
           this.log({ event: 'send_failed', code: outcome, reason: 'flush_refused', peer: envelope.to });
-        this.queueOutbox(envelope);
+        this.queueOutbox(queued);
       } else if (outcome !== 'delivered' && outcome !== 'queued') {
         this.log({ event: 'send_failed', code: outcome, reason: 'flush_rejected', peer: envelope.to });
       }
@@ -615,6 +643,11 @@ export class NodeEngine extends EventEmitter {
       }
     }
     this.changed();
+    try {
+      await this.options.funder?.retryPending?.();
+    } catch {
+      this.log({ event: 'funding', code: 'E_FUNDING_RELEASE' });
+    }
   }
 
   // ---- internals ---------------------------------------------------------------------------------------------
@@ -862,26 +895,7 @@ export class NodeEngine extends EventEmitter {
   }
 
   private onApprovalRequest(from: NodeId, message: MessageOf<'approval_request'>): void {
-    if (message.expiresAt <= this.now() || message.expiresAt > this.now() + APPROVAL_TTL_MS + MAX_CLOCK_SKEW_MS) {
-      this.log({
-        event: 'approval_rejected',
-        code: 'E_EXPIRED',
-        reason: 'approval_expiry',
-        dropId: message.dropId,
-        peer: from,
-      });
-      return;
-    }
-    if (!this.inbox.has(message.dropId) && this.inbox.size >= MAX_INBOX_ITEMS) {
-      this.log({
-        event: 'approval_rejected',
-        code: 'E_RATE',
-        reason: 'inbox_capacity',
-        dropId: message.dropId,
-        peer: from,
-      });
-      return;
-    }
+    if (!this.canAcceptInboxCard('approval', from, message.dropId, message.expiresAt, APPROVAL_TTL_MS)) return;
     this.inbox.set(message.dropId, {
       kind: 'approval',
       dropId: message.dropId,
@@ -948,26 +962,7 @@ export class NodeEngine extends EventEmitter {
   }
 
   private onReviewRequest(from: NodeId, message: MessageOf<'review_request'>): void {
-    if (message.expiresAt <= this.now() || message.expiresAt > this.now() + REVIEW_TTL_MS + MAX_CLOCK_SKEW_MS) {
-      this.log({
-        event: 'review_rejected',
-        code: 'E_EXPIRED',
-        reason: 'review_expiry',
-        dropId: message.dropId,
-        peer: from,
-      });
-      return;
-    }
-    if (!this.inbox.has(message.dropId) && this.inbox.size >= MAX_INBOX_ITEMS) {
-      this.log({
-        event: 'review_rejected',
-        code: 'E_RATE',
-        reason: 'inbox_capacity',
-        dropId: message.dropId,
-        peer: from,
-      });
-      return;
-    }
+    if (!this.canAcceptInboxCard('review', from, message.dropId, message.expiresAt, REVIEW_TTL_MS)) return;
     this.inbox.set(message.dropId, {
       kind: 'review',
       dropId: message.dropId,
@@ -1087,7 +1082,7 @@ export class NodeEngine extends EventEmitter {
   private rememberCompletedError(drop: ExecutorDrop): void {
     const timestamp = uuidv7Timestamp(drop.dropId);
     if (timestamp === undefined || !drop.error) return;
-    const expiresAt = timestamp + REPLAY_WINDOW_MS;
+    const expiresAt = Math.min(timestamp + REPLAY_WINDOW_MS, this.now() + REPLAY_WINDOW_MS);
     if (expiresAt <= this.now()) return;
     this.pruneCompletedErrors(this.now());
     if (this.completedErrors.size >= MAX_COMPLETED_ERRORS) {
@@ -1146,21 +1141,47 @@ export class NodeEngine extends EventEmitter {
     await this.send(drop.requester, { type: 'drop_status', dropId: drop.dropId, state: drop.state });
   }
 
-  private queueOutbox(envelope: Envelope): void {
+  private canAcceptInboxCard(
+    kind: InboxItem['kind'],
+    from: NodeId,
+    dropId: string,
+    expiresAt: number,
+    ttlMs: number,
+  ): boolean {
+    if (this.inbox.has(dropId)) {
+      this.log({ event: `${kind}_rejected`, code: 'E_REPLAY', reason: 'inbox_duplicate', dropId, peer: from });
+      return false;
+    }
+    const now = this.now();
+    if (expiresAt <= now || expiresAt > now + ttlMs + MAX_CLOCK_SKEW_MS) {
+      this.log({ event: `${kind}_rejected`, code: 'E_EXPIRED', reason: `${kind}_expiry`, dropId, peer: from });
+      return false;
+    }
+    if (this.inbox.size >= MAX_INBOX_ITEMS) {
+      this.log({ event: `${kind}_rejected`, code: 'E_RATE', reason: 'inbox_capacity', dropId, peer: from });
+      return false;
+    }
+    return true;
+  }
+
+  private queueOutbox(queued: QueuedEnvelope): void {
     const now = this.now();
     for (let index = this.outbox.length - 1; index >= 0; index -= 1) {
-      const queued = this.outbox[index];
-      if (queued && queued.exp <= now) this.outbox.splice(index, 1);
+      const entry = this.outbox[index];
+      if (entry && entry.envelope.exp <= now) this.outbox.splice(index, 1);
     }
-    if (this.outbox.length >= MAX_OUTBOX_ENVELOPES) {
+    const insertAt = this.outbox.findIndex((entry) => entry.order > queued.order);
+    if (insertAt === -1) this.outbox.push(queued);
+    else this.outbox.splice(insertAt, 0, queued);
+    if (this.outbox.length + (this.outboxInFlight ? 1 : 0) > MAX_OUTBOX_ENVELOPES) {
       this.outbox.shift();
       this.log({ event: 'send_failed', code: 'E_RATE', reason: 'outbox_capacity' });
     }
-    this.outbox.push(envelope);
   }
 
-  private async send(to: NodeId, message: Message, queueOffline = true): Promise<string> {
+  private async send(to: NodeId, message: Message, options: { queueOffline?: boolean } = {}): Promise<string> {
     const envelope = await sealEnvelope(this.identity, to, message, { now: this.now() });
+    const order = this.nextOutboxOrder++;
     let outcome: string;
     try {
       outcome = await this.options.transport.send(envelope);
@@ -1168,7 +1189,7 @@ export class NodeEngine extends EventEmitter {
       this.log({ event: 'send_failed', code: 'E_RUNNER', reason: 'transport_exception', peer: to });
       outcome = 'offline';
     }
-    if (outcome === 'offline' && queueOffline) this.queueOutbox(envelope);
+    if (outcome === 'offline' && options.queueOffline !== false) this.queueOutbox({ envelope, order });
     else if (outcome !== 'delivered' && outcome !== 'queued')
       this.log({ event: 'send_failed', code: outcome, peer: to });
     return outcome;

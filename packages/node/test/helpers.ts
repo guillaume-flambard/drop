@@ -102,7 +102,11 @@ export async function until(check: () => boolean, timeoutMs = 4000): Promise<voi
 /** Relay + three nodes: Guillaume requests, the VPS executes, Julie approves. Everyone is paired with everyone. */
 export async function startMesh(
   capabilities: CapabilityImpl[],
-  extra: { requester?: Partial<EngineOptions>; executor?: Partial<EngineOptions> } = {},
+  extra: {
+    requester?: Partial<EngineOptions>;
+    executor?: Partial<EngineOptions>;
+    approver?: Partial<EngineOptions>;
+  } = {},
 ): Promise<Mesh> {
   const clock = { now: Date.now() };
   const ids = {
@@ -147,7 +151,7 @@ export async function startMesh(
   };
   const requester = await make(ids.requester, 'human', extra.requester);
   const executor = await make(ids.executor, 'machine', extra.executor);
-  const approver = await make(ids.approver, 'human');
+  const approver = await make(ids.approver, 'human', extra.approver);
 
   // Pairing through real invites: requester ↔ executor, approver ↔ executor.
   for (const node of [requester, approver]) {
