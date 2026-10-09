@@ -87,7 +87,6 @@ interface Connection {
   socket: WebSocket;
   nodeId: string;
   missedPings: number;
-  sentInWindow: number[];
 }
 
 export function startRelay(config: RelayConfig, options: RelayOptions = {}): Promise<RelayHandle> {
@@ -127,6 +126,7 @@ export function startRelay(config: RelayConfig, options: RelayOptions = {}): Pro
     return 'ok';
   };
   const connections = new Map<string, Connection>();
+  const sentByNode = new Map<string, number[]>();
   const queues = new Map<string, Envelope[]>();
   // Plain HTTP answers only GET /health (for the deploy probe and uptime monitoring); /v1 upgrades to WebSocket.
   const http = createServer((req, res) => {
@@ -144,6 +144,20 @@ export function startRelay(config: RelayConfig, options: RelayOptions = {}): Pro
     const live = (queues.get(nodeId) ?? []).filter((envelope) => envelope.exp > now());
     queues.set(nodeId, live);
     return live;
+  };
+
+  const charge = (nodeId: string): boolean => {
+    const minuteAgo = now() - 60_000;
+    for (const [nodeId, entries] of sentByNode) {
+      const current = entries.filter((at) => at > minuteAgo);
+      if (current.length) sentByNode.set(nodeId, current);
+      else sentByNode.delete(nodeId);
+    }
+    const sent = sentByNode.get(nodeId) ?? [];
+    if (sent.length >= settings.rateLimitPerMinute) return false;
+    sent.push(now());
+    sentByNode.set(nodeId, sent);
+    return true;
   };
 
   const route = (sender: Connection, raw: unknown): void => {
@@ -166,15 +180,6 @@ export function startRelay(config: RelayConfig, options: RelayOptions = {}): Pro
       log({ event: 'envelope', outcome: 'E_TOO_LARGE', ...meta });
       return;
     }
-    const minuteAgo = now() - 60_000;
-    sender.sentInWindow = sender.sentInWindow.filter((at) => at > minuteAgo);
-    if (sender.sentInWindow.length >= settings.rateLimitPerMinute) {
-      send(sender.socket, { type: 'error', id: envelope.id, error: 'E_RATE' });
-      log({ event: 'envelope', outcome: 'E_RATE', ...meta });
-      return;
-    }
-    sender.sentInWindow.push(now());
-
     const target = connections.get(envelope.to);
     if (target) {
       send(target.socket, { type: 'envelope', envelope });
@@ -206,8 +211,8 @@ export function startRelay(config: RelayConfig, options: RelayOptions = {}): Pro
     });
 
     socket.on('message', (data) => {
-      const frame = parseFrame(ClientFrameSchema, data);
       if (!connection) {
+        const frame = parseFrame(ClientFrameSchema, data);
         if (frame?.type !== 'auth') {
           socket.close(CLOSE_UNAUTHORIZED, 'auth expected');
           return;
@@ -226,7 +231,7 @@ export function startRelay(config: RelayConfig, options: RelayOptions = {}): Pro
             }
             clearTimeout(authTimer);
             connections.get(nodeId)?.socket.close(CLOSE_REPLACED, 'replaced by a newer connection');
-            connection = { socket, nodeId, missedPings: 0, sentInWindow: [] };
+            connection = { socket, nodeId, missedPings: 0 };
             connections.set(nodeId, connection);
             send(socket, { type: 'ready', nodeId });
             log({ event: 'auth', outcome: 'ok', nodeId });
@@ -249,6 +254,16 @@ export function startRelay(config: RelayConfig, options: RelayOptions = {}): Pro
           });
         return;
       }
+      if (!charge(connection.nodeId)) {
+        // Read only a bounded prefix to associate valid client sends with E_RATE without parsing an exhausted frame.
+        const prefix = Buffer.isBuffer(data) ? data.subarray(0, 256).toString('utf8') : '';
+        const rawId = /"id"\s*:\s*"([0-9a-f-]{36})"/i.exec(prefix)?.[1];
+        const id = rawId && z.uuid().safeParse(rawId).success ? rawId : undefined;
+        send(socket, { type: 'error', ...(id ? { id } : {}), error: 'E_RATE' });
+        log({ event: 'envelope', outcome: 'E_RATE', nodeId: connection.nodeId, ...(id ? { id } : {}) });
+        return;
+      }
+      const frame = parseFrame(ClientFrameSchema, data);
       if (frame?.type !== 'envelope') {
         send(socket, { type: 'error', error: 'E_SCHEMA' });
         return;

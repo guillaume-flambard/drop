@@ -12,6 +12,7 @@ import {
   envelopeSize,
   generateIdentity,
   MAX_ENVELOPE_BYTES,
+  MessageSchema,
   openEnvelope,
   protocolJsonSchemas,
   ReplayCache,
@@ -27,11 +28,42 @@ import {
   type Envelope,
   type Identity,
   type Message,
+  uuidv7,
 } from '../src/index.ts';
 import { getSodium } from '../src/sodium.ts';
 
 const NOW = 1_791_460_000_000;
 const DROP_ID = '0199c5a0-0000-7000-8000-000000000001';
+
+describe('drop request id', () => {
+  it('rejects UUIDv4 for a new drop request', () => {
+    const request = {
+      type: 'drop_request',
+      dropId: '550e8400-e29b-41d4-a716-446655440000',
+      capabilityId: 'test.state',
+      capabilityVersion: '1',
+      input: {},
+      purpose: 'Test',
+      requestedBy: { nodeId: 'A'.repeat(43), displayName: 'Requester', agent: 'codex' },
+    };
+    expect(MessageSchema.safeParse(request).success).toBe(false);
+    expect(MessageSchema.safeParse({ ...request, dropId: uuidv7(NOW) }).success).toBe(true);
+  });
+
+  it('normalizes uppercase UUIDv7 before dispatch', () => {
+    const id = uuidv7(NOW);
+    const parsed = MessageSchema.parse({
+      type: 'drop_request',
+      dropId: id.toUpperCase(),
+      capabilityId: 'test.state',
+      capabilityVersion: '1',
+      input: {},
+      purpose: 'Test',
+      requestedBy: { nodeId: 'A'.repeat(43), displayName: 'Requester', agent: 'codex' },
+    });
+    expect(parsed).toMatchObject({ type: 'drop_request', dropId: id });
+  });
+});
 
 async function pair(): Promise<{ alice: Identity; bob: Identity }> {
   return { alice: await generateIdentity('Alice'), bob: await generateIdentity('Bob') };
