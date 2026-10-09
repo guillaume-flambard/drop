@@ -16,11 +16,14 @@
 - [x] 3.2 Tester puis borner `outbox` pendant une panne prolongée et traiter une exception de transport sans exécution bloquée.
 - [x] 3.3 Tester puis traiter `E_RATE`/`E_QUEUE_FULL`, la panne hors ligne et une exception de préparation de l'enveloppe initiale, avec libération du financement et de la place locale ; tester 429/413 et le refus temporaire pendant `flushOutbox`.
 - [x] 3.4 Tester puis borner `ReplayCache` sans éviction d'un identifiant non expiré ; vérifier les tests protocole.
+- [x] 3.5 Corriger les écarts de la revue Codex : collision de cartes, ordre de l'outbox pendant un vidage concurrent, 413 sur `/ask` et durée du résumé de refus ; vérifier les tests rouges puis verts.
+- [x] 3.6 Tester la révocation OpenRouter refusée, conserver son hash jusqu'à confirmation ou expiration et réessayer avec plafond sur les ticks ; vérifier les tests de financement et de relais.
+- [x] 3.7 Tester puis sérialiser les vidages concurrents en comptant l'envoi en cours dans le plafond de la file ; réserver les places des créations de clés avant l'appel fournisseur et libérer la réservation après échec.
 
 ## 4. Vérification
 
-- [x] 4.1 Synchroniser les specs canoniques, vérifier tous les scénarios `AC:` avec sélecteurs exacts et valider la change OpenSpec strictement.
-- [x] 4.2 Exécuter `pnpm -r lint`, `pnpm -r typecheck`, `pnpm -r test`, puis openspec-guard avec `--fail-on fail` et `--update-baseline` sans nouvel échec ; consigner les preuves.
+- [x] 4.1 Synchroniser les specs canoniques, vérifier tous les scénarios `AC:` avec sélecteurs exacts et valider la change OpenSpec strictement après la revue Codex.
+- [x] 4.2 Exécuter `pnpm -r lint`, `pnpm -r typecheck`, `pnpm -r test`, puis openspec-guard avec `--fail-on fail` et `--update-baseline` sans nouvel échec après les corrections ; consigner les preuves.
 - [ ] 4.3 Exécuter `/review` et `/cso` gstack sur le diff, corriger les constats P0/P1, puis faire chercher les manques par une vérification indépendante.
 
 ## Workflow follow-up

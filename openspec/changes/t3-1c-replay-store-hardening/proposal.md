@@ -11,6 +11,8 @@ T3.1c ferme un constat CSO de gravité HIGH : sous des demandes valides répét�
 - Refuser explicitement une nouvelle demande lorsque toutes les places sont occupées par des demandes actives.
 - Garder un historique local récent borné pour le panneau et documenter sa rétention.
 - Borner également la boîte d'approbation, la file hors ligne et le cache des enveloppes ; un refus explicite du relais ne doit pas immobiliser une place active.
+- Empêcher qu'un pair remplace une carte de consentement existante avec le même identifiant et conserver l'ordre réel de la file pendant une reconnexion concurrente.
+- Pour une clé plafonnée facultative, conserver un hash borné et réessayer une révocation refusée par le fournisseur ; distinguer tentative et confirmation.
 
 ## Non-goals
 
@@ -30,4 +32,4 @@ Aucune.
 
 ## Impact
 
-`packages/node/src/engine.ts`, `packages/protocol/src/envelope.ts`, l'API locale `/drops` et `/ask`, leurs tests, les specs `node`/`protocol` et le guide du profil privé. Aucune dépendance nouvelle.
+`packages/node/src/engine.ts`, `packages/node/src/funding.ts`, `packages/protocol/src/envelope.ts`, l'API locale `/drops` et `/ask`, leurs tests, les specs `node`/`protocol` et le guide du profil privé. Aucune dépendance nouvelle.

@@ -8,7 +8,8 @@
     "REQ-3 bounded approval inbox",
     "REQ-4 bounded offline outbox",
     "REQ-5 relay refusal cleanup",
-    "REQ-6 bounded envelope ReplayCache"
+    "REQ-6 bounded envelope ReplayCache",
+    "REQ-7 bounded deferred funding-key revocation"
   ],
   "acceptance": {
     "executor_release": "passed",
@@ -24,7 +25,17 @@
     "relay_offline": "passed",
     "initial_envelope_too_large": "passed",
     "replay_cache_capacity": "passed",
-    "replay_cache_expiry": "passed"
+    "replay_cache_expiry": "passed",
+    "inbox_duplicate": "passed",
+    "outbox_order": "passed",
+    "ask_too_large": "passed",
+    "completed_error_ttl": "passed",
+    "funding_revocation_retry": "passed",
+    "funding_pending_cap": "passed",
+    "funding_concurrent_reservation": "passed",
+    "funding_failed_creation_release": "passed",
+    "outbox_concurrent_flush": "passed",
+    "outbox_once_per_flush": "passed"
   },
   "workGraph": {
     "1.1": "DONE",
@@ -35,6 +46,9 @@
     "3.2": "DONE",
     "3.3": "DONE",
     "3.4": "DONE",
+    "3.5": "DONE",
+    "3.6": "DONE",
+    "3.7": "DONE",
     "4.1": "DONE",
     "4.2": "DONE",
     "4.3": "TODO"
@@ -57,20 +71,27 @@
       "severity": "medium",
       "status": "open_in_T3.1e_before_pilot",
       "description": "Finite entry counts can still represent a large byte budget; ReplayCache pruning is O(N); offline queue saturation can lose an old outcome"
+    },
+    {
+      "id": "R-4",
+      "severity": "medium",
+      "status": "open_in_T3.1d_before_sensitive_multi_org_use",
+      "description": "An optional provider key deletion cannot be confirmed while that provider is unavailable; in-memory retries do not survive a crash, but the key has a hard two-hour provider expiry and per-drop spend cap"
     }
   ],
   "verification": {
-    "targetedTests": "passed_63_of_63_independent",
-    "lint": "passed",
-    "typecheck": "passed",
-    "fullTests": "passed_312_of_312",
+    "targetedTests": "passed_22_of_22_funding_and_memory_after_concurrency_findings",
+    "lint": "passed_after_codex_findings",
+    "typecheck": "passed_after_codex_findings",
+    "fullTests": "passed_322_of_322",
     "openspecValidate": "passed_strict_change_and_16_specs",
-    "guard": "passed_128_linked_258_historical_frozen_baseline_plus0_minus0",
-    "independentReview": "passed_no_P0_P1_in_T3.1c_scope",
+    "guard": "passed_138_linked_258_historical_frozen_baseline_plus0_minus0",
+    "independentReview": "codex_two_axis_final_rereview_found_no_P0_or_P1_in_examined_diff;_P2_snapshot_retention_corrected_afterward",
     "review": "pending_gstack_quota",
     "cso": "finished_partial_run_1791556424890-fc5cb966b6a46fe0_zero_supported_findings;_prior_HIGH_recheck_1791556505240-2e2b9ead1eb3571c_unknown_due_partial"
   },
   "remaining": [
+    "Recheck the final snapshot retention adjustment in full verification; targeted independent review found no remaining P0/P1 in its examined scope",
     "Run formal gstack /review after Claude quota reset at 18:20 Europe/Paris; resolve any P0/P1",
     "CSO and original HIGH recheck are partial: static mitigation evidence exists, but helper disallows closure from partial coverage; Semgrep Docker socket and snapshot exclusions limit assurance",
     "Do not archive or mark T3.1c done before formal review and no open high risk",

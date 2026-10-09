@@ -90,6 +90,10 @@ describe('local API', () => {
       status: 413,
       body: { error: 'E_TOO_LARGE' },
     });
+    expect(await post('/ask', { question: 'Où en est le ticket GitHub ?' })).toMatchObject({
+      status: 413,
+      body: { error: 'E_TOO_LARGE' },
+    });
   });
 
   it('reports already sent routes when /ask reaches capacity midway', async () => {

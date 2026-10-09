@@ -148,6 +148,84 @@ describe('bounded requester memory', () => {
 });
 
 describe('bounded transient node memory', () => {
+  it('keeps the first approval and review when another paired peer reuses their drop ids', async () => {
+    const logs: { code?: string; reason?: string }[] = [];
+    const m = (mesh = await startMesh([fakeCapability(CAPABILITY, 'low')], {
+      approver: { log: (entry) => logs.push(entry) },
+    }));
+    const other = await generateIdentity('Other executor');
+    m.approver.store.savePeer({
+      nodeId: other.nodeId,
+      displayName: 'Other executor',
+      ownerKind: 'machine',
+      pairedAt: new Date(m.clock.now).toISOString(),
+    });
+    const approvalId = uuidv7(m.clock.now);
+    const approval = {
+      type: 'approval_request' as const,
+      dropId: approvalId,
+      card: {
+        capabilityId: CAPABILITY,
+        title: 'Original',
+        receives: ['Un état'],
+        neverReceives: [],
+        sensitivity: 'low' as const,
+        executorName: 'Executor',
+      },
+      inputPreview: 'Original',
+      purpose: 'Test mémoire',
+      requestedBy: { nodeId: m.requester.identity.nodeId, displayName: 'Requester', agent: 'codex' as const },
+      expiresAt: m.clock.now + 10 * 60_000,
+    };
+    await m.approver.engine.handleEnvelope(
+      await sealEnvelope(m.executor.identity, m.approver.identity.nodeId, approval, { now: m.clock.now }),
+    );
+    await m.approver.engine.handleEnvelope(
+      await sealEnvelope(
+        other,
+        m.approver.identity.nodeId,
+        { ...approval, inputPreview: 'Replaced' },
+        { now: m.clock.now },
+      ),
+    );
+    expect(m.approver.engine.pending()).toEqual([
+      expect.objectContaining({
+        kind: 'approval',
+        dropId: approvalId,
+        executor: m.executor.identity.nodeId,
+        inputPreview: 'Original',
+      }),
+    ]);
+
+    const reviewId = uuidv7(m.clock.now + 1);
+    const review = {
+      type: 'review_request' as const,
+      dropId: reviewId,
+      output: { status: 'original' },
+      expiresAt: m.clock.now + 10 * 60_000,
+    };
+    await m.approver.engine.handleEnvelope(
+      await sealEnvelope(m.executor.identity, m.approver.identity.nodeId, review, { now: m.clock.now }),
+    );
+    await m.approver.engine.handleEnvelope(
+      await sealEnvelope(
+        other,
+        m.approver.identity.nodeId,
+        { ...review, output: { status: 'replaced' } },
+        { now: m.clock.now },
+      ),
+    );
+    expect(m.approver.engine.pending()).toContainEqual(
+      expect.objectContaining({
+        kind: 'review',
+        dropId: reviewId,
+        executor: m.executor.identity.nodeId,
+        output: { status: 'original' },
+      }),
+    );
+    expect(logs.filter((entry) => entry.code === 'E_REPLAY' && entry.reason === 'inbox_duplicate')).toHaveLength(2);
+  });
+
   it('refuses extra approval cards and excessive expiration without evicting a pending card', async () => {
     const m = (mesh = await startMesh([fakeCapability(CAPABILITY, 'low')]));
     const sendApproval = async (index: number, expiresAt: number) => {
@@ -221,4 +299,101 @@ describe('bounded transient node memory', () => {
     expect(engine.memoryStats().outbox).toBe(1);
     expect(logs).toContainEqual(expect.objectContaining({ code: 'E_RATE' }));
   });
+
+  it('attempts each queued envelope once per flush even when an older one is requeued', async () => {
+    const identity = await generateIdentity('Owner');
+    const sent: string[] = [];
+    const engine = new NodeEngine({
+      identity,
+      ownerKind: 'human',
+      store: new MemoryStore(),
+      capabilities: [],
+      transport: {
+        send: (envelope) => {
+          sent.push(envelope.id);
+          return Promise.resolve('offline');
+        },
+      },
+    });
+    await engine.refreshCatalogs();
+    await engine.refreshCatalogs();
+    const initial = sent.slice();
+    await engine.flushOutbox();
+    expect(sent.slice(2)).toEqual(initial);
+    expect(engine.memoryStats().outbox).toBe(2);
+  });
+
+  it('requeues an older envelope ahead of newer sends during a concurrent flush', async () => {
+    const identity = await generateIdentity('Owner');
+    let mode: 'offline' | 'hold' | 'deliver' = 'offline';
+    let finishHeld: ((outcome: string) => void) | undefined;
+    const initial: string[] = [];
+    const delivered: string[] = [];
+    const engine = new NodeEngine({
+      identity,
+      ownerKind: 'human',
+      store: new MemoryStore(),
+      capabilities: [],
+      transport: {
+        send: (envelope) => {
+          if (mode === 'hold')
+            return new Promise<string>((resolve) => {
+              finishHeld = resolve;
+            });
+          if (mode === 'deliver') {
+            delivered.push(envelope.id);
+            return Promise.resolve('delivered');
+          }
+          initial.push(envelope.id);
+          return Promise.resolve('offline');
+        },
+      },
+    });
+    await engine.refreshCatalogs();
+    mode = 'hold';
+    const flushing = engine.flushOutbox();
+    expect(finishHeld).toBeDefined();
+    mode = 'offline';
+    await engine.refreshCatalogs();
+    finishHeld?.('offline');
+    await flushing;
+    mode = 'deliver';
+    await engine.flushOutbox();
+    expect(delivered).toEqual(initial);
+  });
+
+  it('serializes concurrent flushes and counts the held send against outbox capacity', async () => {
+    const identity = await generateIdentity('Owner');
+    let hold = false;
+    let finishHeld: ((outcome: string) => void) | undefined;
+    let sends = 0;
+    const logs: { code?: string; reason?: string }[] = [];
+    const engine = new NodeEngine({
+      identity,
+      ownerKind: 'human',
+      store: new MemoryStore(),
+      capabilities: [],
+      transport: {
+        send: () => {
+          sends += 1;
+          if (hold) return new Promise<string>((resolve) => (finishHeld = resolve));
+          return Promise.resolve('offline');
+        },
+      },
+      log: (entry) => logs.push(entry),
+    });
+    await engine.refreshCatalogs();
+    hold = true;
+    const first = engine.flushOutbox();
+    const second = engine.flushOutbox();
+    expect(sends).toBe(2);
+    expect(engine.memoryStats().outbox).toBe(1);
+    hold = false;
+    for (let index = 0; index < 1_024; index += 1) await engine.refreshCatalogs();
+    expect(engine.memoryStats().outbox).toBe(1_024);
+    expect(logs).toContainEqual(expect.objectContaining({ code: 'E_RATE', reason: 'outbox_capacity' }));
+    finishHeld?.('offline');
+    await Promise.all([first, second]);
+    expect(engine.memoryStats().outbox).toBeLessThanOrEqual(1_024);
+  }, 60_000);
 });

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { Funding } from '@drop/protocol';
+import { DropError, type Funding } from '@drop/protocol';
 
 /**
  * The requester pays (D27): for each drop, a key capped at `perDropUsd` is minted with an OpenRouter management key
@@ -26,21 +26,83 @@ export interface Funder {
   mint(dropId: string): Promise<Funding | undefined>;
   /** Deletes the drop's key; safe to call twice or for a drop that had none. */
   release(dropId: string): Promise<void>;
+  /** Retries failed remote deletions without retaining the capped key itself. */
+  retryPending?(): Promise<void>;
 }
 
 const CreatedKeySchema = z.object({ key: z.string().min(10), data: z.object({ hash: z.string().min(1) }) });
+const KEY_TTL_MS = 2 * 3_600_000;
+const MAX_PENDING_FUNDING_KEYS = 8_192;
+const MAX_RELEASE_RETRIES_PER_TICK = 4;
+
+interface PendingKey {
+  hash: string;
+  expiresAt: number;
+  nextRetryAt: number;
+  failures: number;
+}
 
 export function openRouterFunder(
   config: FundingConfig,
-  options: { env?: NodeJS.ProcessEnv; fetch?: typeof fetch; now?: () => number; log?: (code: string) => void } = {},
+  options: {
+    env?: NodeJS.ProcessEnv;
+    fetch?: typeof fetch;
+    now?: () => number;
+    log?: (code: string) => void;
+    /** A lower cap for deterministic bounded-memory tests. Production always uses the hard maximum. */
+    maxPendingKeys?: number;
+  } = {},
 ): Funder {
   const env = options.env ?? process.env;
   const doFetch = options.fetch ?? fetch;
   const now = options.now ?? Date.now;
   const log = options.log ?? (() => undefined);
-  const hashes = new Map<string, string>();
+  const hashes = new Map<string, PendingKey>();
+  const pendingMints = new Set<string>();
+  const maxPendingKeys = Math.min(
+    MAX_PENDING_FUNDING_KEYS,
+    Math.max(1, options.maxPendingKeys ?? MAX_PENDING_FUNDING_KEYS),
+  );
+  const inFlight = new Map<string, Promise<boolean>>();
   const management = (): string | undefined => env[config.managementKeyEnv];
   const api = config.baseUrl.replace(/\/$/, '');
+  const pruneExpired = (): void => {
+    for (const [dropId, pending] of hashes) if (pending.expiresAt <= now()) hashes.delete(dropId);
+  };
+  const revoke = (dropId: string, pending: PendingKey): Promise<boolean> => {
+    const running = inFlight.get(dropId);
+    if (running) return running;
+    const operation = (async (): Promise<boolean> => {
+      const key = management();
+      if (!key) {
+        log('E_FUNDING_NO_MANAGEMENT_KEY');
+      } else {
+        try {
+          const response = await doFetch(`${api}/keys/${encodeURIComponent(pending.hash)}`, {
+            method: 'DELETE',
+            headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+            signal: AbortSignal.timeout(5_000),
+          });
+          if (response.ok) {
+            if (hashes.get(dropId) === pending) hashes.delete(dropId);
+            return true;
+          }
+          log(`E_FUNDING_RELEASE_HTTP_${String(response.status)}`);
+        } catch {
+          log('E_FUNDING_RELEASE');
+        }
+      }
+      pending.failures += 1;
+      pending.nextRetryAt = now() + Math.min(30_000 * 2 ** Math.min(pending.failures - 1, 4), 300_000);
+      return false;
+    })();
+    inFlight.set(dropId, operation);
+    void operation.then(
+      () => inFlight.delete(dropId),
+      () => inFlight.delete(dropId),
+    );
+    return operation;
+  };
   return {
     async mint(dropId) {
       const key = management();
@@ -48,6 +110,11 @@ export function openRouterFunder(
         log('E_FUNDING_NO_MANAGEMENT_KEY');
         return undefined;
       }
+      pruneExpired();
+      if (hashes.has(dropId) || pendingMints.has(dropId)) throw new DropError('E_RATE', 'Duplicate capped key request');
+      if (hashes.size + pendingMints.size >= maxPendingKeys)
+        throw new DropError('E_RATE', 'Too many pending capped keys');
+      pendingMints.add(dropId);
       try {
         const response = await doFetch(`${api}/keys`, {
           method: 'POST',
@@ -56,7 +123,7 @@ export function openRouterFunder(
             name: `drop ${dropId}`,
             limit: config.perDropUsd,
             // ISO 8601 with seconds, as the API requires; minute precision is rejected.
-            expires_at: new Date(now() + 2 * 3_600_000).toISOString().replace(/\.\d{3}Z$/, 'Z'),
+            expires_at: new Date(now() + KEY_TTL_MS).toISOString().replace(/\.\d{3}Z$/, 'Z'),
           }),
         });
         if (!response.ok) {
@@ -64,7 +131,12 @@ export function openRouterFunder(
           return undefined;
         }
         const created = CreatedKeySchema.parse(await response.json());
-        hashes.set(dropId, created.data.hash);
+        hashes.set(dropId, {
+          hash: created.data.hash,
+          expiresAt: now() + KEY_TTL_MS,
+          nextRetryAt: now(),
+          failures: 0,
+        });
         return {
           kind: 'capped_key',
           baseUrl: api,
@@ -75,22 +147,19 @@ export function openRouterFunder(
       } catch {
         log('E_FUNDING_MINT');
         return undefined;
+      } finally {
+        pendingMints.delete(dropId);
       }
     },
     async release(dropId) {
-      const hash = hashes.get(dropId);
-      const key = management();
-      if (!hash || !key) return;
-      hashes.delete(dropId);
-      try {
-        const response = await doFetch(`${api}/keys/${encodeURIComponent(hash)}`, {
-          method: 'DELETE',
-          headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-        });
-        if (!response.ok) log(`E_FUNDING_RELEASE_HTTP_${String(response.status)}`);
-      } catch {
-        log('E_FUNDING_RELEASE');
-      }
+      pruneExpired();
+      const pending = hashes.get(dropId);
+      if (pending && !(await revoke(dropId, pending))) throw new Error('E_FUNDING_RELEASE');
+    },
+    async retryPending() {
+      pruneExpired();
+      const due = [...hashes].filter(([, pending]) => pending.failures > 0 && pending.nextRetryAt <= now());
+      await Promise.all(due.slice(0, MAX_RELEASE_RETRIES_PER_TICK).map(([dropId, pending]) => revoke(dropId, pending)));
     },
   };
 }
