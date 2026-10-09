@@ -1,6 +1,6 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { getDefaultEnvironment, StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { UnauthorizedError } from '@modelcontextprotocol/sdk/client/auth.js';
+import { UnauthorizedError, type OAuthClientProvider } from '@modelcontextprotocol/sdk/client/auth.js';
 import { StreamableHTTPClientTransport, StreamableHTTPError } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import { z } from 'zod';
@@ -116,9 +116,25 @@ export class McpConnectError extends DropError {
   }
 }
 
-async function connectHttp(client: Client, url: string, headers: Record<string, string>): Promise<void> {
+/** How connectMcp finds drop's own OAuth tokens for a remote server (T2.17): the node passes its store. */
+export interface ConnectOptions {
+  oauth?: (serverUrl: string) => OAuthClientProvider | undefined;
+}
+
+async function connectHttp(
+  client: Client,
+  url: string,
+  headers: Record<string, string>,
+  options: ConnectOptions,
+): Promise<void> {
+  const tokened = Object.keys(headers).some((name) => name.toLowerCase() === 'authorization');
+  // A token the owner configured wins; otherwise drop's own sign-in, if there is one for this server.
+  const authProvider = tokened ? undefined : options.oauth?.(url);
   // The SDK's transport types predate exactOptionalPropertyTypes (sessionId?: string vs string | undefined).
-  const transport = new StreamableHTTPClientTransport(new URL(url), { requestInit: { headers } }) as Transport;
+  const transport = new StreamableHTTPClientTransport(new URL(url), {
+    requestInit: { headers },
+    ...(authProvider ? { authProvider } : {}),
+  }) as Transport;
   try {
     await client.connect(transport);
   } catch (error) {
@@ -126,7 +142,6 @@ async function connectHttp(client: Client, url: string, headers: Record<string, 
     const status =
       error instanceof StreamableHTTPError ? error.code : error instanceof UnauthorizedError ? 401 : undefined;
     if (status === 401 || status === 403) {
-      const tokened = Object.keys(headers).some((name) => name.toLowerCase() === 'authorization');
       throw tokened
         ? new McpConnectError('token_refused', `the MCP server ${host} refused its token (HTTP ${String(status)})`)
         : new McpConnectError('oauth', `the MCP server ${host} requires an OAuth sign-in, which drop cannot do yet`);
@@ -149,7 +164,11 @@ async function connectStdio(client: Client, command: string, transport: StdioCli
   }
 }
 
-export async function connectMcp(server: McpServerConfig, env: NodeJS.ProcessEnv = process.env): Promise<McpClient> {
+export async function connectMcp(
+  server: McpServerConfig,
+  env: NodeJS.ProcessEnv = process.env,
+  options: ConnectOptions = {},
+): Promise<McpClient> {
   const read = (name: string): string => {
     const value = env[name];
     if (value === undefined) throw new DropError('E_RUNNER', `environment variable ${name} is not set`);
@@ -171,7 +190,7 @@ export async function connectMcp(server: McpServerConfig, env: NodeJS.ProcessEnv
         }),
       );
     } else {
-      await connectHttp(client, declared.url ?? '', declared.headers);
+      await connectHttp(client, declared.url ?? '', declared.headers, options);
     }
     return client;
   }
@@ -191,7 +210,7 @@ export async function connectMcp(server: McpServerConfig, env: NodeJS.ProcessEnv
     const headers = Object.fromEntries(
       Object.entries(server.headersFromEnv).map(([header, name]) => [header, read(name)]),
     );
-    await connectHttp(client, server.url, headers);
+    await connectHttp(client, server.url, headers, options);
   }
   return client;
 }

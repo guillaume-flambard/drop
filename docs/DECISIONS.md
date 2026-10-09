@@ -298,6 +298,15 @@ Format : `D<n> — date — décision — raison`. Les agents ajoutent ici toute
   joignable d'ici). Deux manques deviennent des tâches : un serveur qui exige OAuth se partage sans erreur puis échoue
   à chaque demande (T2.16), et drop ne sait pas se connecter aux serveurs distants OAuth (T2.17). Pour Notion, voir le
   point ouvert ci-dessous.
+- **D39** — Connexion OAuth de drop aux serveurs MCP distants (2026-10-09, T2.17, plan accepté par Guillaume). drop
+  s'enregistre comme son propre client (enregistrement dynamique, nom « drop »), avec le client OAuth du SDK MCP déjà
+  installé, sans dépendance nouvelle. Connexion une fois, par `drop connect <agent>/<serveur>` ou le bouton du panneau ;
+  le navigateur revient sur l'API locale (`127.0.0.1:<port>/oauth/callback`), vérifié par un `state` à usage unique de
+  10 minutes ; le vérificateur PKCE ne vit qu'en mémoire, avec la connexion en cours. Jetons sous `DROP_HOME/oauth`
+  (0700, fichiers 0600), comme la clé d'identité ; une exécution ne fait que les réutiliser et les rafraîchir. Exclus :
+  le serveur distant de Figma, réservé à une liste de clients approuvés par leur nom (s'en faire passer pour un
+  enfreindrait ses conditions) ; le serveur local de l'app reste la voie. Linear garde aussi la clé d'API. Vérifié
+  contre un faux serveur conforme ; l'essai réel avec un compte Notion reste à faire, T2.17 reste `doing` jusque-là.
 
 ## À décider par l'humain
 
@@ -335,7 +344,8 @@ Format : `D<n> — date — décision — raison`. Les agents ajoutent ici toute
     ces outils, si bien que drop ne lit qu'une page dont la question donne le lien. Options : (a) accepter la limite
     pour l'essai ; (b) laisser le propriétaire autoriser nommément un outil marqué destructif, après un avertissement,
     ce qui assouplit une règle de sécurité ; (c) attendre T2.17 et le serveur distant de Notion, qui cherche.
-    Recommandation : (a) pour l'essai, puis (c).
+    Recommandation : (a) pour l'essai, puis (c). Mise à jour : (c) est construit (D39), à essayer avec un vrai
+    compte Notion.
   Détail : `coverage.md` de la change `migrate-spec-kit` (archivée sous `openspec/changes/archive/`).
 - **Financement des demandes, options gardées pour plus tard** (D21 a retenu A). B : une clé d'équipe ou
   d'organisation sur chaque Node ; aucun code, c'est la variable d'environnement. C : le demandeur finance, en joignant

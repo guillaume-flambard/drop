@@ -52,6 +52,7 @@ export {
 export {
   connectMcp,
   McpConnectError,
+  type ConnectOptions,
   createMcpAnswer,
   mcpAnswer,
   McpAnswerConfigSchema,
@@ -79,3 +80,4 @@ export {
 } from './a2a-answer.ts';
 
 export const capabilities: CapabilityImpl[] = [errorSummary, repoAnswer, mcpAnswer, a2aAnswer];
+export { OAuthSignIns, OAuthStore, runtimeOAuth, SIGN_IN_TTL_MS } from './mcp-oauth.ts';

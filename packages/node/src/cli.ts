@@ -9,6 +9,7 @@ import { startDaemon } from './daemon.ts';
 import { AGENT_LABELS, detectAgents } from './detect.ts';
 import { bundledServer, cursorInstallLink, install, serverEntry } from './install.ts';
 import { isAgentKind, shareDetected } from './share.ts';
+import { oauthConnect } from './oauth.ts';
 import { DropHome, NodeConfigSchema } from './home.ts';
 import { costLine } from './ui.ts';
 
@@ -31,6 +32,7 @@ const USAGE = `drop <command>
   detect [--json]                the coding agents on this machine, drop in each, and their MCP servers
   share <agent>/<server> [--label <text>] [--tools a,b] [--id mcp.answer.<name>] [--approver <nodeId>]
                                  answer from a detected MCP server (read-only tools by default; secrets stay put)
+  connect <agent>/<server>       sign drop in to a remote MCP server that needs OAuth, in the browser (daemon must run)
   pending                        requests waiting for your decision
   approve|deny|not-now <dropId>  decide from the terminal
   review <dropId> send|discard [--redact <field>]…
@@ -264,20 +266,38 @@ switch (command) {
     const [agentName = '', serverName = ''] = (positionals[0] ?? fail('drop share <agent>/<server>')).split('/');
     if (!isAgentKind(agentName)) fail(`unknown agent ${agentName}; one of ${AGENTS.join(', ')}`);
     try {
-      const shared = await shareDetected(home, {
-        agent: agentName,
-        server: serverName,
-        label: values.label,
-        tools: values.tools?.split(',').map((tool) => tool.trim()),
-        capabilityId: values.id,
-        approvers: values.approver,
-      });
+      const shared = await shareDetected(
+        home,
+        {
+          agent: agentName,
+          server: serverName,
+          label: values.label,
+          tools: values.tools?.split(',').map((tool) => tool.trim()),
+          capabilityId: values.id,
+          approvers: values.approver,
+        },
+        oauthConnect(home, home.config().apiPort),
+      );
       process.stdout.write(
         `published ${shared.capabilityId}: « Répondre à partir de ${shared.label} » with ${String(shared.tools.length)} tools (${shared.tools.join(', ')}) from ${AGENT_LABELS[agentName]}\n`,
       );
     } catch (error) {
       fail(error instanceof Error ? error.message : 'share failed');
     }
+    break;
+  }
+  case 'connect': {
+    const target = rest[0] ?? fail('drop connect <agent>/<server>');
+    const [agent = '', server = ''] = target.split('/');
+    const started = (await api(home, 'POST', '/ui/admin/connect', { agent, server })) as {
+      connected?: boolean;
+      authorizationUrl?: string;
+    };
+    if (started.connected) process.stdout.write(`drop is already signed in to ${server}\n`);
+    else
+      process.stdout.write(
+        `finish signing in in your browser (it opens on macOS), within 10 minutes:\n${started.authorizationUrl ?? ''}\nthen run: drop share ${target}\n`,
+      );
     break;
   }
   case 'mcp-tools': {

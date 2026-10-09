@@ -1,4 +1,11 @@
-import { AGENTS, connectMcp, McpAnswerConfigSchema, McpConnectError, type AgentKind } from '@drop/capabilities';
+import {
+  AGENTS,
+  connectMcp,
+  McpAnswerConfigSchema,
+  McpConnectError,
+  type AgentKind,
+  type ConnectOptions,
+} from '@drop/capabilities';
 import { AGENT_LABELS, detectAgents, shareId } from './detect.ts';
 import type { DropHome } from './home.ts';
 
@@ -23,14 +30,22 @@ export interface ShareResult {
   tools: string[];
 }
 
-export class ShareError extends Error {}
+/** `code` lets the panel offer the next step: `E_SHARE_OAUTH` means "sign in first" (T2.17). */
+export class ShareError extends Error {
+  readonly code: string | undefined;
+  constructor(message: string, code?: string) {
+    super(message);
+    this.code = code;
+  }
+}
 
 function connectFailure(error: unknown, server: string, agent: AgentKind): ShareError {
   if (!(error instanceof McpConnectError)) return new ShareError(`${server} ne répond pas.`);
   switch (error.reason) {
     case 'oauth':
       return new ShareError(
-        `${server} demande une connexion OAuth, que drop ne sait pas encore faire. Déclare-le dans ${AGENT_LABELS[agent]} avec un jeton dans l’en-tête Authorization (voir docs/essais).`,
+        `${server} demande une connexion OAuth : connecte drop avec le bouton Se connecter, ou \`drop connect ${agent}/${server}\`, puis partage de nouveau.`,
+        'E_SHARE_OAUTH',
       );
     case 'token_refused':
       return new ShareError(`${server} refuse son jeton : vérifie-le dans la configuration de ${AGENT_LABELS[agent]}.`);
@@ -43,13 +58,17 @@ export function isAgentKind(value: string): value is AgentKind {
   return (AGENTS as readonly string[]).includes(value);
 }
 
-export async function shareDetected(home: DropHome, request: ShareRequest): Promise<ShareResult> {
+export async function shareDetected(
+  home: DropHome,
+  request: ShareRequest,
+  options: ConnectOptions = {},
+): Promise<ShareResult> {
   const agent = detectAgents().find((candidate) => candidate.agent === request.agent);
   const server = agent?.servers.find((candidate) => candidate.name === request.server);
   if (!agent || !server) throw new ShareError(`aucun serveur MCP ${request.agent}/${request.server}`);
   if (!server.shareable) throw new ShareError(`${server.name} fait partie de drop`);
   const source = { transport: 'agent' as const, agent: agent.agent, name: server.name };
-  const client = await connectMcp(source).catch((error: unknown) => {
+  const client = await connectMcp(source, process.env, options).catch((error: unknown) => {
     throw connectFailure(error, server.name, agent.agent);
   });
   let tools = request.tools?.filter(Boolean) ?? [];

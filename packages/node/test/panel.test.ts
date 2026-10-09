@@ -72,6 +72,10 @@ describe('menu bar panel and its admin routes (T2.4)', () => {
         calls.push(`team ${name}`);
         return { ok: true };
       },
+      connect: (agent, server) => {
+        calls.push(`connect ${agent}/${server}`);
+        return Promise.resolve({ connected: true });
+      },
     };
     const engine = new NodeEngine({
       identity: await generateIdentity('Julie'),
@@ -113,6 +117,13 @@ describe('menu bar panel and its admin routes (T2.4)', () => {
     expect((await call(port, 'POST', '/ui/admin/link', link)).status).toBe(400);
     expect((await call(port, 'POST', '/ui/admin/link', { ...link, redirect: 'claude.ai' })).status).toBe(200);
     expect(calls.at(-1)).toBe('link Claude (claude.ai)');
+  });
+
+  it('offers to sign in when a shared server needs OAuth, and links only an https sign-in page (T2.17)', () => {
+    const html = renderPanel();
+    expect(html).toContain("if (error.code === 'E_SHARE_OAUTH') signInOffer");
+    expect(html).toContain("api('POST', '/ui/admin/connect', offer)");
+    expect(html).toContain("if (signInLink.indexOf('https://') === 0)");
   });
 
   it('names the domain a linked assistant returns to, and warns when it is neither Claude nor ChatGPT', () => {
