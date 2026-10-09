@@ -60,9 +60,9 @@ describe('menu bar panel and its admin routes (T2.4)', () => {
         calls.push(`${remove ? 'uninstall' : 'install'} ${agent}`);
         return { ok: true };
       },
-      link: (gateway, session, client) => {
-        calls.push(`link ${client}`);
-        return Promise.resolve({ ok: true, gateway, session });
+      link: (gateway, request) => {
+        calls.push(`link ${request.clientName} (${request.redirectHost})`);
+        return Promise.resolve({ ok: true, gateway });
       },
       unlink: (_gateway, client) => {
         calls.push(`unlink ${client}`);
@@ -107,6 +107,19 @@ describe('menu bar panel and its admin routes (T2.4)', () => {
       401,
     );
     expect(JSON.parse((await call(port, 'GET', '/ui/outbound')).text)).toEqual({ drops: [] });
+
+    // Linking an assistant: the request must carry its client and return domain, which the gateway checks (T2.13).
+    const link = { gateway: 'gw', session: 's'.repeat(24), client: 'Claude', clientId: 'c'.repeat(24) };
+    expect((await call(port, 'POST', '/ui/admin/link', link)).status).toBe(400);
+    expect((await call(port, 'POST', '/ui/admin/link', { ...link, redirect: 'claude.ai' })).status).toBe(200);
+    expect(calls.at(-1)).toBe('link Claude (claude.ai)');
+  });
+
+  it('names the domain a linked assistant returns to, and warns when it is neither Claude nor ChatGPT', () => {
+    const html = renderPanel();
+    expect(html).toContain('var knownHosts = ["claude.ai","chatgpt.com","chat.openai.com"];');
+    expect(html).toContain('qui n’est ni Claude ni ChatGPT');
+    expect(html).toContain('clientId: request.clientId, redirect: request.redirect');
   });
 
   it('inserts what peers wrote as text only', () => {

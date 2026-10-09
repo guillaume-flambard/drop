@@ -122,8 +122,8 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
         return { ok: true };
       },
       createTeam: (name) => engine.createTeam(name),
-      link: async (gateway, session, client) => {
-        await engine.linkAssistant(NodeIdSchema.parse(gateway), session, client);
+      link: async (gateway, request) => {
+        await engine.linkAssistant(NodeIdSchema.parse(gateway), request);
         return { ok: true, trusted: config.gateways.includes(gateway) };
       },
       unlink: (gateway, client) => engine.unlinkAssistant(NodeIdSchema.parse(gateway), client),
