@@ -52,7 +52,6 @@ Le Node nommé Julie et son dépôt de démonstration tournaient sur le Mac de G
 | Tâche | Ce qu'il manque | Condition ou dépendance |
 | --- | --- | --- |
 | T1.14 | Test humain de compréhension en 30 secondes | Une personne extérieure à la construction |
-| T2.1 | Clôture de l'admission par invitation | Code et tests présents, index encore `doing` ; preuve de clôture à réconcilier |
 | T2.4 | App Mac de barre de menus et distribution signée | T2.1, T2.2, T2.8 et T2.9 |
 | T2.6 | Vidéo, parcours d’installation final et site public | T2.4, T2.5 ; mise en ligne soumise à accord |
 | T2.11 | Publication npm utilisable sans chemin local | `blocked` : nom du produit et accord de publication attendus |
@@ -73,7 +72,7 @@ T2.6a ajoute une vitrine et la documentation en prévisualisation. Elle ne publi
 
 ## Le prochain chemin utile
 
-L'ordre et les dépendances restent ceux de [TASKS.md](TASKS.md). Pour rendre le prototype utilisable par quelqu'un d'autre, le chemin passe par la clôture de l’admission, l’app Mac et la distribution publique. L’annuaire et l’installation locale ont été ajoutés pendant cette analyse et sont inclus dans ce bilan. Les essais chez les testeurs viennent ensuite. La mesure du besoin peut continuer pendant ces travaux, sans présumer le GO.
+L'ordre et les dépendances restent ceux de [TASKS.md](TASKS.md). Pour rendre le prototype utilisable par quelqu'un d'autre, le chemin passe par l’app Mac (l’admission par invitation est close depuis le 2026-10-09) et la distribution publique. L’annuaire et l’installation locale ont été ajoutés pendant cette analyse et sont inclus dans ce bilan. Les essais chez les testeurs viennent ensuite. La mesure du besoin peut continuer pendant ces travaux, sans présumer le GO.
 
 ## Reproduire le bilan
 

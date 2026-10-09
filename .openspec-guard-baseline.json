@@ -1587,14 +1587,6 @@
       "file": "openspec/specs/relay/spec.md"
     },
     {
-      "id": "sg_3e75c6ae5e7b4639",
-      "reason": "missing-selector",
-      "verdict": "fail",
-      "capability": "relay",
-      "scenario": "Configuration chargée",
-      "file": "openspec/specs/relay/spec.md"
-    },
-    {
       "id": "sg_42d813acb7844eb1",
       "reason": "missing-selector",
       "verdict": "fail",
