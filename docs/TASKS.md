@@ -68,6 +68,7 @@ Codex, Cursor, Claude Desktop) ou pour répondre (app Mac), et l'utilise sur ses
 | T2.17 | Serveurs MCP distants avec OAuth (Notion, Figma, Linear distants) : drop se connecte en son nom propre, jetons gardés sur le poste ; à décider avant de commencer (D38) | `capability-mcp-answer`, `node`, `owner-app` | `t2-17-mcp-oauth` | T2.16 | doing |
 | T2.18 | `drop.mjs` assemblé démarre le serveur MCP du demandeur à chaque commande (`import.meta.main` vaut vrai dans le bundle) et plante sur `drop init` dans un `DROP_HOME` neuf, donc au premier lancement de l'app Mac : séparer la bibliothèque de `requester-mcp` de son point d'entrée | `requester-mcp`, `node` | `t2-18-bundle-entry` | T2.5 | done |
 | T2.19 | Relais : révocation sans redémarrage (`drop-relay revoke`, `--with-invited`) et plafond global d'admissions par jour, point ouvert de D34 (D40) | `relay` | `t2-19-relay-revocation` | T2.1 | done |
+| T2.20 | Passerelle officielle de confiance par défaut : son `nodeId` dans la valeur par défaut de `gateways`, pour que l'app n'avertisse pas à chaque liaison ; attend le premier démarrage de la passerelle sur le VPS (`docs/deploiement-lab.md`) | `node`, `gateway` | `t2-20-default-gateway` | T2.13 | blocked |
 
 **Points d'arrêt humains** : signature de l'app avec le compte Apple Developer de Guillaume (T2.4) ; dessin du
 panneau de suivi (T2.4) ; accord avant toute publication npm ou
