@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, unwatchFile, watchFile, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { z } from 'zod';
@@ -30,12 +30,21 @@ export const RelayConfigSchema = z.object({
   /** Where nodes admitted by invitation are kept across restarts (T2.1). Without it, admissions last until restart. */
   admittedPath: z.string().optional(),
   maxAdmissionsPerSponsorPerDay: z.number().int().nonnegative().default(20),
+  /** All sponsors together (T2.19): bounds how fast admissions can spread from node to node. */
+  maxAdmissionsPerDay: z.number().int().nonnegative().default(100),
+  /** Revocations written by `drop-relay revoke`, reloaded while the relay runs (T2.19). */
+  revokedPath: z.string().optional(),
+});
+
+/** The revocation file: a revoked node is refused even if allowlisted or admitted; `withInvited` spreads to its invitees. */
+export const RevokedStateSchema = z.object({
+  revoked: z.array(z.object({ nodeId: z.string(), withInvited: z.boolean(), at: z.string() })),
 });
 export type RelayConfig = z.input<typeof RelayConfigSchema>;
 
 /** One relay log line: metadata only, never `body` (AGENTS.md). */
 export interface RelayLogEntry {
-  event: 'auth' | 'admission' | 'envelope' | 'disconnect';
+  event: 'auth' | 'admission' | 'envelope' | 'disconnect' | 'revocation';
   outcome: string;
   nodeId?: string;
   id?: string;
@@ -51,6 +60,8 @@ export interface RelayOptions {
   now?: () => number;
   pingIntervalMs?: number;
   authTimeoutMs?: number;
+  /** How often the revocation file is checked for changes; 2 s by default. */
+  revocationPollMs?: number;
 }
 
 export interface RelayHandle {
@@ -92,21 +103,26 @@ export function startRelay(config: RelayConfig, options: RelayOptions = {}): Pro
   const now = options.now ?? Date.now;
   const admittedState = loadAdmitted(settings.admittedPath);
   const allowed = new Set([...settings.allowedNodeIds, ...admittedState.admitted.map((entry) => entry.nodeId)]);
+  let revoked = new Set<string>();
+  const isAllowed = (nodeId: string): boolean => allowed.has(nodeId) && !revoked.has(nodeId);
 
   /**
    * Admits `nodeId` if `raw` is a valid ticket from an admitted sponsor, unspent and within the sponsor's daily quota.
    * Runs after the awaited signature check, so the spent-nonce test and the write below happen in one synchronous step.
    */
   const admit = async (nodeId: string, raw: unknown): Promise<string> => {
+    if (revoked.has(nodeId)) return 'revoked';
     const check = await verifyAdmission(raw, now());
     if (check !== 'ok') return check;
     const ticket = AdmissionSchema.parse(raw);
-    if (!allowed.has(ticket.sponsor)) return 'sponsor_not_admitted';
+    if (!isAllowed(ticket.sponsor)) return 'sponsor_not_admitted';
     admittedState.spentNonces = admittedState.spentNonces.filter((spent) => spent.expiresAt > now());
     if (admittedState.spentNonces.some((spent) => spent.nonce === ticket.nonce)) return 'ticket_spent';
     const dayAgo = now() - 86_400_000;
     const sponsored = admittedState.admitted.filter((entry) => entry.sponsor === ticket.sponsor && entry.at > dayAgo);
     if (sponsored.length >= settings.maxAdmissionsPerSponsorPerDay) return 'sponsor_quota';
+    if (admittedState.admitted.filter((entry) => entry.at > dayAgo).length >= settings.maxAdmissionsPerDay)
+      return 'global_quota';
     admittedState.spentNonces.push({ nonce: ticket.nonce, expiresAt: ticket.expiresAt });
     admittedState.admitted.push({ nodeId, sponsor: ticket.sponsor, at: now() });
     allowed.add(nodeId);
@@ -118,6 +134,43 @@ export function startRelay(config: RelayConfig, options: RelayOptions = {}): Pro
   };
   const connections = new Map<string, Connection>();
   const queues = new Map<string, Envelope[]>();
+
+  /**
+   * Reads the revocation file (T2.19): the listed nodes, plus, for an entry `withInvited`, every node it admitted and
+   * theirs. A node newly revoked is disconnected and its queue dropped. A file that does not parse changes nothing.
+   */
+  const applyRevocations = (): void => {
+    let state: z.infer<typeof RevokedStateSchema>;
+    try {
+      state =
+        settings.revokedPath && existsSync(settings.revokedPath)
+          ? RevokedStateSchema.parse(JSON.parse(readFileSync(settings.revokedPath, 'utf8')))
+          : { revoked: [] };
+    } catch {
+      log({ event: 'revocation', outcome: 'E_SCHEMA' });
+      return;
+    }
+    const next = new Set(state.revoked.map((entry) => entry.nodeId));
+    const spreading = state.revoked.filter((entry) => entry.withInvited).map((entry) => entry.nodeId);
+    while (spreading.length > 0) {
+      const sponsor = spreading.pop();
+      for (const entry of admittedState.admitted)
+        if (entry.sponsor === sponsor && !next.has(entry.nodeId)) {
+          next.add(entry.nodeId);
+          spreading.push(entry.nodeId);
+        }
+    }
+    for (const nodeId of next) {
+      if (revoked.has(nodeId)) continue;
+      connections.get(nodeId)?.socket.close(CLOSE_UNAUTHORIZED, 'revoked');
+      queues.delete(nodeId);
+      log({ event: 'revocation', outcome: 'revoked', nodeId });
+    }
+    revoked = next;
+  };
+  applyRevocations();
+  if (settings.revokedPath)
+    watchFile(settings.revokedPath, { interval: options.revocationPollMs ?? 2000 }, applyRevocations);
   // Plain HTTP answers only GET /health (for the deploy probe and uptime monitoring); /v1 upgrades to WebSocket.
   const http = createServer((req, res) => {
     const healthy = req.method === 'GET' && req.url === '/health';
@@ -205,11 +258,11 @@ export function startRelay(config: RelayConfig, options: RelayOptions = {}): Pro
         const { nodeId, sig, admission } = frame;
         void verifyDetached(nodeId, challenge, sig)
           .then(async (valid) => {
-            if (valid && !allowed.has(nodeId) && admission !== undefined) {
+            if (valid && !isAllowed(nodeId) && admission !== undefined) {
               const outcome = await admit(nodeId, admission);
               if (outcome !== 'ok') log({ event: 'admission', outcome, nodeId });
             }
-            if (!valid || !allowed.has(nodeId)) {
+            if (!valid || !isAllowed(nodeId)) {
               log({ event: 'auth', outcome: valid ? 'not_allowed' : 'bad_signature', nodeId });
               socket.close(CLOSE_UNAUTHORIZED, 'unauthorized');
               return;
@@ -277,6 +330,7 @@ export function startRelay(config: RelayConfig, options: RelayOptions = {}): Pro
         close: () =>
           new Promise<void>((done) => {
             clearInterval(pinger);
+            if (settings.revokedPath) unwatchFile(settings.revokedPath, applyRevocations);
             for (const client of server.clients) client.terminate();
             server.close(() => {
               http.close(() => {

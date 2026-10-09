@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { resolve } from 'node:path';
-import { allowNode } from './config.ts';
+import { allowNode, revokeNode } from './config.ts';
 import { readRelayConfig, startRelay } from './server.ts';
 
 const [command = 'serve', ...args] = process.argv.slice(2);
@@ -15,6 +15,21 @@ if (command === 'allow') {
     process.exit(2);
   }
   process.stdout.write(allowNode(configPath, nodeId) ? `allowed ${nodeId} (restart the relay)\n` : 'already allowed\n');
+} else if (command === 'revoke') {
+  const nodeId = args.find((arg) => !arg.startsWith('--'));
+  const revokedPath = readRelayConfig(configPath).revokedPath;
+  if (!nodeId || !revokedPath) {
+    process.stderr.write(
+      'usage: drop-relay revoke <nodeId> [--with-invited] [--config=relay.config.json] (the config needs revokedPath)\n',
+    );
+    process.exit(2);
+  }
+  const withInvited = args.includes('--with-invited');
+  process.stdout.write(
+    revokeNode(revokedPath, nodeId, { withInvited })
+      ? `revoked ${nodeId}${withInvited ? ' and the nodes it admitted' : ''} (the running relay applies it within seconds)\n`
+      : 'already revoked\n',
+  );
 } else if (command === 'serve') {
   const relay = await startRelay(readRelayConfig(configPath));
   process.stdout.write(`drop relay listening on ${relay.url}\n`);
@@ -27,6 +42,8 @@ if (command === 'allow') {
   process.on('SIGINT', stop);
   process.on('SIGTERM', stop);
 } else {
-  process.stderr.write('usage: drop-relay [serve|allow <nodeId>] [--config=relay.config.json]\n');
+  process.stderr.write(
+    'usage: drop-relay [serve|allow <nodeId>|revoke <nodeId> [--with-invited]] [--config=relay.config.json]\n',
+  );
   process.exit(2);
 }
