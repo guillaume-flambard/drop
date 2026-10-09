@@ -95,9 +95,35 @@ ne les oublie pas, et journaliser chaque admission avec son sponsor. `allowedNod
 - **WHEN** le relais redémarre après avoir admis un Node par invitation
 - **THEN** ce Node est encore authentifié, et `admittedPath` est en mode `0600`
 
+### Requirement: Révocation sans redémarrage
+`drop-relay revoke <nodeId> [--with-invited]` SHALL ajouter le Node à `revokedPath` (mode `0600`), que le relais relit
+toutes les 2 s : il MUST alors couper la connexion du Node avec `4401`, oublier sa file, et le refuser ensuite, même
+listé dans `allowedNodeIds` ou présentant un nouveau ticket, et refuser les tickets qu'il a signés. Avec
+`--with-invited`, les Nodes qu'il a fait admettre sont révoqués aussi, de proche en proche (T2.19, D40).
+
+#### Scenario: Node révoqué
+<!-- openspec-guard:test="relay > revokes a node without a restart: cut off at once, never back, and no longer a sponsor (T2.19)" -->
+- **WHEN** l'opérateur révoque Natha, admise par Julie, pendant qu'elle est connectée
+- **THEN** sa connexion est coupée, un nouveau ticket de Julie ne la fait pas revenir, ses propres tickets sont refusés, et Julie reste admise
+
+#### Scenario: Révocation avec ses invités
+<!-- openspec-guard:test="relay > revoking with --with-invited also cuts off the nodes it admitted, transitively (T2.19)" -->
+- **WHEN** l'opérateur révoque Natha avec `--with-invited`, après qu'elle a fait admettre Paul
+- **THEN** Natha et Paul sont coupés, et Zoé, admise par Julie, reste connectée
+
+### Requirement: Plafond global d'admissions
+Le relais MUST refuser une admission quand `maxAdmissionsPerDay` Nodes (100 par défaut) ont été admis dans les
+dernières 24 h, tous sponsors confondus, ce qui borne la vitesse à laquelle les admissions se propagent (T2.19, D40).
+
+#### Scenario: Plafond atteint
+<!-- openspec-guard:test="relay > caps admissions per day across all sponsors (T2.19)" -->
+- **WHEN** le plafond est de 2 et que deux Nodes ont été admis aujourd'hui par deux sponsors différents
+- **THEN** un troisième ticket valide est refusé avec `4401`, et le relais journalise `global_quota`
+
 ### Requirement: Aucun stockage hors de la file
-Le relais MUST NOT stocker autre chose que la file courte des enveloppes en attente et l'état d'admission
-(`admittedPath`) : ni contenu déchiffré, ni historique des enveloppes livrées.
+Le relais MUST NOT stocker autre chose que la file courte des enveloppes en attente, l'état d'admission
+(`admittedPath`) et les révocations qu'il lit (`revokedPath`) : ni contenu déchiffré, ni historique des enveloppes
+livrées.
 
 #### Scenario: Rien gardé après livraison
 - **WHEN** une enveloppe a été livrée à son destinataire
@@ -136,7 +162,7 @@ En v1, un redémarrage du relais SHALL entraîner la perte de la file d'attente 
 - **THEN** ces enveloppes sont perdues et ne sont pas livrées
 
 ### Requirement: Fichier de configuration du relais
-Le relais SHALL lire `relay.config.json` de la forme `{ port, allowedNodeIds: string[], maxQueuePerNode, rateLimitPerMinute, admittedPath?, maxAdmissionsPerSponsorPerDay? }`. Sans `admittedPath`, les admissions par invitation durent jusqu'au redémarrage.
+Le relais SHALL lire `relay.config.json` de la forme `{ port, allowedNodeIds: string[], maxQueuePerNode, rateLimitPerMinute, admittedPath?, maxAdmissionsPerSponsorPerDay?, maxAdmissionsPerDay?, revokedPath? }`. Sans `admittedPath`, les admissions par invitation durent jusqu'au redémarrage.
 
 #### Scenario: Configuration chargée
 <!-- openspec-guard:test="relay > reads relay.config.json, with the admission settings optional" -->

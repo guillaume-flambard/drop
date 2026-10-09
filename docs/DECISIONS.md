@@ -307,6 +307,14 @@ Format : `D<n> — date — décision — raison`. Les agents ajoutent ici toute
   le serveur distant de Figma, réservé à une liste de clients approuvés par leur nom (s'en faire passer pour un
   enfreindrait ses conditions) ; le serveur local de l'app reste la voie. Linear garde aussi la clé d'API. Vérifié
   contre un faux serveur conforme ; l'essai réel avec un compte Notion reste à faire, T2.17 reste `doing` jusque-là.
+- **D40** — Révocation et plafond global au relais (2026-10-09, T2.19, choix de Guillaume), qui tranche le point ouvert
+  de D34. `drop-relay revoke <nodeId>` écrit dans `revokedPath`, que le relais relit toutes les 2 s : pas de
+  redémarrage, pas de port d'administration ; le relais et la commande partagent le fichier par le volume. Un Node
+  révoqué est coupé, refusé même avec un nouveau ticket ou dans l'allowlist, et ses tickets ne valent plus rien. Par
+  défaut, ses invités gardent leur place (un membre qui part ne doit pas couper ceux qu'il a fait venir) ;
+  `--with-invited` les révoque de proche en proche, pour un parrain malveillant. `maxAdmissionsPerDay` (100) borne la
+  croissance que le quota par sponsor ne bornait pas. Dans `lab-infra/stacks/drop/relay.config.json` : ajouter
+  `revokedPath` sur le même volume que `admittedPath`.
 
 ## À décider par l'humain
 
@@ -333,7 +341,7 @@ Format : `D<n> — date — décision — raison`. Les agents ajoutent ici toute
     caractères. Un `answer` à la limite ferait échouer la validation de taille.
   - T1.13 : aucun code d'erreur n'est prévu pour un snapshot au-delà de `maxSnapshotBytes`, ni pour le post-contrôle
     d'extrait de code.
-  - T2.1, relevé en clôture (D34) : l'admission est transitive. Un Node admis parraine 20 Nodes par jour, qui
+  - T2.1, relevé en clôture (D34), **tranché par D40** : l'admission est transitive. Un Node admis parraine 20 Nodes par jour, qui
     parrainent chacun 20 Nodes ; le quota ne borne donc pas la croissance, seulement sa vitesse. Aucune révocation
     n'existe non plus (`admittedPath` s'édite à la main, puis redémarrage). Le risque se limite à la charge du relais :
     l'admission ne donne accès à personne, l'appairage exige toujours le jeton de l'invitation. Options : quota global
