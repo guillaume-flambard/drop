@@ -1,0 +1,27 @@
+{
+  "task": "T3.1a",
+  "status": "VERIFYING",
+  "acceptance": {
+    "AC-HERMES-01": "verified_client_mcp",
+    "AC-HERMES-02": "verified_fixture_with_real_model_gap_documented",
+    "AC-HERMES-03": "verified_manual_recipe_defer_adapter"
+  },
+  "humanAuthorization": "ok continues les chantiers",
+  "todo": {
+    "p0_open": 0,
+    "p1_open": 2
+  },
+  "risks": {
+    "critical_open": 1,
+    "high_open": 0,
+    "tracking": "T3.1b in docs/TASKS.md; inherited from T3.1"
+  },
+  "verification": {
+    "status": "issues_found",
+    "independent_review": "no_hermes_findings",
+    "gstack_review": "1_critical_inherited",
+    "qa": "partial_browser_verified"
+  },
+  "manualAcceptance": "pending",
+  "ready_for_manual_acceptance": false
+}

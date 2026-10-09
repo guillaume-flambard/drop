@@ -129,7 +129,7 @@
               <li>
                 <strong>Socle privé implémenté (T3.1).</strong> Destinations autorisées, aucun repli cloud, financement
                 sans substitution, migration et révocation vérifiées. IP privées explicites ; pas de DNS ni de source
-                MCP stdio.
+                MCP stdio. La persistance des demandes reçues doit encore être bornée (T3.1b) avant un pilote.
               </li>
               <li>
                 <strong>Qualifier les modèles et la connexion locale.</strong> Réutiliser un modèle existant, mesurer
@@ -155,11 +155,11 @@
               à valider avec les utilisateurs.
             </p>
             <p>
-              Deux évaluations complémentaires sont inscrites : Hermes comme agent demandeur via MCP (T3.1a), puis AI
-              SDK avec adaptateurs directs et LiteLLM comme passerelle privée facultative (T3.2a). Aucune intégration
-              n’est encore livrée. Elles ne bloquent pas la première preuve privée, qui conserve notre client de modèle
-              actuel. Un connecteur gratuit ne rend pas les API gratuites.
+              Hermes a passé l’essai MCP isolé (T3.1a) : accord, refus, expiration et panne du fournisseur local simulé.
+              La recette manuelle reste facultative ; aucun adaptateur automatique ni vrai modèle n’est qualifié par cet
+              essai. AI SDK et LiteLLM restent à évaluer en T3.2a. Un connecteur gratuit ne rend pas les API gratuites.
             </p>
+            <p><a class="text-link" href="downloads/HERMES.md" download>Lire la recette Hermes et ses limites</a></p>
             <a class="text-link" href="downloads/ACCEPTANCE.md" download
               >Voir les critères reliés aux prochains chantiers</a
             >

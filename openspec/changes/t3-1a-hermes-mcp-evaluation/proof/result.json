@@ -1,0 +1,74 @@
+{
+  "hermes_commit": "73162b00eefde3794bed0afb53d84a19c0eed230",
+  "scenarios": [
+    "upstream-hermes-config-discovery-and-tool-filter",
+    "allow_once",
+    "deny",
+    "expire",
+    "real-agent-loop-local-model-fixture-and-mcp-tool",
+    "model-unavailable-no-network-egress"
+  ],
+  "tools": [
+    "mcp__drop__get_drop_result",
+    "mcp__drop__list_capabilities",
+    "mcp__drop__request_drop"
+  ],
+  "model_failure_outcome": {
+    "has_error": true,
+    "completed": false
+  },
+  "model_requests": [
+    {
+      "path": "/api/show",
+      "tools": [],
+      "failed": false
+    },
+    {
+      "path": "/v1/chat/completions",
+      "tools": [
+        "mcp__drop__get_drop_result",
+        "mcp__drop__list_capabilities",
+        "mcp__drop__request_drop"
+      ],
+      "failed": false
+    },
+    {
+      "path": "/v1/chat/completions",
+      "tools": [
+        "mcp__drop__get_drop_result",
+        "mcp__drop__list_capabilities",
+        "mcp__drop__request_drop"
+      ],
+      "failed": false
+    },
+    {
+      "path": "/v1/chat/completions",
+      "tools": [
+        "mcp__drop__get_drop_result",
+        "mcp__drop__list_capabilities",
+        "mcp__drop__request_drop"
+      ],
+      "failed": true
+    },
+    {
+      "path": "/v1/chat/completions",
+      "tools": [
+        "mcp__drop__get_drop_result",
+        "mcp__drop__list_capabilities",
+        "mcp__drop__request_drop"
+      ],
+      "failed": true
+    }
+  ],
+  "model_qualification": "fixture_only_not_real_weights",
+  "network": {
+    "ipv4_connect_destinations": [
+      "127.0.0.1"
+    ],
+    "packet_lines": 356,
+    "kernel_drops": 0,
+    "routes": [],
+    "isolation": "docker --network none"
+  },
+  "status": "PASS"
+}

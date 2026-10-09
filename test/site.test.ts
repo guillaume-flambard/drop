@@ -79,6 +79,7 @@ describe('documentation site', () => {
       'OPEN_SOURCE',
       'ACCEPTANCE',
       'PRIVATE_PROFILE',
+      'HERMES',
     ]) {
       const response = await fetch(`${preview.url}/downloads/${name}.md`);
       expect(response.status, name).toBe(200);
