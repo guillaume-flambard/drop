@@ -290,6 +290,14 @@ Format : `D<n> — date — décision — raison`. Les agents ajoutent ici toute
   `/.well-known/oauth-*` et `/gateway` vers la passerelle ; tout le reste vers le site. La vidéo n'est pas tournée :
   l'accueil montre les captures de la démo du 8 octobre et l'annonce pour les premiers essais (T2.7). Les exports
   Markdown pointent vers le dépôt, qui est privé : à revoir avant la mise en ligne.
+- **D38** — Préparation des essais réels (2026-10-09, T2.7). Protocole dans `docs/essais/README.md`. Ce que la
+  confrontation aux vrais serveurs a montré, sources lues ce jour : Figma se branche par le serveur local de l'app de
+  bureau (`127.0.0.1:3845/mcp`, sans jeton), mais exige un siège Dev ou Full (sinon 6 appels d'outil par mois) et lit
+  la sélection ou un lien ; GitHub par `api.githubcopilot.com/mcp/readonly` avec un jeton en en-tête ; Linear par
+  `mcp.linear.app/mcp/readonly` avec une clé d'API en en-tête (d'après les résultats de recherche, la doc n'était pas
+  joignable d'ici). Deux manques deviennent des tâches : un serveur qui exige OAuth se partage sans erreur puis échoue
+  à chaque demande (T2.16), et drop ne sait pas se connecter aux serveurs distants OAuth (T2.17). Pour Notion, voir le
+  point ouvert ci-dessous.
 
 ## À décider par l'humain
 
@@ -322,6 +330,12 @@ Format : `D<n> — date — décision — raison`. Les agents ajoutent ici toute
     l'admission ne donne accès à personne, l'appairage exige toujours le jeton de l'invitation. Options : quota global
     par jour, profondeur de parrainage maximale, commande `drop relay revoke`. À trancher avant d'ouvrir le relais
     au-delà des testeurs.
+  - T2.7, Notion (D38) : le serveur local `@notionhq/notion-mcp-server` 2.5.2 marque toute requête POST comme
+    destructive, dont la recherche (`post-search`) et la requête de base (`query-data-source`) ; `mcp.answer` retire
+    ces outils, si bien que drop ne lit qu'une page dont la question donne le lien. Options : (a) accepter la limite
+    pour l'essai ; (b) laisser le propriétaire autoriser nommément un outil marqué destructif, après un avertissement,
+    ce qui assouplit une règle de sécurité ; (c) attendre T2.17 et le serveur distant de Notion, qui cherche.
+    Recommandation : (a) pour l'essai, puis (c).
   Détail : `coverage.md` de la change `migrate-spec-kit` (archivée sous `openspec/changes/archive/`).
 - **Financement des demandes, options gardées pour plus tard** (D21 a retenu A). B : une clé d'équipe ou
   d'organisation sur chaque Node ; aucun code, c'est la variable d'environnement. C : le demandeur finance, en joignant
