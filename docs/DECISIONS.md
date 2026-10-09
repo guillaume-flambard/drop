@@ -243,6 +243,13 @@ Format : `D<n> — date — décision — raison`. Les agents ajoutent ici toute
   `TASK_STATE_WORKING` pendant l'attente de l'accord, devient `TASK_STATE_COMPLETED` avec la réponse relue,
   `TASK_STATE_REJECTED` sur un refus, `TASK_STATE_FAILED` sur une expiration ou une erreur. Sortant : une capacité
   `a2a.answer` permet à une entreprise de brancher son propre agent A2A comme source de réponses, comme `mcp.answer`.
+- **D34** — Clôture de T2.1 (2026-10-09). Revue de sécurité de l'admission par invitation : la course entre deux
+  connexions qui présentent le même ticket est fermée (le test du `nonce` et son écriture se font d'un seul pas
+  synchrone), le `nonce` n'est jamais journalisé. Un trou corrigé : le relais acceptait un ticket au `expiresAt`
+  arbitrairement lointain, alors que la spec le borne à 24 h ; un ticket qui dépasse 24 h et 5 min (même dérive
+  d'horloge que les enveloppes) est désormais refusé (`too_long`). Deux points restent ouverts, ci-dessous. Hors de ce
+  dépôt : `lab-infra/stacks/drop/relay.config.json` doit fixer `admittedPath` sur un volume persistant, sinon le relais
+  oublie les Nodes admis à chaque redéploiement.
 
 ## À décider par l'humain
 
@@ -269,6 +276,12 @@ Format : `D<n> — date — décision — raison`. Les agents ajoutent ici toute
     caractères. Un `answer` à la limite ferait échouer la validation de taille.
   - T1.13 : aucun code d'erreur n'est prévu pour un snapshot au-delà de `maxSnapshotBytes`, ni pour le post-contrôle
     d'extrait de code.
+  - T2.1, relevé en clôture (D34) : l'admission est transitive. Un Node admis parraine 20 Nodes par jour, qui
+    parrainent chacun 20 Nodes ; le quota ne borne donc pas la croissance, seulement sa vitesse. Aucune révocation
+    n'existe non plus (`admittedPath` s'édite à la main, puis redémarrage). Le risque se limite à la charge du relais :
+    l'admission ne donne accès à personne, l'appairage exige toujours le jeton de l'invitation. Options : quota global
+    par jour, profondeur de parrainage maximale, commande `drop relay revoke`. À trancher avant d'ouvrir le relais
+    au-delà des testeurs.
   Détail : `coverage.md` de la change `migrate-spec-kit` (archivée sous `openspec/changes/archive/`).
 - **Financement des demandes, options gardées pour plus tard** (D21 a retenu A). B : une clé d'équipe ou
   d'organisation sur chaque Node ; aucun code, c'est la variable d'environnement. C : le demandeur finance, en joignant

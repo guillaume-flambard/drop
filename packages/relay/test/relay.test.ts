@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import WebSocket from 'ws';
-import { mkdtempSync, readFileSync, statSync } from 'node:fs';
+import { mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -11,7 +11,14 @@ import {
   type Envelope,
   type Identity,
 } from '@drop/protocol';
-import { RelayClient, startRelay, type RelayHandle, type RelayLogEntry } from '../src/index.ts';
+import {
+  RelayClient,
+  readRelayConfig,
+  RelayConfigSchema,
+  startRelay,
+  type RelayHandle,
+  type RelayLogEntry,
+} from '../src/index.ts';
 
 const cleanups: (() => Promise<void> | void)[] = [];
 afterEach(async () => {
@@ -59,6 +66,26 @@ async function until(check: () => boolean, timeoutMs = 3000): Promise<void> {
 }
 
 describe('relay', () => {
+  it('reads relay.config.json, with the admission settings optional', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'relay-config-'));
+    const minimal = join(dir, 'minimal.json');
+    writeFileSync(minimal, JSON.stringify({ port: 8787, allowedNodeIds: ['a'] }));
+    expect(RelayConfigSchema.parse(readRelayConfig(minimal))).toMatchObject({
+      port: 8787,
+      allowedNodeIds: ['a'],
+      maxQueuePerNode: 100,
+      rateLimitPerMinute: 60,
+      maxAdmissionsPerSponsorPerDay: 20,
+    });
+    const full = join(dir, 'full.json');
+    const admittedPath = join(dir, 'admitted.json');
+    writeFileSync(
+      full,
+      JSON.stringify({ port: 1, allowedNodeIds: [], admittedPath, maxAdmissionsPerSponsorPerDay: 0 }),
+    );
+    expect(readRelayConfig(full)).toMatchObject({ admittedPath, maxAdmissionsPerSponsorPerDay: 0 });
+  });
+
   it('direct delivery between two in-memory nodes', async () => {
     const alice = await generateIdentity('Alice');
     const bob = await generateIdentity('Bob');

@@ -175,11 +175,11 @@ qui il invite (T2.9).
 - **THEN** l'invité reçoit `team_roster` avec tous les membres, et l'équipe adopte l'invité
 
 ### Requirement: Ticket d'admission
-Un ticket d'admission `{ v: 1, sponsor, nonce, expiresAt, sig }` MUST être signé en Ed25519 par le Node `sponsor` sur `canonical({ v, sponsor, nonce, expiresAt })` et expirer 24 h après l'émission (T2.1, D26). Il ne nomme pas le nouveau venu.
+Un ticket d'admission `{ v: 1, sponsor, nonce, expiresAt, sig }` MUST être signé en Ed25519 par le Node `sponsor` sur `canonical({ v, sponsor, nonce, expiresAt })` et expirer 24 h après l'émission (T2.1, D26). Il ne nomme pas le nouveau venu. Un ticket dont `expiresAt` dépasse l'instant de vérification de plus de 24 h et 5 min (dérive d'horloge) MUST être refusé (D34).
 
 #### Scenario: Ticket falsifié ou expiré
 <!-- openspec-guard:test="cards, receipts, invites, lifecycle, schemas > signs single-use admission tickets that only the sponsor can produce" -->
-- **WHEN** un ticket est modifié, attribué à un autre sponsor, ou présenté après `expiresAt`
+- **WHEN** un ticket est modifié, attribué à un autre sponsor, présenté après `expiresAt`, ou signé avec un `expiresAt` à plus de 24 h et 5 min
 - **THEN** sa vérification échoue
 
 #### Scenario: Code expiré
