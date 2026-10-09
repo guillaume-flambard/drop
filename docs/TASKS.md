@@ -66,7 +66,7 @@ Codex, Cursor, Claude Desktop) ou pour répondre (app Mac), et l'utilise sur ses
 | T2.7 | Cas d'usage réels joués chez Julie (Figma) et Natha (Notion, Linear, GitHub, base de données), captures et vidéo pour les entreprises | `deploy-mac-vps` | `t2-7-real-use-cases` | T2.3, T2.4, T2.5, T2.10 | doing |
 | T2.16 | Partage vérifié : `drop share` et le panneau se connectent toujours au serveur, refusent un outil choisi qu'il n'offre pas, et disent clairement qu'un serveur demande une connexion OAuth que drop ne fait pas encore (D38) | `node`, `capability-mcp-answer` | `t2-16-checked-share` | T2.8 | done |
 | T2.17 | Serveurs MCP distants avec OAuth (Notion, Figma, Linear distants) : drop se connecte en son nom propre, jetons gardés sur le poste ; à décider avant de commencer (D38) | `capability-mcp-answer`, `node`, `owner-app` | `t2-17-mcp-oauth` | T2.16 | doing |
-| T2.18 | `drop.mjs` assemblé démarre le serveur MCP du demandeur à chaque commande (`import.meta.main` vaut vrai dans le bundle) et plante sur `drop init` dans un `DROP_HOME` neuf, donc au premier lancement de l'app Mac : séparer la bibliothèque de `requester-mcp` de son point d'entrée | `requester-mcp`, `node` | `t2-18-bundle-entry` | T2.5 | todo |
+| T2.18 | `drop.mjs` assemblé démarre le serveur MCP du demandeur à chaque commande (`import.meta.main` vaut vrai dans le bundle) et plante sur `drop init` dans un `DROP_HOME` neuf, donc au premier lancement de l'app Mac : séparer la bibliothèque de `requester-mcp` de son point d'entrée | `requester-mcp`, `node` | `t2-18-bundle-entry` | T2.5 | done |
 
 **Points d'arrêt humains** : signature de l'app avec le compte Apple Developer de Guillaume (T2.4) ; dessin du
 panneau de suivi (T2.4) ; accord avant toute publication npm ou
