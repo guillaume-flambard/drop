@@ -35,6 +35,24 @@ import { getSodium } from '../src/sodium.ts';
 const NOW = 1_791_460_000_000;
 const DROP_ID = '0199c5a0-0000-7000-8000-000000000001';
 
+describe('bounded envelope replay cache', () => {
+  it('refuses new ids at capacity without forgetting an unexpired id', () => {
+    const cache = new ReplayCache(30 * 60_000, 2);
+    expect(cache.check('a', NOW)).toBe(true);
+    expect(cache.check('b', NOW)).toBe(true);
+    expect(cache.check('c', NOW)).toBe(false);
+    expect(cache.check('a', NOW)).toBe(false);
+  });
+
+  it('admits another id after entries expire without reopening a live id', () => {
+    const cache = new ReplayCache(1000, 2);
+    expect(cache.check('a', NOW)).toBe(true);
+    expect(cache.check('b', NOW + 500)).toBe(true);
+    expect(cache.check('c', NOW + 1000)).toBe(true);
+    expect(cache.check('b', NOW + 1000)).toBe(false);
+  });
+});
+
 describe('drop request id', () => {
   it('rejects UUIDv4 for a new drop request', () => {
     const request = {

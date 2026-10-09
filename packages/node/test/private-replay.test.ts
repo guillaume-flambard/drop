@@ -14,7 +14,7 @@ import {
 } from '@drop/protocol';
 import { DropHome, MAX_RECEIVED_DROPS, REPLAY_LOCK_OWNER } from '../src/home.ts';
 import { privateConfig } from '../src/private-config.ts';
-import { NodeEngine, type EngineLogEntry } from '../src/engine.ts';
+import { MAX_ACTIVE_EXECUTING_DROPS, NodeEngine, type EngineLogEntry } from '../src/engine.ts';
 import { fakeCapability } from './helpers.ts';
 
 const NOW = 1_791_460_000_000;
@@ -31,6 +31,7 @@ function fillMarkers(root: string, at: number, count: number): void {
 
 /** One owner node on a real DropHome, a paired requester, and every reply and log line captured. */
 async function ownerNode(root: string, now = NOW) {
+  const clock = { now };
   const owner = await generateIdentity('Owner');
   const requester = await generateIdentity('Requester');
   const other = await generateIdentity('Other');
@@ -52,19 +53,22 @@ async function ownerNode(root: string, now = NOW) {
   });
   const replies: Envelope[] = [];
   const logs: EngineLogEntry[] = [];
+  const transport = {
+    fail: false,
+    send: (envelope: Envelope): Promise<string> => {
+      if (transport.fail) return Promise.reject(new Error('transport offline'));
+      replies.push(envelope);
+      return Promise.resolve('delivered');
+    },
+  };
   const engine = new NodeEngine({
     identity: owner,
     ownerKind: 'human',
     store: home,
     capabilities: [fakeCapability('test.state', 'low')],
-    transport: {
-      send: (envelope) => {
-        replies.push(envelope);
-        return Promise.resolve('delivered');
-      },
-    },
+    transport,
     log: (entry) => logs.push(entry),
-    now: () => now,
+    now: () => clock.now,
   });
   const send = async (dropId: string, sender = requester) =>
     engine.handleEnvelope(
@@ -80,7 +84,7 @@ async function ownerNode(root: string, now = NOW) {
           purpose: 'Test replay',
           requestedBy: { nodeId: sender.nodeId, displayName: sender.displayName, agent: 'codex' },
         },
-        { now },
+        { now: clock.now },
       ),
     );
   const lastReply = async (recipient = requester): Promise<Message> =>
@@ -88,7 +92,7 @@ async function ownerNode(root: string, now = NOW) {
       await openEnvelope(recipient, replies.at(-1), {
         isKnownPeer: (id) => id === owner.nodeId,
         replay: new ReplayCache(),
-        now,
+        now: clock.now,
       })
     ).message;
   const errorsTo = async (recipient = requester): Promise<Message[]> => {
@@ -97,13 +101,13 @@ async function ownerNode(root: string, now = NOW) {
       const { message } = await openEnvelope(recipient, envelope, {
         isKnownPeer: (id) => id === owner.nodeId,
         replay: new ReplayCache(),
-        now,
+        now: clock.now,
       });
       if (message.type === 'drop_error') messages.push(message);
     }
     return messages;
   };
-  return { home, engine, replies, logs, send, lastReply, errorsTo, requester, other };
+  return { home, engine, replies, logs, send, lastReply, errorsTo, requester, other, clock, transport };
 }
 
 function deadPid(): number {
@@ -459,10 +463,77 @@ describe('replay admission through the engine', () => {
       expect(outcome).toMatchObject({ type: 'drop_error', dropId, code: 'E_NOT_NOW' });
       await node.send(dropId);
       expect(await node.errorsTo()).toEqual([outcome, outcome]);
+      expect(node.engine.memoryStats().executing).toBe(0);
+      expect(node.engine.memoryStats().completedErrors).toBe(1);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
   });
+
+  it('frees a delivered request without reopening its durable replay marker', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'drop-replay-engine-delivered-memory-'));
+    try {
+      const node = await ownerNode(root);
+      const dropId = uuidv7(NOW);
+      await node.send(dropId);
+      expect(await node.engine.decide(dropId, 'allow_once')).toBe(true);
+      expect(node.engine.memoryStats().executing).toBe(0);
+      await node.send(dropId);
+      expect(node.engine.pending()).toHaveLength(0);
+      expect(await node.lastReply()).toMatchObject({ type: 'drop_error', dropId, code: 'E_DENIED' });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('frees an expired approval without reopening its durable replay marker', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'drop-replay-engine-expired-memory-'));
+    try {
+      const node = await ownerNode(root);
+      const dropId = uuidv7(NOW);
+      await node.send(dropId);
+      node.clock.now += 11 * 60_000;
+      await node.engine.tick();
+      expect(node.engine.memoryStats().executing).toBe(0);
+      expect(node.engine.pending()).toHaveLength(0);
+      await node.send(dropId);
+      expect(await node.lastReply()).toMatchObject({ type: 'drop_error', dropId, code: 'E_EXPIRED' });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('does not strand an approved request when transport throws on status', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'drop-replay-engine-transport-'));
+    try {
+      const node = await ownerNode(root);
+      const dropId = uuidv7(NOW);
+      await node.send(dropId);
+      node.transport.fail = true;
+      expect(await node.engine.decide(dropId, 'allow_once')).toBe(true);
+      expect(node.engine.memoryStats().executing).toBe(0);
+      expect(node.engine.memoryStats().outbox).toBeGreaterThan(0);
+      expect(node.logs).toContainEqual(expect.objectContaining({ code: 'E_RUNNER', reason: 'transport_exception' }));
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('refuses another request before consent when active execution memory is full', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'drop-replay-engine-active-cap-'));
+    try {
+      const node = await ownerNode(root);
+      for (let index = 0; index < MAX_ACTIVE_EXECUTING_DROPS; index += 1) await node.send(uuidv7(NOW + index));
+      expect(node.engine.memoryStats().executing).toBe(MAX_ACTIVE_EXECUTING_DROPS);
+      const extra = uuidv7(NOW + MAX_ACTIVE_EXECUTING_DROPS);
+      await node.send(extra);
+      expect(node.engine.pending()).toHaveLength(MAX_ACTIVE_EXECUTING_DROPS);
+      expect(await node.lastReply()).toMatchObject({ type: 'drop_error', dropId: extra, code: 'E_RATE' });
+      expect(node.engine.memoryStats().executing).toBe(MAX_ACTIVE_EXECUTING_DROPS);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }, 60_000);
 });
 
 describe('private replay admission', () => {

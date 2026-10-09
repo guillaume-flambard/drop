@@ -1,7 +1,7 @@
 {
   "change": "t3-1b-replay-storage-bounds",
   "phase": "VERIFYING",
-  "status": "VERIFYING",
+  "status": "BLOCKED_EXTERNAL_REVIEW",
   "requirements": [
     "REQ-1 UUIDv7 for new drop requests",
     "REQ-2 bounded durable anti-replay across restart and clock rollback",
@@ -45,8 +45,8 @@
     {
       "id": "R-2",
       "severity": "high",
-      "status": "open",
-      "description": "NodeEngine.executing and outbound have no memory bound; CSO finding 369ec22b77cbf3bf1de4e4b432896a67 for executing; T3.1c must address before pilot T3.5"
+      "status": "mitigated_in_T3.1c_pending_formal_closure",
+      "description": "T3.1c bounds executing and outbound with tests; CSO finding 369ec22b77cbf3bf1de4e4b432896a67 has static mitigation evidence, but its partial recheck cannot formally close it before pilot T3.5"
     }
   ],
   "verification": {
@@ -61,7 +61,7 @@
   },
   "remaining": [
     "Fresh gstack /review after Claude session limit resets at 18:20 Europe/Paris; resolve any findings",
-    "T3.1c owns HIGH memory availability finding; it blocks T3.5 and acceptance of the private profile, not the T3.1b replay-store contract",
+    "T3.1c mitigates HIGH memory availability finding; formal closure is still blocked by partial CSO coverage and blocks T3.5, not the T3.1b replay-store contract",
     "CSO completeness remains partial: Semgrep Docker socket unavailable and snapshot exclusions",
     "Archive and mark T3.1b done only after required review validates its own contract"
   ]
