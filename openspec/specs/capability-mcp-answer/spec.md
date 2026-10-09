@@ -87,3 +87,16 @@ variables et en-têtes lus dans le fichier de l'agent au moment de l'exécution,
 <!-- openspec-guard:test="MCP servers declared by the coding agents (T2.8) > reads the servers of Claude Code, Cursor, Claude Desktop and Codex, with their env and headers" -->
 - **WHEN** les quatre agents déclarent des serveurs, dont une table Codex désactivée
 - **THEN** chaque serveur actif est lu avec sa commande ou son URL, ses variables et ses en-têtes
+
+### Requirement: Partage vérifié
+Partager un serveur détecté (`drop share`, panneau) SHALL toujours s'y connecter d'abord et MUST ne rien publier si :
+le serveur exige une connexion OAuth (401 ou 403 sans en-tête `Authorization`), refuse son jeton (401 ou 403 avec
+en-tête), ne répond pas, n'offre pas un outil choisi, ou marque un outil choisi `destructiveHint`. Le message MUST dire
+quoi faire, en français, puisque le panneau l'affiche tel quel ; à l'exécution, ces mêmes cas restent `E_RUNNER` (T2.16,
+D38).
+
+#### Scenario: Serveur que drop ne peut pas utiliser
+<!-- openspec-guard:test="detecting agents and their MCP servers (T2.8) > drop share checks the server first: OAuth-only, refused token, unreachable, missing or destructive tools (T2.16)" -->
+- **WHEN** Natha partage un serveur qui exige OAuth, un serveur qui refuse son jeton, un serveur éteint, un outil absent ou un outil destructif
+- **THEN** le partage échoue avec un message qui nomme la cause, et aucune capacité n'est publiée
+- **AND** le même serveur partagé avec des outils offerts et en lecture est publié

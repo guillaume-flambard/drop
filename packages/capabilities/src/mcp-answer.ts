@@ -1,6 +1,7 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { getDefaultEnvironment, StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import { UnauthorizedError } from '@modelcontextprotocol/sdk/client/auth.js';
+import { StreamableHTTPClientTransport, StreamableHTTPError } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import { z } from 'zod';
 import { DropError, type ConsentCost } from '@drop/protocol';
@@ -102,6 +103,52 @@ export function parseMcpFinal(content: string): McpAnswerOutput | undefined {
 /** The part of an MCP client this capability uses; tests pass an in-memory one. */
 export type McpClient = Pick<Client, 'listTools' | 'callTool' | 'close'>;
 
+/**
+ * Why an MCP server could not be reached (T2.16, D38), so that sharing can say what to do: `oauth` when an HTTP server
+ * answers 401 or 403 to a request without an Authorization header (drop cannot sign in with OAuth yet, T2.17),
+ * `token_refused` when it refuses the token it was given, `unreachable` for anything else.
+ */
+export class McpConnectError extends DropError {
+  readonly reason: 'oauth' | 'token_refused' | 'unreachable';
+  constructor(reason: 'oauth' | 'token_refused' | 'unreachable', message: string) {
+    super('E_RUNNER', message);
+    this.reason = reason;
+  }
+}
+
+async function connectHttp(client: Client, url: string, headers: Record<string, string>): Promise<void> {
+  // The SDK's transport types predate exactOptionalPropertyTypes (sessionId?: string vs string | undefined).
+  const transport = new StreamableHTTPClientTransport(new URL(url), { requestInit: { headers } }) as Transport;
+  try {
+    await client.connect(transport);
+  } catch (error) {
+    const host = new URL(url).host;
+    const status =
+      error instanceof StreamableHTTPError ? error.code : error instanceof UnauthorizedError ? 401 : undefined;
+    if (status === 401 || status === 403) {
+      const tokened = Object.keys(headers).some((name) => name.toLowerCase() === 'authorization');
+      throw tokened
+        ? new McpConnectError('token_refused', `the MCP server ${host} refused its token (HTTP ${String(status)})`)
+        : new McpConnectError('oauth', `the MCP server ${host} requires an OAuth sign-in, which drop cannot do yet`);
+    }
+    throw new McpConnectError(
+      'unreachable',
+      `the MCP server ${host} did not answer: ${error instanceof Error ? error.message : 'connection failed'}`,
+    );
+  }
+}
+
+async function connectStdio(client: Client, command: string, transport: StdioClientTransport): Promise<void> {
+  try {
+    await client.connect(transport);
+  } catch (error) {
+    throw new McpConnectError(
+      'unreachable',
+      `the MCP server ${command} did not start: ${error instanceof Error ? error.message : 'failed'}`,
+    );
+  }
+}
+
 export async function connectMcp(server: McpServerConfig, env: NodeJS.ProcessEnv = process.env): Promise<McpClient> {
   const read = (name: string): string => {
     const value = env[name];
@@ -113,7 +160,9 @@ export async function connectMcp(server: McpServerConfig, env: NodeJS.ProcessEnv
     const declared = findAgentServer(server.agent, server.name);
     if (!declared) throw new DropError('E_RUNNER', `${server.agent} no longer declares the MCP server ${server.name}`);
     if (declared.transport === 'stdio') {
-      await client.connect(
+      await connectStdio(
+        client,
+        declared.command ?? '',
         new StdioClientTransport({
           command: declared.command ?? '',
           args: declared.args ?? [],
@@ -122,16 +171,15 @@ export async function connectMcp(server: McpServerConfig, env: NodeJS.ProcessEnv
         }),
       );
     } else {
-      const transport = new StreamableHTTPClientTransport(new URL(declared.url ?? ''), {
-        requestInit: { headers: declared.headers },
-      }) as Transport;
-      await client.connect(transport);
+      await connectHttp(client, declared.url ?? '', declared.headers);
     }
     return client;
   }
   if (server.transport === 'stdio') {
     const forwarded = Object.fromEntries(server.env.map((name) => [name, read(name)]));
-    await client.connect(
+    await connectStdio(
+      client,
+      server.command,
       new StdioClientTransport({
         command: server.command,
         args: server.args,
@@ -143,9 +191,7 @@ export async function connectMcp(server: McpServerConfig, env: NodeJS.ProcessEnv
     const headers = Object.fromEntries(
       Object.entries(server.headersFromEnv).map(([header, name]) => [header, read(name)]),
     );
-    // The SDK's transport types predate exactOptionalPropertyTypes (sessionId?: string vs string | undefined).
-    const transport = new StreamableHTTPClientTransport(new URL(server.url), { requestInit: { headers } }) as Transport;
-    await client.connect(transport);
+    await connectHttp(client, server.url, headers);
   }
   return client;
 }

@@ -1,5 +1,6 @@
-import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { spawn, spawnSync } from 'node:child_process';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -82,6 +83,78 @@ describe('detecting agents and their MCP servers (T2.8)', () => {
       server: { transport: 'agent', agent: 'claude_code', name: 'figma' },
       tools: ['get_design_context'],
     });
-    expect(run('share', 'claude_code/drop').stderr).toContain('part of drop itself');
+    expect(run('share', 'claude_code/drop').stderr).toContain('fait partie de drop');
   });
+
+  it('drop share checks the server first: OAuth-only, refused token, unreachable, missing or destructive tools (T2.16)', async () => {
+    const fixture = resolve(
+      import.meta.dirname,
+      '..',
+      '..',
+      'capabilities',
+      'test',
+      'fixtures',
+      'fake-design-mcp-stdio.ts',
+    );
+    // Answers like Notion's or Figma's remote servers to a client without a token: 401 pointing at OAuth metadata.
+    const oauthOnly = createServer((req, res) => {
+      req.resume();
+      res.writeHead(401, {
+        'WWW-Authenticate': 'Bearer resource_metadata="http://127.0.0.1/.well-known/oauth-protected-resource"',
+      });
+      res.end();
+    });
+    await new Promise<void>((done) => oauthOnly.listen(0, '127.0.0.1', done));
+    const address = oauthOnly.address();
+    const url = `http://127.0.0.1:${String(typeof address === 'object' && address ? address.port : 0)}/mcp`;
+    const cli = resolve(import.meta.dirname, '..', 'src', 'cli.ts');
+    const home = mkdtempSync(join(tmpdir(), 'share-check-home-'));
+    writeFileSync(
+      join(home, '.claude.json'),
+      JSON.stringify({
+        mcpServers: {
+          figma: { command: process.execPath, args: [fixture] },
+          notion: { type: 'http', url },
+          linear: { type: 'http', url, headers: { Authorization: 'Bearer lin_api_wrong' } },
+          offline: { type: 'http', url: 'http://127.0.0.1:9/mcp' },
+        },
+      }),
+    );
+    const dropHome = join(home, '.drop');
+    const env = { ...process.env, HOME: home, DROP_HOME: dropHome };
+    // Asynchronous, so that the OAuth-only server above can answer while the CLI runs.
+    const run = (...args: string[]) =>
+      new Promise<{ status: number | null; stdout: string; stderr: string }>((done) => {
+        const child = spawn(process.execPath, [cli, ...args], { env });
+        let stdout = '';
+        let stderr = '';
+        child.stdout.on('data', (chunk: Buffer) => (stdout += chunk.toString()));
+        child.stderr.on('data', (chunk: Buffer) => (stderr += chunk.toString()));
+        child.on('close', (status) => {
+          done({ status, stdout, stderr });
+        });
+      });
+    try {
+      expect(
+        (await run('init', '--name', 'Natha', '--kind', 'human', '--relay', 'wss://relay.example/v1')).status,
+      ).toBe(0);
+      const oauth = await run('share', 'claude_code/notion', '--tools', 'search');
+      expect(oauth.status).not.toBe(0);
+      expect(oauth.stderr).toContain('demande une connexion OAuth');
+      expect((await run('share', 'claude_code/linear')).stderr).toContain('refuse son jeton');
+      expect((await run('share', 'claude_code/offline')).stderr).toContain('ne répond pas');
+      const missing = await run('share', 'claude_code/figma', '--tools', 'get_design_context,get_comments');
+      expect(missing.stderr).toContain('n’offre pas get_comments');
+      expect(missing.stderr).toContain('get_design_context, delete_frame, export_all');
+      expect((await run('share', 'claude_code/figma', '--tools', 'delete_frame')).stderr).toContain(
+        'marque comme destructifs : delete_frame',
+      );
+      const capabilities = join(dropHome, 'capabilities');
+      expect(existsSync(capabilities) ? readdirSync(capabilities) : []).toEqual([]);
+      const shared = await run('share', 'claude_code/figma', '--tools', 'get_design_context');
+      expect(shared.stdout).toContain('published mcp.answer.figma');
+    } finally {
+      oauthOnly.close();
+    }
+  }, 30_000);
 });
