@@ -21,6 +21,8 @@
     "relay_oversized_frame_quota": "passed",
     "relay_websocket_payload_limit_quota": "passed",
     "relay_websocket_invalid_utf8_quota": "passed",
+    "node_duplicate_review_decision": "passed_full_suite",
+    "node_review_expiry_while_sending": "passed_full_suite",
     "relay_reconnect": "passed"
   },
   "workGraph": {
@@ -36,35 +38,43 @@
     "P1-7": "DONE",
     "P1-8": "DONE",
     "P1-9": "DONE",
-    "P1-10": "DONE"
+    "P1-10": "DONE",
+    "P1-11": "DONE"
   },
   "risks": [
     {
       "id": "R-1",
       "severity": "high",
       "status": "mitigated_pending_final_review",
-      "description": "Replay and quota bypasses fixed, including ws pre-message errors; foreign lock age takeover and missing clock after migration fail closed, pending formal scoped review"
+      "description": "Replay and quota bypasses fixed, including ws pre-message errors and concurrent review-decision delivery; foreign lock age takeover and missing clock after migration fail closed, pending formal scoped review"
     },
     {
       "id": "R-2",
       "severity": "high",
       "status": "mitigated_in_T3.1c_pending_formal_closure",
       "description": "T3.1c bounds executing and outbound with tests; CSO finding 369ec22b77cbf3bf1de4e4b432896a67 has static mitigation evidence, but its partial recheck cannot formally close it before pilot T3.5"
+    },
+    {
+      "id": "R-3",
+      "severity": "high",
+      "status": "tracked_in_T3.1d",
+      "description": "A relay E_RATE refusal may leave an executor result unsent while a receipt claims delivery; T3.1d explicitly owns retryable E_RATE and outbound quota behavior before the pilot"
     }
   ],
   "verification": {
     "targetedTests": "passed",
     "lint": "passed",
     "typecheck": "passed",
-    "fullTests": "passed_345_of_345_current_worktree",
+    "fullTests": "passed_347_of_347_current_worktree;_first_parallel_run_detect_timeout_then_targeted_2_of_2_passed",
     "openspecValidate": "passed",
-    "guard": "passed_428_criteria_153_linked_baseline_plus0_minus0",
-    "review": "independent_scoped_review_and_adversarial_no_P0_P1;_formal_gstack_log_pending_for_final_diff",
+    "guard": "passed_430_criteria_155_linked_baseline_plus0_minus0",
+    "review": "two_isolated_formal_passes_incomplete;_first_found_review_race_now_fixed;_independent_current_source_race_review_no_P0_P1;_final_formal_pass_pending",
     "cso": "finished_partial_run_1791554996421-68b812ec9550df5c;_one_high_memory_growth_finding;_semgrep_not_assessed"
   },
   "remaining": [
     "Formal gstack /review bound to final T3.1b diff; resolve any findings",
     "T3.1c mitigates HIGH memory availability finding; formal closure is still blocked by partial CSO coverage and blocks T3.5, not the T3.1b replay-store contract",
+    "T3.1d owns relay E_RATE retry and outbound quota after the isolated adversarial pass identified possible result loss",
     "CSO completeness remains partial: Semgrep Docker socket unavailable and snapshot exclusions",
     "Archive and mark T3.1b done only after required review validates its own contract"
   ]

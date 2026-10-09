@@ -10,6 +10,7 @@
 - [x] 2.2 Documenter la migration UUIDv4 → UUIDv7 et le stockage local ; vérifier les exemples du guide.
 - [x] 2.3 Empêcher deux processus partageant un `DROP_HOME` de dépasser la borne, avec test de verrou concurrent et refus fermé.
 - [x] 2.4 Normaliser la casse des UUIDv7 avant admission et persistance pour qu'un même identifiant ne crée jamais deux marqueurs sur Linux ; vérifier par test lower/upper.
+- [x] 2.5 Sérialiser la décision de relecture acceptée face à un doublon et à `tick()` ; tests de non-régression rouges puis verts sur le résultat et le reçu.
 
 ## 3. Relais
 

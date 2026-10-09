@@ -567,6 +567,16 @@ Le Node MUST conserver au plus 16 384 identifiants de demandes reçues, sans leu
 - **WHEN** un `drop_error` ou un `drop_status` arrive après l'issue finale d'une demande
 - **THEN** le demandeur conserve l'issue déjà reçue
 
+#### Scenario: AC: décision de relecture reçue deux fois
+<!-- openspec-guard:test="end to end, in memory: relay and three nodes > records one result and receipt when the approver repeats a review decision concurrently" -->
+- **WHEN** deux décisions de relecture pour la même demande arrivent pendant l'envoi du résultat
+- **THEN** l'exécuteur n'émet qu'un résultat et un reçu
+
+#### Scenario: AC: délai de relecture pendant l'envoi
+<!-- openspec-guard:test="end to end, in memory: relay and three nodes > does not expire a review while its accepted result is being sent" -->
+- **WHEN** la relecture acceptée est en cours d'envoi et son délai expire
+- **THEN** l'exécuteur ne produit pas de reçu d'expiration contradictoire
+
 ### Requirement: Mémoire des demandes exécutées bornée
 Le Node MUST limiter à 1 024 les demandes reçues encore actives en mémoire. Dès qu'une issue est envoyée, il MUST libérer l'entrée complète ; il MAY conserver pendant au plus 30 minutes un résumé borné du refus pour répondre au même demandeur. La suppression de mémoire MUST NOT supprimer le marqueur anti-rejeu durable ni relancer une demande.
 
