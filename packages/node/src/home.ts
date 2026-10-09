@@ -232,11 +232,14 @@ export class DropHome {
 
   private claimDropLocked(dropId: string, now: number, timestamp: number): DropClaim {
     const dir = join(this.root, 'received-drops');
-    mkdirSync(dir, { recursive: true, mode: 0o700 });
     const clockPath = join(this.root, 'received-drops-clock');
     const versionPath = join(this.root, 'received-drops-version');
     const clockExists = existsSync(clockPath);
     const versionExists = existsSync(versionPath);
+    // The clock/version prove that this home has admitted requests. Recreating a lost marker directory would
+    // silently reopen consent for a recent request whose tombstone was in that directory.
+    if (!existsSync(dir) && (clockExists || versionExists)) throw new Error('E_REPLAY_STATE missing markers');
+    mkdirSync(dir, { recursive: true, mode: 0o700 });
     if (versionExists) {
       if (readFileSync(versionPath, 'utf8') !== '1\n') throw new Error('E_REPLAY_STATE corrupt version');
       if (!clockExists) throw new Error('E_REPLAY_STATE missing clock');

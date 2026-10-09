@@ -266,6 +266,19 @@ describe('bounded received drops', () => {
     }
   });
 
+  it('fails closed if the marker directory disappears after a durable claim', () => {
+    const root = mkdtempSync(join(tmpdir(), 'drop-replay-missing-markers-'));
+    try {
+      const home = new DropHome(root);
+      const dropId = uuidv7(NOW);
+      expect(home.claimDrop(dropId, NOW)).toBe('claimed');
+      rmSync(join(root, 'received-drops'), { recursive: true });
+      expect(() => new DropHome(root).claimDrop(dropId, NOW)).toThrow('E_REPLAY_STATE missing markers');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('ignores operating system and foreign entries in the marker directory', () => {
     const root = mkdtempSync(join(tmpdir(), 'drop-replay-foreign-'));
     try {
@@ -406,6 +419,7 @@ describe('replay admission through the engine', () => {
     const root = mkdtempSync(join(tmpdir(), 'drop-replay-engine-cause-'));
     try {
       const node = await ownerNode(root);
+      mkdirSync(join(root, 'received-drops'));
       writeFileSync(join(root, 'received-drops-clock'), 'corrupt');
       await node.send(uuidv7(NOW));
       expect(node.logs).toContainEqual(

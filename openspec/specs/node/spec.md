@@ -537,6 +537,11 @@ Le Node MUST conserver au plus 16 384 identifiants de demandes reçues, sans leu
 - **WHEN** le fichier d'horloge manque après une première admission T3.1b
 - **THEN** le Node refuse toute nouvelle admission sans recréer une horloge initiale
 
+#### Scenario: AC: marqueurs anti-rejeu perdus
+<!-- openspec-guard:test="bounded received drops > fails closed if the marker directory disappears after a durable claim" -->
+- **WHEN** le dossier des marqueurs manque après une première admission T3.1b
+- **THEN** le Node refuse toute nouvelle admission sans recréer ce dossier
+
 #### Scenario: AC: doublon d'une demande terminée
 <!-- openspec-guard:test="replay admission through the engine > answers a duplicate of a finished request with its recorded outcome" -->
 - **WHEN** le même demandeur renvoie une demande déjà refusée ou échouée
