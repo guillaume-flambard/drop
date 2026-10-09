@@ -1,0 +1,45 @@
+{
+  "change": "t3-4-private-mac-app",
+  "phase": "VERIFY",
+  "status": "IN_PROGRESS",
+  "acceptance": {
+    "AC-MAC-01": "pending",
+    "AC-MAC-02": "pending",
+    "AC-MAC-03": "pending",
+    "AC-MAC-04": "pending"
+  },
+  "workGraph": {
+    "1.1": "DONE",
+    "1.2": "DONE",
+    "2.1": "DONE",
+    "2.2": "PARTIAL",
+    "3.1": "PARTIAL",
+    "3.2": "PARTIAL",
+    "3.3": "DONE",
+    "4.1": "PARTIAL",
+    "4.2": "TODO"
+  },
+  "risks": [
+    { "id": "R-1", "severity": "high", "status": "mitigated_pending_review", "description": "La coque vérifie sa session sur loopback et conserve le port vérifié avant de construire l'URL avec jeton ; collision observée sans navigation vers le processus occupant. Revue formelle et course résiduelle de remplacement de processus à examiner." },
+    { "id": "R-2", "severity": "high", "status": "open", "description": "Aucun paquet signé/notarisé n'a encore été installé et testé sur un Mac propre." },
+    { "id": "R-3", "severity": "medium", "status": "mitigated_pending_manual", "description": "Le panneau garde le focus après décision et diffère le rafraîchissement SSE pendant une interaction ; VoiceOver et WKWebView réels restent à qualifier." },
+    { "id": "R-4", "severity": "medium", "status": "open", "description": "Le retour arrière manuel peut être incompatible avec les migrations de l'état anti-rejeu sans instantané complet cohérent." }
+  ],
+  "verification": {
+    "typescript": "passed_338_of_338_35_files_lint_typecheck_2026-10-09",
+    "rust": "passed_cargo_check_and_2_tests_2026-10-09",
+    "openspec": "passed_strict_change_and_change_guard_4_manual_scenarios",
+    "canonicalGuard": "passed_423_criteria_146_linked_258_frozen_19_excluded",
+    "debugPackage": "built_arm64_with_node_24_21_0_development_only",
+    "isolatedSmoke": "passed_private_profile_port_17881_and_collision_7781_without_touching_existing_node",
+    "uiPreview": "passed_380x620_keyboard_arrow_decision_focus_and_error_state;_VoiceOver_pending",
+    "release": "blocked_missing_notarization_credentials_and_manual_clean_Mac_recipe"
+  },
+  "remaining": [
+    "Exécuter la recette veille, crash et borne de redémarrage sur le Mac",
+    "Exécuter la recette VoiceOver et focus sur le vrai WebView",
+    "Configurer les justificatifs Apple, construire un paquet signé/notarisé et l'installer sur un Mac propre",
+    "Jouer le refus, le hors ligne, le paquet altéré et le retour arrière",
+    "Terminer les revues formelles et la garde canonique après synchronisation des specs"
+  ]
+}

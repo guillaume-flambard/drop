@@ -103,12 +103,16 @@ describe('menu bar panel and its admin routes (T2.4)', () => {
       token: TOKEN,
       port: 0,
       relayUrl: 'ws://x/v1',
+      shellInstance: 'shell-test-instance',
       refreshCatalogs: () => Promise.resolve(),
       admin,
     });
     const { port } = api;
 
     expect((await call(port, 'GET', '/app', undefined, false)).status).toBe(401);
+    expect(JSON.parse((await call(port, 'GET', '/_shell/health', undefined, false)).text)).toEqual({
+      instance: 'shell-test-instance',
+    });
     const page = await call(port, 'GET', `/app?token=${TOKEN}`, undefined, false);
     expect(page.status).toBe(200);
     expect(page.headers['content-security-policy']).toBe(
