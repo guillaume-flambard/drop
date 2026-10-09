@@ -250,6 +250,16 @@ Format : `D<n> — date — décision — raison`. Les agents ajoutent ici toute
   d'horloge que les enveloppes) est désormais refusé (`too_long`). Deux points restent ouverts, ci-dessous. Hors de ce
   dépôt : `lab-infra/stacks/drop/relay.config.json` doit fixer `admittedPath` sur un volume persistant, sinon le relais
   oublie les Nodes admis à chaque redéploiement.
+- **D35** — Mises à jour signées de l'app Mac (2026-10-09, T2.4, choix de Guillaume). Le dépôt est privé, donc l'app
+  ne peut pas lire les Releases GitHub sans jeton : les mises à jour sont servies en statique sous
+  `https://drop.memolabs.dev/updates/` (`latest.json` et une archive nommée par version). L'app vérifie au lancement
+  puis toutes les 6 h et propose la version dans le menu de son icône ; rien ne s'installe sans clic. Plugin updater
+  de Tauri 2.13.2 (doc lue le 2026-10-09 dans tauri-docs, branche v2, et le source du plugin) avec
+  `requireSignedVersion` : la CLI Tauri 2.12.1 inscrit la version dans le commentaire signé, ce qui empêche de
+  ressortir une ancienne archive signée sous un numéro plus récent. La clé privée est générée et gardée par Guillaume
+  (procédure dans `apps/mac/README.md`) ; seule la clé publique, `apps/mac/updater.pub`, entre dans le dépôt. Hors de
+  ce dépôt : une route statique `/updates` dans `lab-infra/stacks/drop`. Le manifeste est validé sans zod pour ne pas
+  ajouter de dépendance à la racine.
 
 ## À décider par l'humain
 

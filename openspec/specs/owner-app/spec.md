@@ -42,3 +42,31 @@ la session.
 <!-- openspec-guard:non-testable reason="App native : vérifiée à la main le 2026-10-08 (drop.app de debug, daemon embarqué connecté au relais public)" -->
 - **WHEN** l'utilisateur ouvre drop.app
 - **THEN** le Node démarre avec le Node embarqué, se connecte au relais, et le panneau s'affiche au clic sur l'icône
+
+### Requirement: Mises à jour signées
+Une app construite avec la clé de mise à jour de drop SHALL chercher une nouvelle version au lancement puis toutes les
+6 h sur `https://drop.memolabs.dev/updates/latest.json`, et la proposer dans le menu de son icône (« Mettre à jour vers
+x.y.z ») ; rien ne se télécharge ni ne s'installe sans ce clic (D35). L'archive MUST être signée par cette clé et sa
+signature MUST porter la version annoncée (`requireSignedVersion` du plugin updater de Tauri), sinon l'app la refuse.
+Une app construite sans la clé ne cherche pas de mise à jour. Le manifeste publié MUST être refusé à la construction si
+la signature porte une autre version que celle de l'app.
+
+#### Scenario: Manifeste publié
+<!-- openspec-guard:test="signed updates of the Mac app (T2.4) > announces the build for darwin-aarch64 with its signature and a versioned URL under /updates" -->
+- **WHEN** la version x.y.z est construite avec `--updates`
+- **THEN** `latest.json` annonce x.y.z pour `darwin-aarch64`, avec la signature de l'archive et son URL sous `/updates/`
+
+#### Scenario: Signature d'une autre version
+<!-- openspec-guard:test="signed updates of the Mac app (T2.4) > refuses a signature made for another version, or carrying none" -->
+- **WHEN** la signature de l'archive porte une autre version, ou aucune
+- **THEN** la construction du manifeste échoue avec `E_UPDATE_SIGNATURE`
+
+#### Scenario: Clé publique et HTTPS
+<!-- openspec-guard:test="signed updates of the Mac app (T2.4) > turns the updater on only with a public key, over HTTPS, and requires the version in the signature" -->
+- **WHEN** l'app est construite avec `--updates`
+- **THEN** sa configuration porte la clé publique, l'adresse HTTPS de `latest.json` et `requireSignedVersion`, et une clé vide ou un chemin de fichier est refusé avec `E_UPDATER_KEY`
+
+#### Scenario: Mise à jour proposée, pas imposée
+<!-- openspec-guard:non-testable reason="App native : à vérifier à la main à la première version publiée sur drop.memolabs.dev/updates" -->
+- **WHEN** une version plus récente est publiée
+- **THEN** le menu de l'icône affiche « Mettre à jour vers x.y.z », et seul un clic télécharge, vérifie la signature, installe et relance l'app avec son Node
