@@ -1,4 +1,5 @@
 import { request } from 'node:http';
+import { Script } from 'node:vm';
 import { afterEach, describe, expect, it } from 'vitest';
 import { generateIdentity } from '@drop/protocol';
 import { startLocalApi, type AdminHooks, type LocalApi } from '../src/api.ts';
@@ -60,6 +61,23 @@ describe('menu bar panel and its admin routes (T2.4)', () => {
         calls.push(`${remove ? 'uninstall' : 'install'} ${agent}`);
         return { ok: true };
       },
+      onboardingPreview: () => ({
+        agents: [
+          {
+            agent: 'cursor',
+            label: 'Cursor',
+            state: 'ready',
+            action: 'connect',
+            fingerprint: 'a'.repeat(64),
+            detail: 'Ajout du connecteur',
+          },
+        ],
+        manual: { command: '/usr/bin/node', args: ['/app/drop-mcp.mjs'], env: { DROP_AGENT: 'other' } },
+      }),
+      onboardingApply: (selections) => {
+        calls.push(`connect ${selections[0]?.agent ?? 'none'}`);
+        return [{ agent: 'cursor', state: 'connected', detail: 'Configuration modifiée', restartRequired: true }];
+      },
       link: (gateway, session, client) => {
         calls.push(`link ${client}`);
         return Promise.resolve({ ok: true, gateway, session });
@@ -100,9 +118,24 @@ describe('menu bar panel and its admin routes (T2.4)', () => {
     expect((await call(port, 'POST', '/ui/admin/share', { agent: 'claude_code', server: 'figma' })).status).toBe(200);
     expect((await call(port, 'POST', '/ui/admin/share', { agent: 'claude_code' })).status).toBe(400);
     await call(port, 'POST', '/ui/admin/unshare', { capabilityId: 'mcp.answer.figma' });
-    await call(port, 'POST', '/ui/admin/install', { agent: 'cursor', remove: true });
+    expect((await call(port, 'POST', '/ui/admin/install', { agent: 'cursor', remove: true })).status).toBe(409);
+    expect((await call(port, 'GET', '/ui/admin/onboarding')).text).toContain('Ajout du connecteur');
+    expect(
+      (
+        await call(port, 'POST', '/ui/admin/onboarding', {
+          selections: [{ agent: 'cursor', fingerprint: 'bad', action: 'connect' }],
+        })
+      ).status,
+    ).toBe(400);
+    expect(
+      (
+        await call(port, 'POST', '/ui/admin/onboarding', {
+          selections: [{ agent: 'cursor', fingerprint: 'a'.repeat(64), action: 'connect' }],
+        })
+      ).status,
+    ).toBe(200);
     await call(port, 'POST', '/ui/admin/team', { name: 'Atlas' });
-    expect(calls).toEqual(['share claude_code/figma', 'unshare mcp.answer.figma', 'uninstall cursor', 'team Atlas']);
+    expect(calls).toEqual(['share claude_code/figma', 'unshare mcp.answer.figma', 'connect cursor', 'team Atlas']);
     expect((await call(port, 'POST', '/ui/admin/share', { agent: 'claude_code', server: 'figma' }, false)).status).toBe(
       401,
     );
@@ -114,5 +147,12 @@ describe('menu bar panel and its admin routes (T2.4)', () => {
     expect(html).not.toContain('innerHTML');
     expect(html).not.toContain('insertAdjacentHTML');
     expect(html).toContain('node.textContent = a[key]');
+    expect(html).toContain('1. Analyser ce Mac');
+    expect(html).toContain('2. Connecter les agents sélectionnés');
+    expect(html).toContain('Configuration manuelle');
+    expect(html).toContain('hors ligne');
+    const script = /<script>([\s\S]*?)<\/script>/.exec(html)?.[1];
+    expect(script).toBeDefined();
+    expect(() => new Script(script ?? '')).not.toThrow();
   });
 });

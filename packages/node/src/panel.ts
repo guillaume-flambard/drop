@@ -1,6 +1,6 @@
 /**
  * The menu bar panel (T2.4), served by the node at /app and shown by the Mac app in a window under its tray icon. It
- * follows the mockup https://claude.ai/artifact/Frxdg8DdeGA5CzfNq8PBJD: tabs Demandes, Équipe, Mes outils. It talks only
+ * has tabs Demandes, Équipe and Mes outils. It talks only
  * to this node's own API (same origin, bearer token from the URL). Everything a peer wrote is inserted with
  * textContent, never as HTML. No backtick and no dollar-brace in the script below: it lives in a template string.
  */
@@ -78,6 +78,8 @@ code { font: 11px ui-monospace, monospace; word-break: break-all; }
   var tab = 'requests';
   var notice = '';
   var info = '';
+  var onboardingPlans = null;
+  var manualConnector = null;
 
   function api(method, path, body, form) {
     var headers = { Authorization: 'Bearer ' + token };
@@ -224,16 +226,53 @@ code { font: 11px ui-monospace, monospace; word-break: break-all; }
 
   function renderTools(view) {
     return api('GET', '/ui/admin/tools').then(function (data) {
+      view.appendChild(el('h2', { text: 'Connecter mes agents' }));
+      view.appendChild(el('div', { class: 'muted', text: '1. Analyse locale des quatre agents compatibles. 2. Choisis puis confirme les connecteurs à ajouter. Aucun outil ne sera partagé.' }));
+      view.appendChild(el('button', { class: 'act', onclick: function () {
+        api('GET', '/ui/admin/onboarding').then(function (result) { onboardingPlans = result.agents; manualConnector = result.manual; render(); }, function (error) { notice = error.message; render(); });
+      } }, '1. Analyser ce Mac'));
+      var plans = onboardingPlans || [];
+      var selectable = [];
+      plans.forEach(function (plan) {
+        if (plan.state === 'absent') return;
+        var checkbox = plan.state === 'ready' ? el('input', { type: 'checkbox', 'aria-label': 'Connecter ' + plan.label }) : null;
+        if (checkbox) { checkbox.checked = true; selectable.push({ plan: plan, checkbox: checkbox }); }
+        view.appendChild(el('div', { class: 'card' },
+          el('div', { class: 'row' }, checkbox, el('strong', { text: plan.label })),
+          el('div', { class: plan.state === 'error' || plan.state === 'conflict' ? 'error' : 'muted', text: plan.detail }),
+          plan.state === 'already_connected' ? el('button', { class: 'act', onclick: function () {
+            api('POST', '/ui/admin/onboarding', { selections: [{ agent: plan.agent, fingerprint: plan.fingerprint, action: 'disconnect' }] }).then(function (result) {
+              info = result.results.map(function (item) { return item.agent + ' : ' + item.detail; }).join(' · ');
+              onboardingPlans = null;
+              render();
+            }, function (error) { notice = error.message; render(); });
+          } }, 'Retirer ce connecteur') : null));
+      });
+      if (selectable.length > 0) view.appendChild(el('button', { class: 'act fill', onclick: function () {
+        var selected = selectable.filter(function (item) { return item.checkbox.checked; }).map(function (item) {
+          return { agent: item.plan.agent, fingerprint: item.plan.fingerprint, action: 'connect' };
+        });
+        if (!selected.length) return;
+        api('POST', '/ui/admin/onboarding', { selections: selected }).then(function (result) {
+          info = result.results.map(function (item) { return item.agent + ' : ' + item.detail; }).join(' · ') + ' · Connecteur utilisable : à vérifier après relance. L’état de l’équipe apparaît en haut.';
+          onboardingPlans = null;
+          render();
+        }, function (error) { notice = error.message; render(); });
+      } }, '2. Connecter les agents sélectionnés'));
+      if (onboardingPlans && plans.every(function (plan) { return plan.state === 'absent'; })) view.appendChild(el('div', { class: 'empty', text: 'Aucun de ces quatre agents détecté. Tu peux ajouter manuellement le connecteur MCP drop dans ton agent.' }));
+      view.appendChild(el('div', { class: 'muted', text: 'Autre agent ? Ajoute manuellement un serveur MCP stdio nommé drop. Aucune permission générale n’est nécessaire.' }));
+      if (onboardingPlans && manualConnector) view.appendChild(el('div', { class: 'card' },
+        el('strong', { text: 'Configuration manuelle' }),
+        el('code', { text: JSON.stringify({ mcpServers: { drop: manualConnector } }, null, 2) }),
+        el('div', { class: 'muted', text: 'Copie cette entrée dans la configuration MCP de ton agent, puis relance-le. Cela ne partage aucun outil.' })));
+      view.appendChild(el('h2', { text: 'Mes outils' }));
       view.appendChild(el('div', { class: 'muted', text: 'Partager un outil, c’est répondre aux questions de l’équipe avec lui, après ton accord. Personne ne reçoit l’accès.' }));
       data.agents.forEach(function (agent) {
         if (!agent.installed) return;
         view.appendChild(el('h2', { text: agent.label }));
         var card = el('div', { class: 'list' });
         card.appendChild(el('div', { class: 'row' },
-          el('div', { class: 'grow', text: agent.dropInstalled ? 'drop est installé dans ' + agent.label : 'drop n’est pas encore installé' }),
-          el('button', { class: 'act ' + (agent.dropInstalled ? '' : 'accent'), onclick: function () {
-            api('POST', '/ui/admin/install', { agent: agent.agent, remove: agent.dropInstalled }).then(render, function (error) { notice = error.message; render(); });
-          } }, agent.dropInstalled ? 'Retirer' : 'Ajouter')));
+          el('div', { class: 'grow', text: agent.dropInstalled ? 'drop est installé dans ' + agent.label : 'drop n’est pas encore installé' })));
         agent.servers.forEach(function (server) {
           if (!server.shareable) return;
           var shared = data.shared[agent.agent + '/' + server.name];

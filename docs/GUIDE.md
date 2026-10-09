@@ -4,7 +4,7 @@
 
 Votre agent a besoin d'une information détenue par un collègue. Avec drop, il lui adresse une demande précise. Le collègue choisit de l'autoriser ; son environnement exécute une action définie à l'avance ; votre agent reçoit la réponse autorisée.
 
-`drop` est un nom de code. Cap adopté le 9 octobre 2026 : collaboration A2A/MCP dans l'infrastructure du client, app Mac de barre de menus, socle Community sous Apache-2.0. Le runtime privé est implémenté ; le raccordement groupé reste à construire. Le [bilan daté](AVANCEMENT.md) précise les preuves.
+`drop` est un nom de code. Cap adopté le 9 octobre 2026 : collaboration A2A/MCP dans l'infrastructure du client, app Mac de barre de menus, socle Community sous Apache-2.0. Le runtime privé est implémenté ; le raccordement groupé est vérifié dans le panneau local sur fixtures et attend une recette humaine sur Mac. Le [bilan daté](AVANCEMENT.md) précise les preuves.
 
 ## La cible privée
 
@@ -148,6 +148,8 @@ node packages/node/src/cli.ts install codex
 ```
 
 Remplacer `codex` par `claude_code`, `cursor` ou `claude_desktop` selon l’agent. Cette commande modifie sa configuration. `uninstall <agent>` retire le connecteur. Le paquet npm public n’est pas encore publié. `node scripts/bundle.ts` nettoie `dist/` : reconstruire ensuite le site si nécessaire.
+
+Dans le panneau local, « Mes outils » propose le parcours guidé : « Analyser ce Mac », choisir les agents, puis « Connecter les agents sélectionnés ». Une configuration changée depuis l'analyse est refusée ; aucune capacité n'est publiée par ce raccordement. La commande CLI suit les mêmes contrôles de conflit et de sauvegarde pour l'agent nommé.
 
 Un annuaire d’équipe est implémenté : `team create <nom>` initialise l’équipe ; les invitations propagent l’adhésion et l’appairage ; `team` liste les membres, leurs agents et leurs capacités. Un shell Mac existe ; sa distribution et son parcours privé restent à terminer.
 
