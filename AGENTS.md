@@ -7,6 +7,8 @@ Principe directeur : **Get the answer, not the access.**
 
 Lis `openspec/project/vision.md` une fois par session avant de coder.
 
+Cap adopté le 9 octobre 2026 : socle A2A/MCP privé et open source, app Mac Tauri en barre de menus, puis Windows et Linux. `docs/ACCEPTANCE.md` porte les critères futurs à promouvoir dans les specs pendant les tâches T3.*. Les contrats runtime historiques ne prouvent pas le profil privé. Suivre D34 à D38 et l’ordre de `docs/TASKS.md` ; aucun défaut cloud du prototype ne doit être présenté comme exigence de la cible.
+
 ## Où vit quoi
 
 - `openspec/specs/<capacité>/spec.md` : le contrat. Exigences SHALL/MUST et scénarios ; les scénarios `AC:` sont les
@@ -54,9 +56,9 @@ Reste dans le périmètre de la ligne de l'index. Un manque découvert devient u
 - MCP : `@modelcontextprotocol/sdk` (transport stdio côté poste de travail).
 - Crypto : `libsodium-wrappers` (Ed25519 pour signer, `crypto_box` / X25519 pour chiffrer). Pas de crypto maison.
 - WebSocket : `ws`. Pas de framework web lourd.
-- Runner LLM : n'importe quel fournisseur compatible OpenAI (Ollama local par défaut, gratuit ; OpenRouter, Groq,
+- Runner LLM : n'importe quel fournisseur compatible OpenAI (endpoint choisi par le propriétaire ; Ollama local en option ; OpenRouter, Groq,
   Gemini, OpenAI, Anthropic…) par `fetch`, sans SDK. Clé API par variable d'environnement nommée dans la config, jamais
-  un login d'abonnement. Les outils du modèle sont fournis par la capacité, jamais par le fournisseur (D19).
+  un login d'abonnement. Les outils du modèle sont fournis par la capacité, jamais par le fournisseur (D19). Le prototype utilise encore OpenRouter par défaut ; T3.1 impose le choix local/interne et aucun repli distant dans le profil privé cible (D34, D37).
 
 Ne pas ajouter de dépendance hors de cette liste sans l'écrire dans `docs/DECISIONS.md` avec la raison.
 

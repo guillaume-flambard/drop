@@ -61,15 +61,25 @@ describe('documentation site', () => {
     expect(hostStatus).toBe(403);
   });
 
-  it('builds reproducibly and keeps Markdown exports linked to the audited source snapshot', async () => {
+  it('builds reproducibly and keeps the selected Markdown guides readable together', async () => {
     const first = await readFile(join(directory, 'guide.html'), 'utf8');
     await writeFile(join(directory, 'stale-private.txt'), 'must not survive a rebuild');
     await buildSite(directory);
     expect(await readdir(directory)).not.toContain('stale-private.txt');
     expect(await readFile(join(directory, 'guide.html'), 'utf8')).toBe(first);
     const guide = await readFile(join(directory, 'downloads/GUIDE.md'), 'utf8');
-    expect(guide).toContain('https://github.com/guillaume-flambard/drop/blob/cacf1cc/');
+    expect(guide).toContain('https://github.com/guillaume-flambard/drop/blob/main/');
     expect(guide).toContain('../diagrams/journey.svg');
     expect(guide).not.toContain('](../packages/');
+    for (const name of ['GUIDE', 'AVANCEMENT', 'ONBOARDING', 'MODELS', 'OPEN_SOURCE', 'ACCEPTANCE']) {
+      const response = await fetch(`${preview.url}/downloads/${name}.md`);
+      expect(response.status, name).toBe(200);
+      expect(response.headers.get('content-type')).toContain('text/markdown');
+      for (const match of (await response.text()).matchAll(/\]\(([^)]+)\)/g)) {
+        const target = new URL(match[1] ?? '', `${preview.url}/downloads/${name}.md`);
+        if (target.origin === preview.url) expect((await fetch(target)).status, target.href).toBe(200);
+      }
+    }
+    expect((await fetch(`${preview.url}/downloads/DECISIONS.md`)).status).toBe(404);
   });
 });
