@@ -16,7 +16,7 @@ describe('detecting agents and their MCP servers (T2.8)', () => {
           drop: { command: 'node', args: ['/x/packages/requester-mcp/src/index.ts'] },
           notion: {
             command: 'npx',
-            args: ['-y', '@notionhq/notion-mcp-server'],
+            args: ['-y', '@notionhq/notion-mcp-server', 'inline-secret-value'],
             env: { NOTION_TOKEN: 'ntn_secret_value' },
           },
         },
@@ -37,12 +37,13 @@ describe('detecting agents and their MCP servers (T2.8)', () => {
       ['drop', undefined, false],
       ['notion', 'notion', true],
     ]);
-    expect(claude?.servers[2]).toMatchObject({ where: 'npx @notionhq/notion-mcp-server', envNames: ['NOTION_TOKEN'] });
+    expect(claude?.servers[2]).toMatchObject({ where: 'npx', envNames: ['NOTION_TOKEN'] });
     expect(agents.find((agent) => agent.agent === 'cursor')?.servers[0]).toMatchObject({
       kind: 'crm',
       where: 'mcp.hubspot.com',
     });
     expect(JSON.stringify(agents)).not.toContain('ntn_secret_value');
+    expect(JSON.stringify(agents)).not.toContain('inline-secret-value');
     expect(shareId({ name: 'figma-desktop', kind: 'figma' })).toBe('mcp.answer.figma');
     expect(shareId({ name: '42-Notion Team', kind: undefined })).toBe('mcp.answer.notion_team');
   });

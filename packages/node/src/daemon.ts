@@ -4,7 +4,7 @@ import { RelayClient } from '@drop/relay';
 import { NodeEngine, type InboxItem } from './engine.ts';
 import { detectAgents } from './detect.ts';
 import { openRouterFunder } from './funding.ts';
-import { install } from './install.ts';
+import { applyOnboarding, manualOnboarding, previewOnboarding } from './onboarding.ts';
 import { isAgentKind, shareDetected } from './share.ts';
 import { runAgentCall } from './assistant.ts';
 import { startLocalApi, type LocalApi } from './api.ts';
@@ -119,11 +119,14 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
         return shareDetected(home, { agent: body.agent, server: body.server, label: body.label, tools: body.tools });
       },
       unshare: (capabilityId) => home.unpublish(capabilityId),
-      install: (agent, remove) => {
-        if (!isAgentKind(agent)) throw new Error(`unknown agent ${agent}`);
-        install(agent, { dropHome: home.root }, remove);
-        return { ok: true };
+      install: () => {
+        throw new Error('E_PREVIEW_REQUIRED');
       },
+      onboardingPreview: () => ({
+        agents: previewOnboarding({ dropHome: home.root }),
+        manual: manualOnboarding({ dropHome: home.root }),
+      }),
+      onboardingApply: (selections) => applyOnboarding(selections, { dropHome: home.root }),
       createTeam: (name) => engine.createTeam(name),
       link: async (gateway, session, client) => {
         if (config.profile === 'private') throw new DropError('E_DENIED', 'E_DENIED cloud gateway disabled');

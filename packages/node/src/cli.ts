@@ -9,7 +9,8 @@ import { implFor } from '@drop/runner';
 import { createTeam, generateIdentity, OwnerKindSchema, type ConsentCost } from '@drop/protocol';
 import { startDaemon } from './daemon.ts';
 import { AGENT_LABELS, detectAgents } from './detect.ts';
-import { bundledServer, cursorInstallLink, install, serverEntry } from './install.ts';
+import { bundledServer, cursorInstallLink, serverEntry } from './install.ts';
+import { applyOnboarding, previewOnboarding } from './onboarding.ts';
 import { isAgentKind, shareDetected } from './share.ts';
 import { DropHome, NodeConfigSchema } from './home.ts';
 import { costLine } from './ui.ts';
@@ -250,12 +251,18 @@ switch (command) {
       break;
     }
     for (const agent of agents) {
-      try {
-        install(agent, { dropHome: home.root }, remove);
-        process.stdout.write(`${remove ? 'removed from' : 'added to'} ${AGENT_LABELS[agent]}\n`);
-      } catch (error) {
-        process.stderr.write(`${AGENT_LABELS[agent]}: ${error instanceof Error ? error.message : 'failed'}\n`);
+      const plan = previewOnboarding({ dropHome: home.root }).find((item) => item.agent === agent);
+      if (!plan || plan.state === 'absent' || plan.state === 'error' || plan.state === 'conflict') {
+        process.stderr.write(`${AGENT_LABELS[agent]}: ${plan?.detail ?? 'E_AGENT_INVALID'}\n`);
+        continue;
       }
+      const result = applyOnboarding(
+        [{ agent, fingerprint: plan.fingerprint, action: remove ? 'disconnect' : 'connect' }],
+        { dropHome: home.root },
+      )[0];
+      if (result?.state === 'connected' || result?.state === 'disconnected' || result?.state === 'already_connected')
+        process.stdout.write(`${AGENT_LABELS[agent]}: ${result.detail}\n`);
+      else process.stderr.write(`${AGENT_LABELS[agent]}: ${result?.detail ?? 'E_ONBOARDING_FAILED'}\n`);
     }
     if (!remove) process.stdout.write('restart the agent so it loads drop\n');
     break;

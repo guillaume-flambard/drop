@@ -32,6 +32,14 @@ export interface AdminHooks {
   }): Promise<unknown>;
   unshare(capabilityId: string): boolean;
   install(agent: string, remove: boolean): unknown;
+  onboardingPreview?(): unknown;
+  onboardingApply?(
+    selections: {
+      agent: 'claude_code' | 'claude_desktop' | 'cursor' | 'codex';
+      fingerprint: string;
+      action: 'connect' | 'disconnect';
+    }[],
+  ): unknown;
   createTeam(name: string): unknown;
   link(gateway: string, session: string, client: string): Promise<unknown>;
   unlink(gateway: string, client: string): boolean;
@@ -42,6 +50,19 @@ const ShareBody = z.object({
   server: z.string().min(1),
   label: z.string().min(2).max(60).optional(),
   tools: z.array(z.string().min(1)).max(30).optional(),
+});
+
+const OnboardingBody = z.object({
+  selections: z
+    .array(
+      z.object({
+        agent: z.enum(['claude_code', 'claude_desktop', 'cursor', 'codex']),
+        fingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+        action: z.enum(['connect', 'disconnect']),
+      }),
+    )
+    .min(1)
+    .max(4),
 });
 
 export interface LocalApi {
@@ -297,7 +318,28 @@ export function startLocalApi(options: LocalApiOptions): Promise<LocalApi> {
           json(res, 200, admin.tools());
           return;
         }
+        if (method === 'GET' && path === '/ui/admin/onboarding') {
+          if (!admin.onboardingPreview) {
+            json(res, 404, { error: 'not_found' });
+            return;
+          }
+          json(res, 200, admin.onboardingPreview());
+          return;
+        }
         const body: unknown = method === 'POST' ? JSON.parse((await readBody(req)) || '{}') : {};
+        if (method === 'POST' && path === '/ui/admin/onboarding') {
+          if (!admin.onboardingApply) {
+            json(res, 404, { error: 'not_found' });
+            return;
+          }
+          const parsed = OnboardingBody.safeParse(body);
+          if (!parsed.success) {
+            json(res, 400, { error: 'E_SCHEMA' });
+            return;
+          }
+          json(res, 200, { results: admin.onboardingApply(parsed.data.selections) });
+          return;
+        }
         if (method === 'POST' && path === '/ui/admin/share') {
           const parsed = ShareBody.safeParse(body);
           if (!parsed.success) {
@@ -316,6 +358,10 @@ export function startLocalApi(options: LocalApiOptions): Promise<LocalApi> {
           return;
         }
         if (method === 'POST' && path === '/ui/admin/install') {
+          if (admin.onboardingApply) {
+            json(res, 409, { error: 'E_PREVIEW_REQUIRED' });
+            return;
+          }
           json(res, 200, admin.install(field('agent'), (body as { remove?: unknown }).remove === true));
           return;
         }
