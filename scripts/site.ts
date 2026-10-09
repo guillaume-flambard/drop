@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = resolve(import.meta.dirname, '..');
 const output = join(root, 'dist/site');
-const sourceSnapshot = 'https://github.com/guillaume-flambard/drop/blob/cacf1cc/';
+const sourceBranch = 'https://github.com/guillaume-flambard/drop/blob/main/';
 const sourceFiles: Record<string, string> = {
   'index.html': 'site/index.html',
   'guide.html': 'site/guide.html',
@@ -17,6 +17,10 @@ const sourceFiles: Record<string, string> = {
   'diagrams/roadmap.svg': 'docs/diagrams/roadmap.svg',
   'downloads/GUIDE.md': 'docs/GUIDE.md',
   'downloads/AVANCEMENT.md': 'docs/AVANCEMENT.md',
+  'downloads/ONBOARDING.md': 'docs/ONBOARDING.md',
+  'downloads/MODELS.md': 'docs/MODELS.md',
+  'downloads/OPEN_SOURCE.md': 'docs/OPEN_SOURCE.md',
+  'downloads/ACCEPTANCE.md': 'docs/ACCEPTANCE.md',
 };
 const contentTypes: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -26,12 +30,16 @@ const contentTypes: Record<string, string> = {
 };
 
 function exportMarkdown(text: string): string {
-  return text.replace(/\]\(([^)]+)\)/g, (match: string, target: string) => {
-    if (target.startsWith('#') || /^https?:/.test(target)) return match;
-    if (/^(GUIDE|AVANCEMENT)\.md(?:#|$)/.test(target)) return match;
-    if (target.startsWith('diagrams/')) return `](../${target})`;
-    return `](${sourceSnapshot}${posix.normalize(posix.join('docs', target))})`;
-  });
+  return (
+    text.replace(/\]\(([^)]+)\)/g, (match: string, target: string) => {
+      if (target.startsWith('#') || /^https?:/.test(target)) return match;
+      const [path] = target.split('#');
+      if (path && sourceFiles[`downloads/${path}`]) return match;
+      if (target.startsWith('diagrams/')) return `](../${target})`;
+      return `](${sourceBranch}${posix.normalize(posix.join('docs', target))})`;
+    }) +
+    '\n> Les liens vers les sources GitHub nécessitent un accès au dépôt, encore privé. Ils suivent la branche main, pas un snapshot audité.\n'
+  );
 }
 
 /** The public surface is explicit: neither the repository nor the owner's DROP_HOME is served. */

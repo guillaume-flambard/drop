@@ -1,5 +1,9 @@
 # Journal des décisions
 
+## Applicabilité depuis le 9 octobre 2026
+
+D34 à D38 fixent la cible adoptée. Les décisions antérieures restent des preuves historiques : D7/D22 (relais lab), D20 (OpenRouter par défaut), D27/D28 (financement demandeur) et D31 (passerelle distante) ne sont pas des exigences du profil privé. Le code conserve encore ces comportements jusqu'aux tâches T3.*. D24 reste inchangée. Les deux entrées D30 sont conservées avec leur titre pour ne pas casser les références historiques.
+
 Format : `D<n> — date — décision — raison`. Les agents ajoutent ici toute décision non écrite dans les specs.
 
 ## Décisions de cadrage (8 octobre 2026)
@@ -117,14 +121,14 @@ Format : `D<n> — date — décision — raison`. Les agents ajoutent ici toute
   - Logs Codex (codex-cli 0.156, vérifié sur 216 sessions locales) : `~/.codex/sessions/AAAA/MM/JJ/rollout-*.jsonl`.
     Les appels sont des `function_call` ou `custom_tool_call`, leurs résultats des `*_call_output` reliés par
     `call_id`, et la session est dans `session_meta`.
-  Motifs : la v1 de la spec, mesurée sur 30 jours de logs Codex réels, donne 780 « blocages » (34 par jour actif),
-  surtout du bruit : numéros de ligne, tables de tests, `BranchForbiddenError`, `HTTPStatus.FORBIDDEN`. La v2 exige un
-  contexte HTTP pour 401 et 403 et lit « forbidden » ou « unauthorized » comme une réponse. Elle donne 202 événements
-  (environ 9 par jour actif) ; sur un échantillon de 401, environ 9 sur 12 sont de vrais refus d'authentification,
-  contre environ 5 sur 15 en v1. Le hook n'importe pas zod (`light.ts`) : 60 ms au lieu de 80 à 105 ms. « Jour actif »
-  vient de `activity.json` : un jour avec au moins un appel d'outil Claude Code ou une session Codex, pas seulement un
-  jour avec un blocage. `report_blocked` lit la session dans `CLAUDE_SESSION_ID` ou `CODEX_SESSION_ID` quand l'agent
-  l'expose ; sinon le rapprochement A↔B n'a pas de session commune et reste vide.
+    Motifs : la v1 de la spec, mesurée sur 30 jours de logs Codex réels, donne 780 « blocages » (34 par jour actif),
+    surtout du bruit : numéros de ligne, tables de tests, `BranchForbiddenError`, `HTTPStatus.FORBIDDEN`. La v2 exige un
+    contexte HTTP pour 401 et 403 et lit « forbidden » ou « unauthorized » comme une réponse. Elle donne 202 événements
+    (environ 9 par jour actif) ; sur un échantillon de 401, environ 9 sur 12 sont de vrais refus d'authentification,
+    contre environ 5 sur 15 en v1. Le hook n'importe pas zod (`light.ts`) : 60 ms au lieu de 80 à 105 ms. « Jour actif »
+    vient de `activity.json` : un jour avec au moins un appel d'outil Claude Code ou une session Codex, pas seulement un
+    jour avec un blocage. `report_blocked` lit la session dans `CLAUDE_SESSION_ID` ou `CODEX_SESSION_ID` quand l'agent
+    l'expose ; sinon le rapprochement A↔B n'a pas de session commune et reste vide.
 - **D24** — Seuil go/no-go de l'étape 0, fixé par Guillaume le 2026-10-08, avant la mesure. Un « blocage YES » est
   un événement classé `YES_*` par `classify` pendant un entretien : une réponse bornée, donnée par le propriétaire de
   la ressource, l'aurait débloqué.
@@ -134,10 +138,10 @@ Format : `D<n> — date — décision — raison`. Les agents ajoutent ici toute
     médiane d'au moins **10 minutes perdues** par blocage YES.
   - **NO-GO** : moins de **0,2** blocage YES par dev-jour actif **ou** une médiane de moins de **5 minutes**.
   - **Entre les deux** : prolonger la mesure de 2 semaines, puis trancher avec les mêmes seuils.
-  Les deux chiffres sont lus dans `blocked-observer report --merge <exports…>` (`yesPerActiveDay` et
-  `medianPainMinutesYes`), sur l'agrégat des exports relus de chaque développeur ; la commande applique ces seuils et
-  donne le verdict (T0.6). Les signaux bruts non classés ne comptent pas : au 2026-10-08,
-  Guillaume en a 202 sur 23 jours actifs côté Codex, aucun encore classé.
+    Les deux chiffres sont lus dans `blocked-observer report --merge <exports…>` (`yesPerActiveDay` et
+    `medianPainMinutesYes`), sur l'agrégat des exports relus de chaque développeur ; la commande applique ces seuils et
+    donne le verdict (T0.6). Les signaux bruts non classés ne comptent pas : au 2026-10-08,
+    Guillaume en a 202 sur 23 jours actifs côté Codex, aucun encore classé.
 
 - **D25** — Classification et filtre de bruit de l'étape 0 (2026-10-08). Constat : classer 3 événements Codex vieux
   de plusieurs semaines avec Guillaume a donné trois « je ne sais pas », parce que la spec listait les huit codes sans
@@ -269,9 +273,17 @@ Format : `D<n> — date — décision — raison`. Les agents ajoutent ici toute
     caractères. Un `answer` à la limite ferait échouer la validation de taille.
   - T1.13 : aucun code d'erreur n'est prévu pour un snapshot au-delà de `maxSnapshotBytes`, ni pour le post-contrôle
     d'extrait de code.
-  Détail : `coverage.md` de la change `migrate-spec-kit` (archivée sous `openspec/changes/archive/`).
+    Détail : `coverage.md` de la change `migrate-spec-kit` (archivée sous `openspec/changes/archive/`).
 - **Financement des demandes, options gardées pour plus tard** (D21 a retenu A). B : une clé d'équipe ou
   d'organisation sur chaque Node ; aucun code, c'est la variable d'environnement. C : le demandeur finance, en joignant
   à sa demande une clé jetable à plafond dur (OpenRouter sait en créer), chiffrée pour l'exécuteur ; il faut l'ajouter
   au protocole et à la carte. D : refacturation, où le propriétaire paie et les reçus signés (`costUsd`) servent de
   relevé. C ou D ne valent que si drop sert entre entreprises différentes ; à trancher à ce moment-là.
+
+## Tournant privé et open source adopté
+
+- **D34 : souveraineté et cible (2026-10-09).** Guillaume adopte l'outillage A2A/MCP installé chez le client, sans compte ni serveur externe imposé, pour petites équipes techniques et entreprises avec leurs propres agents/modèles. A2A est un standard existant ; le différenciateur est le consentement borné et le raccordement simple. Un relais privé est conservé ; aucun besoin de supprimer HTTP/WebSocket local ou interne. Les défauts cloud du prototype ne valent pas pour ce profil. Le propriétaire fixe les destinations, y compris face au financement ; aucun fallback cloud, aucune télémétrie ou licence en ligne obligatoire. Les agents A2A joints restent une frontière à vérifier. T3.1/T3.5 doivent le prouver, pas cette documentation. D24 et HARNESS FIRST restent en vigueur.
+- **D35 : desktop (2026-10-09).** Garder Tauri 2, le panneau web local et Node embarqué. Mac de barre de menus en premier, Windows puis Linux. SwiftUI natif et Electron demanderaient une réécriture sans bénéfice prouvé à ce stade. Le tray est intégré au système ; le panneau n'est pas SwiftUI. Pas de comparaison de performance inventée. Sources : `research/2026-10-09-desktop-models.md`. Linux exige un accès au panneau sans tray si l'environnement ne le propose pas.
+- **D36 : deux confirmations (2026-10-09).** Après installation et environnement prêt : analyser les configurations compatibles, puis connecter les agents sélectionnés. Adapter explicitement Claude Code, Codex, Cursor et Claude Desktop ; aucune promesse de détection universelle. Aperçu expurgé, aucune exécution découverte, aucune publication implicite, sauvegarde, idempotence, concurrence et restauration. Les permissions système, invitations, redémarrages d'agents et modèles sont visibles séparément. `docs/ONBOARDING.md` et `ACCEPTANCE.md` portent les détails de T3.3.
+- **D37 : gratuit local (2026-10-09).** Réutiliser d'abord l'endpoint choisi ou l'agent A2A interne ; aucune inférence pour les capacités déterministes. Ollama et Qwen3.5 4B/9B quantifiés sont des candidats, à télécharger avec consentement et à mesurer en T3.2 avant de choisir un défaut. Ne pas confondre taille de poids et mémoire totale, modèle cloud gratuit et traitement local. D20 reste le comportement historique ; T3.1 doit le remplacer dans le profil privé.
+- **D38 : modèle open source (2026-10-09).** Préparer Apache-2.0 pour le code détenu par le projet. Le socle Community inclut auto-hébergement, A2A/MCP, modèles internes et sécurité essentielle, sans limitation artificielle de requêtes. Revenu envisagé par installation, intégration, maintenance et support ; administration d'organisation privée possible plus tard, sans produit ni prix validés. Les dons restent complémentaires. Kit de contribution et sécurité maintenant ; ouverture du dépôt, npm, binaires et publication du site restent T3.6 avec accord humain. Licences et attributions tierces, historique, données et CI du lab doivent être audités avant ouverture. Aucune dépendance ajoutée par T3.0.
