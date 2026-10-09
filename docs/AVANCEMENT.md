@@ -60,7 +60,7 @@ La [démo conservée dans le dépôt](demo/README.md) rapporte deux passages, av
 
 **2. Les tests ne couvrent pas formellement tout le contrat.** Les 258 critères gelés doivent être reliés à une preuve, ou corrigés si le contrat est devenu obsolète. Un garde vert avec baseline signifie absence de régression par rapport à cette baseline.
 
-**3. La documentation historique a pris du retard sur le code.** L'architecture parle encore de Caddy et de `get_result` ; D22 documente Traefik, l'outil s'appelle `get_drop_result`. Les décisions D26 à D40 étendent le périmètre initial (app Mac, outils MCP, assistants grand public).
+**3. Une partie des specs décrit encore le plan d'origine.** L'architecture est à jour depuis le 9 octobre, mais la spec `deploy-mac-vps` décrit Caddy et des unités systemd, quand le lab tourne avec Traefik et Docker (D22). Les décisions D26 à D40 étendent le périmètre initial (app Mac, outils MCP, assistants grand public).
 
 **4. La confidentialité doit être formulée précisément.** Le demandeur reçoit une sortie bornée et les accès du propriétaire ne lui sont pas transmis. Mais un modèle distant reçoit les résultats des outils qu'il appelle, et la passerelle voit en clair les questions et réponses des utilisateurs de Claude et ChatGPT. Le scanner de secrets est un filtre, pas une preuve. Voir la [page Sécurité](../site/securite.html) et le [guide](GUIDE.md#ce-qui-circule-et-ce-qui-reste-chez-soi).
 
