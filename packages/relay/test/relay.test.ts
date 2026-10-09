@@ -348,6 +348,89 @@ describe('relay', () => {
     expect(frames.find((frame) => frame.id === envelope.id)?.error).toBe('E_RATE');
   });
 
+  it('closes an exhausted connection when a valid frame has an uncorrelatable late id', async () => {
+    const alice = await generateIdentity('Alice');
+    const bob = await generateIdentity('Bob');
+    const { relay } = await relayFor([alice, bob], { rateLimitPerMinute: 1 });
+    const socket = new WebSocket(relay.url);
+    cleanups.push(() => {
+      socket.terminate();
+    });
+    const frames: { type?: string; challenge?: string; id?: string; error?: string }[] = [];
+    let closed = false;
+    socket.on('close', () => {
+      closed = true;
+    });
+    socket.on('message', (data) => {
+      const frame = JSON.parse(Buffer.isBuffer(data) ? data.toString('utf8') : '') as (typeof frames)[number];
+      frames.push(frame);
+      if (frame.type === 'challenge' && frame.challenge) {
+        void signDetached(alice, frame.challenge).then(
+          (sig) => {
+            socket.send(JSON.stringify({ type: 'auth', nodeId: alice.nodeId, sig }));
+          },
+          () => {
+            socket.close();
+          },
+        );
+      }
+    });
+    await until(() => frames.some((frame) => frame.type === 'ready'));
+    const first = await sealEnvelope(alice, bob.nodeId, { type: 'catalog_request' });
+    socket.send(JSON.stringify({ type: 'envelope', envelope: first }));
+    await until(() => frames.some((frame) => frame.id === first.id));
+    const second = await sealEnvelope(alice, bob.nodeId, { type: 'catalog_request' });
+    const { id, ...rest } = second;
+    const lateIdFrame = JSON.stringify({ type: 'envelope', envelope: { ...rest, id } });
+    expect(lateIdFrame.indexOf('"id"')).toBeGreaterThan(256);
+    socket.send(lateIdFrame);
+    await until(() => frames.some((frame) => frame.error === 'E_RATE'));
+    expect(frames.find((frame) => frame.error === 'E_RATE')?.id).toBeUndefined();
+    await until(() => closed);
+  });
+
+  it('closes an exhausted connection even when a decoy id appears before the envelope id', async () => {
+    const alice = await generateIdentity('Alice');
+    const bob = await generateIdentity('Bob');
+    const { relay } = await relayFor([alice, bob], { rateLimitPerMinute: 1 });
+    const socket = new WebSocket(relay.url);
+    cleanups.push(() => {
+      socket.terminate();
+    });
+    const frames: { type?: string; challenge?: string; id?: string; error?: string }[] = [];
+    let closed = false;
+    socket.on('close', () => {
+      closed = true;
+    });
+    socket.on('message', (data) => {
+      const frame = JSON.parse(Buffer.isBuffer(data) ? data.toString('utf8') : '') as (typeof frames)[number];
+      frames.push(frame);
+      if (frame.type === 'challenge' && frame.challenge) {
+        void signDetached(alice, frame.challenge).then(
+          (sig) => {
+            socket.send(JSON.stringify({ type: 'auth', nodeId: alice.nodeId, sig }));
+          },
+          () => {
+            socket.close();
+          },
+        );
+      }
+    });
+    await until(() => frames.some((frame) => frame.type === 'ready'));
+    const first = await sealEnvelope(alice, bob.nodeId, { type: 'catalog_request' });
+    socket.send(JSON.stringify({ type: 'envelope', envelope: first }));
+    await until(() => frames.some((frame) => frame.id === first.id));
+    const second = await sealEnvelope(alice, bob.nodeId, { type: 'catalog_request' });
+    const { id, ...rest } = second;
+    const decoy = '550e8400-e29b-41d4-a716-446655440000';
+    const frame = JSON.stringify({ type: 'envelope', id: decoy, envelope: { ...rest, id } });
+    expect(frame.indexOf(`"id":"${id}"`)).toBeGreaterThan(256);
+    socket.send(frame);
+    await until(() => frames.some((candidate) => candidate.error === 'E_RATE'));
+    expect(frames.find((candidate) => candidate.error === 'E_RATE')?.id).toBe(decoy);
+    await until(() => closed);
+  });
+
   it('no body field in the logs', async () => {
     const alice = await generateIdentity('Alice');
     const bob = await generateIdentity('Bob');

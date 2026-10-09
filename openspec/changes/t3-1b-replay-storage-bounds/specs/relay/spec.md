@@ -31,3 +31,18 @@ Le relais MUST limiter chaque Node authentifié à `rateLimitPerMinute` tentativ
 <!-- openspec-guard:test="relay > counts invalid UTF-8 frames rejected by WebSocket before reconnect" -->
 - **WHEN** un Node authentifié envoie une trame texte UTF-8 invalide puis se reconnecte dans la même minute avec un quota d'une tentative
 - **THEN** la connexion initiale est fermée et l'enveloppe suivante reçoit `E_RATE`
+
+## ADDED Requirements
+
+### Requirement: Refus de quota sans identifiant corrélable
+Le relais MUST fermer la connexion après un refus `E_RATE` afin de libérer les envois en attente, même si le préfixe lu contient un identifiant qui pourrait être trompeur.
+
+#### Scenario: AC: refus de quota sans identifiant corrélable
+<!-- openspec-guard:test="relay > closes an exhausted connection when a valid frame has an uncorrelatable late id" -->
+- **WHEN** une enveloppe valide hors quota place son identifiant après le préfixe lu par le relais
+- **THEN** le relais envoie `E_RATE` puis ferme la connexion pour libérer les envois en attente
+
+#### Scenario: AC: identifiant trompeur avant l'enveloppe
+<!-- openspec-guard:test="relay > closes an exhausted connection even when a decoy id appears before the envelope id" -->
+- **WHEN** une trame hors quota contient un autre identifiant avant celui de l'enveloppe
+- **THEN** le relais ferme la connexion après `E_RATE`, sans laisser l'envoi réel en attente

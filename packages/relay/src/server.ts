@@ -283,6 +283,8 @@ export function startRelay(config: RelayConfig, options: RelayOptions = {}): Pro
         const id = rawId && z.uuid().safeParse(rawId).success ? rawId : undefined;
         send(socket, { type: 'error', ...(id ? { id } : {}), error: 'E_RATE' });
         log({ event: 'envelope', outcome: 'E_RATE', nodeId: connection.nodeId, ...(id ? { id } : {}) });
+        // A bounded prefix can contain a misleading id. Closing settles every unmatched send as offline.
+        socket.close(1013, 'rate limit');
         return;
       }
       const frame = parseFrame(ClientFrameSchema, data);

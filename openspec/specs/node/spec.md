@@ -577,6 +577,14 @@ Le Node MUST conserver au plus 16 384 identifiants de demandes reçues, sans leu
 - **WHEN** la relecture acceptée est en cours d'envoi et son délai expire
 - **THEN** l'exécuteur ne produit pas de reçu d'expiration contradictoire
 
+### Requirement: Nettoyage des écritures anti-rejeu échouées
+Le Node MUST supprimer le fichier temporaire d'une écriture durable échouée, afin qu'une panne répétée n'accumule pas de fichiers hors de la borne anti-rejeu.
+
+#### Scenario: AC: échec répété de l'écriture durable
+<!-- openspec-guard:test="replay clock write failures > does not accumulate temporary files when durable writes repeatedly fail" -->
+- **WHEN** la synchronisation de l'horloge échoue plusieurs fois avant le renommage
+- **THEN** le Node refuse chaque demande sans laisser de fichier temporaire supplémentaire
+
 ### Requirement: Mémoire des demandes exécutées bornée
 Le Node MUST limiter à 1 024 les demandes reçues encore actives en mémoire. Dès qu'une issue est envoyée, il MUST libérer l'entrée complète ; il MAY conserver pendant au plus 30 minutes un résumé borné du refus pour répondre au même demandeur. La suppression de mémoire MUST NOT supprimer le marqueur anti-rejeu durable ni relancer une demande.
 
