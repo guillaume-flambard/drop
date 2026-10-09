@@ -399,7 +399,7 @@ Le corps déchiffré SHALL être une union discriminée sur `type`. Tous les mes
 - **THEN** le `message` du `drop_error` est lisible et ne contient ni pile d'appels ni chemin interne
 
 #### Scenario: AC: quota local explicite
-<!-- openspec-guard:test="private replay admission > refuses an old drop before consent and reports a corrupt replay store as E_RATE" -->
+<!-- openspec-guard:test="replay admission through the engine > reports a full replay store as E_RATE before consent" -->
 - **WHEN** le Node refuse une demande parce que le stockage anti-rejeu est plein
 - **THEN** le demandeur reçoit un `drop_error` `E_RATE` sans détail interne
 

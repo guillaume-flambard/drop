@@ -489,3 +489,63 @@ Le Node MUST conserver au plus 16 384 identifiants de demandes reçues, sans leu
 <!-- openspec-guard:test="bounded received drops > treats lowercase and uppercase UUIDv7 as the same claim" -->
 - **WHEN** le même UUIDv7 est reçu en minuscules puis en majuscules
 - **THEN** le second envoi est refusé comme doublon, sans nouveau marqueur ni consentement
+
+#### Scenario: AC: anciens marqueurs nil et max
+<!-- openspec-guard:test="bounded received drops > deletes legacy nil and max UUID markers instead of blocking admission" -->
+- **WHEN** le stockage contient un marqueur nil ou max accepté avant T3.1b
+- **THEN** le Node le supprime et admet la nouvelle demande récente
+
+#### Scenario: AC: fichiers étrangers dans le stockage
+<!-- openspec-guard:test="bounded received drops > ignores operating system and foreign entries in the marker directory" -->
+- **WHEN** `received-drops/` contient un fichier ou dossier dont le nom n'a pas la forme d'un UUID, comme `.DS_Store`
+- **THEN** le Node l'ignore, sans le compter ni le supprimer, et continue d'admettre
+
+#### Scenario: AC: verrou abandonné par ce processus
+<!-- openspec-guard:test="bounded received drops > reclaims only its own replay lock and refuses an old foreign lock" -->
+- **WHEN** le verrou d'admission porte le nonce du processus courant, sans admission synchrone en cours
+- **THEN** le Node reprend ce verrou et traite la demande
+
+#### Scenario: AC: verrou d'un autre processus
+<!-- openspec-guard:test="bounded received drops > reclaims only its own replay lock and refuses an old foreign lock" -->
+- **WHEN** le verrou porte un autre nonce, même s'il semble ancien
+- **THEN** le Node refuse la demande sans toucher au verrou
+
+#### Scenario: AC: verrou sans propriétaire
+<!-- openspec-guard:test="bounded received drops > requires manual removal of an ownerless replay lock before admission resumes" -->
+- **WHEN** un verrou sans propriétaire subsiste après un crash, même ancien
+- **THEN** le Node refuse toute admission jusqu'au retrait manuel après arrêt de tous les processus qui partagent ce `DROP_HOME`
+
+#### Scenario: AC: horloge anti-rejeu perdue
+<!-- openspec-guard:test="bounded received drops > fails closed if the durable replay clock disappears after migration and pruning" -->
+- **WHEN** le fichier d'horloge manque après une première admission T3.1b
+- **THEN** le Node refuse toute nouvelle admission sans recréer une horloge initiale
+
+#### Scenario: AC: doublon d'une demande terminée
+<!-- openspec-guard:test="replay admission through the engine > answers a duplicate of a finished request with its recorded outcome" -->
+- **WHEN** le même demandeur renvoie une demande déjà refusée ou échouée
+- **THEN** le Node renvoie la même erreur, sans nouvel accord
+
+#### Scenario: AC: identifiant actif réutilisé par un autre pair
+<!-- openspec-guard:test="replay admission through the engine > refuses another peer reusing an active drop id without revealing its state" -->
+- **WHEN** un autre pair envoie l'identifiant d'une demande active
+- **THEN** il reçoit `E_DENIED` sans l'état de la demande
+
+#### Scenario: AC: résultat réel après un refus de doublon
+<!-- openspec-guard:test="end to end, in memory: relay and three nodes > a real result still lands after an overtaking refusal or a premature delivered status, and funding is released once" -->
+- **WHEN** un refus de doublon ou un `drop_status` annonçant une livraison précède le vrai résultat
+- **THEN** le demandeur enregistre le vrai résultat et libère le financement une seule fois
+
+#### Scenario: AC: horloge anti-rejeu en avance
+<!-- openspec-guard:test="replay admission through the engine > refuses a request after clock rollback with E_EXPIRED and logs that the replay clock is ahead" -->
+- **WHEN** l'horloge persistante est en avance sur l'horloge du Node
+- **THEN** la demande reçoit `E_EXPIRED` sans accord et le journal indique `replay_clock_ahead`
+
+#### Scenario: AC: doublon d'une demande active
+<!-- openspec-guard:test="replay admission through the engine > answers a duplicate of an active request with its current state" -->
+- **WHEN** une demande encore en attente ou en cours est reçue une seconde fois du même demandeur
+- **THEN** le Node répond par un `drop_status` portant l'état courant, sans nouvel accord
+
+#### Scenario: AC: issue finale conservée chez le demandeur
+<!-- openspec-guard:test="end to end, in memory: relay and three nodes > a late executor update cannot rewrite a finished outbound drop" -->
+- **WHEN** un `drop_error` ou un `drop_status` arrive après l'issue finale d'une demande
+- **THEN** le demandeur conserve l'issue déjà reçue

@@ -11,7 +11,6 @@ import {
   readFileSync,
   rmSync,
   renameSync,
-  rmdirSync,
   unlinkSync,
   writeFileSync,
 } from 'node:fs';
@@ -19,6 +18,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { z } from 'zod';
 import { FundingConfigSchema } from './funding.ts';
+import type { DropClaim } from './engine.ts';
 import {
   PrivateNetworkSchema,
   assertPrivateDestination,
@@ -125,6 +125,61 @@ function writeDurablePrivate(path: string, content: string): void {
   syncDirectory(join(path, '..'));
 }
 
+const UUID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const LEGACY_MARKER =
+  /^([0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}|0{8}-0{4}-0{4}-0{4}-0{12}|f{8}-f{4}-f{4}-f{4}-f{12})$/i;
+/** Names this process in its replay lock; a lock carrying it is our own leftover, since claims are synchronous. */
+export const REPLAY_LOCK_OWNER = `${String(process.pid)} ${randomBytes(8).toString('hex')}\n`;
+
+function errorCode(error: unknown): unknown {
+  return error instanceof Error && 'code' in error ? error.code : undefined;
+}
+
+function lockOwner(lock: string): string | undefined {
+  try {
+    return readFileSync(join(lock, 'owner'), 'utf8');
+  } catch {
+    return undefined;
+  }
+}
+
+function createLock(path: string): boolean {
+  try {
+    mkdirSync(path, { mode: 0o700 });
+    return true;
+  } catch (error) {
+    if (errorCode(error) === 'EEXIST') return false;
+    throw new Error('E_REPLAY_STATE storage unavailable', { cause: error });
+  }
+}
+
+function claimLock(lock: string): void {
+  try {
+    writeFileSync(join(lock, 'owner'), REPLAY_LOCK_OWNER, { mode: 0o600 });
+  } catch (error) {
+    rmSync(lock, { recursive: true, force: true });
+    throw new Error('E_REPLAY_STATE storage unavailable', { cause: error });
+  }
+}
+
+/** A foreign lock is never taken over by age: a slow filesystem may leave a live claim holding it. */
+function acquireReplayLock(lock: string): void {
+  if (createLock(lock)) {
+    claimLock(lock);
+    return;
+  }
+  // Claims are synchronous in this process, so its own nonce can only identify a leftover lock.
+  if (lockOwner(lock) !== REPLAY_LOCK_OWNER) throw new Error('E_REPLAY_STATE claim locked');
+  rmSync(lock, { recursive: true, force: true });
+  if (!createLock(lock)) throw new Error('E_REPLAY_STATE claim locked');
+  claimLock(lock);
+}
+
+/** Never removes a lock another process has since taken over. */
+function releaseReplayLock(lock: string): void {
+  if (lockOwner(lock) === REPLAY_LOCK_OWNER) rmSync(lock, { recursive: true, force: true });
+}
+
 /** Everything a node keeps on disk under DROP_HOME. Private keys and the local token are mode 0600. */
 export class DropHome {
   readonly root: string;
@@ -149,42 +204,43 @@ export class DropHome {
   }
 
   /** Bounded, durable tombstones: a past consent cannot be regained after restart or clock rollback. */
-  claimDrop(dropId: string, now: number = Date.now()): 'claimed' | 'duplicate' | 'expired' | 'capacity' {
+  claimDrop(dropId: string, now: number = Date.now()): DropClaim {
     const timestamp = uuidv7Timestamp(dropId);
     if (timestamp === undefined || !Number.isSafeInteger(now) || now < 0) return 'expired';
     const canonicalDropId = dropId.toLowerCase();
     const lock = join(this.root, 'received-drops.lock');
-    try {
-      mkdirSync(lock, { mode: 0o700 });
-    } catch {
-      throw new Error('E_REPLAY_STATE claim locked or unavailable');
-    }
+    acquireReplayLock(lock);
     try {
       return this.claimDropLocked(canonicalDropId, now, timestamp);
     } finally {
-      rmdirSync(lock);
+      releaseReplayLock(lock);
     }
   }
 
-  private claimDropLocked(
-    dropId: string,
-    now: number,
-    timestamp: number,
-  ): 'claimed' | 'duplicate' | 'expired' | 'capacity' {
+  private claimDropLocked(dropId: string, now: number, timestamp: number): DropClaim {
     const dir = join(this.root, 'received-drops');
     mkdirSync(dir, { recursive: true, mode: 0o700 });
     const clockPath = join(this.root, 'received-drops-clock');
+    const versionPath = join(this.root, 'received-drops-version');
+    const clockExists = existsSync(clockPath);
+    const versionExists = existsSync(versionPath);
+    if (versionExists) {
+      if (readFileSync(versionPath, 'utf8') !== '1\n') throw new Error('E_REPLAY_STATE corrupt version');
+      if (!clockExists) throw new Error('E_REPLAY_STATE missing clock');
+    }
     let highWater = 0;
-    if (existsSync(clockPath)) {
+    if (clockExists) {
       const raw = readFileSync(clockPath, 'utf8').trim();
       if (!/^(0|[1-9][0-9]*)$/.test(raw)) throw new Error('E_REPLAY_STATE corrupt clock');
       highWater = Number(raw);
       if (!Number.isSafeInteger(highWater)) throw new Error('E_REPLAY_STATE corrupt clock');
     }
-    if (now > highWater || !existsSync(clockPath)) {
+    if (now > highWater || !clockExists) {
       highWater = Math.max(now, highWater);
       writeDurablePrivate(clockPath, `${String(highWater)}\n`);
     }
+    // Distinguish a first T3.1b migration from later loss of the replay clock.
+    if (!versionExists) writeDurablePrivate(versionPath, '1\n');
     const floor = highWater - REPLAY_WINDOW_MS;
     let count = 0;
     let removed = false;
@@ -192,13 +248,13 @@ export class DropHome {
     const names = new Set(entries.map((entry) => entry.name));
     const retained = new Set<string>();
     for (const entry of entries) {
+      // Finder, backup and sync tools may drop their own files here; only UUID-shaped names are markers.
+      if (!UUID_SHAPE.test(entry.name)) continue;
       if (!entry.isFile()) throw new Error('E_REPLAY_STATE unexpected marker');
       const markerTime = uuidv7Timestamp(entry.name);
       if (markerTime === undefined) {
-        // Legacy UUIDv4 claims cannot be admitted by the new protocol.
-        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(entry.name)) {
-          throw new Error('E_REPLAY_STATE unexpected marker');
-        }
+        // Pre-T3.1b claims (anything z.uuid() accepted, nil and max included) cannot be admitted by the new protocol.
+        if (!LEGACY_MARKER.test(entry.name)) throw new Error('E_REPLAY_STATE unexpected marker');
         unlinkSync(join(dir, entry.name));
         removed = true;
       } else if (markerTime < floor) {
@@ -233,7 +289,7 @@ export class DropHome {
       syncDirectory(dir);
       return 'claimed';
     } catch (error) {
-      if (error instanceof Error && 'code' in error && error.code === 'EEXIST') return 'duplicate';
+      if (errorCode(error) === 'EEXIST') return 'duplicate';
       throw error;
     }
   }

@@ -13,8 +13,10 @@ Intention et hors périmètre : `proposal.md`. Cartographie et choix techniques 
 | P1-5 enveloppe trop grande | P1 | REQ-3 | P0-3 | DONE | `relay.test.ts`, test quota sur enveloppe rejetée |
 | P1-6 trame malformée | P1 | REQ-3 | P0-3 | DONE | `relay.test.ts`, test de trame malformée ; revue indépendante |
 | P1-7 casse des UUIDv7 | P1 | REQ-1 et REQ-2 | P0-1, P0-2 | DONE | `protocol.test.ts` et `private-replay.test.ts`, casse et migration |
-| P1-1 suite complète | P1 | REQ-1 à REQ-3 | P0-1 à P0-3 | DONE | 33 fichiers, 276 tests passés ; lint, typecheck et validation OpenSpec passés |
-| P1-2 revue et audit | P1 | REQ-1 à REQ-3 | P1-1 | VERIFYING | revues indépendantes sans P0/P1 ; clôture formelle gstack /review encore requise ; CSO partiel consigné ci-dessous |
+| P1-8 verrou étranger âgé | P1 | REQ-2 | P0-2 | DONE | `private-replay.test.ts`, refus d'un verrou étranger même ancien ; aucune reprise sur simple âge |
+| P1-9 perte de l'horloge | P1 | REQ-2 | P0-2 | DONE | `private-replay.test.ts`, version durable et refus si l'horloge disparaît après purge |
+| P1-1 suite complète | P1 | REQ-1 à REQ-3 | P0-1 à P0-3 | DONE | 33 fichiers, 294 tests passés ; lint, typecheck, OpenSpec strict et guard passés |
+| P1-2 revue et audit | P1 | REQ-1 à REQ-3 | P1-1 | VERIFYING | gstack : 3 cycles, `completed:true`, `converged:false` ; nouvelle passe nécessaire après les derniers correctifs, ainsi que recheck CSO |
 | P1-3 archive et clôture | P1 | REQ-1 à REQ-3 | P1-2 | TODO | specs synchronisées et guard passé ; archive, index et commit de clôture attendent P1-2 |
 
 ## Couverture du périmètre
@@ -24,16 +26,17 @@ Applicables : comportement, erreurs, persistance, intégrité, restauration, con
 ## Preuves acquises
 
 - Tests écrits avant correction : 6 échecs attendus sur UUIDv4, fenêtre/stockage et reconnexion.
-- Après correction et tests supplémentaires : `pnpm -r test` — 33 fichiers et 276 tests passés le 9 octobre 2026.
+- Après correction et tests supplémentaires : `pnpm -r test` — 33 fichiers et 294 tests passés le 9 octobre 2026.
 - `pnpm -r typecheck` et `pnpm -r lint` — passés le 9 octobre 2026 après la normalisation de casse.
 - `pnpm exec openspec validate t3-1b-replay-storage-bounds --strict` — passé le 9 octobre 2026.
-- Les deltas ont été synchronisés dans les trois specs canoniques sans archiver la change. `openspec validate --specs --strict` passe pour les 16 specs ; `openspec-guard check --require-selector ... --fail-on fail` passe sur 378 critères, dont 101 liés par sélecteur. Les 258 échecs historiques restent gelés ; `--update-baseline` a produit +0/-0 et aucun diff de baseline.
+- Les deltas ont été synchronisés dans les trois specs canoniques sans archiver la change. `openspec validate --specs --strict` passe pour les 16 specs ; `openspec-guard check --require-selector ... --fail-on fail` passe sur 390 critères, dont 113 liés par sélecteur. Les 258 échecs historiques restent gelés ; `--update-baseline` a produit +0/-0 et aucun diff de baseline.
 - Revue indépendante : P1 sur trames malformées après authentification, puis P1 sur les UUIDv7 majuscules/minuscules sous Linux ; tous deux corrigés, couverts par tests et revus sans P0/P1 restant. Les tests historiques de détection et d'outillage disposaient de 5 s en suite concurrente ; leurs délais ont été portés à 15 s et la suite complète passe.
 - Gstack CSO : audit statique lancé avec `--code --diff --base HEAD --offline` (run `1791550316563-978736f4d9d99f7b`), puis recheck après correction (run `1791550611243-25fd9b2648e3adaf`). Le premier audit a identifié le P1 sur les trames malformées. Le recheck est partiel et ne certifie pas formellement sa clôture ; la preuve de clôture technique repose sur le test de régression et la revue indépendante du nouveau code. La revue gstack `/review` a été lancée et son journal finalisé avec `completed:false` (jeton `4b799a4a-7a6f-496a-b0da-72f81507d6e7`) : le workflow demande six spécialistes simultanés, plus QA et adversarial Claude, indisponibles avec les slots de cette session. Sa revue statique ciblée n'a trouvé aucun P0/P1 résiduel, mais il faut une passe `/review` complète avant la clôture formelle.
+- Une revue gstack `/review` complète a ensuite tourné dans Claude Code : trois cycles, sept spécialistes, Red Team, adversarial et sondes QA. Le journal est `completed:true`, `converged:false`, 0 critique et 9 informatifs ; les derniers correctifs n'ont pas été revus dans ce cycle. La vérification indépendante suivante a trouvé deux P1 supplémentaires, corrigés avec tests rouges puis verts : reprise d'un verrou étranger âgé, et horloge manquante après purge. Une nouvelle passe gstack et un recheck CSO sur ce diff stabilisé restent requis.
 
 ## Risques et vérification finale
 
-R-1 HIGH, clos sur preuve technique : les tests de retour d'horloge, redémarrage, saturation, concurrence interprocessus, reconnexion, enveloppe trop grande, trame malformée et casse des UUIDv7 ont cherché les contournements ; les deux revues indépendantes n'ont pas trouvé de P0/P1 après correction. Limite P2 : une trame hors quota dont l'ID est après les 256 premiers octets reçoit `E_RATE` sans ID corrélable ; le client doit gérer ce refus global. La certification automatique CSO reste partielle, comme indiqué ci-dessus. Le changement UUIDv7 est une rupture documentée ; les clients tiers UUIDv4 doivent migrer. Aucun service externe requis.
+R-1 HIGH, corrigé mais sous revalidation : les tests de retour d'horloge, redémarrage, saturation, concurrence interprocessus, reconnexion, enveloppe trop grande, trame malformée, casse des UUIDv7, verrou étranger âgé et horloge perdue cherchent les contournements. La reprise automatique d'un verrou étranger a été retirée ; un crash nécessite une reprise manuelle après arrêt des daemons. La perte du fichier d'horloge après migration provoque désormais un refus fermé. Risque distinct de disponibilité mémoire : `executing` et `outbound` restent non bornés ; T3.1c le traite avant T3.5. Limite P2 : une trame hors quota dont l'ID est après les 256 premiers octets reçoit `E_RATE` sans ID corrélable. Le changement UUIDv7 est une rupture documentée ; les clients tiers UUIDv4 doivent migrer. Aucun service externe requis.
 
 ## Acceptation manuelle
 

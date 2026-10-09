@@ -15,6 +15,8 @@
     "node_saturation": "passed",
     "node_corruption": "passed",
     "node_case_replay_and_migration": "passed",
+    "node_foreign_lock_age": "passed",
+    "node_missing_clock_after_migration": "passed",
     "relay_malformed_frame_quota": "passed",
     "relay_oversized_frame_quota": "passed",
     "relay_reconnect": "passed"
@@ -29,28 +31,32 @@
     "P1-4": "DONE",
     "P1-5": "DONE",
     "P1-6": "DONE",
-    "P1-7": "DONE"
+    "P1-7": "DONE",
+    "P1-8": "DONE",
+    "P1-9": "DONE"
   },
   "risks": [
     {
       "id": "R-1",
       "severity": "high",
-      "status": "closed_by_tests_and_independent_review",
-      "description": "Replay and quota bypasses fixed; targeted adversarial tests and independent rereview found no remaining P0/P1"
+      "status": "mitigated_pending_final_review",
+      "description": "Replay and quota bypasses fixed; foreign lock age takeover and missing clock after migration now fail closed, pending fresh review"
     }
   ],
   "verification": {
     "targetedTests": "passed",
     "lint": "passed",
     "typecheck": "passed",
-    "fullTests": "passed_276_of_276",
+    "fullTests": "passed_294_of_294_uncommitted_review_fixes",
     "openspecValidate": "passed",
-    "guard": "passed_378_criteria_101_linked_baseline_plus0_minus0",
-    "review": "independent_passed_gstack_incomplete_completed_false",
+    "guard": "passed_390_criteria_113_linked_baseline_plus0_minus0",
+    "review": "gstack_completed_true_converged_false_3_cycles_then_two_independent_P1_fixed_fresh_review_pending",
     "cso": "partial_recheck_cannot_certify_closure"
   },
   "remaining": [
-    "Formal gstack review completion",
+    "Fresh gstack /review pass on the cycle-3 fixes and the independent lock/clock corrections",
+    "Commit the uncommitted review fixes",
+    "Open informational test gaps: other peer on finished drop, relay idle sweep, release guard, takeover re-check, deliver/duplicate interleave",
     "Archive and index after formal review",
     "Final closure commit"
   ]

@@ -29,11 +29,12 @@ afterEach(async () => {
 async function relayFor(
   identities: Identity[],
   extra: { rateLimitPerMinute?: number; admittedPath?: string; maxAdmissionsPerSponsorPerDay?: number } = {},
+  options: { now?: () => number; pingIntervalMs?: number } = {},
 ) {
   const logs: RelayLogEntry[] = [];
   const relay = await startRelay(
     { port: 0, allowedNodeIds: identities.map((identity) => identity.nodeId), ...extra },
-    { logger: (entry) => logs.push(entry) },
+    { logger: (entry) => logs.push(entry), ...options },
   );
   cleanups.push(() => relay.close());
   return { relay, logs };
@@ -181,6 +182,26 @@ describe('relay', () => {
       outcomes.push(await a.instance.send(await sealEnvelope(alice, bob.nodeId, { type: 'catalog_request' })));
     }
     expect(outcomes).toEqual(['queued', 'queued', 'queued', 'E_RATE']);
+  });
+
+  it('restores a sender once its rate window has passed, with idle windows swept', async () => {
+    const alice = await generateIdentity('Alice');
+    const bob = await generateIdentity('Bob');
+    const clock = { now: Date.now() };
+    const { relay } = await relayFor(
+      [alice, bob],
+      { rateLimitPerMinute: 1 },
+      { now: () => clock.now, pingIntervalMs: 20 },
+    );
+    const sender = client(relay, alice);
+    await sender.instance.waitReady();
+    const send = async () => sender.instance.send(await sealEnvelope(alice, bob.nodeId, { type: 'catalog_request' }));
+    expect(await send()).toBe('queued');
+    expect(await send()).toBe('E_RATE');
+    clock.now += 60_001;
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    expect(await send()).toBe('queued');
+    expect(await send()).toBe('E_RATE');
   });
 
   it('keeps a node rate limit after reconnect', async () => {
