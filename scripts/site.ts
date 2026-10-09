@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = resolve(import.meta.dirname, '..');
 const output = join(root, 'dist/site');
-const sourceSnapshot = 'https://github.com/guillaume-flambard/drop/blob/cacf1cc/';
+const sourceSnapshot = 'https://github.com/guillaume-flambard/drop/blob/00fe39a/';
 const sourceFiles: Record<string, string> = {
   'index.html': 'site/index.html',
   'demarrer.html': 'site/demarrer.html',
