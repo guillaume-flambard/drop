@@ -1,5 +1,5 @@
-import { capabilities } from '@drop/capabilities';
-import { NodeIdSchema } from '@drop/protocol';
+import { capabilities, privateCapabilities } from '@drop/capabilities';
+import { DropError, NodeIdSchema } from '@drop/protocol';
 import { RelayClient } from '@drop/relay';
 import { NodeEngine, type InboxItem } from './engine.ts';
 import { detectAgents } from './detect.ts';
@@ -38,12 +38,13 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
     identity,
     ownerKind: config.ownerKind,
     store: home,
-    capabilities,
+    capabilities: config.profile === 'private' && config.network ? privateCapabilities(config.network) : capabilities,
     transport: { send: (envelope) => (link.relay ? link.relay.send(envelope) : Promise.resolve('offline')) },
     log: (entry) => {
       log(JSON.stringify({ at: new Date().toISOString(), ...entry }));
     },
     payer: config.payer,
+    privateProfile: config.profile === 'private',
     agents: () => detectAgents().flatMap((agent) => (agent.installed ? [agent.label] : [])),
     ...(config.funding
       ? {
@@ -56,7 +57,9 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
       : {}),
     // A linked assistant's call runs the requester tools against this node's own local API (T2.13).
     onAgentCall: (call) =>
-      runAgentCall(`http://127.0.0.1:${String(link.apiPort ?? config.apiPort)}`, home.localToken(), call),
+      config.profile === 'private'
+        ? Promise.reject(new DropError('E_DENIED', 'E_DENIED cloud gateway disabled'))
+        : runAgentCall(`http://127.0.0.1:${String(link.apiPort ?? config.apiPort)}`, home.localToken(), call),
     onAdmission: (ticket) => {
       home.savePendingAdmission(ticket);
       link.relay?.retryNow();
@@ -123,6 +126,7 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
       },
       createTeam: (name) => engine.createTeam(name),
       link: async (gateway, session, client) => {
+        if (config.profile === 'private') throw new DropError('E_DENIED', 'E_DENIED cloud gateway disabled');
         await engine.linkAssistant(NodeIdSchema.parse(gateway), session, client);
         return { ok: true, trusted: config.gateways.includes(gateway) };
       },

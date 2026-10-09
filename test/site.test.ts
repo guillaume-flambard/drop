@@ -71,7 +71,15 @@ describe('documentation site', () => {
     expect(guide).toContain('https://github.com/guillaume-flambard/drop/blob/main/');
     expect(guide).toContain('../diagrams/journey.svg');
     expect(guide).not.toContain('](../packages/');
-    for (const name of ['GUIDE', 'AVANCEMENT', 'ONBOARDING', 'MODELS', 'OPEN_SOURCE', 'ACCEPTANCE']) {
+    for (const name of [
+      'GUIDE',
+      'AVANCEMENT',
+      'ONBOARDING',
+      'MODELS',
+      'OPEN_SOURCE',
+      'ACCEPTANCE',
+      'PRIVATE_PROFILE',
+    ]) {
       const response = await fetch(`${preview.url}/downloads/${name}.md`);
       expect(response.status, name).toBe(200);
       expect(response.headers.get('content-type')).toContain('text/markdown');

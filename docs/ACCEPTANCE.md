@@ -1,8 +1,10 @@
 # Critères du produit privé à construire
 
-Conception adoptée le 9 octobre 2026. **Tous les critères ci-dessous restent à implémenter ou à revérifier dans leur chantier.** T3.0 vérifie ce plan, pas ces comportements. Avant de coder, promouvoir les critères dans les specs normatives concernées et les lier aux tests ou à une recette matérielle. Ordre et dépendances : [TASKS](TASKS.md).
+Conception adoptée le 9 octobre 2026. **T3.1 dispose de preuves exécutables pour AC-PRIVATE-01 à 08**, avec fixtures et limites décrites dans [PRIVATE_PROFILE](PRIVATE_PROFILE.md). Les autres critères restent à implémenter ou à revérifier dans leur chantier. T3.0 vérifie le plan, pas ces comportements. Avant de coder, promouvoir les critères dans les specs normatives concernées et les lier aux tests ou à une recette matérielle. Ordre et dépendances : [TASKS](TASKS.md).
 
 ## Profil privé : T3.1
+
+[Preuves AC-PRIVATE-01 à 08](../openspec/changes/archive/2026-10-09-t3-1-private-profile/evidence.md) et [acceptation manuelle](../openspec/changes/archive/2026-10-09-t3-1-private-profile/closure.md).
 
 | Critère       | Situation et résultat exigé                                                                        | Preuve attendue                                                                                  |
 | ------------- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |

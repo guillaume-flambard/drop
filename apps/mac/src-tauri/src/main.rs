@@ -19,7 +19,11 @@ use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
 use tauri_plugin_deep_link::DeepLinkExt;
 use url::Url;
 
-const RELAY: &str = "wss://drop.memolabs.dev/v1";
+const DEFAULT_RELAY: &str = "ws://127.0.0.1:7780/v1";
+
+fn bootstrap_relay(configured: Option<String>) -> String {
+    configured.unwrap_or_else(|| DEFAULT_RELAY.to_string())
+}
 const PANEL_WIDTH: f64 = 380.0;
 const PANEL_HEIGHT: f64 = 620.0;
 
@@ -40,7 +44,7 @@ fn drop_command(app: &AppHandle, args: &[&str]) -> Command {
     command
 }
 
-/// First launch: an identity named after the Mac's user, on the public relay. Joining a team comes with an invite link.
+/// First launch: a private identity named after the Mac's user, on an explicitly configured or loopback relay. Joining a team comes with an invite link.
 fn ensure_identity(app: &AppHandle) {
     if drop_home().join("identity.json").exists() {
         return;
@@ -54,7 +58,8 @@ fn ensure_identity(app: &AppHandle) {
         .filter(|name| !name.is_empty())
         .unwrap_or_else(|| "Moi".to_string());
     let first_name = full_name.split_whitespace().next().unwrap_or("Moi").to_string();
-    let _ = drop_command(app, &["init", "--name", &first_name, "--kind", "human", "--relay", RELAY])
+    let relay = bootstrap_relay(std::env::var("DROP_RELAY_URL").ok());
+    let _ = drop_command(app, &["init", "--profile", "private", "--name", &first_name, "--kind", "human", "--relay", &relay])
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status();
@@ -242,4 +247,15 @@ fn main() {
             }
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bootstrap_uses_loopback_or_explicit_relay() {
+        assert_eq!(bootstrap_relay(None), "ws://127.0.0.1:7780/v1");
+        assert_eq!(bootstrap_relay(Some("wss://10.0.0.2/v1".to_string())), "wss://10.0.0.2/v1");
+    }
 }

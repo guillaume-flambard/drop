@@ -65,13 +65,12 @@ La carte MUST déclarer `sensitivity: 'high'` et `approval: 'always'` : le propr
 - **THEN** la réponse n'est pas retenue (une relance, puis `E_OUTPUT_INVALID`)
 
 ### Requirement: Clé du demandeur
-Quand la demande porte une clé plafonnée (D27), la capacité MUST appeler le modèle avec cette clé, l'URL qu'elle donne et
-son modèle s'il est précisé, avec un budget égal au plus petit de `maxUsd` et du plafond de la clé.
+Quand une clé plafonnée est fournie, la capacité MUST conserver l’URL et le modèle du propriétaire. Elle MUST refuser un financement incompatible avant tout appel au serveur ou au modèle. Un financement compatible utilise le minimum des budgets.
 
 #### Scenario: Modèle payé par le demandeur
 <!-- openspec-guard:test="mcp.answer (T2.2) > runs on the requester capped key when the requester pays (D27)" -->
-- **WHEN** la demande porte une clé plafonnée à 0,10 $ pour `requester/model`
-- **THEN** le modèle appelé est `requester/model` avec cette clé, et le budget est 0,10 $
+- **WHEN** la demande porte une clé plafonnée compatible avec le fournisseur et le modèle du propriétaire
+- **THEN** ce modèle est appelé avec cette clé et le minimum des deux budgets
 
 ### Requirement: Serveur déclaré par un agent
 La config MAY désigner un serveur par `{ transport: 'agent', agent, name }` : un serveur déjà déclaré par Claude Code,
@@ -87,3 +86,11 @@ variables et en-têtes lus dans le fichier de l'agent au moment de l'exécution,
 <!-- openspec-guard:test="MCP servers declared by the coding agents (T2.8) > reads the servers of Claude Code, Cursor, Claude Desktop and Codex, with their env and headers" -->
 - **WHEN** les quatre agents déclarent des serveurs, dont une table Codex désactivée
 - **THEN** chaque serveur actif est lu avec sa commande ou son URL, ses variables et ses en-têtes
+
+### Requirement: Connexions MCP privées
+La connexion et la découverte des outils MCP MUST appliquer la politique privée, y compris aux serveurs référencés dans les fichiers des agents. Un processus stdio non isolé MUST être refusé avant son lancement.
+
+#### Scenario: AC: contrôle avant découverte
+<!-- openspec-guard:test="private adapters > refuses HTTP discovery outside policy and refuses stdio before spawning it" -->
+- **WHEN** un serveur HTTP hors politique ou un serveur stdio non isolé est découvert
+- **THEN** aucune connexion ni exécution de ce serveur n’a lieu.

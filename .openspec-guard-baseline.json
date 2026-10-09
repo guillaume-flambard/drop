@@ -1611,14 +1611,6 @@
       "file": "openspec/specs/relay/spec.md"
     },
     {
-      "id": "sg_74c8e9fb6fe24d7c",
-      "reason": "missing-selector",
-      "verdict": "fail",
-      "capability": "relay",
-      "scenario": "Connexion chiffrée",
-      "file": "openspec/specs/relay/spec.md"
-    },
-    {
       "id": "sg_75ea7d9f337a4767",
       "reason": "missing-selector",
       "verdict": "fail",

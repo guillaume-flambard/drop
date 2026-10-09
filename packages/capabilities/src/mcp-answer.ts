@@ -1,3 +1,5 @@
+import type { PrivateNetwork } from '@drop/protocol';
+import { privateFetch } from './private-network.ts';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { getDefaultEnvironment, StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
@@ -102,7 +104,11 @@ export function parseMcpFinal(content: string): McpAnswerOutput | undefined {
 /** The part of an MCP client this capability uses; tests pass an in-memory one. */
 export type McpClient = Pick<Client, 'listTools' | 'callTool' | 'close'>;
 
-export async function connectMcp(server: McpServerConfig, env: NodeJS.ProcessEnv = process.env): Promise<McpClient> {
+export async function connectMcp(
+  server: McpServerConfig,
+  env: NodeJS.ProcessEnv = process.env,
+  network?: PrivateNetwork,
+): Promise<McpClient> {
   const read = (name: string): string => {
     const value = env[name];
     if (value === undefined) throw new DropError('E_RUNNER', `environment variable ${name} is not set`);
@@ -113,6 +119,7 @@ export async function connectMcp(server: McpServerConfig, env: NodeJS.ProcessEnv
     const declared = findAgentServer(server.agent, server.name);
     if (!declared) throw new DropError('E_RUNNER', `${server.agent} no longer declares the MCP server ${server.name}`);
     if (declared.transport === 'stdio') {
+      if (network) throw new DropError('E_DENIED', 'E_DENIED unisolated MCP process');
       await client.connect(
         new StdioClientTransport({
           command: declared.command ?? '',
@@ -124,12 +131,14 @@ export async function connectMcp(server: McpServerConfig, env: NodeJS.ProcessEnv
     } else {
       const transport = new StreamableHTTPClientTransport(new URL(declared.url ?? ''), {
         requestInit: { headers: declared.headers },
+        ...(network ? { fetch: privateFetch(network, declared.url ?? '') } : {}),
       }) as Transport;
       await client.connect(transport);
     }
     return client;
   }
   if (server.transport === 'stdio') {
+    if (network) throw new DropError('E_DENIED', 'E_DENIED unisolated MCP process');
     const forwarded = Object.fromEntries(server.env.map((name) => [name, read(name)]));
     await client.connect(
       new StdioClientTransport({
@@ -144,7 +153,10 @@ export async function connectMcp(server: McpServerConfig, env: NodeJS.ProcessEnv
       Object.entries(server.headersFromEnv).map(([header, name]) => [header, read(name)]),
     );
     // The SDK's transport types predate exactOptionalPropertyTypes (sessionId?: string vs string | undefined).
-    const transport = new StreamableHTTPClientTransport(new URL(server.url), { requestInit: { headers } }) as Transport;
+    const transport = new StreamableHTTPClientTransport(new URL(server.url), {
+      requestInit: { headers },
+      ...(network ? { fetch: privateFetch(network, server.url) } : {}),
+    }) as Transport;
     await client.connect(transport);
   }
   return client;
@@ -165,6 +177,7 @@ export function toolResultText(result: unknown): string {
 }
 
 export interface McpAnswerDeps {
+  network?: PrivateNetwork;
   provider?: (config: ProviderConfig) => ChatProvider;
   connect?: (server: McpServerConfig) => Promise<McpClient>;
 }
@@ -208,7 +221,13 @@ export function createMcpAnswer(deps: McpAnswerDeps = {}): CapabilityImpl<McpAns
     },
     async execute(input: McpAnswerInput, ctx: RunContext): Promise<McpAnswerOutput> {
       const config = McpAnswerConfigSchema.parse(ctx.config);
-      const client = await (deps.connect ?? connectMcp)(config.server);
+      const run = providerFor(config.provider, config.maxUsd, ctx.funding);
+      const provider = deps.provider
+        ? deps.provider(run.config)
+        : openAiCompatible(run.config, run.env, deps.network ? privateFetch(deps.network, run.config.baseUrl) : fetch);
+      const client = await (deps.connect
+        ? deps.connect(config.server)
+        : connectMcp(config.server, process.env, deps.network));
       try {
         // Only the owner's tools that the server really offers, minus any the server itself marks destructive.
         const listed = (await client.listTools()).tools.filter(
@@ -221,8 +240,6 @@ export function createMcpAnswer(deps: McpAnswerDeps = {}): CapabilityImpl<McpAns
           description: (tool.description ?? tool.name).slice(0, 1000),
           parameters: tool.inputSchema,
         }));
-        const run = providerFor(config.provider, config.maxUsd, ctx.funding);
-        const provider = deps.provider ? deps.provider(run.config) : openAiCompatible(run.config, run.env);
         const messages: ChatMessage[] = [
           { role: 'system', content: mcpSystemPrompt(config.label, [...allowed]) },
           { role: 'user', content: frameQuestion(input.question) },

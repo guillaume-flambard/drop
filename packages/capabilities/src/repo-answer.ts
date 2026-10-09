@@ -1,3 +1,5 @@
+import type { PrivateNetwork } from '@drop/protocol';
+import { privateFetch } from './private-network.ts';
 import { copyFile, lstat, mkdir, readdir, readFile } from 'node:fs/promises';
 import { dirname, join, relative, sep } from 'node:path';
 import { z } from 'zod';
@@ -188,6 +190,7 @@ async function runTool(name: string, rawArguments: string, workdir: string, file
 }
 
 export interface RepoAnswerDeps {
+  network?: PrivateNetwork;
   provider?: (config: ProviderConfig) => ChatProvider;
 }
 
@@ -221,7 +224,9 @@ export function createRepoAnswer(deps: RepoAnswerDeps = {}): CapabilityImpl<Repo
       const config = RepoAnswerConfigSchema.parse(ctx.config);
       const files = await takeSnapshot(config, ctx.workdir);
       const run = providerFor(config.provider, config.maxUsd, ctx.funding);
-      const provider = deps.provider ? deps.provider(run.config) : openAiCompatible(run.config, run.env);
+      const provider = deps.provider
+        ? deps.provider(run.config)
+        : openAiCompatible(run.config, run.env, deps.network ? privateFetch(deps.network, run.config.baseUrl) : fetch);
       const messages: ChatMessage[] = [
         { role: 'system', content: systemPrompt(config.allowSourceExcerpts) },
         { role: 'user', content: frameQuestion(input.question) },

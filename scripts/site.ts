@@ -21,6 +21,7 @@ const sourceFiles: Record<string, string> = {
   'downloads/MODELS.md': 'docs/MODELS.md',
   'downloads/OPEN_SOURCE.md': 'docs/OPEN_SOURCE.md',
   'downloads/ACCEPTANCE.md': 'docs/ACCEPTANCE.md',
+  'downloads/PRIVATE_PROFILE.md': 'docs/PRIVATE_PROFILE.md',
 };
 const contentTypes: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',

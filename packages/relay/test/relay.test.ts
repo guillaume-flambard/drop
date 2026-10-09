@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import WebSocket from 'ws';
-import { mkdtempSync, readFileSync, statSync } from 'node:fs';
+import { mkdtempSync, readFileSync, statSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -11,7 +11,14 @@ import {
   type Envelope,
   type Identity,
 } from '@drop/protocol';
-import { RelayClient, startRelay, type RelayHandle, type RelayLogEntry } from '../src/index.ts';
+import {
+  RelayClient,
+  startRelay,
+  revokeNode,
+  readRelayConfig,
+  type RelayHandle,
+  type RelayLogEntry,
+} from '../src/index.ts';
 
 const cleanups: (() => Promise<void> | void)[] = [];
 afterEach(async () => {
@@ -59,6 +66,37 @@ async function until(check: () => boolean, timeoutMs = 3000): Promise<void> {
 }
 
 describe('relay', () => {
+  it('keeps revoked members and their sponsored invitations refused after restore', async () => {
+    const alice = await generateIdentity('Alice');
+    const bob = await generateIdentity('Bob');
+    const newcomer = await generateIdentity('New');
+    const dir = mkdtempSync(join(tmpdir(), 'drop-revoked-'));
+    cleanups.push(() => {
+      rmSync(dir, { recursive: true, force: true });
+    });
+    const configPath = join(dir, 'relay.config.json');
+    const statePath = join(dir, 'admitted.json');
+    writeFileSync(configPath, JSON.stringify({ port: 0, allowedNodeIds: [alice.nodeId], admittedPath: statePath }));
+    writeFileSync(
+      statePath,
+      JSON.stringify({ admitted: [{ nodeId: bob.nodeId, sponsor: alice.nodeId, at: Date.now() }], spentNonces: [] }),
+    );
+    expect(revokeNode(configPath, bob.nodeId)).toBe(true);
+    expect(revokeNode(configPath, bob.nodeId)).toBe(false);
+    // Restoration uses both the config (revocations) and admissions, including the revoked member's old entry.
+    const restoredConfig = readRelayConfig(configPath);
+    const relay = await startRelay(restoredConfig, { logger: () => undefined });
+    cleanups.push(() => relay.close());
+    const ticket = await createAdmission(alice, Date.now());
+    const denied = client(relay, bob, ticket);
+    const sponsored = client(relay, newcomer, await createAdmission(bob, Date.now()));
+    const permitted = client(relay, alice);
+    await permitted.instance.waitReady();
+    await until(() => denied.statuses.includes('unauthorized') && sponsored.statuses.includes('unauthorized'));
+    expect(denied.instance.connected).toBe(false);
+    expect(sponsored.instance.connected).toBe(false);
+  });
+
   it('direct delivery between two in-memory nodes', async () => {
     const alice = await generateIdentity('Alice');
     const bob = await generateIdentity('Bob');

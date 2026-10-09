@@ -45,6 +45,8 @@ export interface Transport {
 }
 
 export interface NodeStore {
+  /** Persistent stores refuse a previously received drop, even after process restart. */
+  claimDrop?(dropId: string): boolean;
   peers(): Peer[];
   savePeer(peer: Peer): void;
   published(): Published[];
@@ -145,6 +147,7 @@ export interface EngineOptions {
   funder?: Funder;
   /** Executor side: who pays the model. 'requester' (default, D27) uses the requester's key when one is sent. */
   payer?: 'requester' | 'owner';
+  privateProfile?: boolean;
   /** The coding agents this node's human uses, shared with the team (T2.9). */
   agents?: () => string[];
   /** Runs a call from a linked assistant (T2.13) with the requester tools, in this user's name. */
@@ -600,6 +603,15 @@ export class NodeEngine extends EventEmitter {
   }
 
   private async onDropRequest(from: NodeId, message: MessageOf<'drop_request'>): Promise<void> {
+    if (this.options.privateProfile && this.options.payer === 'owner' && message.funding) {
+      await this.send(from, {
+        type: 'drop_error',
+        dropId: message.dropId,
+        code: 'E_DENIED',
+        message: 'Financement non accepté par le propriétaire.',
+      });
+      return;
+    }
     const published = this.options.store.published().find((entry) => entry.capabilityId === message.capabilityId);
     const built = published ? this.cardFor(published) : undefined;
     if (!published || !built || built.card.version !== message.capabilityVersion) {
@@ -619,6 +631,15 @@ export class NodeEngine extends EventEmitter {
         dropId: message.dropId,
         code: 'E_SCHEMA',
         message: 'Entrée invalide.',
+      });
+      return;
+    }
+    if (this.options.store.claimDrop && !this.options.store.claimDrop(message.dropId)) {
+      await this.send(from, {
+        type: 'drop_error',
+        dropId: message.dropId,
+        code: 'E_DENIED',
+        message: 'Demande déjà reçue ; créez une nouvelle demande.',
       });
       return;
     }

@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
 import { createServer } from 'node:http';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { z } from 'zod';
@@ -25,6 +26,7 @@ export const RelayConfigSchema = z.object({
   port: z.number().int().min(0).max(65535),
   host: z.string().default('127.0.0.1'),
   allowedNodeIds: z.array(z.string()),
+  revokedNodeIds: z.array(z.string()).default([]),
   maxQueuePerNode: z.number().int().positive().default(100),
   rateLimitPerMinute: z.number().int().positive().default(60),
   /** Where nodes admitted by invitation are kept across restarts (T2.1). Without it, admissions last until restart. */
@@ -60,7 +62,9 @@ export interface RelayHandle {
 }
 
 export function readRelayConfig(path: string): RelayConfig {
-  return RelayConfigSchema.parse(JSON.parse(readFileSync(path, 'utf8')));
+  const config = RelayConfigSchema.parse(JSON.parse(readFileSync(path, 'utf8')));
+  if (config.admittedPath) config.admittedPath = resolve(dirname(path), config.admittedPath);
+  return config;
 }
 
 const defaultLogger: RelayLogger = (entry) => {
@@ -91,13 +95,19 @@ export function startRelay(config: RelayConfig, options: RelayOptions = {}): Pro
   const log = options.logger ?? defaultLogger;
   const now = options.now ?? Date.now;
   const admittedState = loadAdmitted(settings.admittedPath);
-  const allowed = new Set([...settings.allowedNodeIds, ...admittedState.admitted.map((entry) => entry.nodeId)]);
+  const revoked = new Set(settings.revokedNodeIds);
+  const allowed = new Set(
+    [...settings.allowedNodeIds, ...admittedState.admitted.map((entry) => entry.nodeId)].filter(
+      (id) => !revoked.has(id),
+    ),
+  );
 
   /**
    * Admits `nodeId` if `raw` is a valid ticket from an admitted sponsor, unspent and within the sponsor's daily quota.
    * Runs after the awaited signature check, so the spent-nonce test and the write below happen in one synchronous step.
    */
   const admit = async (nodeId: string, raw: unknown): Promise<string> => {
+    if (revoked.has(nodeId)) return 'revoked';
     const check = await verifyAdmission(raw, now());
     if (check !== 'ok') return check;
     const ticket = AdmissionSchema.parse(raw);
