@@ -4,12 +4,13 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::fs;
+use std::io::Write;
 use std::net::TcpStream;
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use tauri::image::Image;
 use tauri::menu::{Menu, MenuItem};
@@ -17,13 +18,19 @@ use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent}
 use tauri::{ActivationPolicy, AppHandle, Manager, PhysicalPosition, RunEvent, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
 use tauri_plugin_deep_link::DeepLinkExt;
+use tauri_plugin_updater::{Update, UpdaterExt};
 use url::Url;
 
 const RELAY: &str = "wss://drop.memolabs.dev/v1";
 const PANEL_WIDTH: f64 = 380.0;
 const PANEL_HEIGHT: f64 = 620.0;
+const TRAY: &str = "drop";
+/// The app looks for an update at launch, then this often (D35).
+const UPDATE_CHECK_EVERY: Duration = Duration::from_secs(6 * 60 * 60);
 
 struct Daemon(Mutex<Option<Child>>);
+/// An update found by the last check, offered in the menu until the user installs it (T2.4, D35).
+struct PendingUpdate(Mutex<Option<Update>>);
 
 fn drop_home() -> PathBuf {
     if let Ok(home) = std::env::var("DROP_HOME") {
@@ -58,6 +65,15 @@ fn ensure_identity(app: &AppHandle) {
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status();
+}
+
+/// Appends `{ at, code, detail }` to ~/.drop/app.log: the app's own errors, with a stable code (AGENTS.md).
+fn log_error(code: &str, detail: &str) {
+    let at = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    let line = serde_json::json!({ "at": at, "code": code, "detail": detail });
+    if let Ok(mut file) = fs::OpenOptions::new().create(true).append(true).open(drop_home().join("app.log")) {
+        let _ = writeln!(file, "{line}");
+    }
 }
 
 fn start_daemon(app: &AppHandle) {
@@ -157,14 +173,91 @@ fn open_links(app: &AppHandle, urls: Vec<Url>) {
     }
 }
 
+fn stop_daemon(app: &AppHandle) {
+    if let Some(mut child) = app.state::<Daemon>().0.lock().unwrap().take() {
+        let _ = child.kill();
+    }
+}
+
+/// The icon's menu; with an update pending it starts with "Mettre à jour vers x.y.z", greyed out while installing.
+fn set_tray_menu(app: &AppHandle, update: Option<&str>, installing: bool) -> tauri::Result<()> {
+    let open = MenuItem::with_id(app, "open", "Ouvrir drop", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", "Quitter drop", true, None::<&str>)?;
+    let menu = match update {
+        Some(version) => {
+            let label = if installing {
+                format!("Mise à jour vers {version}…")
+            } else {
+                format!("Mettre à jour vers {version}")
+            };
+            let item = MenuItem::with_id(app, "update", label, !installing, None::<&str>)?;
+            Menu::with_items(app, &[&item, &open, &quit])?
+        }
+        None => Menu::with_items(app, &[&open, &quit])?,
+    };
+    if let Some(tray) = app.tray_by_id(TRAY) {
+        tray.set_menu(Some(menu))?;
+    }
+    Ok(())
+}
+
+/// Checks the update endpoint; a newer version, signed for that version with drop's key, is offered in the menu.
+/// Nothing is downloaded before the user clicks it.
+fn check_for_update(app: &AppHandle) {
+    let found = tauri::async_runtime::block_on(async {
+        match app.updater() {
+            Ok(updater) => updater.check().await,
+            Err(error) => Err(error),
+        }
+    });
+    match found {
+        Ok(Some(update)) => {
+            let version = update.version.clone();
+            *app.state::<PendingUpdate>().0.lock().unwrap() = Some(update);
+            if let Err(error) = set_tray_menu(app, Some(&version), false) {
+                log_error("E_UPDATE_MENU", &error.to_string());
+            }
+        }
+        Ok(None) => {}
+        Err(error) => log_error("E_UPDATE_CHECK", &error.to_string()),
+    }
+}
+
+/// Downloads the pending update, checks its signature, replaces the app, then restarts it with its daemon.
+fn install_update(app: &AppHandle) {
+    let Some(update) = app.state::<PendingUpdate>().0.lock().unwrap().take() else { return };
+    let version = update.version.clone();
+    let _ = set_tray_menu(app, Some(&version), true);
+    let app = app.clone();
+    thread::spawn(move || {
+        match tauri::async_runtime::block_on(update.download_and_install(|_, _| {}, || {})) {
+            Ok(()) => {
+                stop_daemon(&app);
+                app.restart();
+            }
+            Err(error) => {
+                log_error("E_UPDATE_INSTALL", &error.to_string());
+                // Offered again by the next check.
+                let _ = set_tray_menu(&app, None, false);
+            }
+        }
+    });
+}
+
 fn main() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, None))
         .manage(Daemon(Mutex::new(None)))
+        .manage(PendingUpdate(Mutex::new(None)))
         .setup(|app| {
             app.set_activation_policy(ActivationPolicy::Accessory);
             let handle = app.handle().clone();
+            // Only a build made with the update key carries the updater config (scripts/build-mac.ts --updates).
+            let updates = app.config().plugins.0.contains_key("updater");
+            if updates {
+                handle.plugin(tauri_plugin_updater::Builder::new().build())?;
+            }
             ensure_identity(&handle);
             start_daemon(&handle);
 
@@ -196,7 +289,7 @@ fn main() {
             let open = MenuItem::with_id(app, "open", "Ouvrir drop", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quitter drop", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&open, &quit])?;
-            TrayIconBuilder::new()
+            TrayIconBuilder::with_id(TRAY)
                 .icon(Image::from_bytes(include_bytes!("../icons/tray.png"))?)
                 .icon_as_template(true)
                 .tooltip("drop")
@@ -204,6 +297,7 @@ fn main() {
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| match event.id().as_ref() {
                     "open" => show_panel(app, None),
+                    "update" => install_update(app),
                     "quit" => app.exit(0),
                     _ => {}
                 })
@@ -230,6 +324,13 @@ fn main() {
             if !cfg!(debug_assertions) {
                 let _ = app.autolaunch().enable();
             }
+            if updates {
+                let checker = handle.clone();
+                thread::spawn(move || loop {
+                    check_for_update(&checker);
+                    thread::sleep(UPDATE_CHECK_EVERY);
+                });
+            }
             Ok(())
         })
         .build(tauri::generate_context!())
@@ -237,9 +338,7 @@ fn main() {
 
     app.run(|handle, event| {
         if let RunEvent::Exit = event {
-            if let Some(mut child) = handle.state::<Daemon>().0.lock().unwrap().take() {
-                let _ = child.kill();
-            }
+            stop_daemon(handle);
         }
     });
 }
