@@ -41,23 +41,28 @@
       "severity": "high",
       "status": "mitigated_pending_final_review",
       "description": "Replay and quota bypasses fixed; foreign lock age takeover and missing clock after migration now fail closed, pending fresh review"
+    },
+    {
+      "id": "R-2",
+      "severity": "high",
+      "status": "open",
+      "description": "NodeEngine.executing and outbound have no memory bound; CSO finding 369ec22b77cbf3bf1de4e4b432896a67 for executing; T3.1c must address before pilot T3.5"
     }
   ],
   "verification": {
     "targetedTests": "passed",
     "lint": "passed",
     "typecheck": "passed",
-    "fullTests": "passed_294_of_294_uncommitted_review_fixes",
+    "fullTests": "passed_294_of_294_commit_56c396c",
     "openspecValidate": "passed",
     "guard": "passed_390_criteria_113_linked_baseline_plus0_minus0",
-    "review": "gstack_completed_true_converged_false_3_cycles_then_two_independent_P1_fixed_fresh_review_pending",
-    "cso": "partial_recheck_cannot_certify_closure"
+    "review": "gstack_completed_true_converged_false_3_cycles;_fresh_review_blocked_by_claude_session_limit_until_18h20_Paris",
+    "cso": "finished_partial_run_1791554996421-68b812ec9550df5c;_one_high_memory_growth_finding;_semgrep_not_assessed"
   },
   "remaining": [
-    "Fresh gstack /review pass on the cycle-3 fixes and the independent lock/clock corrections",
-    "Commit the uncommitted review fixes",
-    "Open informational test gaps: other peer on finished drop, relay idle sweep, release guard, takeover re-check, deliver/duplicate interleave",
-    "Archive and index after formal review",
-    "Final closure commit"
+    "Fresh gstack /review after Claude session limit resets at 18:20 Europe/Paris; resolve any findings",
+    "T3.1c owns HIGH memory availability finding; it blocks T3.5 and acceptance of the private profile, not the T3.1b replay-store contract",
+    "CSO completeness remains partial: Semgrep Docker socket unavailable and snapshot exclusions",
+    "Archive and mark T3.1b done only after required review validates its own contract"
   ]
 }
