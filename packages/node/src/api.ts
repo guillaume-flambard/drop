@@ -1,6 +1,7 @@
 import { timingSafeEqual } from 'node:crypto';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { z } from 'zod';
+import { isDropError } from '@drop/protocol';
 import type { NodeEngine } from './engine.ts';
 import { renderPanel } from './panel.ts';
 import { routeQuestion, takesQuestion } from './route.ts';
@@ -158,7 +159,15 @@ export function startLocalApi(options: LocalApiOptions): Promise<LocalApi> {
       try {
         const drop = await engine.requestDrop(parsed.data);
         json(res, 201, { dropId: drop.dropId, owner: drop.ownerName, title: drop.title });
-      } catch {
+      } catch (error) {
+        if (isDropError(error, 'E_RATE')) {
+          json(res, 429, { error: 'E_RATE', message: 'Trop de demandes actives.' });
+          return;
+        }
+        if (isDropError(error, 'E_TOO_LARGE')) {
+          json(res, 413, { error: 'E_TOO_LARGE', message: 'Enveloppe trop grande.' });
+          return;
+        }
         json(res, 404, { error: 'E_UNKNOWN_CAPABILITY', message: 'no such capability among paired peers' });
       }
       return;
@@ -179,13 +188,19 @@ export function startLocalApi(options: LocalApiOptions): Promise<LocalApi> {
       const routes = routeQuestion(catalog, parsed.data.question);
       const asked = [];
       for (const route of routes) {
-        const drop = await engine.requestDrop({
-          capabilityId: route.capabilityId,
-          input: { question: parsed.data.question },
-          purpose: parsed.data.purpose ?? 'Pas de raison précisée.',
-          agent: parsed.data.agent,
-        });
-        asked.push({ dropId: drop.dropId, ...route });
+        try {
+          const drop = await engine.requestDrop({
+            capabilityId: route.capabilityId,
+            input: { question: parsed.data.question },
+            purpose: parsed.data.purpose ?? 'Pas de raison précisée.',
+            agent: parsed.data.agent,
+          });
+          asked.push({ dropId: drop.dropId, ...route });
+        } catch (error) {
+          if (!isDropError(error, 'E_RATE')) throw error;
+          json(res, 429, { error: 'E_RATE', message: 'Trop de demandes actives.', asked });
+          return;
+        }
       }
       const helpers = catalog
         .filter(takesQuestion)

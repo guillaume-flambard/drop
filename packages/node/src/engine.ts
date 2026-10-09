@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events';
 import {
   createAdmission,
+  DropError,
   createTeam,
   createInvite,
   decodeInvite,
@@ -42,6 +43,11 @@ import type { AgentLink, Peer, Published, TeamState } from './home.ts';
 export const APPROVAL_TTL_MS = 10 * 60_000;
 export const REVIEW_TTL_MS = 10 * 60_000;
 export const CATALOG_TTL_MS = 60_000;
+export const MAX_ACTIVE_EXECUTING_DROPS = 1_024;
+export const MAX_COMPLETED_ERRORS = 1_024;
+export const MAX_OUTBOUND_DROPS = 1_024;
+export const MAX_INBOX_ITEMS = 1_024;
+export const MAX_OUTBOX_ENVELOPES = 1_024;
 
 export interface Transport {
   send(envelope: Envelope): Promise<string>;
@@ -199,6 +205,11 @@ export class NodeEngine extends EventEmitter {
   private readonly pairing = new Map<NodeId, { token: string; displayName: string }>();
   private readonly catalogs = new Map<NodeId, { cards: CapabilityCard[]; at: number }>();
   private readonly executing = new Map<string, ExecutorDrop>();
+  /** Minimal duplicate response, without the request input, tools, config or funding. */
+  private readonly completedErrors = new Map<
+    string,
+    { requester: NodeId; error: ExecutorDrop['error']; expiresAt: number }
+  >();
   private readonly outbound = new Map<string, OutboundDrop>();
   private readonly inbox = new Map<string, InboxItem>();
   private readonly outbox: Envelope[] = [];
@@ -218,6 +229,17 @@ export class NodeEngine extends EventEmitter {
 
   pending(): InboxItem[] {
     return [...this.inbox.values()].sort((a, b) => a.expiresAt - b.expiresAt);
+  }
+
+  /** Counts only; safe for local diagnostics and bounded-memory tests. */
+  memoryStats(): { executing: number; completedErrors: number; outbound: number; inbox: number; outbox: number } {
+    return {
+      executing: this.executing.size,
+      completedErrors: this.completedErrors.size,
+      outbound: this.outbound.size,
+      inbox: this.inbox.size,
+      outbox: this.outbox.length,
+    };
   }
 
   drop(dropId: string): OutboundDrop | undefined {
@@ -439,6 +461,7 @@ export class NodeEngine extends EventEmitter {
   }): Promise<OutboundDrop> {
     const entry = this.catalog().find((candidate) => candidate.card.id === request.capabilityId);
     if (!entry) throw new Error(`unknown capability: ${request.capabilityId}`);
+    this.reserveOutboundSlot();
     const dropId = uuidv7(this.now());
     const outbound: OutboundDrop = {
       dropId,
@@ -450,19 +473,66 @@ export class NodeEngine extends EventEmitter {
       createdAt: this.now(),
     };
     this.outbound.set(dropId, outbound);
-    const funding = await this.options.funder?.mint(dropId);
-    await this.send(entry.card.executorNodeId, {
-      type: 'drop_request',
-      dropId,
-      capabilityId: entry.card.id,
-      capabilityVersion: entry.card.version,
-      input: request.input,
-      purpose: request.purpose,
-      requestedBy: { nodeId: this.identity.nodeId, displayName: this.identity.displayName, agent: request.agent },
-      ...(funding ? { funding } : {}),
-    });
+    let funding: Funding | undefined;
+    try {
+      funding = await this.options.funder?.mint(dropId);
+    } catch (error) {
+      this.outbound.delete(dropId);
+      throw error;
+    }
+    let outcome: string;
+    try {
+      outcome = await this.send(
+        entry.card.executorNodeId,
+        {
+          type: 'drop_request',
+          dropId,
+          capabilityId: entry.card.id,
+          capabilityVersion: entry.card.version,
+          input: request.input,
+          purpose: request.purpose,
+          requestedBy: { nodeId: this.identity.nodeId, displayName: this.identity.displayName, agent: request.agent },
+          ...(funding ? { funding } : {}),
+        },
+        false,
+      );
+    } catch (error) {
+      await this.abandonOutbound(dropId, funding);
+      throw error;
+    }
+    if (outcome === 'E_RATE' || outcome === 'E_QUEUE_FULL' || outcome === 'offline') {
+      await this.abandonOutbound(dropId, funding);
+      throw new DropError('E_RATE', 'Le relais a refusé la demande.');
+    }
     this.changed();
     return outbound;
+  }
+
+  private async abandonOutbound(dropId: string, funding: Funding | undefined): Promise<void> {
+    this.outbound.delete(dropId);
+    if (funding && this.options.funder) {
+      try {
+        await this.options.funder.release(dropId);
+      } catch {
+        this.log({ event: 'funding', code: 'E_FUNDING_RELEASE', dropId });
+      }
+    }
+    this.changed();
+  }
+
+  private reserveOutboundSlot(): void {
+    if (this.outbound.size < MAX_OUTBOUND_DROPS) return;
+    for (const [dropId, drop] of this.outbound) {
+      if (
+        drop.result ||
+        drop.error ||
+        ['denied', 'expired', 'not_now', 'failed', 'delivered', 'receipted'].includes(drop.state)
+      ) {
+        this.outbound.delete(dropId);
+        break;
+      }
+    }
+    if (this.outbound.size >= MAX_OUTBOUND_DROPS) throw new DropError('E_RATE', 'Trop de demandes actives.');
   }
 
   // ---- approver ----------------------------------------------------------------------------------------------
@@ -512,14 +582,27 @@ export class NodeEngine extends EventEmitter {
     const pending = this.outbox.splice(0);
     for (const envelope of pending) {
       if (envelope.exp <= this.now()) continue;
-      const outcome = await this.options.transport.send(envelope);
-      if (outcome === 'offline') this.outbox.push(envelope);
+      let outcome: string;
+      try {
+        outcome = await this.options.transport.send(envelope);
+      } catch {
+        this.log({ event: 'send_failed', code: 'E_RUNNER', reason: 'transport_exception', peer: envelope.to });
+        outcome = 'offline';
+      }
+      if (outcome === 'offline' || outcome === 'E_RATE' || outcome === 'E_QUEUE_FULL') {
+        if (outcome !== 'offline')
+          this.log({ event: 'send_failed', code: outcome, reason: 'flush_refused', peer: envelope.to });
+        this.queueOutbox(envelope);
+      } else if (outcome !== 'delivered' && outcome !== 'queued') {
+        this.log({ event: 'send_failed', code: outcome, reason: 'flush_rejected', peer: envelope.to });
+      }
     }
   }
 
   /** Expires undecided approvals and reviews. Called every second by the daemon, or with a simulated clock in tests. */
   async tick(): Promise<void> {
     const now = this.now();
+    this.pruneCompletedErrors(now);
     for (const [dropId, item] of this.inbox) if (item.expiresAt <= now) this.inbox.delete(dropId);
     for (const drop of this.executing.values()) {
       if (drop.state === 'awaiting_approval' && drop.expiresAt <= now) {
@@ -633,10 +716,20 @@ export class NodeEngine extends EventEmitter {
   }
 
   private async onDropRequest(from: NodeId, message: MessageOf<'drop_request'>): Promise<void> {
+    this.pruneCompletedErrors(this.now());
     // Before any other check, freshness included, so a duplicate never fails a drop the owner may have approved.
     const active = this.executing.get(message.dropId);
     if (active) {
       await this.answerDuplicate(from, active);
+      return;
+    }
+    const finished = this.completedErrors.get(message.dropId);
+    if (finished) {
+      await this.send(from, {
+        type: 'drop_error',
+        dropId: message.dropId,
+        ...(finished.requester === from && finished.error ? finished.error : CLAIM_ERRORS.duplicate),
+      });
       return;
     }
     const requestTime = uuidv7Timestamp(message.dropId);
@@ -711,6 +804,17 @@ export class NodeEngine extends EventEmitter {
         return;
       }
     }
+    if (this.executing.size >= MAX_ACTIVE_EXECUTING_DROPS) {
+      this.log({
+        event: 'drop_rejected',
+        code: 'E_RATE',
+        reason: 'execution_capacity',
+        dropId: message.dropId,
+        peer: from,
+      });
+      await this.send(from, { type: 'drop_error', dropId: message.dropId, ...CLAIM_ERRORS.capacity });
+      return;
+    }
     const drop: ExecutorDrop = {
       dropId: message.dropId,
       requester: from,
@@ -758,7 +862,26 @@ export class NodeEngine extends EventEmitter {
   }
 
   private onApprovalRequest(from: NodeId, message: MessageOf<'approval_request'>): void {
-    if (message.expiresAt <= this.now()) return;
+    if (message.expiresAt <= this.now() || message.expiresAt > this.now() + APPROVAL_TTL_MS + MAX_CLOCK_SKEW_MS) {
+      this.log({
+        event: 'approval_rejected',
+        code: 'E_EXPIRED',
+        reason: 'approval_expiry',
+        dropId: message.dropId,
+        peer: from,
+      });
+      return;
+    }
+    if (!this.inbox.has(message.dropId) && this.inbox.size >= MAX_INBOX_ITEMS) {
+      this.log({
+        event: 'approval_rejected',
+        code: 'E_RATE',
+        reason: 'inbox_capacity',
+        dropId: message.dropId,
+        peer: from,
+      });
+      return;
+    }
     this.inbox.set(message.dropId, {
       kind: 'approval',
       dropId: message.dropId,
@@ -825,6 +948,26 @@ export class NodeEngine extends EventEmitter {
   }
 
   private onReviewRequest(from: NodeId, message: MessageOf<'review_request'>): void {
+    if (message.expiresAt <= this.now() || message.expiresAt > this.now() + REVIEW_TTL_MS + MAX_CLOCK_SKEW_MS) {
+      this.log({
+        event: 'review_rejected',
+        code: 'E_EXPIRED',
+        reason: 'review_expiry',
+        dropId: message.dropId,
+        peer: from,
+      });
+      return;
+    }
+    if (!this.inbox.has(message.dropId) && this.inbox.size >= MAX_INBOX_ITEMS) {
+      this.log({
+        event: 'review_rejected',
+        code: 'E_RATE',
+        reason: 'inbox_capacity',
+        dropId: message.dropId,
+        peer: from,
+      });
+      return;
+    }
     this.inbox.set(message.dropId, {
       kind: 'review',
       dropId: message.dropId,
@@ -906,17 +1049,21 @@ export class NodeEngine extends EventEmitter {
     // The state moves only once the result is handed to the transport, so a duplicate answered meanwhile can only
     // learn the unsettled state, never a refusal that would overtake the result.
     drop.timestamps.delivered = this.now();
-    await this.send(drop.requester, {
-      type: 'drop_result',
-      dropId: drop.dropId,
-      output,
-      outputSchemaHash: sha256Hex(drop.card.outputSchema),
-    });
-    drop.state = 'delivered';
-    await this.writeReceipt(drop, 'allow_once', sha256Hex(output));
-    drop.state = 'receipted';
-    drop.output = undefined;
-    this.changed();
+    try {
+      await this.send(drop.requester, {
+        type: 'drop_result',
+        dropId: drop.dropId,
+        output,
+        outputSchemaHash: sha256Hex(drop.card.outputSchema),
+      });
+      drop.state = 'delivered';
+      await this.writeReceipt(drop, 'allow_once', sha256Hex(output));
+      drop.state = 'receipted';
+    } finally {
+      drop.output = undefined;
+      this.executing.delete(drop.dropId);
+      this.changed();
+    }
   }
 
   private async fail(
@@ -926,10 +1073,33 @@ export class NodeEngine extends EventEmitter {
     decision: Receipt['decision'],
   ): Promise<void> {
     drop.error = { code, message: text };
-    await this.send(drop.requester, { type: 'drop_error', dropId: drop.dropId, ...drop.error });
-    await this.writeReceipt(drop, decision, undefined, code);
-    drop.output = undefined;
-    this.changed();
+    try {
+      await this.send(drop.requester, { type: 'drop_error', dropId: drop.dropId, ...drop.error });
+      await this.writeReceipt(drop, decision, undefined, code);
+    } finally {
+      drop.output = undefined;
+      this.rememberCompletedError(drop);
+      this.executing.delete(drop.dropId);
+      this.changed();
+    }
+  }
+
+  private rememberCompletedError(drop: ExecutorDrop): void {
+    const timestamp = uuidv7Timestamp(drop.dropId);
+    if (timestamp === undefined || !drop.error) return;
+    const expiresAt = timestamp + REPLAY_WINDOW_MS;
+    if (expiresAt <= this.now()) return;
+    this.pruneCompletedErrors(this.now());
+    if (this.completedErrors.size >= MAX_COMPLETED_ERRORS) {
+      const oldest = this.completedErrors.keys().next().value;
+      if (oldest !== undefined) this.completedErrors.delete(oldest);
+    }
+    this.completedErrors.set(drop.dropId, { requester: drop.requester, error: drop.error, expiresAt });
+  }
+
+  private pruneCompletedErrors(now: number): void {
+    for (const [dropId, summary] of this.completedErrors)
+      if (summary.expiresAt <= now) this.completedErrors.delete(dropId);
   }
 
   private async writeReceipt(
@@ -976,12 +1146,32 @@ export class NodeEngine extends EventEmitter {
     await this.send(drop.requester, { type: 'drop_status', dropId: drop.dropId, state: drop.state });
   }
 
-  private async send(to: NodeId, message: Message): Promise<void> {
+  private queueOutbox(envelope: Envelope): void {
+    const now = this.now();
+    for (let index = this.outbox.length - 1; index >= 0; index -= 1) {
+      const queued = this.outbox[index];
+      if (queued && queued.exp <= now) this.outbox.splice(index, 1);
+    }
+    if (this.outbox.length >= MAX_OUTBOX_ENVELOPES) {
+      this.outbox.shift();
+      this.log({ event: 'send_failed', code: 'E_RATE', reason: 'outbox_capacity' });
+    }
+    this.outbox.push(envelope);
+  }
+
+  private async send(to: NodeId, message: Message, queueOffline = true): Promise<string> {
     const envelope = await sealEnvelope(this.identity, to, message, { now: this.now() });
-    const outcome = await this.options.transport.send(envelope);
-    if (outcome === 'offline') this.outbox.push(envelope);
+    let outcome: string;
+    try {
+      outcome = await this.options.transport.send(envelope);
+    } catch {
+      this.log({ event: 'send_failed', code: 'E_RUNNER', reason: 'transport_exception', peer: to });
+      outcome = 'offline';
+    }
+    if (outcome === 'offline' && queueOffline) this.queueOutbox(envelope);
     else if (outcome !== 'delivered' && outcome !== 'queued')
       this.log({ event: 'send_failed', code: outcome, peer: to });
+    return outcome;
   }
 
   private cardFor(published: Published): { card: CapabilityCard; impl: CapabilityImpl } | undefined {

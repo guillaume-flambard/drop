@@ -1,0 +1,79 @@
+{
+  "change": "t3-1c-replay-store-hardening",
+  "phase": "VERIFY",
+  "status": "VERIFYING",
+  "requirements": [
+    "REQ-1 bounded executor memory",
+    "REQ-2 bounded requester memory",
+    "REQ-3 bounded approval inbox",
+    "REQ-4 bounded offline outbox",
+    "REQ-5 relay refusal cleanup",
+    "REQ-6 bounded envelope ReplayCache"
+  ],
+  "acceptance": {
+    "executor_release": "passed",
+    "executor_duplicate": "passed",
+    "executor_capacity": "passed",
+    "requester_history": "passed",
+    "requester_capacity": "passed",
+    "inbox_capacity": "passed",
+    "inbox_expiry": "passed",
+    "outbox_capacity": "passed",
+    "transport_exception": "passed",
+    "relay_refusal": "passed",
+    "relay_offline": "passed",
+    "initial_envelope_too_large": "passed",
+    "replay_cache_capacity": "passed",
+    "replay_cache_expiry": "passed"
+  },
+  "workGraph": {
+    "1.1": "DONE",
+    "1.2": "DONE",
+    "2.1": "DONE",
+    "2.2": "DONE",
+    "3.1": "DONE",
+    "3.2": "DONE",
+    "3.3": "DONE",
+    "3.4": "DONE",
+    "4.1": "DONE",
+    "4.2": "DONE",
+    "4.3": "TODO"
+  },
+  "risks": [
+    {
+      "id": "R-1",
+      "severity": "high",
+      "status": "mitigated_pending_formal_review",
+      "description": "Previously unbounded executor/requester memory under repeated valid requests; bounded in code and tests, awaiting gstack review and CSO"
+    },
+    {
+      "id": "R-2",
+      "severity": "high",
+      "status": "mitigated_pending_formal_review",
+      "description": "Previously unbounded inbox/outbox/ReplayCache and relay refusal stranding outbound slots; bounded in code and tests, awaiting gstack review and CSO"
+    },
+    {
+      "id": "R-3",
+      "severity": "medium",
+      "status": "open_in_T3.1e_before_pilot",
+      "description": "Finite entry counts can still represent a large byte budget; ReplayCache pruning is O(N); offline queue saturation can lose an old outcome"
+    }
+  ],
+  "verification": {
+    "targetedTests": "passed_63_of_63_independent",
+    "lint": "passed",
+    "typecheck": "passed",
+    "fullTests": "passed_312_of_312",
+    "openspecValidate": "passed_strict_change_and_16_specs",
+    "guard": "passed_128_linked_258_historical_frozen_baseline_plus0_minus0",
+    "independentReview": "passed_no_P0_P1_in_T3.1c_scope",
+    "review": "pending_gstack_quota",
+    "cso": "finished_partial_run_1791556424890-fc5cb966b6a46fe0_zero_supported_findings;_prior_HIGH_recheck_1791556505240-2e2b9ead1eb3571c_unknown_due_partial"
+  },
+  "remaining": [
+    "Run formal gstack /review after Claude quota reset at 18:20 Europe/Paris; resolve any P0/P1",
+    "CSO and original HIGH recheck are partial: static mitigation evidence exists, but helper disallows closure from partial coverage; Semgrep Docker socket and snapshot exclusions limit assurance",
+    "Do not archive or mark T3.1c done before formal review and no open high risk",
+    "Carry byte budget, ReplayCache operation cost and durable outcome delivery into T3.1e before pilot"
+  ]
+}
