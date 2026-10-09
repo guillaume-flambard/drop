@@ -34,6 +34,8 @@ Cap adopté le 9 octobre 2026. T3.0 est vérifiée et archivée, en READY_FOR_MA
 
 Preuves T3.0 : [archive et recette](../openspec/changes/archive/2026-10-09-t3-0-sovereign-oss-foundation/closure.md). Le statut `done` de l’index désigne le travail vérifié de cette tâche ; son acceptation visuelle humaine reste ouverte dans `state.json`.
 
+Preuves T3.4a : [archive et vérification](../openspec/changes/archive/2026-10-09-t3-4a-empty-local-token-auth/proof/verification.md), commit `120c0f6`. T3.4 reste `blocked` pour la signature/notarisation et la recette VoiceOver réelle ; son risque de jeton vide R-7 est clos par T3.4a.
+
 Critères d'exécution : [ACCEPTANCE.md](ACCEPTANCE.md). Chaque tâche promeut ses critères dans les specs avant de coder. Les identifiants de capacités inexistantes sont créés lors de leur tâche ; les contrats actuels restent ceux du prototype jusqu'à leur révision. D24 reste requis avant le pilote et T2.7. Le modèle n'est pas une dépendance du raccordement local : T3.2 et T3.3 peuvent être réalisés indépendamment après T3.1.
 
 Hermes (T3.1a) et les adaptateurs fournisseurs (T3.2a) sont des évaluations complémentaires, non bloquantes pour T3.3 à T3.8. Hermes ne remplace pas le contrôle de consentement ; le client OpenAI-compatible actuel suffit à lancer la preuve privée. AI SDK reste candidat, LiteLLM optionnel chez le client. Aucun SDK nouveau n’est autorisé par leur simple inscription ; D39 précise la décision attendue.
