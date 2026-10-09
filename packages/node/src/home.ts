@@ -32,6 +32,7 @@ import {
   type Receipt,
   MAX_CLOCK_SKEW_MS,
   REPLAY_WINDOW_MS,
+  sha256Hex,
   uuidv7Timestamp,
 } from '@drop/protocol';
 
@@ -234,16 +235,20 @@ export class DropHome {
     const dir = join(this.root, 'received-drops');
     const clockPath = join(this.root, 'received-drops-clock');
     const versionPath = join(this.root, 'received-drops-version');
+    const integrityPath = join(this.root, 'received-drops-integrity');
     const clockExists = existsSync(clockPath);
     const versionExists = existsSync(versionPath);
     // The clock/version prove that this home has admitted requests. Recreating a lost marker directory would
     // silently reopen consent for a recent request whose tombstone was in that directory.
     if (!existsSync(dir) && (clockExists || versionExists)) throw new Error('E_REPLAY_STATE missing markers');
     mkdirSync(dir, { recursive: true, mode: 0o700 });
+    const version = versionExists ? readFileSync(versionPath, 'utf8') : undefined;
     if (versionExists) {
-      if (readFileSync(versionPath, 'utf8') !== '1\n') throw new Error('E_REPLAY_STATE corrupt version');
+      if (version !== '1\n' && version !== '2\n') throw new Error('E_REPLAY_STATE corrupt version');
       if (!clockExists) throw new Error('E_REPLAY_STATE missing clock');
     }
+    const integrityExists = existsSync(integrityPath);
+    if (version === '2\n' && !integrityExists) throw new Error('E_REPLAY_STATE missing integrity');
     let highWater = 0;
     if (clockExists) {
       const raw = readFileSync(clockPath, 'utf8').trim();
@@ -255,12 +260,17 @@ export class DropHome {
       highWater = Math.max(now, highWater);
       writeDurablePrivate(clockPath, `${String(highWater)}\n`);
     }
-    // Distinguish a first T3.1b migration from later loss of the replay clock.
-    if (!versionExists) writeDurablePrivate(versionPath, '1\n');
     const floor = highWater - REPLAY_WINDOW_MS;
     let count = 0;
     let removed = false;
     const entries = readdirSync(dir, { withFileTypes: true });
+    const markerNames = entries
+      .filter((entry) => UUID_SHAPE.test(entry.name))
+      .map((entry) => entry.name)
+      .sort();
+    if (integrityExists && readFileSync(integrityPath, 'utf8') !== `${sha256Hex(markerNames)}\n`) {
+      throw new Error('E_REPLAY_STATE marker integrity');
+    }
     const names = new Set(entries.map((entry) => entry.name));
     const retained = new Set<string>();
     for (const entry of entries) {
@@ -292,6 +302,10 @@ export class DropHome {
       }
     }
     if (removed) syncDirectory(dir);
+    if (removed || !integrityExists) writeDurablePrivate(integrityPath, `${sha256Hex([...retained].sort())}\n`);
+    // Version 1 is upgraded only after the marker-set digest is durable. A crash between the two writes is safe:
+    // the next admission verifies the digest even while the version still says 1.
+    if (version !== '2\n') writeDurablePrivate(versionPath, '2\n');
     if (timestamp < floor || timestamp > highWater + MAX_CLOCK_SKEW_MS) return 'expired';
     if (existsSync(join(dir, dropId))) return 'duplicate';
     if (count >= MAX_RECEIVED_DROPS) return 'capacity';
@@ -303,6 +317,7 @@ export class DropHome {
         closeSync(fd);
       }
       syncDirectory(dir);
+      writeDurablePrivate(integrityPath, `${sha256Hex([...retained, dropId].sort())}\n`);
       return 'claimed';
     } catch (error) {
       if (errorCode(error) === 'EEXIST') return 'duplicate';
