@@ -33,22 +33,47 @@ localhost) et correspondre exactement à celles enregistrées.
 - **THEN** la demande est refusée
 
 ### Requirement: Liaison confirmée dans l'app
-La page d'autorisation SHALL ouvrir l'app drop par `drop://link?session=…&gateway=…&client=…`. Le Node MUST n'envoyer
-`link_grant` qu'après l'accord de l'utilisateur dans son panneau, qui avertit si la passerelle n'est pas parmi celles de
-confiance. La passerelle MUST accepter un `link_grant` d'un Node inconnu seulement pour une session en attente, et lier
-la session à ce Node.
+La page d'autorisation SHALL ouvrir l'app drop par `drop://link?session=…&gateway=…&client=…&client_id=…&redirect=…`,
+où `redirect` est le domaine de l'adresse de retour de la session ; la page et le panneau MUST afficher ce domaine à
+côté du nom de l'assistant. Le panneau MUST avertir si la passerelle n'est pas parmi celles de confiance, et si le
+domaine n'est ni `claude.ai`, ni `chatgpt.com`, ni `chat.openai.com`. Le Node MUST n'envoyer `link_grant { sessionId,
+clientId, clientName, redirectHost }` qu'après l'accord de l'utilisateur, avec ce que le panneau a affiché. La
+passerelle MUST accepter un `link_grant` d'un Node inconnu seulement pour une session en attente, et ne lier la
+session à ce Node que si `clientId`, `clientName` et `redirectHost` sont exactement ceux de la session (D36).
 
 #### Scenario: Liaison puis retrait
 <!-- openspec-guard:test="consumer gateway: Claude or ChatGPT reach the team through the user’s node (T2.13) > runs the whole connector flow: discovery, registration, approval in the app, PKCE, then ask_team over MCP" -->
-- **WHEN** l'utilisateur relie Claude puis retire le lien dans son panneau
-- **THEN** les appels de Claude passent tant que le lien existe, puis échouent : le Node ignore une passerelle qu'il ne connaît plus
+- **WHEN** l'utilisateur relie Claude et ChatGPT par la même passerelle, puis retire Claude dans son panneau
+- **THEN** les appels de Claude passent tant que le lien existe, puis échouent ; ceux de ChatGPT continuent de passer
+
+#### Scenario: Lien truqué
+<!-- openspec-guard:test="consumer gateway: Claude or ChatGPT reach the team through the user’s node (T2.13) > binds a link only to the assistant and return domain the user saw in the app (consent phishing)" -->
+- **WHEN** un client nommé « Claude » qui renvoie vers un autre domaine reçoit un `link_grant` qui annonce `claude.ai`, un autre client ou un autre nom
+- **THEN** la passerelle le refuse et la session reste sans Node ; elle n'est liée que si le `link_grant` annonce le vrai domaine, que la page affiche
+
+#### Scenario: Domaine inconnu signalé
+<!-- openspec-guard:test="menu bar panel and its admin routes (T2.4) > names the domain a linked assistant returns to, and warns when it is neither Claude nor ChatGPT" -->
+- **WHEN** le panneau reçoit une demande de liaison dont le domaine de retour n'est pas celui de Claude ou de ChatGPT
+- **THEN** il affiche ce domaine et un avertissement ; sans `client_id` ni `redirect`, il ne propose pas d'autoriser
 
 ### Requirement: Appels transmis au Node
-Chaque appel MCP SHALL devenir un `agent_call { callId, tool, args }` chiffré vers le Node lié au jeton, qui l'exécute
-avec les outils du demandeur (`ask_team`, `get_drop_results`, `list_capabilities`) et répond `agent_reply`. Seul le
-Node visé MAY répondre à un appel. Sans réponse en 58 s, l'assistant reçoit un message clair.
+Chaque appel MCP SHALL devenir un `agent_call { callId, clientId, tool, args }` chiffré vers le Node lié au jeton, qui
+l'exécute avec les outils du demandeur (`ask_team`, `get_drop_results`, `list_capabilities`) et répond `agent_reply`,
+seulement si un lien de ce Node relie encore `clientId` par cette passerelle ; sinon il répond une erreur. Un lien
+enregistré avant `clientId` vaut pour tous les clients de sa passerelle. Seul le Node visé MAY répondre à un appel.
+Sans réponse en 58 s, l'assistant reçoit un message clair.
 
 #### Scenario: Question routée chez un collègue
 <!-- openspec-guard:test="consumer gateway: Claude or ChatGPT reach the team through the user’s node (T2.13) > runs the whole connector flow: discovery, registration, approval in the app, PKCE, then ask_team over MCP" -->
 - **WHEN** Claude appelle `ask_team` avec une question sur une maquette
 - **THEN** le Node de l'utilisateur la route vers le Figma de Julie, et la carte de consentement s'affiche chez Julie
+
+### Requirement: Limites de la passerelle
+L'enregistrement étant ouvert à tous, la passerelle MUST oublier un client qui n'a obtenu aucun jeton 24 h après son
+enregistrement, et, au-delà de 1 000 clients sans jeton ou de 1 000 sessions d'autorisation ouvertes, oublier le plus
+ancien pour faire place au nouveau plutôt que de refuser tout le monde (D36).
+
+#### Scenario: Enregistrements en masse
+<!-- openspec-guard:test="consumer gateway: Claude or ChatGPT reach the team through the user’s node (T2.13) > forgets clients that never got a token after a day, and the oldest pending client or session beyond its limits" -->
+- **WHEN** des clients s'enregistrent sans jamais obtenir de jeton, ou que des sessions s'ouvrent sans être autorisées
+- **THEN** au-delà de la limite le plus ancien est oublié, et un client sans jeton disparaît après 24 h

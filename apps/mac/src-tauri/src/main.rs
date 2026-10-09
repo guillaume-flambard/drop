@@ -143,8 +143,9 @@ fn toggle_panel(app: &AppHandle, near: PhysicalPosition<f64>) {
     show_panel(app, Some(near));
 }
 
-/// `drop://pair?code=…` joins a team; `drop://link?session=…&gateway=…&client=…` asks to link an assistant such as
-/// Claude or ChatGPT (T2.13). Either way the panel opens with the request and the user decides there.
+/// `drop://pair?code=…` joins a team; `drop://link?session=…&gateway=…&client=…&client_id=…&redirect=…` asks to link
+/// an assistant such as Claude or ChatGPT (T2.13). Either way the panel opens with the request and the user decides
+/// there; for a link it shows the domain the answers return to, which the gateway checks against the session (D36).
 fn open_links(app: &AppHandle, urls: Vec<Url>) {
     for link in urls {
         if link.scheme() != "drop" {
@@ -158,6 +159,8 @@ fn open_links(app: &AppHandle, urls: Vec<Url>) {
                     ("link", session),
                     ("gateway", gateway),
                     ("client", param("client").unwrap_or_else(|| "Un assistant".to_string())),
+                    ("clientId", param("client_id").unwrap_or_default()),
+                    ("redirect", param("redirect").unwrap_or_default()),
                 ],
                 _ => vec![],
             },

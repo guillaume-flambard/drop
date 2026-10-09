@@ -2,8 +2,12 @@
  * The menu bar panel (T2.4), served by the node at /app and shown by the Mac app in a window under its tray icon. It
  * follows the mockup https://claude.ai/artifact/Frxdg8DdeGA5CzfNq8PBJD: tabs Demandes, Équipe, Mes outils. It talks only
  * to this node's own API (same origin, bearer token from the URL). Everything a peer wrote is inserted with
- * textContent, never as HTML. No backtick and no dollar-brace in the script below: it lives in a template string.
+ * textContent, never as HTML. No backtick and no dollar-brace in the script below: it lives in a template string. The
+ * one exception is KNOWN_ASSISTANT_HOSTS, a constant of this file injected as JSON.
  */
+/** Where Claude and ChatGPT send their authorization codes back: the app names them, and warns about any other (D36). */
+export const KNOWN_ASSISTANT_HOSTS = ['claude.ai', 'chatgpt.com', 'chat.openai.com'];
+
 export function renderPanel(): string {
   return `<!doctype html>
 <html lang="fr">
@@ -252,7 +256,7 @@ code { font: 11px ui-monospace, monospace; word-break: break-all; }
         var linked = el('div', { class: 'list' });
         data.links.forEach(function (link) {
           linked.appendChild(el('div', { class: 'row' },
-            el('div', { class: 'grow' }, el('div', { text: link.clientName }), el('div', { class: 'muted', text: 'peut demander à ton équipe en ton nom' })),
+            el('div', { class: 'grow' }, el('div', { text: link.clientName + (link.redirectHost ? ' (' + link.redirectHost + ')' : '') }), el('div', { class: 'muted', text: 'peut demander à ton équipe en ton nom' })),
             el('button', { class: 'act', onclick: function () {
               api('POST', '/ui/admin/unlink', { gateway: link.gateway, client: link.clientName }).then(render);
             } }, 'Retirer')));
@@ -290,25 +294,39 @@ code { font: 11px ui-monospace, monospace; word-break: break-all; }
   // Opened from a drop://link link (T2.13): an assistant such as Claude or ChatGPT asks to reach the team in this
   // user's name, through a gateway. Nothing happens until the user clicks.
   var linkParams = new URLSearchParams(location.search);
-  var linkRequest = linkParams.get('link') ? { session: linkParams.get('link'), gateway: linkParams.get('gateway') || '', client: linkParams.get('client') || 'Un assistant' } : null;
+  var linkRequest = linkParams.get('link') ? {
+    session: linkParams.get('link'),
+    gateway: linkParams.get('gateway') || '',
+    client: linkParams.get('client') || 'Un assistant',
+    clientId: linkParams.get('clientId') || '',
+    redirect: linkParams.get('redirect') || ''
+  } : null;
+  var knownHosts = ${JSON.stringify(KNOWN_ASSISTANT_HOSTS)};
   if (linkRequest) history.replaceState(null, '', '/app?token=' + encodeURIComponent(token));
 
+  // The assistant's name comes from whoever registered it; the return domain is what tells Claude from an impostor.
+  // The node's link_grant repeats both, and the gateway refuses it unless they are the session's own.
   function linkCard(view, status) {
     var request = linkRequest;
     var trusted = status.gateways.indexOf(request.gateway) >= 0;
+    var complete = request.clientId !== '' && request.redirect !== '';
+    var known = knownHosts.indexOf(request.redirect) >= 0;
+    var who = request.client + (request.redirect ? ' (' + request.redirect + ')' : '');
     view.appendChild(el('div', { class: 'card' },
-      el('strong', { text: 'Autoriser ' + request.client + ' à demander à ton équipe ?' }),
+      el('strong', { text: 'Autoriser ' + who + ' à demander à ton équipe ?' }),
       el('div', { text: request.client + ' pourra poser des questions à tes collègues en ton nom. Chacun continue d’accepter ou de refuser chaque question ; personne ne reçoit d’accès.' }),
       trusted ? null : el('div', { class: 'error', text: 'Attention : cette demande ne passe pas par la passerelle officielle de drop. Refuse si tu n’en es pas à l’origine.' }),
+      !complete ? el('div', { class: 'error', text: 'Ce lien est incomplet : redemande l’autorisation depuis ton assistant.' })
+        : known ? null : el('div', { class: 'error', text: 'Attention : les réponses partiront vers ' + request.redirect + ', qui n’est ni Claude ni ChatGPT. Refuse si tu n’as pas ajouté toi-même cet assistant.' }),
       el('div', { class: 'actions' },
         el('button', { class: 'act', onclick: function () { linkRequest = null; render(); } }, 'Refuser'),
-        el('button', { class: 'act fill', onclick: function () {
-          api('POST', '/ui/admin/link', { gateway: request.gateway, session: request.session, client: request.client }).then(function () {
+        complete ? el('button', { class: 'act fill', onclick: function () {
+          api('POST', '/ui/admin/link', { gateway: request.gateway, session: request.session, client: request.client, clientId: request.clientId, redirect: request.redirect }).then(function () {
             linkRequest = null;
             info = request.client + ' est relié. Tu peux revenir dans ta conversation.';
             render();
           }, function (error) { notice = error.message; render(); });
-        } }, 'Autoriser'))));
+        } }, 'Autoriser') : null)));
   }
 
   // Opened from a drop://pair link: accept the invitation once, then forget the code.

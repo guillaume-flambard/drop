@@ -2,6 +2,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { z } from 'zod';
 import type { NodeEngine } from './engine.ts';
+import { LinkRequestSchema, type LinkRequest } from './home.ts';
 import { renderPanel } from './panel.ts';
 import { routeQuestion, takesQuestion } from './route.ts';
 import { teamAgent } from './a2a-inbound.ts';
@@ -32,7 +33,7 @@ export interface AdminHooks {
   unshare(capabilityId: string): boolean;
   install(agent: string, remove: boolean): unknown;
   createTeam(name: string): unknown;
-  link(gateway: string, session: string, client: string): Promise<unknown>;
+  link(gateway: string, request: LinkRequest): Promise<unknown>;
   unlink(gateway: string, client: string): boolean;
 }
 
@@ -299,7 +300,17 @@ export function startLocalApi(options: LocalApiOptions): Promise<LocalApi> {
           return;
         }
         if (method === 'POST' && path === '/ui/admin/link') {
-          json(res, 200, await admin.link(field('gateway'), field('session'), field('client')));
+          const request = LinkRequestSchema.safeParse({
+            sessionId: field('session'),
+            clientId: field('clientId'),
+            clientName: field('client'),
+            redirectHost: field('redirect'),
+          });
+          if (!request.success) {
+            json(res, 400, { error: 'E_SCHEMA' });
+            return;
+          }
+          json(res, 200, await admin.link(field('gateway'), request.data));
           return;
         }
         if (method === 'POST' && path === '/ui/admin/unlink') {

@@ -12,6 +12,14 @@ export const ACCESS_TTL_MS = 60 * 60_000;
 export const REFRESH_TTL_MS = 30 * 24 * 60 * 60_000;
 export const SESSION_TTL_MS = 10 * 60_000;
 export const CODE_TTL_MS = 60_000;
+/**
+ * Registration is open to anyone (D36): a client that never obtained a token is forgotten after a day, and beyond the
+ * limits below the oldest pending client or session makes room. Evicting rather than refusing keeps a flood from
+ * locking real users out; it would have to outpace a real sign-in, which takes a minute.
+ */
+export const UNUSED_CLIENT_TTL_MS = 24 * 60 * 60_000;
+export const MAX_PENDING_CLIENTS = 1000;
+export const MAX_SESSIONS = 1000;
 
 export class OAuthError extends Error {
   readonly status: number;
@@ -35,12 +43,15 @@ export const RegistrationSchema = z.object({
   token_endpoint_auth_method: z.literal('none').optional(),
 });
 
-export interface Client {
-  clientId: string;
-  clientName: string;
-  redirectUris: string[];
-  createdAt: number;
-}
+export const ClientSchema = z.object({
+  clientId: z.string(),
+  clientName: z.string(),
+  redirectUris: z.array(z.string()),
+  createdAt: z.number(),
+  /** When a token was first issued to this client; until then it counts against MAX_PENDING_CLIENTS. */
+  usedAt: z.number().optional(),
+});
+export type Client = z.infer<typeof ClientSchema>;
 
 export interface Session {
   id: string;
@@ -54,17 +65,31 @@ export interface Session {
   nodeId?: string | undefined;
 }
 
-export interface TokenRecord {
-  nodeId: string;
+export const TokenRecordSchema = z.object({
+  nodeId: z.string(),
+  clientId: z.string(),
+  kind: z.enum(['access', 'refresh']),
+  expiresAt: z.number(),
+});
+export type TokenRecord = z.infer<typeof TokenRecordSchema>;
+
+export const OAuthStateSchema = z.object({
+  clients: z.record(z.string(), ClientSchema),
+  /** sha256(token) → record. */
+  tokens: z.record(z.string(), TokenRecordSchema),
+});
+export type OAuthState = z.infer<typeof OAuthStateSchema>;
+
+/** What the user saw in their app before approving, repeated by their node's `link_grant`. */
+export interface LinkClaim {
   clientId: string;
-  kind: 'access' | 'refresh';
-  expiresAt: number;
+  clientName: string;
+  redirectHost: string;
 }
 
-export interface OAuthState {
-  clients: Record<string, Client>;
-  /** sha256(token) → record. */
-  tokens: Record<string, TokenRecord>;
+/** The domain an authorization code goes back to: what the app shows next to the assistant's name. */
+export function redirectHost(redirectUri: string): string {
+  return new URL(redirectUri).host;
 }
 
 const sha256 = (value: string): string => createHash('sha256').update(value).digest('hex');
@@ -85,23 +110,35 @@ export class OAuthServer {
   private readonly codes = new Map<string, { sessionId: string; expiresAt: number }>();
   private readonly now: () => number;
   private readonly persist: (state: OAuthState) => void;
+  private readonly maxPendingClients: number;
+  private readonly maxSessions: number;
 
   constructor(options: {
     resource: string;
     state?: OAuthState;
     now?: () => number;
     persist?: (state: OAuthState) => void;
+    maxPendingClients?: number;
+    maxSessions?: number;
   }) {
     this.resource = options.resource;
     this.state = options.state ?? { clients: {}, tokens: {} };
     this.now = options.now ?? Date.now;
     this.persist = options.persist ?? (() => undefined);
+    this.maxPendingClients = options.maxPendingClients ?? MAX_PENDING_CLIENTS;
+    this.maxSessions = options.maxSessions ?? MAX_SESSIONS;
   }
 
   register(raw: unknown): Record<string, unknown> {
     const parsed = RegistrationSchema.safeParse(raw);
     if (!parsed.success)
       throw new OAuthError('invalid_client_metadata', parsed.error.issues[0]?.message ?? 'invalid metadata');
+    this.sweep();
+    const pending = Object.values(this.state.clients)
+      .filter((client) => client.usedAt === undefined)
+      .sort((a, b) => a.createdAt - b.createdAt);
+    for (const evicted of pending.slice(0, Math.max(0, pending.length - this.maxPendingClients + 1)))
+      Reflect.deleteProperty(this.state.clients, evicted.clientId);
     const client: Client = {
       clientId: random(18),
       clientName: parsed.data.client_name ?? 'Un assistant',
@@ -143,6 +180,9 @@ export class OAuthServer {
     const resource = params.get('resource') ?? this.resource;
     if (resource.replace(/\/$/, '') !== this.resource) throw new OAuthError('invalid_target', 'unknown resource');
     this.sweep();
+    // A Map keeps insertion order: the first keys are the oldest sessions.
+    for (const id of [...this.sessions.keys()].slice(0, Math.max(0, this.sessions.size - this.maxSessions + 1)))
+      this.sessions.delete(id);
     const session: Session = {
       id: random(24),
       clientId: client.clientId,
@@ -161,10 +201,21 @@ export class OAuthServer {
     return session && session.createdAt + SESSION_TTL_MS > this.now() ? session : undefined;
   }
 
-  /** The user's node approved the link (its signed link_grant): the session now belongs to that node. */
-  approve(sessionId: string, nodeId: string): boolean {
+  /**
+   * The user's node approved the link (its signed link_grant): the session now belongs to that node, but only if the
+   * assistant, its client and the return domain the user saw are the session's own. A drop:// link is easy to forge;
+   * this is what keeps a session returning to someone else's server from passing for Claude or ChatGPT.
+   */
+  approve(sessionId: string, nodeId: string, claim: LinkClaim): boolean {
     const session = this.session(sessionId);
     if (!session || session.nodeId) return false;
+    const client = this.client(session.clientId);
+    if (
+      claim.clientId !== session.clientId ||
+      claim.clientName !== client?.clientName ||
+      claim.redirectHost !== redirectHost(session.redirectUri)
+    )
+      return false;
     session.nodeId = nodeId;
     return true;
   }
@@ -230,6 +281,8 @@ export class OAuthServer {
   }
 
   private issue(nodeId: string, clientId: string): Record<string, unknown> {
+    const client = this.state.clients[clientId];
+    if (client && client.usedAt === undefined) client.usedAt = this.now();
     const access = random(32);
     const refresh = random(32);
     this.state.tokens[sha256(access)] = { nodeId, clientId, kind: 'access', expiresAt: this.now() + ACCESS_TTL_MS };
@@ -250,5 +303,8 @@ export class OAuthServer {
     for (const [code, entry] of this.codes) if (entry.expiresAt <= now) this.codes.delete(code);
     for (const [key, record] of Object.entries(this.state.tokens))
       if (record.expiresAt <= now) Reflect.deleteProperty(this.state.tokens, key);
+    for (const [id, client] of Object.entries(this.state.clients))
+      if (client.usedAt === undefined && client.createdAt + UNUSED_CLIENT_TTL_MS <= now)
+        Reflect.deleteProperty(this.state.clients, id);
   }
 }
