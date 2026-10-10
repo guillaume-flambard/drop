@@ -11,11 +11,12 @@
  * as delivered once the recipient returns an acknowledgement signed with its own key (D63); without one, the node
  * falls back to the relay, and the engine's replay check drops a late duplicate.
  */
-import { randomBytes } from 'node:crypto';
+import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { isIP } from 'node:net';
 import WebSocket, { WebSocketServer } from 'ws';
 import { z } from 'zod';
 import { signDetached, verifyDetached, type Envelope, type Identity } from '@drop/protocol';
+import { knockAnswerMac, knockMac, type LanAnnouncement } from './lan-tags.ts';
 
 const DOMAIN = 'drop-lan-v1';
 const ACK_DOMAIN = 'drop-lan-ack-v1';
@@ -31,10 +32,16 @@ const MAX_SOCKETS = 64;
 const MAX_SESSIONS = 64;
 const MAX_EARLY_FRAMES = 16;
 const MAX_FRAMES_PER_SECOND = 100;
+/** After a refusal: 30 s, 1 min, 2 min, then every 5 min (T4.2c). */
+const RETRY_DELAYS_MS = [30_000, 60_000, 120_000, 300_000];
+/** How long the mode must hold before the delays start over. */
+const CALM_MS = 10 * 60_000;
 export const LAN_SERVICE_TYPE = 'drop';
 
 const Base64Url43 = z.string().regex(/^[A-Za-z0-9_-]{43}$/);
 const FrameSchema = z.discriminatedUnion('t', [
+  z.object({ t: z.literal('knock'), nonce: Base64Url43, mac: Base64Url43 }),
+  z.object({ t: z.literal('knock_ok'), mac: Base64Url43 }),
   z.object({ t: z.literal('hello'), id: Base64Url43, nonce: Base64Url43 }),
   z.object({ t: z.literal('proof'), sig: z.string().min(1).max(200) }),
   z.object({ t: z.literal('env'), envelope: z.unknown() }),
@@ -62,35 +69,54 @@ export function privateAddresses(addresses: readonly string[], options: { loopba
 }
 
 export interface LanPeer {
-  nodeId: string;
   addresses: string[];
   port: number;
 }
 
-/** Where peers are announced and found. mDNS in production (lan-mdns.ts), in memory in tests. */
+/**
+ * Where nodes announce themselves and are found (T4.2c): an announcement carries only rotating tags, so finding a
+ * peer means asking which announcement it would make. mDNS in production (lan-mdns.ts), in memory in tests.
+ */
 export interface LanDiscovery {
   /** `onError` reports later multicast failures, which is how a refused macOS permission shows up. */
-  start(self: { nodeId: string; port: number }, onError?: (reason: string) => void): Promise<void>;
-  lookup(nodeId: string): LanPeer | undefined;
+  start(self: { port: number; announcement: () => LanAnnouncement }, onError?: (reason: string) => void): Promise<void>;
+  /** Every announcement that matches, newest first: a stale or copied one must not hide the live one. */
+  find(matches: (seen: LanAnnouncement) => boolean): LanPeer[];
   stop(): Promise<void>;
+}
+
+interface BoardEntry {
+  announcement: () => LanAnnouncement;
+  peer: LanPeer;
 }
 
 /** A shared in-memory announcement board, for tests and the simulation bench. */
 export function memoryDiscovery() {
-  const board = new Map<string, LanPeer>();
+  const board = new Map<string, BoardEntry>();
+  const find = (except: string | undefined, matches: (seen: LanAnnouncement) => boolean) =>
+    [...board]
+      .filter(([key, entry]) => key !== except && matches(entry.announcement()))
+      .map(([, entry]) => entry.peer)
+      .reverse();
   return {
-    announce: (nodeId: string, addresses: string[], port: number) => {
-      board.set(nodeId, { nodeId, addresses: privateAddresses(addresses, { loopback: true }), port });
+    /** Puts an announcement on the board by hand, as anyone on the network could. */
+    announce: (key: string, announcement: LanAnnouncement, addresses: string[], port: number) => {
+      board.set(key, {
+        announcement: () => announcement,
+        peer: { addresses: privateAddresses(addresses, { loopback: true }), port },
+      });
     },
-    lookup: (nodeId: string) => board.get(nodeId),
-    for: (selfId: string): LanDiscovery => ({
+    /** What everyone on the network sees right now. */
+    seen: (): LanAnnouncement[] => [...board.values()].map((entry) => entry.announcement()),
+    find: (matches: (seen: LanAnnouncement) => boolean) => find(undefined, matches),
+    for: (key: string): LanDiscovery => ({
       start: (self) => {
-        board.set(self.nodeId, { nodeId: self.nodeId, addresses: ['127.0.0.1'], port: self.port });
+        board.set(key, { announcement: self.announcement, peer: { addresses: ['127.0.0.1'], port: self.port } });
         return Promise.resolve();
       },
-      lookup: (nodeId) => (nodeId === selfId ? undefined : board.get(nodeId)),
+      find: (matches) => find(key, matches),
       stop: () => {
-        board.delete(selfId);
+        board.delete(key);
         return Promise.resolve();
       },
     }),
@@ -107,6 +133,16 @@ export interface LanOptions {
   /** D60: may that key open a session here? A paired peer, a pairing in progress, or anyone while an invite is live. */
   canAccept: (nodeId: string) => boolean;
   onEnvelope: (envelope: unknown) => void;
+  /** What this node announces now: rotating tags only (T4.2c). */
+  announcement: () => LanAnnouncement;
+  /** Whether an announcement seen on the network is that peer's, from its key or from the invite being used. */
+  recognizes: (nodeId: string, seen: LanAnnouncement) => boolean;
+  /** Secrets a dialer may knock with to reach this node: its discovery key and live invite tokens (T4.2c). */
+  knockSecrets: () => string[];
+  /** The secret this node knocks with to reach that peer: its shared key, or the token of the invite being used. */
+  secretFor: (nodeId: string) => string | undefined;
+  /** Delays between retries after a refusal; tests shorten them. */
+  retryDelaysMs?: number[];
   enabled?: boolean;
   /** Listening address; every interface by default, loopback in tests. */
   host?: string;
@@ -133,6 +169,9 @@ export class LanService {
   private readonly sessions = new Map<string, Session>();
   private readonly dialing = new Map<string, Promise<Session | undefined>>();
   private readonly retryAfter = new Map<string, number>();
+  private retryTimer: ReturnType<typeof setTimeout> | undefined;
+  private attempts = 0;
+  private calm: ReturnType<typeof setTimeout> | undefined;
 
   private readonly options: LanOptions;
 
@@ -152,14 +191,6 @@ export class LanService {
     }
     this.stopped = false;
     this.status = 'starting';
-    const outcome = { refused: false };
-    // macOS refused local network access, multicast is unavailable or the port is taken: the relay remains the way.
-    const denied = (reason: string) => {
-      if (outcome.refused) return;
-      outcome.refused = true;
-      this.status = 'denied';
-      this.options.log?.({ event: 'lan_denied', code: 'E_LAN_DENIED', reason });
-    };
     const server = new WebSocketServer({
       host: this.options.host ?? '0.0.0.0',
       port: this.options.port ?? 0,
@@ -172,7 +203,11 @@ export class LanService {
       });
     } catch (error) {
       server.close();
-      denied(error instanceof Error ? error.message : 'unknown');
+      this.denied(error instanceof Error ? error.message : 'unknown');
+      return 0;
+    }
+    if (this.halted()) {
+      server.close();
       return 0;
     }
     this.server = server;
@@ -192,18 +227,81 @@ export class LanService {
     }, PING_MS);
     const address = server.address();
     const port = address !== null && typeof address === 'object' ? address.port : 0;
-    try {
-      await this.options.discovery.start({ nodeId: this.options.identity.nodeId, port }, denied);
-      if (!outcome.refused) this.status = 'on';
-    } catch (error) {
-      denied(error instanceof Error ? error.message : 'unknown');
-    }
+    await this.announce(port);
     return port;
+  }
+
+  private port(): number {
+    const address = this.server?.address();
+    return typeof address === 'object' && address !== null ? address.port : 0;
+  }
+
+  /** Starts the discovery; a refusal, now or later, puts the mode in `denied` and schedules a retry. */
+  private async announce(port: number): Promise<void> {
+    const outcome = { refused: false };
+    const refuse = (reason: string) => {
+      if (outcome.refused) return;
+      outcome.refused = true;
+      this.denied(reason);
+    };
+    try {
+      await this.options.discovery.start({ port, announcement: this.options.announcement }, refuse);
+      if (this.stopped) {
+        // Stopped while starting: nothing this attempt opened may outlive stop().
+        await this.options.discovery.stop().catch(() => undefined);
+        return;
+      }
+      if (outcome.refused) return;
+      const restored = this.attempts > 0;
+      this.status = 'on';
+      if (restored) this.options.log?.({ event: 'lan_restored' });
+      // Growing delays start over only once the mode has held for a while: a refusal right after each start must
+      // not turn into a restart every 30 s forever.
+      clearTimeout(this.calm);
+      this.calm = setTimeout(
+        () => {
+          this.attempts = 0;
+        },
+        this.options.retryDelaysMs ? (this.options.retryDelaysMs.at(-1) ?? 0) * 2 : CALM_MS,
+      );
+    } catch (error) {
+      refuse(error instanceof Error ? error.message : 'unknown');
+    }
+  }
+
+  // macOS refused local network access, multicast is unavailable or the port is taken: the relay remains the way,
+  // and the local mode tries again, at growing intervals, since the refusal may only be passing (T4.2c).
+  private denied(reason: string): void {
+    this.status = 'denied';
+    clearTimeout(this.calm);
+    this.options.log?.({ event: 'lan_denied', code: 'E_LAN_DENIED', reason });
+    if (this.stopped || this.retryTimer) return;
+    const delays = this.options.retryDelaysMs ?? RETRY_DELAYS_MS;
+    const delay = delays[Math.min(this.attempts, delays.length - 1)] ?? 300_000;
+    this.attempts += 1;
+    this.retryTimer = setTimeout(() => {
+      this.retryTimer = undefined;
+      this.recover().catch(() => undefined);
+    }, delay);
+  }
+
+  private async recover(): Promise<void> {
+    if (this.stopped) return;
+    if (!this.server) {
+      await this.start();
+      return;
+    }
+    await this.options.discovery.stop().catch(() => undefined);
+    if (this.halted()) return;
+    await this.announce(this.port());
   }
 
   async stop(): Promise<void> {
     this.stopped = true;
     clearInterval(this.pinger);
+    clearTimeout(this.retryTimer);
+    clearTimeout(this.calm);
+    this.retryTimer = undefined;
     for (const session of this.sessions.values()) session.ws.terminate();
     this.sessions.clear();
     this.retryAfter.clear();
@@ -286,17 +384,25 @@ export class LanService {
   }
 
   private async connect(target: string): Promise<Session | undefined> {
-    const peer = this.options.discovery.lookup(target);
-    const addresses = privateAddresses(peer?.addresses ?? [], { loopback: this.options.allowLoopback === true });
-    for (const address of addresses) {
+    // Without a secret to knock with, this node could only reveal itself: it does not dial (T4.2c review).
+    const secret = this.options.secretFor(target);
+    if (secret === undefined) return undefined;
+    const loopback = this.options.allowLoopback === true;
+    const candidates = this.options.discovery
+      .find((seen) => this.options.recognizes(target, seen))
+      .flatMap((peer) =>
+        privateAddresses(peer.addresses, { loopback }).map((address) => ({ address, port: peer.port })),
+      );
+    const addresses = candidates.map((candidate) => candidate.address);
+    for (const { address, port } of candidates) {
       if (this.halted()) return undefined;
       const host = isIP(address) === 6 ? `[${address}]` : address;
-      const ws = new WebSocket(`ws://${host}:${String(peer?.port ?? 0)}/`, {
+      const ws = new WebSocket(`ws://${host}:${String(port)}/`, {
         maxPayload: MAX_FRAME_BYTES,
         handshakeTimeout: CONNECT_MS,
       });
       // Listen before the socket opens: the peer's hello may arrive in the same packet as the upgrade response.
-      const proven = this.handshake(ws, target);
+      const proven = this.handshake(ws, target, secret);
       proven.catch(() => undefined);
       try {
         await new Promise<void>((resolve, reject) => {
@@ -323,9 +429,11 @@ export class LanService {
    * Mutual proof of keys. Resolves with the proven peer id once the peer's proof is verified and ours is sent; any
    * deviation closes the socket. Frames that arrive while the peer's proof is being checked wait for the outcome.
    */
-  private handshake(ws: WebSocket, expected: string | undefined): Promise<string> {
+  private handshake(ws: WebSocket, expected: string | undefined, secret?: string): Promise<string> {
     const me = this.options.identity.nodeId;
     const myNonce = randomBytes(32).toString('base64url');
+    const knockNonce = randomBytes(32).toString('base64url');
+    const knock = { done: false };
     const session: Session = { ws, alive: true, acks: new Map() };
     const state = { proven: false, failed: false, verifying: false, sentProof: false, verified: false, frames: 0 };
     const early: Frame[] = [];
@@ -335,7 +443,8 @@ export class LanService {
         if (state.failed) return;
         state.failed = true;
         this.options.log?.({ event: 'lan_session_refused', code, ...(session.peerId ? { peer: session.peerId } : {}) });
-        ws.close(4401, code);
+        // Before the knock, not even a close reason: a connection without the secret learns nothing.
+        if (knock.done) ws.close(4401, code);
         ws.terminate();
         reject(new Error(code));
       };
@@ -424,6 +533,38 @@ export class LanService {
           carry(frame);
           return;
         }
+        if (!knock.done) {
+          // Responder: the first frame must prove the dialer holds this node's key or a live invite token.
+          if (expected === undefined && frame.t === 'knock') {
+            const matched = this.options
+              .knockSecrets()
+              .find((candidate) => sameMac(knockMac(candidate, frame.nonce), frame.mac));
+            if (matched === undefined) {
+              fail('E_LAN_KNOCK');
+              return;
+            }
+            knock.done = true;
+            ws.send(JSON.stringify({ t: 'knock_ok', mac: knockAnswerMac(matched, frame.nonce) }));
+            hello();
+            return;
+          }
+          // Dialer: the answer proves the responder holds the same secret; only then does this node say who it is.
+          if (expected !== undefined && frame.t === 'knock_ok' && secret !== undefined) {
+            if (!sameMac(knockAnswerMac(secret, knockNonce), frame.mac)) {
+              fail('E_LAN_KNOCK');
+              return;
+            }
+            knock.done = true;
+            hello();
+            return;
+          }
+          fail('E_LAN_KNOCK');
+          return;
+        }
+        if (frame.t === 'knock' || frame.t === 'knock_ok') {
+          fail('E_LAN_HANDSHAKE');
+          return;
+        }
         if (frame.t === 'hello') {
           if (session.peerId || frame.id === me || (expected && frame.id !== expected)) {
             fail('E_LAN_IDENTITY');
@@ -482,11 +623,23 @@ export class LanService {
         for (const resolveAck of session.acks.values()) resolveAck('');
         if (!state.proven) reject(new Error('E_LAN_CLOSED'));
       });
-      const hello = () => {
+      function hello(): void {
         ws.send(JSON.stringify({ t: 'hello', id: me, nonce: myNonce }));
-      };
-      if (ws.readyState === WebSocket.OPEN) hello();
-      else ws.once('open', hello);
+      }
+      // Only the dialer speaks first, and only to knock; the responder stays silent until the knock is right.
+      if (expected !== undefined && secret !== undefined) {
+        const sendKnock = () => {
+          ws.send(JSON.stringify({ t: 'knock', nonce: knockNonce, mac: knockMac(secret, knockNonce) }));
+        };
+        if (ws.readyState === WebSocket.OPEN) sendKnock();
+        else ws.once('open', sendKnock);
+      }
     });
   }
+}
+
+function sameMac(a: string, b: string): boolean {
+  const left = Buffer.from(a);
+  const right = Buffer.from(b);
+  return left.length === right.length && timingSafeEqual(left, right);
 }

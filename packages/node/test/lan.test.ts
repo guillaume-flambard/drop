@@ -4,6 +4,7 @@ import WebSocket, { WebSocketServer } from 'ws';
 import { generateIdentity, signDetached, type Identity } from '@drop/protocol';
 import { NodeEngine, type Transport } from '../src/engine.ts';
 import { LanService, memoryDiscovery, privateAddresses, type LanDiscovery, type LanOptions } from '../src/lan.ts';
+import { knockAnswerMac, knockMac } from '../src/lan-tags.ts';
 import { MemoryStore, fakeCapability, until } from './helpers.ts';
 
 const services: LanService[] = [];
@@ -31,6 +32,11 @@ function lanFor(
     canReach: rules.canReach ?? (() => true),
     canAccept: rules.canAccept ?? (() => true),
     onEnvelope: () => undefined,
+    // A plain scheme for these session tests: the tag is the node id. Rotating tags are tested in T4.2c below.
+    announcement: () => ({ tag: identity.nodeId, invites: [] }),
+    recognizes: (nodeId, seen) => seen.tag === nodeId,
+    knockSecrets: () => [identity.nodeId],
+    secretFor: (nodeId) => nodeId,
     host: '127.0.0.1',
     allowLoopback: true,
     ...extra,
@@ -49,11 +55,16 @@ function rawSession(
 ): Promise<string> {
   return new Promise((resolve) => {
     const ws = new WebSocket(`ws://127.0.0.1:${String(port)}/`);
+    const knock = randomBytes(32).toString('base64url');
     ws.on('open', () => {
-      ws.send(JSON.stringify({ t: 'hello', id: claimed.nodeId, nonce: randomBytes(32).toString('base64url') }));
+      ws.send(JSON.stringify({ t: 'knock', nonce: knock, mac: knockMac(serverId, knock) }));
     });
     ws.on('message', (raw: Buffer) => {
       const frame = JSON.parse(raw.toString()) as { t: string; nonce?: string };
+      if (frame.t === 'knock_ok') {
+        ws.send(JSON.stringify({ t: 'hello', id: claimed.nodeId, nonce: randomBytes(32).toString('base64url') }));
+        return;
+      }
       if (frame.t !== 'hello' || !frame.nonce) return;
       signDetached(signer, `drop-lan-v1|${frame.nonce}|${claimed.nodeId}|${serverId}`).then(
         (sig) => {
@@ -101,7 +112,8 @@ describe('local network (T4.2)', () => {
     // An outbound session to Julie's id that reaches someone else is refused too.
     const other = await generateIdentity('Autre');
     const otherPort = await lanFor(other, discovery.for(other.nodeId)).start();
-    discovery.announce(owner.nodeId, ['127.0.0.1'], otherPort);
+    // Someone else answers to Julie's announcement: it replaces her entry on the board.
+    discovery.announce(owner.nodeId, { tag: owner.nodeId, invites: [] }, ['127.0.0.1'], otherPort);
     const dialer = lanFor(victim, discovery.for(victim.nodeId));
     await dialer.start();
     expect(await dialer.send(envelopeTo(victim, owner))).toBe('unreachable');
@@ -161,7 +173,7 @@ describe('local network (T4.2)', () => {
 
     // A peer announced on a port where nothing listens: unreachable, no crash, no unhandled rejection.
     const ghost = await generateIdentity('Fantôme');
-    discovery.announce(ghost.nodeId, ['127.0.0.1'], 1);
+    discovery.announce(`hand:${ghost.nodeId}`, { tag: ghost.nodeId, invites: [] }, ['127.0.0.1'], 1);
     const dialer = lanFor(asker, discovery.for(asker.nodeId));
     await dialer.start();
     expect(await dialer.send(envelopeTo(asker, ghost))).toBe('unreachable');
@@ -175,9 +187,13 @@ describe('local network (T4.2)', () => {
     servers.push(server);
     await new Promise<void>((resolve) => server.once('listening', resolve));
     server.on('connection', (ws) => {
-      ws.send(JSON.stringify({ t: 'hello', id: owner.nodeId, nonce: randomBytes(32).toString('base64url') }));
       ws.on('message', (raw: Buffer) => {
         const frame = JSON.parse(raw.toString()) as { t: string; nonce?: string; envelope?: { id: string } };
+        if (frame.t === 'knock' && frame.nonce) {
+          ws.send(JSON.stringify({ t: 'knock_ok', mac: knockAnswerMac(owner.nodeId, frame.nonce) }));
+          ws.send(JSON.stringify({ t: 'hello', id: owner.nodeId, nonce: randomBytes(32).toString('base64url') }));
+          return;
+        }
         if (frame.t === 'hello' && frame.nonce)
           signDetached(owner, `drop-lan-v1|${frame.nonce}|${owner.nodeId}|${asker.nodeId}`).then(
             (sig) => {
@@ -196,14 +212,19 @@ describe('local network (T4.2)', () => {
     });
     const address = server.address();
     const discovery = memoryDiscovery();
-    discovery.announce(owner.nodeId, ['127.0.0.1'], typeof address === 'object' && address ? address.port : 0);
+    discovery.announce(
+      `hand:${owner.nodeId}`,
+      { tag: owner.nodeId, invites: [] },
+      ['127.0.0.1'],
+      typeof address === 'object' && address ? address.port : 0,
+    );
     const dialer = lanFor(asker, discovery.for(asker.nodeId), {}, { ackMs: 1_000 });
     await dialer.start();
     expect(await dialer.send(envelopeTo(asker, owner))).toBe('unreachable');
 
     // With the real peer, the acknowledgement verifies and the envelope counts as delivered.
     const realPort = await lanFor(owner, discovery.for(owner.nodeId)).start();
-    discovery.announce(owner.nodeId, ['127.0.0.1'], realPort);
+    discovery.announce(`hand:${owner.nodeId}`, { tag: owner.nodeId, invites: [] }, ['127.0.0.1'], realPort);
     const fresh = lanFor(asker, discovery.for(asker.nodeId));
     await fresh.start();
     expect(await fresh.send(envelopeTo(asker, owner))).toBe('delivered');
@@ -239,6 +260,11 @@ describe('local network (T4.2)', () => {
           onEnvelope: (envelope) => {
             void engine.handleEnvelope(envelope).catch(() => undefined);
           },
+          // The real announcement: rotating tags, recognized from the invite, then from the shared key.
+          announcement: () => engine.lanAnnouncement(),
+          recognizes: (nodeId, seen) => engine.lanRecognizes(nodeId, seen),
+          knockSecrets: () => engine.lanKnockSecrets(),
+          secretFor: (nodeId) => engine.lanSecretFor(nodeId),
         },
       );
       await link.lan.start();
@@ -275,7 +301,7 @@ describe('local network (T4.2)', () => {
     const discovery = memoryDiscovery();
     const service = lanFor(identity, discovery.for(identity.nodeId), {}, { enabled: false });
     expect(await service.start()).toBe(0);
-    expect(discovery.lookup(identity.nodeId)).toBeUndefined();
+    expect(discovery.seen()).toEqual([]);
     expect(service.state()).toBe('off');
   });
 

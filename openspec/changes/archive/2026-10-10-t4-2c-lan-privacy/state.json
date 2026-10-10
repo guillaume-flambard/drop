@@ -1,0 +1,10 @@
+{
+  "phase": "READY_FOR_MANUAL_ACCEPTANCE",
+  "scope": "T4.2c réseau local : annonce tournante sans identifiant, clé de découverte, frappe préalable, reprise après refus",
+  "requirements": { "total": 6, "covered": 6 },
+  "acceptance": { "total": 7, "verified": 7, "pending": 0, "failed": 0 },
+  "todos": { "p0_open": 0, "p1_open": 0 },
+  "risks": { "critical_open": 0, "high_open": 0 },
+  "verification": { "status": "PASS", "evidence": "evidence.md" },
+  "ready_for_manual_acceptance": true
+}

@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import {
   createAdmission,
@@ -42,6 +43,17 @@ import {
 } from '@drop/protocol';
 import type { Funder } from './funding.ts';
 import { checkHumanAnswer } from './human-answer.ts';
+import {
+  carriesInvite,
+  carriesTag,
+  decodeLanKey,
+  inviteTag,
+  lanEpoch,
+  lanTag,
+  MAX_INVITE_TAGS,
+  newLanKey,
+  type LanAnnouncement,
+} from './lan-tags.ts';
 import {
   draftFact,
   FACT_IMPL,
@@ -112,6 +124,9 @@ export interface NodeStore {
   /** Published facts (T4.4): absent on stores that predate them, which then publish none. */
   facts?(): StoredFact[];
   saveFacts?(facts: StoredFact[]): void;
+  /** Local-network discovery keys of the peers (T4.2c): kept apart, owner-only. */
+  lanKeys?(): Record<string, string>;
+  saveLanKey?(nodeId: string, key: string): void;
 }
 
 /** One member as the team panel shows them (T2.9): who, which agents, online or not, which capabilities. */
@@ -198,6 +213,8 @@ export interface EngineLogEntry {
 
 export interface EngineOptions {
   identity: Identity;
+  /** Local-network discovery key, 32 bytes base64url (T4.2c); a fresh one per process when absent. */
+  lanKey?: string;
   ownerKind: OwnerKind;
   store: NodeStore;
   transport: Transport;
@@ -229,6 +246,9 @@ export class NodeEngine extends EventEmitter {
   private readonly now: () => number;
   private readonly replay = new ReplayCache();
   private readonly invites = new Map<string, number>();
+  /** This node's local-network discovery key (T4.2c): from DROP_HOME, or one per process in tests. */
+  private readonly lanKey: string;
+  private lanKeysCache: { at: number; keys: Record<string, string> } | undefined;
   /** Recent fact requests per peer (T4.4), for FACT_REQUESTS_PER_MINUTE. */
   private readonly factRequests = new Map<NodeId, number[]>();
   private readonly pairing = new Map<NodeId, { token: string; displayName: string }>();
@@ -248,6 +268,9 @@ export class NodeEngine extends EventEmitter {
 
   constructor(options: EngineOptions) {
     super();
+    this.lanKey = options.lanKey ?? newLanKey();
+    // A predictable key would let anyone recognize and knock: refuse it rather than fall back.
+    if (!decodeLanKey(this.lanKey)) throw new DropError('E_SCHEMA', 'E_LAN_KEY invalid local-network key');
     this.options = options;
     this.identity = options.identity;
     this.now = options.now ?? Date.now;
@@ -388,6 +411,64 @@ export class NodeEngine extends EventEmitter {
     });
   }
 
+  // ---- local network (T4.2c, D67) ----------------------------------------------------------------------------
+
+  /** What this node announces now: a tag of its discovery key, and one per live invite. Never its node id. */
+  lanAnnouncement(): LanAnnouncement {
+    const now = this.now();
+    const epoch = lanEpoch(now);
+    const key = decodeLanKey(this.lanKey) ?? new Uint8Array(randomBytes(32));
+    const invites = [...this.invites]
+      .filter(([, expiresAt]) => expiresAt > now)
+      .slice(-MAX_INVITE_TAGS)
+      .map(([token]) => inviteTag(token, epoch));
+    return { tag: lanTag(key, epoch), invites };
+  }
+
+  /** Whether an announcement is that peer's: from the key it shared, or from the invite this node is using. */
+  lanRecognizes(nodeId: string, seen: LanAnnouncement): boolean {
+    const now = this.now();
+    const shared = this.peerLanKeys()[nodeId];
+    const key = shared ? decodeLanKey(shared) : undefined;
+    if (key && carriesTag(seen, key, now)) return true;
+    const pending = this.pairing.get(nodeId);
+    return pending !== undefined && carriesInvite(seen, pending.token, now);
+  }
+
+  /** Secrets a dialer may knock with to reach this node: its own key and the tokens of live invites. */
+  lanKnockSecrets(): string[] {
+    const now = this.now();
+    return [this.lanKey, ...[...this.invites].filter(([, expiresAt]) => expiresAt > now).map(([token]) => token)];
+  }
+
+  /** The secret to knock with toward a peer: its shared key, or the token of the invite this node is using. */
+  lanSecretFor(nodeId: string): string | undefined {
+    return this.peerLanKeys()[nodeId] ?? this.pairing.get(nodeId)?.token;
+  }
+
+  /** Peers' keys, read from the store at most every 2 s: recognition runs for every announcement and every send. */
+  private peerLanKeys(): Record<string, string> {
+    const now = this.now();
+    if (this.lanKeysCache && now - this.lanKeysCache.at < 2000) return this.lanKeysCache.keys;
+    let keys: Record<string, string> = {};
+    try {
+      keys = this.options.store.lanKeys?.() ?? {};
+    } catch {
+      this.log({ event: 'lan_keys_unreadable', code: 'E_SCHEMA' });
+    }
+    this.lanKeysCache = { at: now, keys };
+    return keys;
+  }
+
+  /** Sends this node's discovery key to every peer: at start, so that peers paired before it changed keep up. */
+  async announceLanKey(): Promise<void> {
+    for (const peer of this.peers()) await this.shareLanKey(peer.nodeId);
+  }
+
+  private async shareLanKey(nodeId: NodeId): Promise<void> {
+    await this.send(nodeId, { type: 'lan_key', key: this.lanKey });
+  }
+
   // ---- team (T2.9) -------------------------------------------------------------------------------------------
 
   team(): TeamState | undefined {
@@ -472,6 +553,7 @@ export class NodeEngine extends EventEmitter {
             via: from,
           });
           introduced.push(member.nodeId);
+          await this.shareLanKey(member.nodeId);
         }
       } else if (member.nodeId === from && JSON.stringify(known) !== JSON.stringify(member)) {
         members.set(from, member);
@@ -718,6 +800,17 @@ export class NodeEngine extends EventEmitter {
       case 'agent_reply':
         // Addressed to a gateway, never to a node.
         return;
+      case 'lan_key':
+        // Only a known peer, for itself: an unknown sender's key would only let it be recognized, never trusted.
+        if (this.peers().some((peer) => peer.nodeId === from)) {
+          try {
+            this.options.store.saveLanKey?.(from, message.key);
+          } catch {
+            this.log({ event: 'lan_key_not_saved', code: 'E_SCHEMA', peer: from });
+          }
+          this.lanKeysCache = undefined;
+        }
+        return;
       case 'catalog_request':
         await this.send(from, {
           type: 'catalog',
@@ -770,6 +863,7 @@ export class NodeEngine extends EventEmitter {
       ownerKind: this.options.ownerKind,
     });
     this.log({ event: 'paired', peer: from });
+    await this.shareLanKey(from);
     const state = this.team();
     if (state && !state.members.some((member) => member.nodeId === from)) {
       const newcomer: TeamMember = {
@@ -796,6 +890,7 @@ export class NodeEngine extends EventEmitter {
       pairedAt: new Date(this.now()).toISOString(),
     });
     this.log({ event: 'paired', peer: from });
+    await this.shareLanKey(from);
     if (this.team()) await this.sendRoster(from);
     this.changed();
   }
