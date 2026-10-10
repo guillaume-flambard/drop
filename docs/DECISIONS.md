@@ -1,5 +1,9 @@
 # Journal des décisions
 
+## Applicabilité depuis le 9 octobre 2026
+
+D34 à D38 fixent la cible adoptée. Les décisions antérieures restent des preuves historiques : D7/D22 (relais lab), D20 (OpenRouter par défaut), D27/D28 (financement demandeur) et D31 (passerelle distante) ne sont pas des exigences du profil privé. T3.1 remplace les défauts imposés ; les intégrations cloud historiques restent des options explicites hors profil privé. D24 reste inchangée. Les deux entrées D30 sont conservées avec leur titre pour ne pas casser les références historiques.
+
 Format : `D<n> — date — décision — raison`. Les agents ajoutent ici toute décision non écrite dans les specs.
 
 ## Décisions de cadrage (8 octobre 2026)
@@ -117,14 +121,14 @@ Format : `D<n> — date — décision — raison`. Les agents ajoutent ici toute
   - Logs Codex (codex-cli 0.156, vérifié sur 216 sessions locales) : `~/.codex/sessions/AAAA/MM/JJ/rollout-*.jsonl`.
     Les appels sont des `function_call` ou `custom_tool_call`, leurs résultats des `*_call_output` reliés par
     `call_id`, et la session est dans `session_meta`.
-  Motifs : la v1 de la spec, mesurée sur 30 jours de logs Codex réels, donne 780 « blocages » (34 par jour actif),
-  surtout du bruit : numéros de ligne, tables de tests, `BranchForbiddenError`, `HTTPStatus.FORBIDDEN`. La v2 exige un
-  contexte HTTP pour 401 et 403 et lit « forbidden » ou « unauthorized » comme une réponse. Elle donne 202 événements
-  (environ 9 par jour actif) ; sur un échantillon de 401, environ 9 sur 12 sont de vrais refus d'authentification,
-  contre environ 5 sur 15 en v1. Le hook n'importe pas zod (`light.ts`) : 60 ms au lieu de 80 à 105 ms. « Jour actif »
-  vient de `activity.json` : un jour avec au moins un appel d'outil Claude Code ou une session Codex, pas seulement un
-  jour avec un blocage. `report_blocked` lit la session dans `CLAUDE_SESSION_ID` ou `CODEX_SESSION_ID` quand l'agent
-  l'expose ; sinon le rapprochement A↔B n'a pas de session commune et reste vide.
+    Motifs : la v1 de la spec, mesurée sur 30 jours de logs Codex réels, donne 780 « blocages » (34 par jour actif),
+    surtout du bruit : numéros de ligne, tables de tests, `BranchForbiddenError`, `HTTPStatus.FORBIDDEN`. La v2 exige un
+    contexte HTTP pour 401 et 403 et lit « forbidden » ou « unauthorized » comme une réponse. Elle donne 202 événements
+    (environ 9 par jour actif) ; sur un échantillon de 401, environ 9 sur 12 sont de vrais refus d'authentification,
+    contre environ 5 sur 15 en v1. Le hook n'importe pas zod (`light.ts`) : 60 ms au lieu de 80 à 105 ms. « Jour actif »
+    vient de `activity.json` : un jour avec au moins un appel d'outil Claude Code ou une session Codex, pas seulement un
+    jour avec un blocage. `report_blocked` lit la session dans `CLAUDE_SESSION_ID` ou `CODEX_SESSION_ID` quand l'agent
+    l'expose ; sinon le rapprochement A↔B n'a pas de session commune et reste vide.
 - **D24** — Seuil go/no-go de l'étape 0, fixé par Guillaume le 2026-10-08, avant la mesure. Un « blocage YES » est
   un événement classé `YES_*` par `classify` pendant un entretien : une réponse bornée, donnée par le propriétaire de
   la ressource, l'aurait débloqué.
@@ -134,10 +138,10 @@ Format : `D<n> — date — décision — raison`. Les agents ajoutent ici toute
     médiane d'au moins **10 minutes perdues** par blocage YES.
   - **NO-GO** : moins de **0,2** blocage YES par dev-jour actif **ou** une médiane de moins de **5 minutes**.
   - **Entre les deux** : prolonger la mesure de 2 semaines, puis trancher avec les mêmes seuils.
-  Les deux chiffres sont lus dans `blocked-observer report --merge <exports…>` (`yesPerActiveDay` et
-  `medianPainMinutesYes`), sur l'agrégat des exports relus de chaque développeur ; la commande applique ces seuils et
-  donne le verdict (T0.6). Les signaux bruts non classés ne comptent pas : au 2026-10-08,
-  Guillaume en a 202 sur 23 jours actifs côté Codex, aucun encore classé.
+    Les deux chiffres sont lus dans `blocked-observer report --merge <exports…>` (`yesPerActiveDay` et
+    `medianPainMinutesYes`), sur l'agrégat des exports relus de chaque développeur ; la commande applique ces seuils et
+    donne le verdict (T0.6). Les signaux bruts non classés ne comptent pas : au 2026-10-08,
+    Guillaume en a 202 sur 23 jours actifs côté Codex, aucun encore classé.
 
 - **D25** — Classification et filtre de bruit de l'étape 0 (2026-10-08). Constat : classer 3 événements Codex vieux
   de plusieurs semaines avec Guillaume a donné trois « je ne sais pas », parce que la spec listait les huit codes sans
@@ -243,14 +247,19 @@ Format : `D<n> — date — décision — raison`. Les agents ajoutent ici toute
   `TASK_STATE_WORKING` pendant l'attente de l'accord, devient `TASK_STATE_COMPLETED` avec la réponse relue,
   `TASK_STATE_REJECTED` sur un refus, `TASK_STATE_FAILED` sur une expiration ou une erreur. Sortant : une capacité
   `a2a.answer` permet à une entreprise de brancher son propre agent A2A comme source de réponses, comme `mcp.answer`.
-- **D34** — Clôture de T2.1 (2026-10-09). Revue de sécurité de l'admission par invitation : la course entre deux
+
+Les décisions D69 à D75 ont été prises le 9 octobre 2026 sur la branche principale sous les numéros D34 à D40, en même
+temps que D34 à D46 sur la branche du profil privé. Elles ont été renumérotées à la réunion des deux branches
+(10 octobre 2026), références comprises ; les numéros D34 à D46 gardent le sens du profil privé.
+
+- **D69** — Clôture de T2.1 (2026-10-09). Revue de sécurité de l'admission par invitation : la course entre deux
   connexions qui présentent le même ticket est fermée (le test du `nonce` et son écriture se font d'un seul pas
   synchrone), le `nonce` n'est jamais journalisé. Un trou corrigé : le relais acceptait un ticket au `expiresAt`
   arbitrairement lointain, alors que la spec le borne à 24 h ; un ticket qui dépasse 24 h et 5 min (même dérive
   d'horloge que les enveloppes) est désormais refusé (`too_long`). Deux points restent ouverts, ci-dessous. Hors de ce
   dépôt : `lab-infra/stacks/drop/relay.config.json` doit fixer `admittedPath` sur un volume persistant, sinon le relais
   oublie les Nodes admis à chaque redéploiement.
-- **D35** — Mises à jour signées de l'app Mac (2026-10-09, T2.4, choix de Guillaume). Le dépôt est privé, donc l'app
+- **D70** — Mises à jour signées de l'app Mac (2026-10-09, T2.4, choix de Guillaume). Le dépôt est privé, donc l'app
   ne peut pas lire les Releases GitHub sans jeton : les mises à jour sont servies en statique sous
   `https://drop.memolabs.dev/updates/` (`latest.json` et une archive nommée par version). L'app vérifie au lancement
   puis toutes les 6 h et propose la version dans le menu de son icône ; rien ne s'installe sans clic. Plugin updater
@@ -260,7 +269,7 @@ Format : `D<n> — date — décision — raison`. Les agents ajoutent ici toute
   (procédure dans `apps/mac/README.md`) ; seule la clé publique, `apps/mac/updater.pub`, entre dans le dépôt. Hors de
   ce dépôt : une route statique `/updates` dans `lab-infra/stacks/drop`. Le manifeste est validé sans zod pour ne pas
   ajouter de dépendance à la racine.
-- **D36** — Durcissement de la passerelle (2026-10-09, T2.13, plan accepté par Guillaume). Trois trous relevés en
+- **D71** — Durcissement de la passerelle (2026-10-09, T2.13, plan accepté par Guillaume). Trois trous relevés en
   revue. (1) Hameçonnage du consentement : le nom de l'assistant vient de l'enregistrement dynamique, ouvert à tous ;
   un tiers pouvait enregistrer « Claude » avec sa propre adresse de retour et faire autoriser sa session par la
   victime, puis interroger l'équipe en son nom. Le lien `drop://link` porte désormais `client_id` et le domaine de
@@ -277,20 +286,20 @@ Format : `D<n> — date — décision — raison`. Les agents ajoutent ici toute
   et `agent_call` : passerelle et Nodes se mettent à jour ensemble, ce qui convient tant que la passerelle n'est pas
   ouverte au public. Les adresses de retour de Claude et ChatGPT sont à revérifier dans leur aide officielle au
   premier essai réel.
-- **D37** — Site public (2026-10-09, T2.6, choix de Guillaume). Trois pages s'ajoutent au site de T2.6a :
+- **D72** — Site public (2026-10-09, T2.6, choix de Guillaume). Trois pages s'ajoutent au site de T2.6a :
   « Démarrer en 5 minutes », « Cas d'usage », « Sécurité » ; l'accueil gagne la démo réelle en trois captures et une
   section d'installation. Tant que l'app n'est pas notarisée (T2.4) et que npm est bloqué (T2.11), `site/site.json`
   est en `beta` : un accès sur invitation, aucun lien de téléchargement ; passer à `open` affiche l'app Mac, le
   `.mcpb` et les guides, sans autre changement. `contact` reste vide tant que Guillaume n'a pas choisi l'adresse à
   publier. Le site est servi par l'image drop (`node scripts/site.ts serve`, rendu en mémoire, aucune écriture),
   sur l'hôte public seulement, avec HSTS et la politique de contenu sans script ; il sert aussi les fichiers de
-  mise à jour de l'app (D35) depuis `SITE_RELEASES_DIR`, par nom exact. Hors de ce dépôt, dans
+  mise à jour de l'app (D70) depuis `SITE_RELEASES_DIR`, par nom exact. Hors de ce dépôt, dans
   `lab-infra/stacks/drop` : un service `drop-site` (même image, cette commande, le dossier des releases en volume)
   et les routes Traefik de `drop.memolabs.dev` : `/v1` et `/health` vers le relais ; `/oauth`, `/mcp`,
   `/.well-known/oauth-*` et `/gateway` vers la passerelle ; tout le reste vers le site. La vidéo n'est pas tournée :
   l'accueil montre les captures de la démo du 8 octobre et l'annonce pour les premiers essais (T2.7). Les exports
   Markdown pointent vers le dépôt, qui est privé : à revoir avant la mise en ligne.
-- **D38** — Préparation des essais réels (2026-10-09, T2.7). Protocole dans `docs/essais/README.md`. Ce que la
+- **D73** — Préparation des essais réels (2026-10-09, T2.7). Protocole dans `docs/essais/README.md`. Ce que la
   confrontation aux vrais serveurs a montré, sources lues ce jour : Figma se branche par le serveur local de l'app de
   bureau (`127.0.0.1:3845/mcp`, sans jeton), mais exige un siège Dev ou Full (sinon 6 appels d'outil par mois) et lit
   la sélection ou un lien ; GitHub par `api.githubcopilot.com/mcp/readonly` avec un jeton en en-tête ; Linear par
@@ -298,7 +307,7 @@ Format : `D<n> — date — décision — raison`. Les agents ajoutent ici toute
   joignable d'ici). Deux manques deviennent des tâches : un serveur qui exige OAuth se partage sans erreur puis échoue
   à chaque demande (T2.16), et drop ne sait pas se connecter aux serveurs distants OAuth (T2.17). Pour Notion, voir le
   point ouvert ci-dessous.
-- **D39** — Connexion OAuth de drop aux serveurs MCP distants (2026-10-09, T2.17, plan accepté par Guillaume). drop
+- **D74** — Connexion OAuth de drop aux serveurs MCP distants (2026-10-09, T2.17, plan accepté par Guillaume). drop
   s'enregistre comme son propre client (enregistrement dynamique, nom « drop »), avec le client OAuth du SDK MCP déjà
   installé, sans dépendance nouvelle. Connexion une fois, par `drop connect <agent>/<serveur>` ou le bouton du panneau ;
   le navigateur revient sur l'API locale (`127.0.0.1:<port>/oauth/callback`), vérifié par un `state` à usage unique de
@@ -307,8 +316,8 @@ Format : `D<n> — date — décision — raison`. Les agents ajoutent ici toute
   le serveur distant de Figma, réservé à une liste de clients approuvés par leur nom (s'en faire passer pour un
   enfreindrait ses conditions) ; le serveur local de l'app reste la voie. Linear garde aussi la clé d'API. Vérifié
   contre un faux serveur conforme ; l'essai réel avec un compte Notion reste à faire, T2.17 reste `doing` jusque-là.
-- **D40** — Révocation et plafond global au relais (2026-10-09, T2.19, choix de Guillaume), qui tranche le point ouvert
-  de D34. `drop-relay revoke <nodeId>` écrit dans `revokedPath`, que le relais relit toutes les 2 s : pas de
+- **D75** — Révocation et plafond global au relais (2026-10-09, T2.19, choix de Guillaume), qui tranche le point ouvert
+  de D69. `drop-relay revoke <nodeId>` écrit dans `revokedPath`, que le relais relit toutes les 2 s : pas de
   redémarrage, pas de port d'administration ; le relais et la commande partagent le fichier par le volume. Un Node
   révoqué est coupé, refusé même avec un nouveau ticket ou dans l'allowlist, et ses tickets ne valent plus rien. Par
   défaut, ses invités gardent leur place (un membre qui part ne doit pas couper ceux qu'il a fait venir) ;
@@ -341,18 +350,18 @@ Format : `D<n> — date — décision — raison`. Les agents ajoutent ici toute
     caractères. Un `answer` à la limite ferait échouer la validation de taille.
   - T1.13 : aucun code d'erreur n'est prévu pour un snapshot au-delà de `maxSnapshotBytes`, ni pour le post-contrôle
     d'extrait de code.
-  - T2.1, relevé en clôture (D34), **tranché par D40** : l'admission est transitive. Un Node admis parraine 20 Nodes par jour, qui
+  - T2.1, relevé en clôture (D69), **tranché par D75** : l'admission est transitive. Un Node admis parraine 20 Nodes par jour, qui
     parrainent chacun 20 Nodes ; le quota ne borne donc pas la croissance, seulement sa vitesse. Aucune révocation
     n'existe non plus (`admittedPath` s'édite à la main, puis redémarrage). Le risque se limite à la charge du relais :
     l'admission ne donne accès à personne, l'appairage exige toujours le jeton de l'invitation. Options : quota global
     par jour, profondeur de parrainage maximale, commande `drop relay revoke`. À trancher avant d'ouvrir le relais
     au-delà des testeurs.
-  - T2.7, Notion (D38) : le serveur local `@notionhq/notion-mcp-server` 2.5.2 marque toute requête POST comme
+  - T2.7, Notion (D73) : le serveur local `@notionhq/notion-mcp-server` 2.5.2 marque toute requête POST comme
     destructive, dont la recherche (`post-search`) et la requête de base (`query-data-source`) ; `mcp.answer` retire
     ces outils, si bien que drop ne lit qu'une page dont la question donne le lien. Options : (a) accepter la limite
     pour l'essai ; (b) laisser le propriétaire autoriser nommément un outil marqué destructif, après un avertissement,
     ce qui assouplit une règle de sécurité ; (c) attendre T2.17 et le serveur distant de Notion, qui cherche.
-    Recommandation : (a) pour l'essai, puis (c). Mise à jour : (c) est construit (D39), à essayer avec un vrai
+    Recommandation : (a) pour l'essai, puis (c). Mise à jour : (c) est construit (D74), à essayer avec un vrai
     compte Notion.
   Détail : `coverage.md` de la change `migrate-spec-kit` (archivée sous `openspec/changes/archive/`).
 - **Financement des demandes, options gardées pour plus tard** (D21 a retenu A). B : une clé d'équipe ou
@@ -360,3 +369,30 @@ Format : `D<n> — date — décision — raison`. Les agents ajoutent ici toute
   à sa demande une clé jetable à plafond dur (OpenRouter sait en créer), chiffrée pour l'exécuteur ; il faut l'ajouter
   au protocole et à la carte. D : refacturation, où le propriétaire paie et les reçus signés (`costUsd`) servent de
   relevé. C ou D ne valent que si drop sert entre entreprises différentes ; à trancher à ce moment-là.
+
+## Tournant privé et open source adopté
+
+- **D34 : souveraineté et cible (2026-10-09).** Guillaume adopte l'outillage A2A/MCP installé chez le client, sans compte ni serveur externe imposé, pour petites équipes techniques et entreprises avec leurs propres agents/modèles. A2A est un standard existant ; le différenciateur est le consentement borné et le raccordement simple. Un relais privé est conservé ; aucun besoin de supprimer HTTP/WebSocket local ou interne. Les défauts cloud du prototype ne valent pas pour ce profil. Le propriétaire fixe les destinations, y compris face au financement ; aucun fallback cloud, aucune télémétrie ou licence en ligne obligatoire. Les agents A2A joints restent une frontière à vérifier. T3.1/T3.5 doivent le prouver, pas cette documentation. D24 et HARNESS FIRST restent en vigueur.
+- **D35 : desktop (2026-10-09).** Garder Tauri 2, le panneau web local et Node embarqué. Mac de barre de menus en premier, Windows puis Linux. SwiftUI natif et Electron demanderaient une réécriture sans bénéfice prouvé à ce stade. Le tray est intégré au système ; le panneau n'est pas SwiftUI. Pas de comparaison de performance inventée. Sources : `research/2026-10-09-desktop-models.md`. Linux exige un accès au panneau sans tray si l'environnement ne le propose pas.
+- **D36 : deux confirmations (2026-10-09).** Après installation et environnement prêt : analyser les configurations compatibles, puis connecter les agents sélectionnés. Adapter explicitement Claude Code, Codex, Cursor et Claude Desktop ; aucune promesse de détection universelle. Aperçu expurgé, aucune exécution découverte, aucune publication implicite, sauvegarde, idempotence, concurrence et restauration. Les permissions système, invitations, redémarrages d'agents et modèles sont visibles séparément. `docs/ONBOARDING.md` et `ACCEPTANCE.md` portent les détails de T3.3.
+- **D37 : gratuit local (2026-10-09).** Réutiliser d'abord l'endpoint choisi ou l'agent A2A interne ; aucune inférence pour les capacités déterministes. Ollama et Qwen3.5 4B/9B quantifiés sont des candidats, à télécharger avec consentement et à mesurer en T3.2 avant de choisir un défaut. Ne pas confondre taille de poids et mémoire totale, modèle cloud gratuit et traitement local. D20 reste le comportement historique ; T3.1 doit le remplacer dans le profil privé.
+- **D38 : modèle open source (2026-10-09).** Préparer Apache-2.0 pour le code détenu par le projet. Le socle Community inclut auto-hébergement, A2A/MCP, modèles internes et sécurité essentielle, sans limitation artificielle de requêtes. Revenu envisagé par installation, intégration, maintenance et support ; administration d'organisation privée possible plus tard, sans produit ni prix validés. Les dons restent complémentaires. Kit de contribution et sécurité maintenant ; ouverture du dépôt, npm, binaires et publication du site restent T3.6 avec accord humain. Licences et attributions tierces, historique, données et CI du lab doivent être audités avant ouverture. Aucune dépendance ajoutée par T3.0.
+
+- **D39 : Hermes et fournisseurs, pistes consignées (2026-10-09).** À la demande du propriétaire, ajouter T3.1a et T3.2a sans changer la priorité T3.1 ni la stack imposée. Hermes Agent de Nous Research est un agent partenaire candidat : tester notre MCP stdio comme entrée, sans remplacer le runner ni son consentement, sans présumer un support A2A natif. [Projet](https://github.com/NousResearch/hermes-agent), [MCP officiel](https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp), consultés le 9 octobre. Pour les fournisseurs LLM, garder d’abord le client OpenAI-compatible par `fetch`. [AI SDK](https://github.com/vercel/ai) est candidat pour des adaptateurs TypeScript directs sans Vercel AI Gateway obligatoire ; [LiteLLM](https://docs.litellm.ai/docs/) est une option de passerelle privée, pas un service ajouté d’office au laptop. Vérifier versions, licences, outils, erreurs, budgets, destinations et coût de maintenance avant adoption. Le logiciel gratuit ne rend pas les API gratuites et aucune solution ne couvre nécessairement toutes les fonctions de tous les fournisseurs. La règle « sans SDK » reste applicable tant qu’une nouvelle décision motivée ne l’amende pas. Les critères sont dans ACCEPTANCE ; ces évaluations ne bloquent pas la première preuve privée.
+
+
+- **D40 : profil privé exécutable (2026-10-09, T3.1).** Liste d’origines sur IP privées canoniques, pas de DNS ni de redirection ; transport HTTP direct sans proxy implicite. Le propriétaire conserve endpoint et modèle ; financement incompatible refusé, et mode privé `payer: owner` refusant tout financement reçu. L’URL Ollama locale est proposée, mais aucun modèle n’est présélectionné (D37), aucun poids téléchargé. Les sources MCP stdio/docker/journald sont refusées faute d’isolation vérifiable ; le MCP demandeur stdio reste disponible. L’hôte doit isoler les services sources. Migration explicite et sauvegarde privée, révocation au redémarrage, identifiants de demandes reçues conservés sans contenu pour empêcher la reprise d’un ancien consentement. Le modèle est validé avant connexion MCP. Une séparation de l’API importable et de l’exécutable requester-mcp corrige un démarrage involontaire révélé par l’assemblage sur installation vierge. Aucune dépendance runtime ajoutée. D20 est remplacée ; les démos historiques nomment explicitement leur fournisseur et leur profil legacy.
+
+- **D41 : pistes proposées pendant T3.1 (2026-10-09, sans adoption).** Le texte transmis sur libp2p, OPA, ContextForge et Bifrost alimente l’évaluation, pas la stack obligatoire. Garder le relais interne actuel ; libp2p seulement si un besoin P2P mesuré le justifie. OPA est une piste de politiques administrables, pas une isolation des outils. ContextForge et Bifrost resteraient des intégrations chez le client ; Bifrost pourra être comparé aux options de T3.2a sans migration immédiate. PostgreSQL, Drop Cloud obligatoire, Opik et nouvelle pile de déploiement ne sont pas requis pour le laptop. Aucun déploiement VPS ni retour à Coolify. Sources officielles consultées : [libp2p](https://github.com/libp2p/js-libp2p), [OPA](https://www.openpolicyagent.org/docs), [ContextForge](https://github.com/IBM/mcp-context-forge), [Bifrost](https://github.com/maximhq/bifrost).
+
+- **D42 : résultat de l’évaluation Hermes (2026-10-09, T3.1a).** Retenir une recette MCP manuelle facultative, différer l’auto-détection et la distribution d’un adaptateur. Le commit amont `73162b00eefde3794bed0afb53d84a19c0eed230` (MIT) passe accord/refus/expiration via son client MCP réel ; sa boucle AIAgent appelle le catalogue Drop avec un endpoint local simulé puis remonte une panne 503 sans connexion externe observée. Ce n’est pas une qualification de poids de modèle ni de Hermes sur macOS. `DROP_AGENT=other`, trois outils seulement ; aucun remplacement du runner, aucun ajout runtime Drop. La preuve utilise une installation Python editable jetable, réseau none, profil sans mémoire personnelle. Hermes conserve des diagnostics de requête locaux en cas de panne : la recette exige isolation et gestion de rétention, sans promettre la souveraineté de son profil général. Coût : pin, vérification des API/config et six scénarios à rejouer à chaque évolution ; retrait et sources dans [HERMES](HERMES.md). D39 est précisée, pas la stack de fournisseurs.
+
+- **D43 : borne anti-rejeu (2026-10-09, T3.1b, choix de Guillaume).** Les nouvelles demandes Drop exigent un identifiant UUIDv7 horodaté ; les clients intégrés en émettent déjà. Un client tiers qui envoie un UUIDv4 doit migrer (**rupture de compatibilité explicite**). Fenêtre de fraîcheur et durée des tombstones bornées à la fenêtre de rejeu du protocole, avec marge de futur ; un identifiant trop ancien ou non v7 est rejeté avant tout consentement. Conserver une borne supérieure de stockage et refuser sans exécuter si elle est atteinte. Le relais limite par identité de Node malgré les reconnexions, plutôt que par socket. Une horloge persistante monotone doit empêcher qu’un retour en arrière de l’horloge ne rende un identifiant purgé réutilisable. Aucun nouveau fournisseur, compte ou serveur externe.
+
+- **D44 : rétention bornée et révocation différée (2026-10-09, T3.1c).** Une carte de consentement ou de relecture visible ne peut pas être écrasée par un autre message portant le même `dropId`, même signé par un pair connu. Les enveloppes hors ligne gardent leur ordre d'émission pendant les tentatives de vidage ; un seul vidage s'exécute et son envoi en cours compte dans le plafond de 1 024. Pour une clé plafonnée OpenRouter facultative, un échec de DELETE conserve uniquement son hash en mémoire, journalise un code stable et déclenche de nouvelles tentatives sur les ticks du Node, avec délai croissant ; au plus 8 192 clés non expirées ou créations en cours sont suivies. Une création réserve sa place avant l'appel fournisseur, refuse les doublons et libère la place après échec. La clé créée expire également au bout de deux heures chez le fournisseur. Le Node ne peut pas garantir une révocation immédiate si celui-ci est indisponible, ni reprendre une suppression après un crash avec ce seul état volatil : l'API ne doit pas décrire une tentative comme une révocation confirmée. La durabilité des révocations et les autres chemins de financement restent à traiter séparément avant un usage multi-organisation sensible.
+
+- **D45 : raccordement local T3.3 (2026-10-09).** Le panneau demande explicitement l'analyse puis la connexion d'une sélection. Le Node relit la configuration au moment de l'application et compare son empreinte ; une entrée `drop` différente bloque l'action. Cursor et Claude Desktop utilisent un fichier temporaire renommé et une sauvegarde privée limitée à trois versions par fichier ; Claude Code et Codex restent configurés par leurs CLI officielles, sans suppression préventive avant l'ajout. Le résultat CLI est relu et un état incertain n'est pas annoncé comme un succès. La déconnexion retire seulement l'entrée reconnue. L'ancien installateur direct est supprimé et la route historique du panneau refuse l'action sans aperçu. Une concurrence externe dans l'intervalle final lecture-renommage et l'absence de transaction des CLI restent des limites documentées ; aucune restauration intégrale automatique ne peut effacer un ajout tiers.
+
+- **D46 : app Mac T3.4 (2026-10-09, direction visuelle de Guillaume).** Conserver un panneau discret et familier sur Mac : typographie système, palette neutre existante, accent vert réservé aux actions et états, navigation clavier et VoiceOver avant toute décoration. La coque vérifie qu'elle parle au Node qu'elle a démarré avant d'ouvrir une URL contenant le jeton ; une collision de port s'affiche comme un échec récupérable. Aucun service d'update n'est imposé : première distribution par DMG signé/notarisé, téléchargement et remplacement volontaires par le canal choisi. Le script de release refuse une construction sans prérequis de notarisation ; le paquet de développement n'est pas une preuve de distribution. Une mise à jour future à l'intérieur de l'app demanderait un contrat et une clé de signature spécifiques, non ajoutés ici. [Recette Mac](MAC_RELEASE.md).
+
+- **D76 : réunion de la branche principale et du profil privé (2026-10-10, demande de Guillaume).** Les deux histoires partaient du 8 octobre ; la branche principale portait l'étape 2 (T2.1, T2.4, T2.6, T2.7, T2.13, T2.16 à T2.19), la branche Codex le profil privé (T3.x). Elles sont réunies par une fusion, sans réécrire l'historique. Règles suivies : le cap privé (D34 à D38) l'emporte quand les deux se contredisent ; une fonction de l'étape 2 est gardée si elle ne s'impose pas au profil privé. Ainsi la mise à jour signée dans l'app (D70) reste, mais seulement dans un build fait avec la clé de mise à jour (`--updates`) : le build par défaut n'en contient aucune et D46 vaut toujours pour lui. Les numéros en double sont renumérotés (D69 à D75).

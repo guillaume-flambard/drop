@@ -1,15 +1,23 @@
 # drop
 
-**Obtenir la réponse. Garder la maîtrise de ses accès.**
+**Faire collaborer vos agents dans votre infrastructure. Obtenir la réponse, garder la maîtrise des accès.**
 
 Votre agent a besoin d'une information chez un collègue. Il pose une question précise ; le propriétaire autorise une fois ; une capacité s'exécute dans son environnement ; seule la réponse autorisée revient.
 
-`drop` est un nom de code. Le cœur du prototype est implémenté et démontré. L'app Mac et la distribution publique restent à livrer. Le [bilan daté](docs/AVANCEMENT.md) distingue le code, les tests, les démonstrations et le travail restant.
+`drop` est un nom de code. Cap adopté : A2A/MCP, installation privée sans service externe imposé, app Mac de barre de menus sous Tauri 2, puis Windows et Linux. Le runtime privé fonctionne avec un relais interne et une politique réseau explicite. Le raccordement groupé en deux confirmations reste à livrer. Le [bilan daté](docs/AVANCEMENT.md) distingue le code, les tests, les démonstrations et le travail restant.
+
+## Le socle et son modèle
+
+Le code du projet est sous [Apache-2.0](LICENSE). Community vise l'auto-hébergement, les modèles internes, le consentement et les contrôles essentiels sans taxe par demande. L'accompagnement, l'intégration et la maintenance peuvent être payants ; une administration d'organisation reste à valider. Le dépôt est encore privé, sans installateur public annoncé. Voir [le cadre open source](docs/OPEN_SOURCE.md).
+
+Le nouveau profil utilise un relais local ou interne choisi par le propriétaire. Les destinations modèle, MCP HTTP et A2A sont limitées à des origines privées explicites, sans redirection ni repli cloud. Le modèle doit être choisi ; aucun poids n’est téléchargé automatiquement. Le financement ne remplace plus son endpoint. Voir le [démarrage et les limites du profil privé](docs/PRIVATE_PROFILE.md), notamment le refus du DNS et des serveurs source MCP stdio non isolés.
 
 ## Commencer par comprendre
 
 - [Le guide illustré](docs/GUIDE.md) : un exemple, le parcours, l'architecture et la confidentialité.
 - [L'avancement du projet](docs/AVANCEMENT.md) : preuves, limites et prochaines étapes.
+- [Le raccordement en deux confirmations](docs/ONBOARDING.md) et [les modèles locaux candidats](docs/MODELS.md).
+- [Les critères futurs](docs/ACCEPTANCE.md) et [les chantiers ordonnés](docs/TASKS.md).
 - [Les démonstrations conservées](docs/demo/README.md) : captures et résultats de Claude Code et Codex.
 
 ![Le trajet d'une réponse autorisée](docs/diagrams/journey.svg)
@@ -19,7 +27,7 @@ Votre agent a besoin d'une information chez un collègue. Il pose une question p
 Depuis un clone du dépôt, avec Node **22.18 ou supérieur** et pnpm **11.27.0** :
 
 ```bash
-pnpm install
+pnpm install --frozen-lockfile
 pnpm site:preview
 ```
 
@@ -60,19 +68,19 @@ Voir [les configurations manuelles](packages/requester-mcp/README.md) et `node p
 
 ## Où trouver les sources
 
-| Chemin | Rôle |
-| --- | --- |
-| [AGENTS.md](AGENTS.md) | Méthode de contribution, stack et règles de sécurité |
-| [openspec/specs/](openspec/specs/) | Contrats normatifs des capacités |
-| [openspec/project/](openspec/project/) | Vision et architecture descriptives |
-| [docs/TASKS.md](docs/TASKS.md) | Ordre, dépendances et statuts du travail |
-| [docs/DECISIONS.md](docs/DECISIONS.md) | Décisions et évolutions du périmètre |
-| [packages/](packages/) | Protocole, relais, Node, runner, capacités et connecteurs |
-| [site/](site/) | Sources de la vitrine statique |
+| Chemin                                 | Rôle                                                      |
+| -------------------------------------- | --------------------------------------------------------- |
+| [AGENTS.md](AGENTS.md)                 | Méthode de contribution, stack et règles de sécurité      |
+| [openspec/specs/](openspec/specs/)     | Contrats normatifs des capacités                          |
+| [openspec/project/](openspec/project/) | Vision et architecture descriptives                       |
+| [docs/TASKS.md](docs/TASKS.md)         | Ordre, dépendances et statuts du travail                  |
+| [docs/DECISIONS.md](docs/DECISIONS.md) | Décisions et évolutions du périmètre                      |
+| [packages/](packages/)                 | Protocole, relais, Node, runner, capacités et connecteurs |
+| [site/](site/)                         | Sources de la vitrine statique                            |
 
 ## Contribuer
 
-Lire [AGENTS.md](AGENTS.md), puis la première tâche disponible dans l'index ou celle désignée par l'humain. Une change OpenSpec porte le travail, ses critères et ses preuves. Les contrôles incluent lint, types, tests, liens aux scénarios, revue, puis archivage.
+Lire [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md) et [AGENTS.md](AGENTS.md), puis la première tâche disponible dans l'index ou celle désignée par l'humain. Une change OpenSpec porte le travail, ses critères et ses preuves. Les contrôles incluent lint, types, tests, liens aux scénarios, revue, puis archivage.
 
 ```bash
 openspec list --specs

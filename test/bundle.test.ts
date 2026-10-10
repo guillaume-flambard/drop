@@ -48,7 +48,17 @@ describe('the bundled files that ship outside the repo (D29, T2.18)', () => {
     const env = { ...process.env, DROP_HOME: home };
     const run = (...args: string[]) =>
       spawnSync(process.execPath, [join(out, 'drop.mjs'), ...args], { env, encoding: 'utf8', timeout: 15_000 });
-    const init = run('init', '--name', 'Julie', '--kind', 'human', '--relay', 'wss://relay.example/v1');
+    const init = run(
+      'init',
+      '--profile',
+      'legacy',
+      '--name',
+      'Julie',
+      '--kind',
+      'human',
+      '--relay',
+      'wss://relay.example/v1',
+    );
     expect(init.status, init.stderr).toBe(0);
     expect(init.stdout).toContain('initialized');
     const help = run('help');

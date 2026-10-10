@@ -4,7 +4,17 @@
 
 Votre agent a besoin d'une information détenue par un collègue. Avec drop, il lui adresse une demande précise. Le collègue choisit de l'autoriser ; son environnement exécute une action définie à l'avance ; votre agent reçoit la réponse autorisée.
 
-`drop` est un nom de code. Le projet dispose d'un prototype fonctionnel, accessible depuis le terminal. L’installation locale dans les agents et l’annuaire d’équipe existent. L’app Mac et la publication npm restent à livrer. Le [bilan daté](AVANCEMENT.md) détaille ce qui est prouvé.
+`drop` est un nom de code. Cap adopté le 9 octobre 2026 : collaboration A2A/MCP dans l'infrastructure du client, app Mac de barre de menus, socle Community sous Apache-2.0. Le runtime privé est implémenté ; le raccordement groupé est vérifié dans le panneau local sur fixtures et attend une recette humaine sur Mac. Le [bilan daté](AVANCEMENT.md) précise les preuves.
+
+## La cible privée
+
+Un relais interne relie les postes ; aucun serveur Memo Labs ni compte externe ne doit être requis. Le modèle peut être sur le laptop ou dans l'entreprise. Les destinations des modèles, connecteurs et agents joints doivent être approuvées : avoir l'app sur son Mac ne rend pas une API cloud locale.
+
+L'app conserve Tauri 2 et le moteur partagé. Mac d'abord, Windows puis Linux. Après installation et environnement prêt : analyser les configurations compatibles, puis raccorder les agents sélectionnés. Ce parcours de deux confirmations ne publie aucun outil. Invitations, permissions système et téléchargements sont séparés. Voir [ONBOARDING](ONBOARDING.md).
+
+Le modèle existant passe en premier. Sans modèle, les capacités déterministes fonctionnent ; Ollama avec Qwen3.5 4B/9B est une option à mesurer, avec téléchargement volontaire et aucun fallback distant dans le profil privé cible. Voir [MODELS](MODELS.md).
+
+La sécurité essentielle et l'auto-hébergement sont gratuits. L'installation, l'intégration et le support peuvent financer le projet ; l'administration d'organisation est une piste future. [OPEN_SOURCE](OPEN_SOURCE.md) fixe la frontière et les étapes avant publication.
 
 ## Une question, un accord, une réponse
 
@@ -22,13 +32,14 @@ Un refus arrête cette demande. « Pas maintenant » ne planifie pas une relance
 
 ## Ce que drop sait faire aujourd'hui
 
-| Capacité | Exemple de question | Résultat prévu | Relecture |
-| --- | --- | --- | --- |
-| `production.error_summary` | « La production va bien depuis une heure ? » | État, compteurs et catégories d'erreurs | Pas de seconde relecture ; traitement déterministe |
-| `repo.answer` | « Le mode sombre est-il déjà implémenté ? » | Réponse courte, verdict et noms de fichiers | Oui |
-| `mcp.answer.<nom>` | « Cette maquette prévoit-elle un état vide ? » | Réponse courte, verdict et noms de sources | Oui |
+| Capacité                   | Exemple de question                            | Résultat prévu                                          | Relecture                                          |
+| -------------------------- | ---------------------------------------------- | ------------------------------------------------------- | -------------------------------------------------- |
+| `production.error_summary` | « La production va bien depuis une heure ? »   | État, compteurs et catégories d'erreurs                 | Pas de seconde relecture ; traitement déterministe |
+| `repo.answer`              | « Le mode sombre est-il déjà implémenté ? »    | Réponse courte, verdict et noms de fichiers             | Oui                                                |
+| `a2a.answer.<nom>`         | « Que sait cet agent interne sur le projet ? » | Réponse d’un agent A2A approuvé, bornée par la capacité | Oui                                                |
+| `mcp.answer.<nom>`         | « Cette maquette prévoit-elle un état vide ? » | Réponse courte, verdict et noms de sources              | Oui                                                |
 
-Toutes ces capacités demandent une autorisation initiale. Les deux dernières utilisent un modèle. Le résumé d'erreurs ne nécessite pas de modèle.
+Toutes ces capacités demandent une autorisation initiale. Les capacités dépôt et MCP utilisent un modèle ; un agent A2A joint utilise sa propre implémentation. Le résumé d'erreurs ne nécessite pas de modèle.
 
 Une capacité est un **contrat d'action** : une entrée, une sortie, des outils autorisés, une sensibilité et un budget. Le demandeur choisit dans ce catalogue ; il ne transmet pas une liste de nouveaux outils à exécuter.
 
@@ -38,21 +49,22 @@ Une capacité est un **contrat d'action** : une entrée, une sortie, des outils 
 
 ![L'agent demandeur passe par son connecteur MCP et son Node, puis par un relais chiffré vers le Node du propriétaire ; le propriétaire contrôle le runner et les sources](diagrams/architecture.svg)
 
-| Pièce | Son rôle |
-| --- | --- |
-| Agent demandeur | Claude Code, Codex ou un autre client capable d'utiliser le serveur MCP |
-| `requester-mcp` | Traduit trois outils de l'agent en appels à l'API locale du Node |
-| Node | Processus local qui porte l'identité, gère les demandes et se connecte au relais |
-| Relais | Route les enveloppes chiffrées entre les Nodes, même à distance |
-| Approbateur | Personne qui décide ; son Node peut différer de celui qui exécute |
-| Runner | Exécute la capacité et contrôle la sortie |
-| Reçu | Trace signée avec empreintes, décision, outils et horodatages |
+| Pièce           | Son rôle                                                                         |
+| --------------- | -------------------------------------------------------------------------------- |
+| Agent demandeur | Claude Code, Codex ou un autre client capable d'utiliser le serveur MCP          |
+| `requester-mcp` | Traduit les outils de l'agent en appels à l'API locale du Node                   |
+| Node            | Processus local qui porte l'identité, gère les demandes et se connecte au relais |
+| Relais          | Route les enveloppes chiffrées entre les Nodes, même à distance                  |
+| Approbateur     | Personne qui décide ; son Node peut différer de celui qui exécute                |
+| Runner          | Exécute la capacité et contrôle la sortie                                        |
+| Reçu            | Trace signée avec empreintes, décision, outils et horodatages                    |
 
 Exemple : le VPS peut résumer ses propres logs pendant que Guillaume autorise la demande sur son Mac. Les connexions au relais partent des Nodes. L'interface de consentement et l'API du Node écoutent sur la boucle locale ; le runner n'expose pas de port.
 
-### Les trois outils de l'agent
+### Les outils de l'agent
 
 ```text
+ask_team             Poser une question à l’équipe, routage déterministe borné
 list_capabilities    Découvrir les réponses disponibles chez ses pairs
 request_drop         Envoyer une demande pour une capacité
 get_drop_result      Attendre ou récupérer le résultat
@@ -64,18 +76,20 @@ get_drop_result      Attendre ou récupérer le résultat
 
 La distinction essentielle est **qui reçoit quoi**.
 
-| Destinataire | Ce qu'il peut recevoir |
-| --- | --- |
-| Demandeur | Sortie conforme au contrat et autorisée ; aucun accès permanent au dépôt ou à l'outil du propriétaire |
-| Relais | Enveloppes chiffrées et métadonnées de routage ; pas le contenu déchiffré |
-| Propriétaire / exécuteur | Question et raison de la demande ; accès à ses propres sources |
-| Fournisseur du modèle, s'il est distant | Question et contexte transmis au modèle, notamment les résultats des outils qu'il utilise |
+| Destinataire                            | Ce qu'il peut recevoir                                                                                |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Demandeur                               | Sortie conforme au contrat et autorisée ; aucun accès permanent au dépôt ou à l'outil du propriétaire |
+| Relais                                  | Enveloppes chiffrées et métadonnées de routage ; pas le contenu déchiffré                             |
+| Propriétaire / exécuteur                | Question et raison de la demande ; accès à ses propres sources                                        |
+| Fournisseur du modèle, s'il est distant | Question et contexte transmis au modèle, notamment les résultats des outils qu'il utilise             |
 
-**Exécution locale ne signifie pas modèle local.** Le fournisseur configuré par défaut dans le code est OpenRouter. Avec un fournisseur distant, des extraits du dépôt ou des résultats MCP peuvent lui être transmis pendant le raisonnement. Un modèle local compatible peut être configuré, mais il faut vérifier sa capacité à utiliser les outils et la qualité de ses réponses.
+**Le propriétaire choisit son modèle.** L’URL proposée est Ollama sur loopback, sans choix implicite de modèle ni téléchargement. Le profil privé impose des origines privées explicites et refuse redirections, DNS et serveurs source MCP stdio. Les services internes doivent eux-mêmes être isolés par le client. Il reste à qualifier un vrai modèle et ses outils. Voir [le guide du profil privé](PRIVATE_PROFILE.md).
 
 Le chiffrement protège le transport entre Nodes. Les listes d'outils, schémas, budgets, filtres et relectures limitent ce qui est exécuté et renvoyé. Ils ne constituent ni un audit de sécurité indépendant, ni un bac à sable système, ni une garantie absolue contre la divulgation. Les annotations de lecture seule d'un serveur MCP ne remplacent pas l'examen des outils que l'on choisit de partager.
 
 ## Qui paie le modèle ?
+
+**Contrôle livré en T3.1.** Le financement ne remplace ni le modèle ni l’endpoint du propriétaire. Un financement incompatible est refusé avant appel ; en profil privé payé par le propriétaire, toute clé reçue est refusée avant consentement.
 
 Le financement par le demandeur est implémenté : une clé plafonnée est créée pour la demande et transmise chiffrée à l'exécuteur. Elle n'est pas écrite sur son disque. Le coût annoncé et le payeur apparaissent sur la carte ; le cycle de fin de demande prévoit la révocation de la clé. Ce chemin dépend d'une configuration de financement valide.
 
@@ -88,7 +102,7 @@ Le propriétaire peut aussi utiliser sa propre clé. La démo historique suit ce
 Prérequis : un clone du dépôt, Node **22.18 ou supérieur**, et la version de pnpm déclarée dans `package.json` (**11.27.0** lors de ce bilan). Depuis la racine :
 
 ```bash
-pnpm install
+pnpm install --frozen-lockfile
 pnpm -r lint
 pnpm -r typecheck
 pnpm -r test
@@ -135,7 +149,9 @@ node packages/node/src/cli.ts install codex
 
 Remplacer `codex` par `claude_code`, `cursor` ou `claude_desktop` selon l’agent. Cette commande modifie sa configuration. `uninstall <agent>` retire le connecteur. Le paquet npm public n’est pas encore publié. `node scripts/bundle.ts` nettoie `dist/` : reconstruire ensuite le site si nécessaire.
 
-Un annuaire d’équipe est implémenté : `team create <nom>` initialise l’équipe ; les invitations propagent l’adhésion et l’appairage ; `team` liste les membres, leurs agents et leurs capacités. Cela ne remplace pas encore une app Mac de suivi.
+Dans le panneau local, « Mes outils » propose le parcours guidé : « Analyser ce Mac », choisir les agents, puis « Connecter les agents sélectionnés ». Une configuration changée depuis l'analyse est refusée ; aucune capacité n'est publiée par ce raccordement. La commande CLI suit les mêmes contrôles de conflit et de sauvegarde pour l'agent nommé.
+
+Un annuaire d’équipe est implémenté : `team create <nom>` initialise l’équipe ; les invitations propagent l’adhésion et l’appairage ; `team` liste les membres, leurs agents et leurs capacités. Un shell Mac existe ; sa distribution et son parcours privé restent à terminer.
 
 Pour examiner les agents reconnus et les sources déjà configurées :
 
@@ -148,17 +164,17 @@ La commande `share <agent>/<serveur>` permet ensuite de publier une source exist
 
 ## Si une demande n'aboutit pas
 
-| Situation | Lecture utile |
-| --- | --- |
-| Aucune capacité visible | Vérifier l'appairage, la publication et la connexion des Nodes |
-| Entrée invalide | Corriger les champs demandés ; rien n'a été envoyé |
-| Refus ou expiration | L'action n'a pas été autorisée ; ne pas contourner cette décision |
-| Résultat en attente | Un humain peut devoir autoriser ou relire la réponse |
-| Erreur de modèle ou budget dépassé | Vérifier la configuration du fournisseur et le budget annoncé |
-| Sortie rejetée | Le contrôle du schéma ou le scanner a bloqué l'envoi |
+| Situation                          | Lecture utile                                                     |
+| ---------------------------------- | ----------------------------------------------------------------- |
+| Aucune capacité visible            | Vérifier l'appairage, la publication et la connexion des Nodes    |
+| Entrée invalide                    | Corriger les champs demandés ; rien n'a été envoyé                |
+| Refus ou expiration                | L'action n'a pas été autorisée ; ne pas contourner cette décision |
+| Résultat en attente                | Un humain peut devoir autoriser ou relire la réponse              |
+| Erreur de modèle ou budget dépassé | Vérifier la configuration du fournisseur et le budget annoncé     |
+| Sortie rejetée                     | Le contrôle du schéma ou le scanner a bloqué l'envoi              |
 
 ## Pour contribuer
 
-Le contrat normatif est dans [openspec/specs](../openspec/specs/). La vision, l'architecture et ce guide sont descriptifs. [TASKS.md](TASKS.md) fixe l'ordre du travail ; [DECISIONS.md](DECISIONS.md) conserve les choix et leurs évolutions ; [AGENTS.md](../AGENTS.md) décrit la méthode de contribution.
+Les critères du produit sont dans [ACCEPTANCE](ACCEPTANCE.md). Ceux de T3.1 sont implémentés dans les specs ; les autres restent à vérifier dans leurs chantiers. Le contrat normatif est dans [openspec/specs](../openspec/specs/). La vision, l'architecture et ce guide sont descriptifs. [TASKS.md](TASKS.md) fixe l'ordre du travail ; [DECISIONS.md](DECISIONS.md) conserve les choix et leurs évolutions ; [AGENTS.md](../AGENTS.md) décrit la méthode de contribution.
 
 Sources principales de ce guide : [CLI](../packages/node/src/cli.ts), [outils MCP](../packages/requester-mcp/src/tools.ts), [registre des capacités](../packages/capabilities/src/index.ts), [pipeline](../packages/runner/src/run.ts), [fournisseur du modèle](../packages/capabilities/src/llm.ts), [cycle de vie](../packages/protocol/src/lifecycle.ts), [démo](../scripts/demo-local.sh).

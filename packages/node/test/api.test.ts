@@ -1,8 +1,8 @@
 import { request } from 'node:http';
-import { afterEach, describe, expect, it } from 'vitest';
-import { generateIdentity } from '@drop/protocol';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { DropError, generateIdentity } from '@drop/protocol';
 import { startLocalApi, type LocalApi } from '../src/api.ts';
-import { NodeEngine } from '../src/engine.ts';
+import { NodeEngine, type CatalogEntry, type OutboundDrop } from '../src/engine.ts';
 import { renderConsentCard, renderReview } from '../src/ui.ts';
 import { MemoryStore } from './helpers.ts';
 
@@ -14,8 +14,8 @@ afterEach(async () => {
   api = undefined;
 });
 
-async function startApi(): Promise<LocalApi> {
-  const engine = new NodeEngine({
+async function startApi(engine?: NodeEngine, token = TOKEN): Promise<LocalApi> {
+  engine ??= new NodeEngine({
     identity: await generateIdentity('Guillaume'),
     ownerKind: 'human',
     store: new MemoryStore(),
@@ -24,7 +24,7 @@ async function startApi(): Promise<LocalApi> {
   });
   api = await startLocalApi({
     engine,
-    token: TOKEN,
+    token,
     port: 0,
     relayUrl: 'ws://127.0.0.1:1/v1',
     refreshCatalogs: () => Promise.resolve(),
@@ -44,6 +44,94 @@ function get(port: number, path: string, headers: Record<string, string>): Promi
 }
 
 describe('local API', () => {
+  it('reports requester capacity as E_RATE/429 for /drops and /ask', async () => {
+    const engine = new NodeEngine({
+      identity: await generateIdentity('Guillaume'),
+      ownerKind: 'human',
+      store: new MemoryStore(),
+      capabilities: [],
+      transport: { send: () => Promise.resolve('offline') },
+    });
+    vi.spyOn(engine, 'catalog').mockReturnValue([
+      {
+        card: {
+          id: 'mcp.answer.github',
+          title: 'GitHub',
+          receives: ['Une question'],
+          inputSchema: { properties: { question: { type: 'string' } }, required: ['question'] },
+        },
+        ownerName: 'Julie',
+        online: true,
+      } as unknown as CatalogEntry,
+    ]);
+    vi.spyOn(engine, 'catalogIsFresh').mockReturnValue(true);
+    const requestDrop = vi
+      .spyOn(engine, 'requestDrop')
+      .mockRejectedValue(new DropError('E_RATE', 'Trop de demandes actives.'));
+    const { port } = await startApi(engine);
+    const post = async (path: string, body: unknown) => {
+      const response = await fetch(`http://127.0.0.1:${String(port)}${path}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      return { status: response.status, body: await response.json() };
+    };
+    expect(await post('/drops', { capabilityId: 'mcp.answer.github', input: {}, purpose: 'Test' })).toMatchObject({
+      status: 429,
+      body: { error: 'E_RATE' },
+    });
+    expect(await post('/ask', { question: 'Où en est le ticket GitHub ?' })).toMatchObject({
+      status: 429,
+      body: { error: 'E_RATE' },
+    });
+    requestDrop.mockRejectedValue(new DropError('E_TOO_LARGE'));
+    expect(await post('/drops', { capabilityId: 'mcp.answer.github', input: {}, purpose: 'Test' })).toMatchObject({
+      status: 413,
+      body: { error: 'E_TOO_LARGE' },
+    });
+    expect(await post('/ask', { question: 'Où en est le ticket GitHub ?' })).toMatchObject({
+      status: 413,
+      body: { error: 'E_TOO_LARGE' },
+    });
+  });
+
+  it('reports already sent routes when /ask reaches capacity midway', async () => {
+    const engine = new NodeEngine({
+      identity: await generateIdentity('Guillaume'),
+      ownerKind: 'human',
+      store: new MemoryStore(),
+      capabilities: [],
+      transport: { send: () => Promise.resolve('offline') },
+    });
+    vi.spyOn(engine, 'catalog').mockReturnValue(
+      ['github', 'notion'].map((kind) => ({
+        card: {
+          id: `mcp.answer.${kind}`,
+          title: kind,
+          receives: ['Une question'],
+          inputSchema: { properties: { question: { type: 'string' } }, required: ['question'] },
+        },
+        ownerName: 'Julie',
+        online: true,
+      })) as unknown as CatalogEntry[],
+    );
+    vi.spyOn(engine, 'catalogIsFresh').mockReturnValue(true);
+    vi.spyOn(engine, 'requestDrop')
+      .mockResolvedValueOnce({ dropId: '0199c5a0-0000-7000-8000-000000000001' } as OutboundDrop)
+      .mockRejectedValueOnce(new DropError('E_RATE'));
+    const { port } = await startApi(engine);
+    const response = await fetch(`http://127.0.0.1:${String(port)}/ask`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question: 'Où en sont le commit GitHub et la documentation Notion ?' }),
+    });
+    expect(response.status).toBe(429);
+    expect(await response.json()).toMatchObject({
+      error: 'E_RATE',
+      asked: [{ dropId: '0199c5a0-0000-7000-8000-000000000001' }],
+    });
+  });
   it('refuses a request without the token', async () => {
     const { port } = await startApi();
     expect(await get(port, '/peers', { Host: `127.0.0.1:${String(port)}` })).toBe(401);
@@ -51,6 +139,28 @@ describe('local API', () => {
     expect(await get(port, '/peers', { Host: `127.0.0.1:${String(port)}`, Authorization: `Bearer ${TOKEN}` })).toBe(
       200,
     );
+  });
+
+  it('rejects an empty configured local token before listening', async () => {
+    await expect(startApi(undefined, '')).rejects.toThrow('E_TOKEN');
+    await expect(startApi(undefined, '   ')).rejects.toThrow('E_TOKEN');
+  });
+
+  it('rejects missing and empty presented tokens', async () => {
+    const { port } = await startApi();
+    const host = { Host: `127.0.0.1:${String(port)}` };
+    for (const path of ['/peers', '/app', '/ui/events']) {
+      expect(await get(port, path, host)).toBe(401);
+      expect(await get(port, path, { ...host, Authorization: 'Bearer ' })).toBe(401);
+      expect(await get(port, `${path}?token=`, host)).toBe(401);
+    }
+  });
+
+  it('preserves authenticated local API and panel access', async () => {
+    const { port } = await startApi();
+    const host = { Host: `127.0.0.1:${String(port)}` };
+    expect(await get(port, '/peers', { ...host, Authorization: `Bearer ${TOKEN}` })).toBe(200);
+    expect(await get(port, `/app?token=${TOKEN}`, host)).toBe(200);
   });
 
   it('refuses a foreign Host header even with the token (DNS rebinding)', async () => {

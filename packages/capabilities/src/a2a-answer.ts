@@ -1,3 +1,5 @@
+import type { PrivateNetwork } from '@drop/protocol';
+import { privateFetch } from './private-network.ts';
 import { z } from 'zod';
 import { askAgent } from '@drop/a2a';
 import { DropError } from '@drop/protocol';
@@ -36,6 +38,7 @@ export function frameForAgent(question: string): string {
 }
 
 export interface A2aAnswerDeps {
+  network?: PrivateNetwork;
   ask?: typeof askAgent;
   env?: NodeJS.ProcessEnv;
 }
@@ -80,6 +83,7 @@ export function createA2aAnswer(deps: A2aAnswerDeps = {}): CapabilityImpl<A2aAns
       ctx.recordToolCall('a2a.SendMessage');
       const result = await (deps.ask ?? askAgent)({
         url: config.url,
+        ...(deps.network ? { fetchImpl: privateFetch(deps.network, config.url) } : {}),
         text: frameForAgent(input.question),
         headers,
         signal: ctx.signal,

@@ -1,0 +1,19 @@
+name: Proposer une amélioration
+description: Décrire le besoin et une solution bornée.
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: Qui est bloqué et quelle réponse lui manque ?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposition, alternatives et périmètre de données
+    validations:
+      required: true
+  - type: input
+    id: task
+    attributes:
+      label: Tâche ou critère lié, si connu

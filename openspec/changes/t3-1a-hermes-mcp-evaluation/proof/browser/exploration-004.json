@@ -1,0 +1,6 @@
+{
+  "observationCommand": "rtk bun /Users/memo/.claude/skills/gstack/bin/gstack-qa-deadline run .gstack/qa-reports/t3-1a-hermes-20261009/browser/deadline.json -- rtk sh -c 'rtk /Users/memo/.claude/skills/gstack/browse/dist/browse attrs @e12 && rtk /Users/memo/.claude/skills/gstack/browse/dist/browse links'",
+  "observed": {"href": "downloads/HERMES.md", "download": "", "resolvedUrl": "http://127.0.0.1:4173/downloads/HERMES.md", "otherVisibleInternalLinks": "all resolve to local pages/files"},
+  "hypothesis": "Le lien est un téléchargement. Charger directement son URL locale pour vérifier que le serveur fournit le document attendu et que le navigateur n’affiche pas d’erreur.",
+  "nextCommand": "rtk bun /Users/memo/.claude/skills/gstack/bin/gstack-qa-deadline run .gstack/qa-reports/t3-1a-hermes-20261009/browser/deadline.json -- rtk sh -c 'rtk /Users/memo/.claude/skills/gstack/browse/dist/browse goto http://127.0.0.1:4173/downloads/HERMES.md && rtk /Users/memo/.claude/skills/gstack/browse/dist/browse url && rtk /Users/memo/.claude/skills/gstack/browse/dist/browse text && rtk /Users/memo/.claude/skills/gstack/browse/dist/browse network && rtk /Users/memo/.claude/skills/gstack/browse/dist/browse console --errors'"
+}

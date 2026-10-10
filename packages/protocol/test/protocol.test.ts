@@ -37,11 +37,83 @@ import {
   type Envelope,
   type Identity,
   type Message,
+  uuidv7,
 } from '../src/index.ts';
 import { getSodium } from '../src/sodium.ts';
 
 const NOW = 1_791_460_000_000;
 const DROP_ID = '0199c5a0-0000-7000-8000-000000000001';
+
+describe('bounded envelope replay cache', () => {
+  it('refuses new ids at capacity without forgetting an unexpired id', () => {
+    const cache = new ReplayCache(30 * 60_000, 2);
+    expect(cache.check('a', NOW)).toBe(true);
+    expect(cache.check('b', NOW)).toBe(true);
+    expect(cache.check('c', NOW)).toBe(false);
+    expect(cache.check('a', NOW)).toBe(false);
+  });
+
+  it('admits another id after entries expire without reopening a live id', () => {
+    const cache = new ReplayCache(1000, 2);
+    expect(cache.check('a', NOW)).toBe(true);
+    expect(cache.check('b', NOW + 500)).toBe(true);
+    expect(cache.check('c', NOW + 1000)).toBe(true);
+    expect(cache.check('b', NOW + 1000)).toBe(false);
+  });
+});
+
+describe('drop request id', () => {
+  it('rejects UUIDv4 for a new drop request', () => {
+    const request = {
+      type: 'drop_request',
+      dropId: '550e8400-e29b-41d4-a716-446655440000',
+      capabilityId: 'test.state',
+      capabilityVersion: '1',
+      input: {},
+      purpose: 'Test',
+      requestedBy: { nodeId: 'A'.repeat(43), displayName: 'Requester', agent: 'codex' },
+    };
+    expect(MessageSchema.safeParse(request).success).toBe(false);
+    expect(MessageSchema.safeParse({ ...request, dropId: uuidv7(NOW) }).success).toBe(true);
+  });
+
+  it('normalizes uppercase UUIDv7 before dispatch', () => {
+    const id = uuidv7(NOW);
+    const parsed = MessageSchema.parse({
+      type: 'drop_request',
+      dropId: id.toUpperCase(),
+      capabilityId: 'test.state',
+      capabilityVersion: '1',
+      input: {},
+      purpose: 'Test',
+      requestedBy: { nodeId: 'A'.repeat(43), displayName: 'Requester', agent: 'codex' },
+    });
+    expect(parsed).toMatchObject({ type: 'drop_request', dropId: id });
+  });
+
+  it('publishes the UUIDv7 constraint in the exported JSON Schema', () => {
+    const find = (node: unknown): unknown => {
+      if (typeof node !== 'object' || node === null) return undefined;
+      const properties = (node as { properties?: Record<string, { const?: unknown }> }).properties;
+      if (properties?.type?.const === 'drop_request') return (properties as Record<string, unknown>).dropId;
+      for (const child of Object.values(node)) {
+        const found = find(child);
+        if (found !== undefined) return found;
+      }
+      return undefined;
+    };
+    const dropId = find(protocolJsonSchemas()) as { type?: unknown; pattern?: unknown } | undefined;
+    expect(dropId?.type).toBe('string');
+    const pattern = new RegExp(String(dropId?.pattern));
+    for (const accepted of [uuidv7(NOW), uuidv7(NOW).toUpperCase()]) expect(pattern.test(accepted)).toBe(true);
+    for (const refused of [
+      '550e8400-e29b-41d4-a716-446655440000',
+      '00000000-0000-0000-0000-000000000000',
+      'ffffffff-ffff-ffff-ffff-ffffffffffff',
+    ])
+      expect(pattern.test(refused)).toBe(false);
+  });
+});
 
 async function pair(): Promise<{ alice: Identity; bob: Identity }> {
   return { alice: await generateIdentity('Alice'), bob: await generateIdentity('Bob') };
@@ -296,15 +368,16 @@ async function openRaw(sender: Identity, recipient: Identity, body: unknown): Pr
 }
 
 describe('protocol contract', () => {
-  it('imports nothing that does I/O: only zod, libsodium and node:crypto for hashes and random bytes', () => {
+  it('imports nothing that does I/O: only zod, libsodium, node:crypto for hashes and random bytes, node:net isIP', () => {
     const src = join(import.meta.dirname, '..', 'src');
     for (const file of readdirSync(src)) {
       const text = readFileSync(join(src, file), 'utf8');
       const imports = [...text.matchAll(/from '([^']+)'/g)].map((match) => match[1] ?? '');
       for (const specifier of imports)
-        expect(['zod', 'libsodium-wrappers', 'node:crypto'].includes(specifier) || specifier.startsWith('./')).toBe(
-          true,
-        );
+        // node:net only for isIP, a pure check of an address literal (private network policy, T3.1).
+        expect(
+          ['zod', 'libsodium-wrappers', 'node:crypto', 'node:net'].includes(specifier) || specifier.startsWith('./'),
+        ).toBe(true);
       expect(text).not.toMatch(/\b(?:process\.|fetch\(|require\(|import\()/);
     }
   });
@@ -450,7 +523,9 @@ describe('protocol contract', () => {
     await expectCode(
       openEnvelope(
         bob,
-        { ...good, sig: good.sig.slice(0, -2) + 'AA' },
+        // The first character carries 6 signature bits: a different one always breaks the signature, unlike a fixed
+        // suffix that the random signature may already end with.
+        { ...good, sig: (good.sig.startsWith('A') ? 'B' : 'A') + good.sig.slice(1) },
         {
           isKnownPeer: () => true,
           replay: new ReplayCache(),

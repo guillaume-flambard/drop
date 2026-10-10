@@ -3,8 +3,8 @@
 ## Purpose
 
 Le site présente drop à quelqu'un qui n'a jamais vu le dépôt : ce que ça fait, comment démarrer, à quoi ça sert, ce
-que ça protège, et où en est le projet (T2.6, D37). Il est servi sur `drop.memolabs.dev` par l'image drop, à côté du
-relais et de la passerelle, et sert aussi les fichiers de mise à jour de l'app Mac (D35). Il ne contient aucun script.
+que ça protège, et où en est le projet (T2.6, D72). Il est servi sur `drop.memolabs.dev` par l'image drop, à côté du
+relais et de la passerelle, et sert aussi les fichiers de mise à jour de l'app Mac (D70). Il ne contient aucun script.
 
 ## Requirements
 

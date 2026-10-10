@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { existsSync, readFileSync, unwatchFile, watchFile, writeFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
 import { createServer } from 'node:http';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { z } from 'zod';
@@ -25,6 +26,7 @@ export const RelayConfigSchema = z.object({
   port: z.number().int().min(0).max(65535),
   host: z.string().default('127.0.0.1'),
   allowedNodeIds: z.array(z.string()),
+  revokedNodeIds: z.array(z.string()).default([]),
   maxQueuePerNode: z.number().int().positive().default(100),
   rateLimitPerMinute: z.number().int().positive().default(60),
   /** Where nodes admitted by invitation are kept across restarts (T2.1). Without it, admissions last until restart. */
@@ -71,8 +73,14 @@ export interface RelayHandle {
 }
 
 export function readRelayConfig(path: string): RelayConfig {
-  return RelayConfigSchema.parse(JSON.parse(readFileSync(path, 'utf8')));
+  const config = RelayConfigSchema.parse(JSON.parse(readFileSync(path, 'utf8')));
+  if (config.admittedPath) config.admittedPath = resolve(dirname(path), config.admittedPath);
+  return config;
 }
+
+const RATE_WINDOW_MS = 60_000;
+/** A client frame serializes the envelope id within this prefix; E_RATE reads no further. */
+const RATE_ID_PREFIX_BYTES = 256;
 
 const defaultLogger: RelayLogger = (entry) => {
   process.stdout.write(`${JSON.stringify({ at: new Date().toISOString(), ...entry })}\n`);
@@ -94,7 +102,6 @@ interface Connection {
   socket: WebSocket;
   nodeId: string;
   missedPings: number;
-  sentInWindow: number[];
 }
 
 export function startRelay(config: RelayConfig, options: RelayOptions = {}): Promise<RelayHandle> {
@@ -102,8 +109,14 @@ export function startRelay(config: RelayConfig, options: RelayOptions = {}): Pro
   const log = options.logger ?? defaultLogger;
   const now = options.now ?? Date.now;
   const admittedState = loadAdmitted(settings.admittedPath);
-  const allowed = new Set([...settings.allowedNodeIds, ...admittedState.admitted.map((entry) => entry.nodeId)]);
-  let revoked = new Set<string>();
+  // Revoked in the config (T3.1): permanent, never admitted again. The revocation file (T2.19) adds to it, live.
+  const configRevoked = new Set<string>(settings.revokedNodeIds);
+  const allowed = new Set(
+    [...settings.allowedNodeIds, ...admittedState.admitted.map((entry) => entry.nodeId)].filter(
+      (id) => !configRevoked.has(id),
+    ),
+  );
+  let revoked = new Set<string>(configRevoked);
   const isAllowed = (nodeId: string): boolean => allowed.has(nodeId) && !revoked.has(nodeId);
 
   /**
@@ -133,6 +146,7 @@ export function startRelay(config: RelayConfig, options: RelayOptions = {}): Pro
     return 'ok';
   };
   const connections = new Map<string, Connection>();
+  const sentByNode = new Map<string, number[]>();
   const queues = new Map<string, Envelope[]>();
 
   /**
@@ -150,7 +164,7 @@ export function startRelay(config: RelayConfig, options: RelayOptions = {}): Pro
       log({ event: 'revocation', outcome: 'E_SCHEMA' });
       return;
     }
-    const next = new Set(state.revoked.map((entry) => entry.nodeId));
+    const next = new Set([...configRevoked, ...state.revoked.map((entry) => entry.nodeId)]);
     const spreading = state.revoked.filter((entry) => entry.withInvited).map((entry) => entry.nodeId);
     while (spreading.length > 0) {
       const sponsor = spreading.pop();
@@ -189,6 +203,23 @@ export function startRelay(config: RelayConfig, options: RelayOptions = {}): Pro
     return live;
   };
 
+  const recentSends = (nodeId: string): number[] => {
+    const windowStart = now() - RATE_WINDOW_MS;
+    const current = (sentByNode.get(nodeId) ?? []).filter((at) => at > windowStart);
+    if (current.length) sentByNode.set(nodeId, current);
+    else sentByNode.delete(nodeId);
+    return current;
+  };
+
+  // Only the sender's window is pruned per frame; idle nodes are swept by the pinger below.
+  const charge = (nodeId: string): boolean => {
+    const sent = recentSends(nodeId);
+    if (sent.length >= settings.rateLimitPerMinute) return false;
+    sent.push(now());
+    sentByNode.set(nodeId, sent);
+    return true;
+  };
+
   const route = (sender: Connection, raw: unknown): void => {
     const parsed = EnvelopeSchema.safeParse(raw);
     if (!parsed.success) {
@@ -209,15 +240,6 @@ export function startRelay(config: RelayConfig, options: RelayOptions = {}): Pro
       log({ event: 'envelope', outcome: 'E_TOO_LARGE', ...meta });
       return;
     }
-    const minuteAgo = now() - 60_000;
-    sender.sentInWindow = sender.sentInWindow.filter((at) => at > minuteAgo);
-    if (sender.sentInWindow.length >= settings.rateLimitPerMinute) {
-      send(sender.socket, { type: 'error', id: envelope.id, error: 'E_RATE' });
-      log({ event: 'envelope', outcome: 'E_RATE', ...meta });
-      return;
-    }
-    sender.sentInWindow.push(now());
-
     const target = connections.get(envelope.to);
     if (target) {
       send(target.socket, { type: 'envelope', envelope });
@@ -248,9 +270,24 @@ export function startRelay(config: RelayConfig, options: RelayOptions = {}): Pro
       if (connection) connection.missedPings = 0;
     });
 
+    socket.on('error', (error: Error) => {
+      // ws rejects oversized or invalid frames before 'message'; account for authenticated attempts.
+      const code = 'code' in error ? error.code : undefined;
+      if (connection && typeof code === 'string' && code.startsWith('WS_ERR_')) {
+        const outcome = charge(connection.nodeId)
+          ? code === 'WS_ERR_UNSUPPORTED_MESSAGE_LENGTH'
+            ? 'E_TOO_LARGE'
+            : 'E_SCHEMA'
+          : 'E_RATE';
+        log({ event: 'envelope', outcome, nodeId: connection.nodeId });
+        return;
+      }
+      log({ event: 'disconnect', outcome: 'socket_error', ...(connection ? { nodeId: connection.nodeId } : {}) });
+    });
+
     socket.on('message', (data) => {
-      const frame = parseFrame(ClientFrameSchema, data);
       if (!connection) {
+        const frame = parseFrame(ClientFrameSchema, data);
         if (frame?.type !== 'auth') {
           socket.close(CLOSE_UNAUTHORIZED, 'auth expected');
           return;
@@ -269,7 +306,7 @@ export function startRelay(config: RelayConfig, options: RelayOptions = {}): Pro
             }
             clearTimeout(authTimer);
             connections.get(nodeId)?.socket.close(CLOSE_REPLACED, 'replaced by a newer connection');
-            connection = { socket, nodeId, missedPings: 0, sentInWindow: [] };
+            connection = { socket, nodeId, missedPings: 0 };
             connections.set(nodeId, connection);
             send(socket, { type: 'ready', nodeId });
             log({ event: 'auth', outcome: 'ok', nodeId });
@@ -292,6 +329,18 @@ export function startRelay(config: RelayConfig, options: RelayOptions = {}): Pro
           });
         return;
       }
+      if (!charge(connection.nodeId)) {
+        // Read only a bounded prefix to associate valid client sends with E_RATE without parsing an exhausted frame.
+        const prefix = Buffer.isBuffer(data) ? data.subarray(0, RATE_ID_PREFIX_BYTES).toString('utf8') : '';
+        const rawId = /"id"\s*:\s*"([0-9a-f-]{36})"/i.exec(prefix)?.[1];
+        const id = rawId && z.uuid().safeParse(rawId).success ? rawId : undefined;
+        send(socket, { type: 'error', ...(id ? { id } : {}), error: 'E_RATE' });
+        log({ event: 'envelope', outcome: 'E_RATE', nodeId: connection.nodeId, ...(id ? { id } : {}) });
+        // A bounded prefix can contain a misleading id. Closing settles every unmatched send as offline.
+        socket.close(1013, 'rate limit');
+        return;
+      }
+      const frame = parseFrame(ClientFrameSchema, data);
       if (frame?.type !== 'envelope') {
         send(socket, { type: 'error', error: 'E_SCHEMA' });
         return;
@@ -317,6 +366,7 @@ export function startRelay(config: RelayConfig, options: RelayOptions = {}): Pro
       connection.missedPings += 1;
       connection.socket.ping();
     }
+    for (const nodeId of [...sentByNode.keys()]) recentSends(nodeId);
   }, options.pingIntervalMs ?? 25_000);
 
   return new Promise((resolve, reject) => {

@@ -1,0 +1,33 @@
+{
+  "scenarios": [
+    "fresh-private-install-and-invitation",
+    "consent-mcp-model-review-result",
+    "denial-without-source-or-model-call",
+    "model-unavailable-without-fallback",
+    "relay-restart-no-reexecution",
+    "daemon-restart-fresh-consent",
+    "revocation-backup-restore"
+  ],
+  "requests": [
+    "POST /mcp",
+    "POST /mcp",
+    "GET /mcp",
+    "POST /mcp",
+    "POST /v1/chat/completions",
+    "POST /mcp",
+    "POST /v1/chat/completions",
+    "POST /mcp",
+    "POST /mcp",
+    "GET /mcp",
+    "POST /mcp",
+    "POST /v1/chat/completions",
+    "POST /mcp",
+    "POST /mcp",
+    "GET /mcp",
+    "POST /mcp",
+    "POST /v1/chat/completions",
+    "POST /mcp",
+    "POST /v1/chat/completions"
+  ],
+  "modelCalls": 5
+}

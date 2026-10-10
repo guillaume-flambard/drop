@@ -6,7 +6,8 @@ import { agentConfigPath, agentServers, AGENTS, type AgentKind, type AgentServer
 /**
  * What `drop detect` (and the app, T2.4) shows in one glance (T2.8, D28): the coding agents on this machine, whether
  * drop is installed in each, and the MCP servers they use, with a guess of what each one is. Never a secret: only
- * names, the command's basename, the URL's host, and the names of environment variables and headers.
+ * names, the command's basename, the URL's host, and the names of environment variables and headers. Existing
+ * command arguments are never displayed: they can contain inline credentials even when `env` is empty.
  */
 export interface DetectedServer {
   agent: AgentKind;
@@ -82,10 +83,7 @@ function describe(server: AgentServer): string {
     }
   }
   const command = (server.command ?? '').split('/').pop() ?? '';
-  const target = (server.args ?? []).find((arg) => !arg.startsWith('-')) ?? '';
-  // A file path shows its last part; a package name (@scope/name) stays whole.
-  const shown = /^[./~]/.test(target) ? target.split('/').pop() : target;
-  return [command, shown].filter(Boolean).join(' ');
+  return command;
 }
 
 export function detectAgents(home: string = homedir()): DetectedAgent[] {

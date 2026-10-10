@@ -135,6 +135,7 @@ async function executeAndCheck(
     if (state.stop !== undefined) return stopFailure(state.stop);
     // A capability may refuse with E_SCHEMA (input it rejects), E_OUTPUT_INVALID (its own post-checks) or E_BUDGET
     // (cost); the message is always fixed text. Anything else stays opaque.
+    if (isDropError(error, 'E_DENIED')) return failure('E_DENIED', 'destination or funding not authorized');
     if (isDropError(error, 'E_SCHEMA')) return failure('E_SCHEMA', MESSAGES.inputRejected);
     if (isDropError(error, 'E_OUTPUT_INVALID')) return failure('E_OUTPUT_INVALID', MESSAGES.outputSchema);
     if (isDropError(error, 'E_BUDGET')) return failure('E_BUDGET', MESSAGES.costBudget);

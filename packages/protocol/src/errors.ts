@@ -10,6 +10,7 @@ export const ERROR_CODES = [
   'E_TOO_LARGE',
   'E_DENIED',
   'E_NOT_NOW',
+  'E_RATE',
   'E_BUDGET',
   'E_OUTPUT_INVALID',
   'E_SECRET_DETECTED',

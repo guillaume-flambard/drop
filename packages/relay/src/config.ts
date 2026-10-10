@@ -6,6 +6,7 @@ import { RelayConfigSchema, RevokedStateSchema } from './server.ts';
 export function allowNode(configPath: string, nodeId: string): boolean {
   const id = NodeIdSchema.parse(nodeId);
   const config = RelayConfigSchema.parse(JSON.parse(readFileSync(configPath, 'utf8')));
+  if (config.revokedNodeIds.includes(id)) throw new Error('E_DENIED node is revoked');
   if (config.allowedNodeIds.includes(id)) return false;
   config.allowedNodeIds.push(id);
   writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
@@ -13,7 +14,21 @@ export function allowNode(configPath: string, nodeId: string): boolean {
 }
 
 /**
- * `drop-relay revoke <nodeId> [--with-invited]` (T2.19, D40): adds a node to the revocation file, which a running relay
+ * Permanent revocation in relay.config.json (T3.1): applies after a restart and takes priority over bootstrap and
+ * persisted admission. Without a `revokedPath`, `drop-relay revoke` writes here.
+ */
+export function revokeInConfig(configPath: string, nodeId: string): boolean {
+  const id = NodeIdSchema.parse(nodeId);
+  const config = RelayConfigSchema.parse(JSON.parse(readFileSync(configPath, 'utf8')));
+  if (config.revokedNodeIds.includes(id)) return false;
+  config.revokedNodeIds.push(id);
+  config.allowedNodeIds = config.allowedNodeIds.filter((entry) => entry !== id);
+  writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 });
+  return true;
+}
+
+/**
+ * `drop-relay revoke <nodeId> [--with-invited]` (T2.19, D75): adds a node to the revocation file, which a running relay
  * reloads within seconds: the node is cut off and refused from then on, even with a fresh ticket. With `withInvited`,
  * the nodes it admitted are revoked too, and theirs, transitively. Returns false if it was already revoked so.
  */

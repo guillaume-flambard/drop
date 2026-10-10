@@ -65,13 +65,12 @@ La carte MUST déclarer `sensitivity: 'high'` et `approval: 'always'` : le propr
 - **THEN** la réponse n'est pas retenue (une relance, puis `E_OUTPUT_INVALID`)
 
 ### Requirement: Clé du demandeur
-Quand la demande porte une clé plafonnée (D27), la capacité MUST appeler le modèle avec cette clé, l'URL qu'elle donne et
-son modèle s'il est précisé, avec un budget égal au plus petit de `maxUsd` et du plafond de la clé.
+Quand une clé plafonnée est fournie, la capacité MUST conserver l’URL et le modèle du propriétaire. Elle MUST refuser un financement incompatible avant tout appel au serveur ou au modèle. Un financement compatible utilise le minimum des budgets.
 
 #### Scenario: Modèle payé par le demandeur
 <!-- openspec-guard:test="mcp.answer (T2.2) > runs on the requester capped key when the requester pays (D27)" -->
-- **WHEN** la demande porte une clé plafonnée à 0,10 $ pour `requester/model`
-- **THEN** le modèle appelé est `requester/model` avec cette clé, et le budget est 0,10 $
+- **WHEN** la demande porte une clé plafonnée compatible avec le fournisseur et le modèle du propriétaire
+- **THEN** ce modèle est appelé avec cette clé et le minimum des deux budgets
 
 ### Requirement: Serveur déclaré par un agent
 La config MAY désigner un serveur par `{ transport: 'agent', agent, name }` : un serveur déjà déclaré par Claude Code,
@@ -88,12 +87,19 @@ variables et en-têtes lus dans le fichier de l'agent au moment de l'exécution,
 - **WHEN** les quatre agents déclarent des serveurs, dont une table Codex désactivée
 - **THEN** chaque serveur actif est lu avec sa commande ou son URL, ses variables et ses en-têtes
 
+### Requirement: Connexions MCP privées
+La connexion et la découverte des outils MCP MUST appliquer la politique privée, y compris aux serveurs référencés dans les fichiers des agents. Un processus stdio non isolé MUST être refusé avant son lancement.
+
+#### Scenario: AC: contrôle avant découverte
+<!-- openspec-guard:test="private adapters > refuses HTTP discovery outside policy and refuses stdio before spawning it" -->
+- **WHEN** un serveur HTTP hors politique ou un serveur stdio non isolé est découvert
+- **THEN** aucune connexion ni exécution de ce serveur n’a lieu.
 ### Requirement: Partage vérifié
 Partager un serveur détecté (`drop share`, panneau) SHALL toujours s'y connecter d'abord et MUST ne rien publier si :
 le serveur exige une connexion OAuth (401 ou 403 sans en-tête `Authorization`), refuse son jeton (401 ou 403 avec
 en-tête), ne répond pas, n'offre pas un outil choisi, ou marque un outil choisi `destructiveHint`. Le message MUST dire
 quoi faire, en français, puisque le panneau l'affiche tel quel ; à l'exécution, ces mêmes cas restent `E_RUNNER` (T2.16,
-D38).
+D73).
 
 #### Scenario: Serveur que drop ne peut pas utiliser
 <!-- openspec-guard:test="detecting agents and their MCP servers (T2.8) > drop share checks the server first: OAuth-only, refused token, unreachable, missing or destructive tools (T2.16)" -->
@@ -102,13 +108,7 @@ D38).
 - **AND** le même serveur partagé avec des outils offerts et en lecture est publié
 
 ### Requirement: Serveurs distants avec OAuth
-Pour un serveur MCP distant qui exige OAuth et accepte l'enregistrement dynamique (Notion par exemple), drop SHALL
-s'enregistrer comme son propre client (nom « drop »), puis obtenir ses jetons par le code d'autorisation avec PKCE
-S256, une fois, dans le navigateur du propriétaire (T2.17, D39). Les jetons MUST rester sous `DROP_HOME/oauth`
-(dossier 0700, un fichier 0600 par serveur), ne jamais être journalisés ni envoyés à un pair, et être rafraîchis
-quand ils expirent. Une exécution ou un partage MUST ne jamais lancer de connexion ni s'enregistrer : sans jetons
-valides, ils échouent comme un serveur qui exige OAuth. Un jeton déjà configuré dans l'agent passe en premier. Les
-outils utilisables restent ceux choisis au partage.
+Pour un serveur MCP distant à OAuth avec enregistrement dynamique, drop SHALL s'enregistrer comme son propre client puis obtenir ses jetons par code d'autorisation et PKCE S256, dans le navigateur du propriétaire (T2.17, D74). Les jetons MUST rester sous `DROP_HOME/oauth` (0700, fichiers 0600), hors des journaux et des pairs, et être rafraîchis. Une exécution ou un partage MUST ne jamais lancer de connexion : sans jetons valides, ils échouent. Un jeton configuré dans l'agent passe en premier.
 
 #### Scenario: Connexion unique puis rafraîchissement
 <!-- openspec-guard:test="remote MCP servers behind OAuth (T2.17) > signs in once (registration, PKCE, consent), keeps the tokens 0600, refreshes them, and stops when revoked" -->

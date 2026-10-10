@@ -1,4 +1,4 @@
-// Signed updates of the Mac app (T2.4, D35). The app looks for `latest.json` under drop.memolabs.dev/updates and only
+// Signed updates of the Mac app (T2.4, D70). The app looks for `latest.json` under drop.memolabs.dev/updates and only
 // installs an archive signed with drop's update key (minisign, Tauri updater plugin) whose signature names the version
 // the manifest announces. This module builds that manifest and the `--config` that turns the updater on; the build
 // itself is scripts/build-mac.ts.

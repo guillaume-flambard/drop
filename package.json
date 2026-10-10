@@ -1,6 +1,7 @@
 {
   "name": "drop",
   "private": true,
+  "license": "Apache-2.0",
   "type": "module",
   "packageManager": "pnpm@11.27.0",
   "engines": {

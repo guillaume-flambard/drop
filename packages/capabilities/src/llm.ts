@@ -1,21 +1,21 @@
 import { z } from 'zod';
-import type { Funding } from '@drop/protocol';
+import { DropError, type Funding } from '@drop/protocol';
 
 /**
  * Provider-agnostic chat client over the OpenAI-compatible `/chat/completions` API, spoken by Ollama, OpenRouter,
- * Groq, Gemini, Mistral, OpenAI and Anthropic. No SDK: one fetch. The API key is read from an environment variable
+ * and other explicitly configured compatible endpoints. No SDK: one fetch. The API key is read from an environment variable
  * named in the owner's config, so it never sits in a config file, a message or a receipt. A keyless provider such as
  * local Ollama sets `apiKeyEnv: null`.
  */
 export const ProviderConfigSchema = z.object({
-  // Default (D20): a free OpenRouter model, measured at 6-14 s with correct tool use. Ollama stays one baseUrl away.
-  baseUrl: z.url().default('https://openrouter.ai/api/v1'),
-  model: z.string().min(1).default('nvidia/nemotron-3-super-120b-a12b:free'),
+  // Local default only; no model download or fallback. Model qualification belongs to T3.2.
+  baseUrl: z.url().default('http://127.0.0.1:11434/v1'),
+  model: z.string().trim().default(''),
   apiKeyEnv: z
     .string()
     .regex(/^[A-Z][A-Z0-9_]*$/)
     .nullable()
-    .default('OPENROUTER_API_KEY'),
+    .default(null),
   inputUsdPerMTok: z.number().nonnegative().default(0),
   outputUsdPerMTok: z.number().nonnegative().default(0),
 });
@@ -73,7 +73,7 @@ const FUNDED_KEY_ENV = 'DROP_REQUESTER_FUNDED_KEY';
 
 /**
  * The provider a run uses: the requester's capped key when the requester pays (D27), else the owner's config. With a
- * funded key the requester may name the model; the budget is the smaller of the owner's and the requester's caps.
+ * funded key the owner's endpoint and model stay fixed; the budget is the smaller of both caps.
  */
 export function providerFor(
   config: ProviderConfig,
@@ -81,19 +81,29 @@ export function providerFor(
   funding?: Funding,
 ): { config: ProviderConfig; env: NodeJS.ProcessEnv; maxUsd: number } {
   if (!funding) return { config, env: process.env, maxUsd };
+  if (
+    funding.baseUrl.replace(/\/$/, '') !== config.baseUrl.replace(/\/$/, '') ||
+    (funding.model !== undefined && funding.model !== config.model)
+  )
+    throw new DropError('E_DENIED', 'E_DENIED incompatible model funding');
   return {
-    config: { ...config, baseUrl: funding.baseUrl, model: funding.model ?? config.model, apiKeyEnv: FUNDED_KEY_ENV },
+    config: { ...config, apiKeyEnv: FUNDED_KEY_ENV },
     env: { [FUNDED_KEY_ENV]: funding.apiKey },
     maxUsd: Math.min(maxUsd, funding.maxUsd),
   };
 }
 
-export function openAiCompatible(config: ProviderConfig, env: NodeJS.ProcessEnv = process.env): ChatProvider {
+export function openAiCompatible(
+  config: ProviderConfig,
+  env: NodeJS.ProcessEnv = process.env,
+  fetchImpl: typeof fetch = fetch,
+): ChatProvider {
+  if (!config.model) throw new DropError('E_SCHEMA', 'E_SCHEMA choose an installed model explicitly');
   const key = config.apiKeyEnv ? env[config.apiKeyEnv] : undefined;
   if (config.apiKeyEnv && !key) throw new Error(`environment variable ${config.apiKeyEnv} is not set`);
   return {
     async chat(messages, tools, signal) {
-      const response = await fetch(`${config.baseUrl.replace(/\/$/, '')}/chat/completions`, {
+      const response = await fetchImpl(`${config.baseUrl.replace(/\/$/, '')}/chat/completions`, {
         method: 'POST',
         signal,
         headers: { 'Content-Type': 'application/json', ...(key ? { Authorization: `Bearer ${key}` } : {}) },

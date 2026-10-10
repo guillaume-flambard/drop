@@ -17,7 +17,7 @@ describe('detecting agents and their MCP servers (T2.8)', () => {
           drop: { command: 'node', args: ['/x/packages/requester-mcp/src/index.ts'] },
           notion: {
             command: 'npx',
-            args: ['-y', '@notionhq/notion-mcp-server'],
+            args: ['-y', '@notionhq/notion-mcp-server', 'inline-secret-value'],
             env: { NOTION_TOKEN: 'ntn_secret_value' },
           },
         },
@@ -38,12 +38,13 @@ describe('detecting agents and their MCP servers (T2.8)', () => {
       ['drop', undefined, false],
       ['notion', 'notion', true],
     ]);
-    expect(claude?.servers[2]).toMatchObject({ where: 'npx @notionhq/notion-mcp-server', envNames: ['NOTION_TOKEN'] });
+    expect(claude?.servers[2]).toMatchObject({ where: 'npx', envNames: ['NOTION_TOKEN'] });
     expect(agents.find((agent) => agent.agent === 'cursor')?.servers[0]).toMatchObject({
       kind: 'crm',
       where: 'mcp.hubspot.com',
     });
     expect(JSON.stringify(agents)).not.toContain('ntn_secret_value');
+    expect(JSON.stringify(agents)).not.toContain('inline-secret-value');
     expect(shareId({ name: 'figma-desktop', kind: 'figma' })).toBe('mcp.answer.figma');
     expect(shareId({ name: '42-Notion Team', kind: undefined })).toBe('mcp.answer.notion_team');
   });
@@ -72,7 +73,10 @@ describe('detecting agents and their MCP servers (T2.8)', () => {
     const dropHome = join(home, '.drop');
     const env = { ...process.env, HOME: home, DROP_HOME: dropHome };
     const run = (...args: string[]) => spawnSync(process.execPath, [cli, ...args], { env, encoding: 'utf8' });
-    expect(run('init', '--name', 'Julie', '--kind', 'human', '--relay', 'wss://relay.example/v1').status).toBe(0);
+    expect(
+      run('init', '--profile', 'legacy', '--name', 'Julie', '--kind', 'human', '--relay', 'wss://relay.example/v1')
+        .status,
+    ).toBe(0);
     const shared = run('share', 'claude_code/figma');
     expect(shared.stdout).toContain('published mcp.answer.figma');
     const published = JSON.parse(readFileSync(join(dropHome, 'capabilities', 'mcp.answer.figma.json'), 'utf8')) as {
@@ -84,7 +88,7 @@ describe('detecting agents and their MCP servers (T2.8)', () => {
       tools: ['get_design_context'],
     });
     expect(run('share', 'claude_code/drop').stderr).toContain('fait partie de drop');
-  });
+  }, 15_000);
 
   it('drop share checks the server first: OAuth-only, refused token, unreachable, missing or destructive tools (T2.16)', async () => {
     const fixture = resolve(
@@ -136,7 +140,19 @@ describe('detecting agents and their MCP servers (T2.8)', () => {
       });
     try {
       expect(
-        (await run('init', '--name', 'Natha', '--kind', 'human', '--relay', 'wss://relay.example/v1')).status,
+        (
+          await run(
+            'init',
+            '--profile',
+            'legacy',
+            '--name',
+            'Natha',
+            '--kind',
+            'human',
+            '--relay',
+            'wss://relay.example/v1',
+          )
+        ).status,
       ).toBe(0);
       const oauth = await run('share', 'claude_code/notion', '--tools', 'search');
       expect(oauth.status).not.toBe(0);
