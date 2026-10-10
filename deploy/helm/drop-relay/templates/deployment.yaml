@@ -1,0 +1,86 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "drop-relay.name" . }}
+  labels:
+    {{- include "drop-relay.labels" . | nindent 4 }}
+spec:
+  # One relay: admissions, revocations and queues live in one process and its volume.
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "drop-relay.selector" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "drop-relay.selector" . | nindent 8 }}
+      annotations:
+        # The whole ConfigMap, policy included: a new policy restarts the relay, which reads it only at start.
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: relay
+          image: {{ include "drop-relay.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["node", "drop-relay.mjs", "serve", "--config=/config/relay.config.json"]
+          ports:
+            - name: relay
+              containerPort: {{ if .Values.tls.enabled }}8443{{ else }}{{ .Values.config.port }}{{ end }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            privileged: false
+            capabilities:
+              drop: [ALL]
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: relay
+              scheme: {{ if .Values.tls.enabled }}HTTPS{{ else }}HTTP{{ end }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: relay
+              scheme: {{ if .Values.tls.enabled }}HTTPS{{ else }}HTTP{{ end }}
+            periodSeconds: 30
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /config
+              readOnly: true
+            - name: data
+              mountPath: /data
+            {{- if .Values.policy.enabled }}
+            - name: config
+              mountPath: /policy/policy.json
+              subPath: policy.json
+              readOnly: true
+            {{- end }}
+            {{- if .Values.tls.enabled }}
+            - name: tls
+              mountPath: /tls
+              readOnly: true
+            {{- end }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "drop-relay.name" . }}
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ include "drop-relay.name" . }}-data
+        {{- if .Values.tls.enabled }}
+        - name: tls
+          secret:
+            secretName: {{ required "tls.secretName is required with tls.enabled" .Values.tls.secretName }}
+        {{- end }}

@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { existsSync, readFileSync, unwatchFile, watchFile, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { createServer } from 'node:http';
+import { createServer as createTlsServer } from 'node:https';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { z } from 'zod';
 import {
@@ -9,7 +10,11 @@ import {
   EnvelopeSchema,
   envelopeSize,
   MAX_ENVELOPE_BYTES,
+  policyExpired,
+  policyFingerprint,
+  SignedPolicySchema,
   verifyAdmission,
+  verifyPolicy,
   verifyDetached,
   type Envelope,
 } from '@drop/protocol';
@@ -22,21 +27,31 @@ import {
   type ServerFrame,
 } from './wire.ts';
 
-export const RelayConfigSchema = z.object({
-  port: z.number().int().min(0).max(65535),
-  host: z.string().default('127.0.0.1'),
-  allowedNodeIds: z.array(z.string()),
-  revokedNodeIds: z.array(z.string()).default([]),
-  maxQueuePerNode: z.number().int().positive().default(100),
-  rateLimitPerMinute: z.number().int().positive().default(60),
-  /** Where nodes admitted by invitation are kept across restarts (T2.1). Without it, admissions last until restart. */
-  admittedPath: z.string().optional(),
-  maxAdmissionsPerSponsorPerDay: z.number().int().nonnegative().default(20),
-  /** All sponsors together (T2.19): bounds how fast admissions can spread from node to node. */
-  maxAdmissionsPerDay: z.number().int().nonnegative().default(100),
-  /** Revocations written by `drop-relay revoke`, reloaded while the relay runs (T2.19). */
-  revokedPath: z.string().optional(),
-});
+export const RelayConfigSchema = z
+  .object({
+    port: z.number().int().min(0).max(65535),
+    host: z.string().default('127.0.0.1'),
+    allowedNodeIds: z.array(z.string()),
+    revokedNodeIds: z.array(z.string()).default([]),
+    maxQueuePerNode: z.number().int().positive().default(100),
+    rateLimitPerMinute: z.number().int().positive().default(60),
+    /** Where nodes admitted by invitation are kept across restarts (T2.1). Without it, admissions last until restart. */
+    admittedPath: z.string().optional(),
+    maxAdmissionsPerSponsorPerDay: z.number().int().nonnegative().default(20),
+    /** All sponsors together (T2.19): bounds how fast admissions can spread from node to node. */
+    maxAdmissionsPerDay: z.number().int().nonnegative().default(100),
+    /** Revocations written by `drop-relay revoke`, reloaded while the relay runs (T2.19). */
+    revokedPath: z.string().optional(),
+    /** The organization policy this relay requires of every node (T4.10, D81), and the key it must be signed with. */
+    policyPath: z.string().min(1).optional(),
+    policyIssuer: z.string().min(1).optional(),
+    /** Serves wss and https itself, for a relay without a TLS front (T4.10). */
+    tls: z.object({ certPath: z.string(), keyPath: z.string() }).optional(),
+  })
+  // Half a policy configuration would start an open relay: both or neither.
+  .refine((config) => (config.policyPath === undefined) === (config.policyIssuer === undefined), {
+    message: 'E_POLICY policyPath and policyIssuer go together',
+  });
 
 /** The revocation file: a revoked node is refused even if allowlisted or admitted; `withInvited` spreads to its invitees. */
 export const RevokedStateSchema = z.object({
@@ -75,6 +90,12 @@ export interface RelayHandle {
 export function readRelayConfig(path: string): RelayConfig {
   const config = RelayConfigSchema.parse(JSON.parse(readFileSync(path, 'utf8')));
   if (config.admittedPath) config.admittedPath = resolve(dirname(path), config.admittedPath);
+  if (config.policyPath) config.policyPath = resolve(dirname(path), config.policyPath);
+  if (config.tls)
+    config.tls = {
+      certPath: resolve(dirname(path), config.tls.certPath),
+      keyPath: resolve(dirname(path), config.tls.keyPath),
+    };
   return config;
 }
 
@@ -104,10 +125,26 @@ interface Connection {
   missedPings: number;
 }
 
-export function startRelay(config: RelayConfig, options: RelayOptions = {}): Promise<RelayHandle> {
+/** Reads and verifies the relay's policy; a relay never starts on one that does not verify or has expired (T4.10). */
+async function loadRelayPolicy(path: string | undefined, issuer: string | undefined, now: number) {
+  if (!path) return undefined;
+  let raw: unknown;
+  try {
+    raw = JSON.parse(readFileSync(path, 'utf8'));
+  } catch {
+    throw new Error('E_POLICY unreadable relay policy');
+  }
+  if (!issuer || !(await verifyPolicy(raw, issuer))) throw new Error('E_POLICY relay policy does not verify');
+  const signed = SignedPolicySchema.parse(raw);
+  if (policyExpired(signed.policy, now)) throw new Error('E_POLICY relay policy expired or not yet valid');
+  return { signed, fingerprint: policyFingerprint(signed) };
+}
+
+export async function startRelay(config: RelayConfig, options: RelayOptions = {}): Promise<RelayHandle> {
   const settings = RelayConfigSchema.parse(config);
   const log = options.logger ?? defaultLogger;
   const now = options.now ?? Date.now;
+  const policy = await loadRelayPolicy(settings.policyPath, settings.policyIssuer, now());
   const admittedState = loadAdmitted(settings.admittedPath);
   // Revoked in the config (T3.1): permanent, never admitted again. The revocation file (T2.19) adds to it, live.
   const configRevoked = new Set<string>(settings.revokedNodeIds);
@@ -185,12 +222,19 @@ export function startRelay(config: RelayConfig, options: RelayOptions = {}): Pro
   applyRevocations();
   if (settings.revokedPath)
     watchFile(settings.revokedPath, { interval: options.revocationPollMs ?? 2000 }, applyRevocations);
-  // Plain HTTP answers only GET /health (for the deploy probe and uptime monitoring); /v1 upgrades to WebSocket.
-  const http = createServer((req, res) => {
+  // HTTP answers only GET /health (for the deploy probe and uptime monitoring); /v1 upgrades to WebSocket. With tls,
+  // the relay serves https and wss itself.
+  const answer = (
+    req: { method?: string | undefined; url?: string | undefined },
+    res: import('node:http').ServerResponse,
+  ) => {
     const healthy = req.method === 'GET' && req.url === '/health';
     res.writeHead(healthy ? 200 : 404, { 'Content-Type': 'application/json' });
     res.end(healthy ? JSON.stringify({ ok: true, nodes: connections.size }) : '{"error":"not_found"}');
-  });
+  };
+  const http = settings.tls
+    ? createTlsServer({ cert: readFileSync(settings.tls.certPath), key: readFileSync(settings.tls.keyPath) }, answer)
+    : createServer(answer);
   const server = new WebSocketServer({ server: http, path: '/v1', maxPayload: MAX_ENVELOPE_BYTES * 2 });
 
   const send = (socket: WebSocket, frame: ServerFrame): void => {
@@ -295,6 +339,20 @@ export function startRelay(config: RelayConfig, options: RelayOptions = {}): Pro
         const { nodeId, sig, admission } = frame;
         void verifyDetached(nodeId, challenge, sig)
           .then(async (valid) => {
+            // Under a policy, only nodes that run it, while it is valid (T4.10, D81). Checked before any admission.
+            if (
+              valid &&
+              policy &&
+              (frame.policy !== policy.fingerprint || policyExpired(policy.signed.policy, now()))
+            ) {
+              log({
+                event: 'auth',
+                outcome: frame.policy === policy.fingerprint ? 'policy_expired' : 'policy_mismatch',
+                nodeId,
+              });
+              socket.close(CLOSE_UNAUTHORIZED, 'policy');
+              return;
+            }
             if (valid && !isAllowed(nodeId) && admission !== undefined) {
               const outcome = await admit(nodeId, admission);
               if (outcome !== 'ok') log({ event: 'admission', outcome, nodeId });
@@ -358,6 +416,12 @@ export function startRelay(config: RelayConfig, options: RelayOptions = {}): Pro
   });
 
   const pinger = setInterval(() => {
+    // A policy that expires while nodes are connected cuts them off: none of them runs a valid policy any more.
+    if (policy && policyExpired(policy.signed.policy, now()))
+      for (const connection of connections.values()) {
+        log({ event: 'auth', outcome: 'policy_expired', nodeId: connection.nodeId });
+        connection.socket.close(CLOSE_UNAUTHORIZED, 'policy');
+      }
     for (const connection of connections.values()) {
       if (connection.missedPings >= 2) {
         connection.socket.terminate();
@@ -376,7 +440,7 @@ export function startRelay(config: RelayConfig, options: RelayOptions = {}): Pro
       const port = typeof address === 'object' && address !== null ? address.port : settings.port;
       resolve({
         port,
-        url: `ws://${settings.host}:${String(port)}/v1`,
+        url: `${settings.tls ? 'wss' : 'ws'}://${settings.host}:${String(port)}/v1`,
         close: () =>
           new Promise<void>((done) => {
             clearInterval(pinger);

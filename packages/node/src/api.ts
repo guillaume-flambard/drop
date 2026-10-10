@@ -48,7 +48,14 @@ function signInPage(res: ServerResponse, status: number, message: string): void 
 
 /** What the panel can do beyond deciding: see and share tools, install drop in agents, create a team. */
 export interface AdminHooks {
-  status(): { displayName: string; nodeId: string; relayConnected: boolean; lan?: string; internet?: string };
+  status(): {
+    displayName: string;
+    nodeId: string;
+    relayConnected: boolean;
+    lan?: string;
+    internet?: string;
+    policy?: unknown;
+  };
   tools(): unknown;
   share(body: {
     agent: string;
