@@ -16,7 +16,12 @@ function entry(
   online = true,
   inputSchema: object = QUESTION_SCHEMA,
 ): CatalogEntry {
-  return { card: { id, title, inputSchema } as unknown as CapabilityCard, ownerName, online };
+  return {
+    card: { id, title, inputSchema } as unknown as CapabilityCard,
+    ownerNodeId: `node-${ownerName}`,
+    ownerName,
+    online,
+  };
 }
 
 const catalog = [

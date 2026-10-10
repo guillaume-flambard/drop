@@ -3,7 +3,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { z } from 'zod';
 import { AGENTS, type AgentKind } from '@drop/capabilities';
 import { decodeInvite, DropError, isDropError, RequesterAgentSchema } from '@drop/protocol';
-import type { NodeEngine } from './engine.ts';
+import { AmbiguousCapabilityError, type NodeEngine } from './engine.ts';
 import { LinkRequestSchema, type LinkRequest } from './home.ts';
 import { InternetSettingsSchema, type InternetSettings } from './iroh.ts';
 import { renderPanel } from './panel.ts';
@@ -110,6 +110,8 @@ export interface LocalApi {
 
 const DropRequestBody = z.object({
   capabilityId: z.string(),
+  /** Who should answer, when several peers publish this id (T4.17, D80). */
+  ownerNodeId: z.string().max(64).optional(),
   input: z.unknown(),
   purpose: z.string().min(1).max(140),
   agent: RequesterAgentSchema.default('other'),
@@ -232,10 +234,11 @@ export function startLocalApi(options: LocalApiOptions): Promise<LocalApi> {
     if (method === 'GET' && path === '/capabilities') {
       if (!engine.catalogIsFresh()) await options.refreshCatalogs();
       json(res, 200, {
-        capabilities: engine.catalog().map(({ card, ownerName, online }) => ({
+        capabilities: engine.catalog().map(({ card, ownerNodeId, ownerName, online }) => ({
           capability_id: card.id,
           title: card.title,
           owner: ownerName,
+          owner_node_id: ownerNodeId,
           online,
           input_schema: card.inputSchema,
           receives: card.receives,
@@ -249,7 +252,17 @@ export function startLocalApi(options: LocalApiOptions): Promise<LocalApi> {
         json(res, 400, { error: 'E_SCHEMA', message: 'invalid drop request' });
         return;
       }
-      if (!engine.catalog().some((entry) => entry.card.id === parsed.data.capabilityId))
+      // Refresh when this capability, or this owner's, is not known yet: never fall back on the catalogs at hand.
+      const { capabilityId, ownerNodeId } = parsed.data;
+      if (
+        !engine
+          .catalog()
+          .some(
+            (entry) =>
+              entry.card.id === capabilityId && (ownerNodeId === undefined || entry.ownerNodeId === ownerNodeId),
+          ) ||
+        (ownerNodeId === undefined && !engine.catalogIsFresh())
+      )
         await options.refreshCatalogs();
       try {
         const drop = await engine.requestDrop(parsed.data);
@@ -261,6 +274,14 @@ export function startLocalApi(options: LocalApiOptions): Promise<LocalApi> {
         }
         if (isDropError(error, 'E_TOO_LARGE')) {
           json(res, 413, { error: 'E_TOO_LARGE', message: 'Enveloppe trop grande.' });
+          return;
+        }
+        if (error instanceof AmbiguousCapabilityError) {
+          json(res, 409, {
+            error: 'E_AMBIGUOUS_CAPABILITY',
+            message: 'Plusieurs pairs publient cette capacité : précise ownerNodeId.',
+            owners: error.owners.map((owner) => ({ owner_node_id: owner.ownerNodeId, owner: owner.ownerName })),
+          });
           return;
         }
         json(res, 404, { error: 'E_UNKNOWN_CAPABILITY', message: 'no such capability among paired peers' });
@@ -288,6 +309,7 @@ export function startLocalApi(options: LocalApiOptions): Promise<LocalApi> {
         try {
           const drop = await engine.requestDrop({
             capabilityId: route.capabilityId,
+            ownerNodeId: route.ownerNodeId,
             input: route.fact ? {} : { question: parsed.data.question },
             purpose: parsed.data.purpose ?? 'Pas de raison précisée.',
             agent: parsed.data.agent,
@@ -302,6 +324,8 @@ export function startLocalApi(options: LocalApiOptions): Promise<LocalApi> {
             json(res, 413, { error: 'E_TOO_LARGE', message: 'Enveloppe trop grande.', asked });
             return;
           }
+          // Routes always name their owner; should one still be ambiguous, the others are asked all the same.
+          if (error instanceof AmbiguousCapabilityError) continue;
           throw error;
         }
       }

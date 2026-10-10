@@ -7,6 +7,8 @@ export const CapabilityViewSchema = z.object({
   capability_id: z.string(),
   title: z.string(),
   owner: z.string(),
+  /** Who runs it (T4.17): name it in request_drop when several peers publish the same capability id. */
+  owner_node_id: z.string().optional(),
   online: z.boolean(),
   input_schema: z.record(z.string(), z.unknown()),
   receives: z.array(z.string()),
@@ -43,6 +45,7 @@ export interface LocalNode {
   capabilities(): Promise<CapabilityView[]>;
   requestDrop(body: {
     capabilityId: string;
+    ownerNodeId?: string | undefined;
     input: unknown;
     purpose: string;
     agent: string;
