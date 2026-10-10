@@ -213,8 +213,20 @@ interface ExecutorDrop {
 
 export interface CatalogEntry {
   card: CapabilityCard;
+  /** Who runs it: the card's executorNodeId, which verifyCard requires to be the catalog's sender (T4.17). */
+  ownerNodeId: NodeId;
   ownerName: string;
   online: boolean;
+}
+
+/** Several peers publish this capability id and the request named none of them (T4.17, D80): nothing was sent. */
+export class AmbiguousCapabilityError extends Error {
+  readonly owners: { ownerNodeId: NodeId; ownerName: string }[];
+
+  constructor(capabilityId: string, owners: { ownerNodeId: NodeId; ownerName: string }[]) {
+    super(`E_AMBIGUOUS_CAPABILITY ${capabilityId} is published by ${String(owners.length)} peers`);
+    this.owners = owners;
+  }
 }
 
 export interface EngineLogEntry {
@@ -341,6 +353,7 @@ export class NodeEngine extends EventEmitter {
     return [...this.catalogs.entries()].flatMap(([nodeId, entry]) =>
       entry.cards.map((card) => ({
         card,
+        ownerNodeId: nodeId,
         ownerName: names.get(nodeId) ?? card.owner.displayName,
         online: entry.at >= fresh,
       })),
@@ -659,12 +672,25 @@ export class NodeEngine extends EventEmitter {
 
   async requestDrop(request: {
     capabilityId: string;
+    /** Who should answer, when several peers publish this id (T4.17). */
+    ownerNodeId?: string | undefined;
     input: unknown;
     purpose: string;
     agent: Agent;
   }): Promise<OutboundDrop> {
-    const entry = this.catalog().find((candidate) => candidate.card.id === request.capabilityId);
+    const matches = this.catalog().filter(
+      (candidate) =>
+        candidate.card.id === request.capabilityId &&
+        (request.ownerNodeId === undefined || candidate.ownerNodeId === request.ownerNodeId),
+    );
+    const [entry] = matches;
     if (!entry) throw new Error(`unknown capability: ${request.capabilityId}`);
+    // Never the first one found: a share is called the same on every machine (mcp.answer.figma).
+    if (matches.length > 1)
+      throw new AmbiguousCapabilityError(
+        request.capabilityId,
+        matches.map((match) => ({ ownerNodeId: match.ownerNodeId, ownerName: match.ownerName })),
+      );
     this.reserveOutboundSlot();
     const dropId = uuidv7(this.now());
     const outbound: OutboundDrop = {
@@ -993,7 +1019,15 @@ export class NodeEngine extends EventEmitter {
 
   private async onCatalog(from: NodeId, message: MessageOf<'catalog'>): Promise<void> {
     const cards: CapabilityCard[] = [];
-    for (const signed of message.cards) if (await verifyCard(signed, from)) cards.push(signed.card);
+    for (const signed of message.cards) {
+      if (!(await verifyCard(signed, from))) continue;
+      // One card per id and owner: a duplicate would make the owner's own capability ambiguous (T4.17 review).
+      if (cards.some((card) => card.id === signed.card.id)) {
+        this.log({ event: 'catalog_duplicate_dropped', code: 'E_SCHEMA', peer: from });
+        continue;
+      }
+      cards.push(signed.card);
+    }
     this.catalogs.set(from, { cards, at: this.now() });
     this.changed();
   }

@@ -446,6 +446,7 @@ describe('published facts (T4.4)', () => {
   it('ignores routing terms too short or in another script, and offline facts', () => {
     const entry = (keywords: string[], title: string, online = true): CatalogEntry => ({
       card: { id: factCapabilityId(uuidv7()), title, keywords } as CatalogEntry['card'],
+      ownerNodeId: 'node-julie',
       ownerName: 'Julie',
       online,
     });

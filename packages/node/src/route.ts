@@ -9,6 +9,8 @@ import type { CatalogEntry } from './engine.ts';
  */
 export interface Route {
   capabilityId: string;
+  /** The owner of the catalog entry this route picked: the drop goes to them (T4.17). */
+  ownerNodeId: string;
   ownerName: string;
   title: string;
   online: boolean;
@@ -185,6 +187,7 @@ export function routeQuestion(catalog: CatalogEntry[], question: string): Route[
       : scored;
   return relevant.slice(0, MAX_ROUTES).map(({ entry, hits }) => ({
     capabilityId: entry.card.id,
+    ownerNodeId: entry.ownerNodeId,
     ownerName: entry.ownerName,
     title: entry.card.title,
     online: entry.online,
@@ -215,6 +218,7 @@ export function routeFacts(catalog: CatalogEntry[], question: string): Route[] {
     .slice(0, MAX_ROUTES)
     .map(({ entry, hits }) => ({
       capabilityId: entry.card.id,
+      ownerNodeId: entry.ownerNodeId,
       ownerName: entry.ownerName,
       title: entry.card.title,
       online: entry.online,
