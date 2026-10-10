@@ -32,6 +32,31 @@ Cap adopté le 9 octobre 2026. T3.0 est vérifiée et archivée, en READY_FOR_MA
 | T3.7  | Port Windows : tray, WebView2, chemins/configs, packaging/signature, tests du corpus commun sur Windows                                                                                                                          | `owner-app`, `node`, `requester-mcp`                                                                 | `t3-7-windows-app`                  | T3.5                      | todo   |
 | T3.8  | Port Linux : paquets/WebKitGTK, GNOME/KDE, X11/Wayland, alternative au tray et tests du corpus commun                                                                                                                            | `owner-app`, `node`, `requester-mcp`                                                                 | `t3-8-linux-app`                    | T3.7                      | todo   |
 
+
+## Repositionnement : phases P0 à P5 (10 octobre 2026)
+
+Adopté le 10 octobre 2026 (D47 à D58). Ces lignes s'ajoutent à la série T3 sans la remplacer : T3.1b à T3.8 gardent leur ordre et restent des prérequis de sécurité avant tout pilote. Le détail des phases vit dans [le plan d'implémentation](product/IMPLEMENTATION_PLAN.md).
+
+| ID    | Tâche (périmètre) | Capacités OpenSpec | Change | Dépend de | Statut |
+| ----- | ----------------- | ------------------ | ------ | --------- | ------ |
+| T4.0  | P0 : documents produit `docs/product/` (PRD, TRD, APP_FLOW, UX_UI, BACKEND_SCHEMA, IMPLEMENTATION_PLAN) décrivant la cible D47 à D58 et renvoyant aux specs et à l'index ; aucun code | Documentation, sans changement de contrat | `t4-0-product-docs` | Demande humaine explicite | done |
+| T4.0a | P0 : mise en vérité de la vision, de PRODUCT.md, du README, du guide, du site et des specs touchées ; retirer toute affirmation fausse ou dépassée | `product-foundation`, `site`, specs concernées | `t4-0a-truth-refresh` | T4.0 | todo |
+| T4.1  | Simulation technique minimale : banc local, relais dédié, 50 nœuds et faux agents déterministes, mesures mémoire et latence, rapport | `simulation` (nouvelle) | `t4-1-simulation-baseline` | T4.0 | todo |
+| T4.2  | Connexion : découverte locale mDNS, iroh embarqué, échec expliqué sans relais de secours par défaut, choix explicite d'un relais | `node`, `relay`, `protocol`, `owner-app` | `t4-2-connectivity-modes` | T4.0, T3.1b | todo |
+| T4.3  | Réponse humaine : le propriétaire répond à la main (texte, fichier) avec le même consentement, la même validation et le même reçu | `node`, `owner-app`, `protocol` | `t4-3-human-answer` | T4.0 | todo |
+| T4.4  | Faits publiés (niveau 1) : faits signés marqués partageables, servis sans modèle, expiration | `node`, `protocol`, `owner-app` | `t4-4-published-facts` | T4.3 | todo |
+| T4.5  | Détection déterministe des treize clients MCP et de leurs configurations globales et par projet | `node`, `owner-app` | `t4-5-mcp-client-adapters` | T3.3 | todo |
+| T4.6  | P1 : essai avec deux amis dans des contextes différents, protocole d'observation et mesure D24 | `deploy-mac-vps` | `t4-6-friends-trial` | T4.1, T4.2, T4.3, T4.4, T4.5, T4.14, T3.4, T3.1c | todo |
+| T4.7  | P2 : simulation complète (500 nœuds virtuels, 10 à 20 personnages sur modèles gratuits, carte interactive, traces, boucle d'amélioration bornée) | `simulation` | `t4-7-simulation-full` | T4.1 | todo |
+| T4.8  | P3 : agent inclus qui répond pour le propriétaire après accord, modèle choisi par lui | `runner`, `owner-app`, `node` | `t4-8-built-in-agent` | T4.3, T3.2 | todo |
+| T4.9  | P3 : petite question (niveau 2) sur un contexte déclaré, appel neuf sans outil | `runner`, `node`, `protocol` | `t4-9-declared-context-question` | T4.4 | todo |
+| T4.10 | P3 : pack entreprise (relais binaire, Docker, Helm ; politique signée appliquée au poste et au relais) | `relay`, `node`, `owner-app` | `t4-10-enterprise-pack` | T4.2 | todo |
+| T4.11 | P4 : tâches déléguées (niveau 4) sur Task A2A avec jalons d'approbation | `a2a`, `runner`, `node`, `owner-app` | `t4-11-delegated-tasks` | T4.9 | todo |
+| T4.12 | P4 : contexte partagé décentralisé (catalogue de sujets, boîte de suggestions, invalidation) | `node`, `protocol`, `owner-app` | `t4-12-decentralized-context` | T4.4, T4.9 | todo |
+| T4.13 | P5 : revue concurrentielle refaite, nom du produit, offre et lancement public ; toute publication attend l'accord humain | `site`, `product-foundation` | `t4-13-launch` | T4.6, T3.6 | todo |
+| T4.14 | Panneau conforme à la spec node, écarts trouvés en T4.0 : expiration, ligne « Sensibilité haute » et « Pas maintenant » par défaut sur la carte de consentement ; retrait de champs à la relecture ; confirmation explicite avant d’accepter un lien drop://pair ; clic sur la notification qui ouvre le panneau ; traduction de E_STATE ; titre de l’écran de démarrage sans tiret cadratin | `owner-app`, `node` | `t4-14-panel-spec-conformance` | T3.3 | todo |
+| T4.15 | Hygiène de configuration trouvée en T4.0 : défaut `profile: legacy` du schéma de config alors que `drop init` crée un profil privé ; mode 0600 pour peers.json, team.json et relay.config.json (y compris fichier existant) ; E_QUEUE_FULL dans ERROR_CODES ; commentaire D21 périmé dans messages.ts ; liste d’agents du protocole plus étroite que la détection | `node`, `protocol`, `relay` | `t4-15-config-hygiene` | T3.1b | todo |
+
 Preuves T3.0 : [archive et recette](../openspec/changes/archive/2026-10-09-t3-0-sovereign-oss-foundation/closure.md). Le statut `done` de l’index désigne le travail vérifié de cette tâche ; son acceptation visuelle humaine reste ouverte dans `state.json`.
 
 Preuves T3.4a : [archive et vérification](../openspec/changes/archive/2026-10-09-t3-4a-empty-local-token-auth/proof/verification.md), commit `120c0f6`. T3.4 reste `blocked` pour la signature/notarisation et la recette VoiceOver réelle ; son risque de jeton vide R-7 est clos par T3.4a.
