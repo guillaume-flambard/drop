@@ -160,3 +160,88 @@ describe('menu bar panel and its admin routes (T2.4)', () => {
     expect(() => new Script(script ?? '')).not.toThrow();
   });
 });
+
+describe('menu bar panel and its admin routes (T4.14)', () => {
+  it('previews an invitation without pairing and pairs only after Rejoindre', async () => {
+    const { createInvite, encodeInvite } = await import('@drop/protocol');
+    const julie = await generateIdentity('Julie');
+    const sent: unknown[] = [];
+    const engine = new NodeEngine({
+      identity: await generateIdentity('Natha'),
+      ownerKind: 'human',
+      store: new MemoryStore(),
+      capabilities: [],
+      transport: {
+        send: (envelope) => {
+          sent.push(envelope);
+          return Promise.resolve('sent');
+        },
+      },
+    });
+    api = await startLocalApi({
+      engine,
+      token: TOKEN,
+      port: 0,
+      relayUrl: 'ws://x/v1',
+      refreshCatalogs: () => Promise.resolve(),
+    });
+    const code = encodeInvite(createInvite(julie, 'ws://x/v1'));
+    const form = (value: string) => new URLSearchParams({ code: value }).toString();
+    const preview = await new Promise<{ status: number; text: string }>((resolve, reject) => {
+      const req = request(
+        {
+          host: '127.0.0.1',
+          port: api?.port,
+          path: '/ui/pair/preview',
+          method: 'POST',
+          headers: {
+            Host: `127.0.0.1:${String(api?.port)}`,
+            Authorization: `Bearer ${TOKEN}`,
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+        },
+        (res) => {
+          let text = '';
+          res.on('data', (chunk: Buffer) => {
+            text += chunk.toString();
+          });
+          res.on('end', () => {
+            resolve({ status: res.statusCode ?? 0, text });
+          });
+        },
+      );
+      req.on('error', reject);
+      req.end(form(code));
+    });
+    expect(preview.status).toBe(200);
+    expect(JSON.parse(preview.text)).toEqual({ displayName: 'Julie' });
+    expect(sent).toHaveLength(0);
+    expect((await call(api.port, 'POST', '/ui/pair/preview', undefined, false)).status).toBe(401);
+    expect((await call(api.port, 'POST', '/ui/pair/preview', { code: 'not-a-code' })).status).toBe(400);
+    const html = renderPanel();
+    expect(html).toContain("'/ui/pair/preview'");
+    // The one pairing call lives inside inviteCard, the « Rejoindre » handler; nothing pairs at load.
+    const pairCalls = html.split("api('POST', '/ui/pair', undefined").length - 1;
+    expect(pairCalls).toBe(1);
+    const inviteCard = html.slice(html.indexOf('function inviteCard(view)'));
+    const handler = inviteCard.slice(0, inviteCard.indexOf("'Rejoindre'"));
+    expect(handler).toContain("api('POST', '/ui/pair', undefined");
+  });
+
+  it('renders expiry, high sensitivity, a default Pas maintenant and per-field redaction', () => {
+    const html = renderPanel();
+    expect(html).toContain('Expire dans ');
+    expect(html).toContain('Sensibilité haute : tu reliras le résultat avant envoi.');
+    // The keyboard default is « Pas maintenant », never « Autoriser ».
+    expect(html).toMatch(/autofocus: 'autofocus', 'data-focus': item\.dropId \+ ':not_now'/);
+    expect(html).not.toMatch(/autofocus: 'autofocus', 'data-focus': item\.dropId \+ ':allow'/);
+    expect(html).toContain("el('b', { text: 'Pourquoi : ' })");
+    expect(html).toContain("text: who + ' recevra :'");
+    expect(html).toContain("text: who + ' ne recevra jamais :'");
+    expect(html).toContain(
+      "removals.forEach(function (removal) { if (removal.box.checked) form.append('redact', removal.key); });",
+    );
+    const script = /<script>([\s\S]*?)<\/script>/.exec(html)?.[1];
+    expect(() => new Script(script ?? '')).not.toThrow();
+  });
+});

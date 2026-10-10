@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>drop — démarrage</title>
+    <title>drop, démarrage</title>
     <style>
       :root {
         color-scheme: light dark;
@@ -161,6 +161,10 @@
           'La fenêtre de drop ne s’ouvre pas. Quitte puis rouvre l’app ; si le problème persiste, réinstalle un paquet vérifié.',
         ],
         E_RESTART: ['Moteur arrêté', 'La reprise automatique a échoué. Vérifie le journal local, puis réessaie.'],
+        E_STATE: [
+          'État interne de l’app bloqué',
+          'L’app n’a pas pu enregistrer le moteur qu’elle venait de lancer. Quitte puis rouvre drop.',
+        ],
       };
       const code = new URLSearchParams(location.search).get('state');
       if (code && states[code]) {

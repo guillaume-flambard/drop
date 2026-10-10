@@ -230,7 +230,7 @@ code { font: 11px/1.4 ui-monospace, SFMono-Regular, monospace; word-break: break
   }
 
   function agentName(agent) {
-    var names = { claude_code: 'Claude Code', claude_desktop: 'Claude Desktop', cursor: 'Cursor', codex: 'Codex' };
+    var names = { claude_code: 'Claude Code', claude_desktop: 'Claude Desktop', cursor: 'Cursor', codex: 'Codex', other: 'un autre agent' };
     return names[agent] || agent.replace(/_/g, ' ');
   }
 
@@ -257,10 +257,10 @@ code { font: 11px/1.4 ui-monospace, SFMono-Regular, monospace; word-break: break
 
   function costLine(card, requester) {
     if (!card.cost) return null;
-    if (card.cost.kind === 'free') return 'Coût : gratuit';
+    if (card.cost.kind === 'free') return 'Coût : gratuit.';
     var payer = card.paidBy === 'requester' ? 'payé par ' + requester : 'à ta charge';
-    if (card.cost.kind === 'capped') return 'Coût max : ' + USD.format(card.cost.maxUsd) + ', ' + payer;
-    return 'Coût : ' + payer + ', non mesuré';
+    if (card.cost.kind === 'capped') return 'Coût max : ' + USD.format(card.cost.maxUsd) + ', ' + payer + '.';
+    return 'Coût : ' + payer + ', non mesuré.';
   }
 
   function decide(path, dropId, decision, button) {
@@ -274,6 +274,30 @@ code { font: 11px/1.4 ui-monospace, SFMono-Regular, monospace; word-break: break
     }, function (error) { notice = error.message; announce('Action impossible. ' + notice); render(true); });
   }
 
+  // True while a field or a box in the view has the focus: only then is a refresh deferred.
+  function editing() {
+    var active = document.activeElement;
+    return Boolean(active && active.closest('#view') && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA'));
+  }
+
+  function countdown(expiresAt) {
+    var seconds = Math.max(0, Math.floor((expiresAt - Date.now()) / 1000));
+    var minutes = Math.floor(seconds / 60);
+    var rest = seconds % 60;
+    return (minutes < 10 ? '0' : '') + minutes + ':' + (rest < 10 ? '0' : '') + rest;
+  }
+
+  // The expiry line of every visible card counts down each second; an expired card leaves at the next refresh.
+  setInterval(function () {
+    var expired = false;
+    Array.prototype.forEach.call(document.querySelectorAll('[data-expires]'), function (node) {
+      var at = Number(node.getAttribute('data-expires'));
+      node.textContent = 'Expire dans ' + countdown(at);
+      if (at <= Date.now()) expired = true;
+    });
+    if (expired && !editing()) render();
+  }, 1000);
+
   function approvalCard(item) {
     var who = item.requestedBy.displayName;
     var cost = costLine(item.card, who);
@@ -281,17 +305,20 @@ code { font: 11px/1.4 ui-monospace, SFMono-Regular, monospace; word-break: break
     return el('article', { class: 'card ask' + fresh(item.dropId), 'aria-label': who + ' : ' + item.card.title },
       el('div', { class: 'who' }, el('span', { class: 'avatar', 'aria-hidden': 'true', text: initials(who) }),
         el('div', { class: 'grow' }, el('div', {}, el('span', { class: 'name', text: who }), ' a besoin d’aide'),
-          el('div', { class: 'muted', text: item.card.title + ' · via ' + agentName(item.requestedBy.agent) }))),
+          el('div', { class: 'muted', text: 'via ' + agentName(item.requestedBy.agent) }))),
+      el('div', { class: 'name', text: item.card.title }),
       el('p', { class: 'quote', text: '« ' + item.inputPreview + ' »' }),
-      el('div', { class: 'why' }, el('b', { text: 'Pourquoi ' }), item.purpose),
+      el('div', { class: 'why' }, el('b', { text: 'Pourquoi : ' }), item.purpose),
       el('div', { class: 'ledger' },
-        el('div', { class: 'give' }, icon('give'), el('div', {}, el('div', { class: 'label', text: first + ' recevra' }), list(item.card.receives))),
-        el('div', { class: 'keep' }, icon('keep'), el('div', {}, el('div', { class: 'label', text: first + ' ne recevra jamais' }), list(item.card.neverReceives)))),
+        el('div', { class: 'give' }, icon('give'), el('div', {}, el('div', { class: 'label', text: who + ' recevra :' }), list(item.card.receives))),
+        el('div', { class: 'keep' }, icon('keep'), el('div', {}, el('div', { class: 'label', text: who + ' ne recevra jamais :' }), list(item.card.neverReceives)))),
       cost ? el('div', { class: 'cost', text: cost }) : null,
+      item.card.sensitivity === 'high' ? el('div', { class: 'cost', text: 'Sensibilité haute : tu reliras le résultat avant envoi.' }) : null,
+      el('div', { class: 'cost', 'data-expires': String(item.expiresAt), text: 'Expire dans ' + countdown(item.expiresAt) }),
       el('div', { class: 'decision-actions' },
-        el('button', { class: 'act subtle', 'aria-label': 'Reporter : ' + item.card.title, onclick: function (event) { decide('/ui/decide', item.dropId, 'not_now', event.currentTarget); } }, 'Pas maintenant'),
-        el('button', { class: 'act', 'aria-label': 'Refuser : ' + item.card.title, onclick: function (event) { decide('/ui/decide', item.dropId, 'deny', event.currentTarget); } }, 'Refuser'),
-        el('button', { class: 'act fill', 'aria-label': 'Autoriser une fois : ' + item.card.title, onclick: function (event) { decide('/ui/decide', item.dropId, 'allow_once', event.currentTarget); } }, 'Autoriser une fois')));
+        el('button', { class: 'act subtle', autofocus: 'autofocus', 'data-focus': item.dropId + ':not_now', 'aria-label': 'Reporter : ' + item.card.title, onclick: function (event) { decide('/ui/decide', item.dropId, 'not_now', event.currentTarget); } }, 'Pas maintenant'),
+        el('button', { class: 'act', 'data-focus': item.dropId + ':deny', 'aria-label': 'Refuser : ' + item.card.title, onclick: function (event) { decide('/ui/decide', item.dropId, 'deny', event.currentTarget); } }, 'Refuser'),
+        el('button', { class: 'act fill', 'data-focus': item.dropId + ':allow', 'aria-label': 'Autoriser une fois : ' + item.card.title, onclick: function (event) { decide('/ui/decide', item.dropId, 'allow_once', event.currentTarget); } }, 'Autoriser une fois')));
   }
 
   function fresh(dropId) {
@@ -303,18 +330,37 @@ code { font: 11px/1.4 ui-monospace, SFMono-Regular, monospace; word-break: break
   function reviewCard(item) {
     var fields = el('dl', { class: 'fields' });
     var output = item.output || {};
+    var removals = [];
     Object.keys(output).forEach(function (key) {
       var value = output[key];
+      var box = el('input', { type: 'checkbox', 'aria-label': 'Retirer ' + key + ' avant l’envoi' });
+      removals.push({ key: key, box: box });
       fields.appendChild(el('dt', { text: key }));
-      fields.appendChild(el('dd', { text: Array.isArray(value) ? value.join(', ') : String(value) }));
+      fields.appendChild(el('dd', {}, el('div', { text: Array.isArray(value) ? value.join(', ') : String(value) }),
+        el('label', { class: 'muted redact' }, box, ' Retirer')));
     });
+    function send(event) {
+      var button = event.currentTarget;
+      button.disabled = true;
+      var form = new URLSearchParams();
+      form.append('dropId', item.dropId);
+      form.append('decision', 'send');
+      removals.forEach(function (removal) { if (removal.box.checked) form.append('redact', removal.key); });
+      api('POST', '/ui/review', undefined, form).then(function () {
+        var card = button.closest('.card');
+        if (card) card.classList.add('leaving');
+        info = 'Réponse envoyée.';
+        announce(info);
+        setTimeout(function () { render(true); }, 160);
+      }, function (error) { notice = error.message; announce('Action impossible. ' + notice); render(true); });
+    }
     return el('article', { class: 'card ask' + fresh(item.dropId), 'aria-label': 'À relire : ' + item.title },
       el('div', {}, el('div', { class: 'name', text: item.title }),
         el('div', { class: 'muted', text: 'À relire avant envoi. Rien n’est parti : tu peux envoyer ou garder pour toi.' })),
       fields,
       el('div', { class: 'actions' },
         el('button', { class: 'act', 'aria-label': 'Ne pas envoyer : ' + item.title, onclick: function (event) { decide('/ui/review', item.dropId, 'discard', event.currentTarget); } }, 'Ne pas envoyer'),
-        el('button', { class: 'act fill', 'aria-label': 'Envoyer : ' + item.title, onclick: function (event) { decide('/ui/review', item.dropId, 'send', event.currentTarget); } }, 'Envoyer')));
+        el('button', { class: 'act fill', 'aria-label': 'Envoyer : ' + item.title, onclick: send }, 'Envoyer')));
   }
 
   var STATES = { proposed: 'envoyée', awaiting_approval: 'en attente', approved: 'acceptée', running: 'en cours', in_review: 'relue',
@@ -485,6 +531,7 @@ code { font: 11px/1.4 ui-monospace, SFMono-Regular, monospace; word-break: break
       document.getElementById('tab-' + name).setAttribute('aria-selected', String(name === tab));
       document.getElementById('tab-' + name).setAttribute('tabindex', name === tab ? '0' : '-1');
     });
+    var focusKey = document.activeElement && document.activeElement.getAttribute ? document.activeElement.getAttribute('data-focus') : null;
     var next = document.createElement('main');
     next.id = 'view';
     next.setAttribute('role', 'tabpanel');
@@ -508,7 +555,16 @@ code { font: 11px/1.4 ui-monospace, SFMono-Regular, monospace; word-break: break
       if (focusResult) {
         var target = next.querySelector('h2, [role="alert"], .notice, button');
         if (target) { target.setAttribute('tabindex', '-1'); target.focus(); }
+      } else if (!document.activeElement || document.activeElement === document.body) {
+        // Back on the button that had the focus before the refresh; otherwise « Pas maintenant », never « Autoriser ».
+        var preferred = (focusKey && Array.prototype.find.call(next.querySelectorAll('[data-focus]'), function (node) { return node.getAttribute('data-focus') === focusKey; })) || next.querySelector('[autofocus]');
+        if (preferred) preferred.focus();
       }
+    }
+    if (pendingInvite) {
+      inviteCard(next);
+      complete();
+      return;
     }
     if (linkRequest) {
       api('GET', '/ui/admin/tools').then(function (tools) { if (version === renderVersion) linkCard(next, tools); complete(); }, complete);
@@ -566,21 +622,41 @@ code { font: 11px/1.4 ui-monospace, SFMono-Regular, monospace; word-break: break
         } }, 'Autoriser'))));
   }
 
-  // Opened from a drop://pair link: accept the invitation once, then forget the code.
-  var pairCode = new URLSearchParams(location.search).get('pair');
-  if (pairCode) {
+  // Opened from a drop://pair link (T4.14): show who invites, then pair only after « Rejoindre ». The code leaves the
+  // URL at once and stays in this page's memory until the choice.
+  var invitation = new URLSearchParams(location.search).get('pair');
+  var pendingInvite = null;
+  if (invitation) {
     history.replaceState(null, '', '/app?token=' + encodeURIComponent(token));
-    api('POST', '/ui/pair', undefined, { code: pairCode }).then(function () {
-      info = 'Invitation acceptée : tu rejoins l’équipe dans quelques secondes.';
-      tab = 'team';
-      announce(info);
+    api('POST', '/ui/pair/preview', undefined, { code: invitation }).then(function (preview) {
+      pendingInvite = { code: invitation, displayName: preview.displayName, team: preview.team || '' };
       render(true);
     }, function () { notice = 'Ce lien d’invitation n’est plus valable. Demande-en un nouveau.'; render(true); });
+  }
+
+  function inviteCard(view) {
+    var invite = pendingInvite;
+    view.appendChild(el('div', { class: 'card ask' },
+      el('div', { class: 'name', text: invite.team ? invite.displayName + ' t’invite dans l’équipe ' + invite.team : 'Invitation de ' + invite.displayName }),
+      el('div', { class: 'muted', text: 'Nom et équipe annoncés par le lien : si tu ne l’attendais pas, vérifie avec la personne avant de rejoindre.' }),
+      el('div', { class: 'muted', text: 'En rejoignant, vous verrez les outils partagés l’un de l’autre. Chaque question reste soumise à ton accord ; personne ne reçoit d’accès.' }),
+      el('div', { class: 'actions' },
+        el('button', { class: 'act', autofocus: 'autofocus', onclick: function () { pendingInvite = null; info = 'Invitation refusée.'; announce(info); render(true); } }, 'Refuser'),
+        el('button', { class: 'act fill', onclick: function (event) {
+          event.currentTarget.disabled = true;
+          api('POST', '/ui/pair', undefined, { code: invite.code }).then(function () {
+            pendingInvite = null;
+            info = 'Invitation acceptée : tu rejoins l’équipe dans quelques secondes.';
+            tab = 'team';
+            announce(info);
+            render(true);
+          }, function () { pendingInvite = null; notice = 'Ce lien d’invitation n’est plus valable. Demande-en un nouveau.'; render(true); });
+        } }, 'Rejoindre'))));
   }
   var events = new EventSource('/ui/events?token=' + encodeURIComponent(token));
   events.onmessage = function () {
     if (tab !== 'requests') return;
-    if (document.activeElement && document.activeElement.closest('#view')) { pendingRefresh = true; return; }
+    if (editing()) { pendingRefresh = true; return; }
     render();
   };
   document.addEventListener('focusin', function (event) {

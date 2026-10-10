@@ -204,7 +204,7 @@ describe('consent UI', () => {
       { ...card, card: { ...card.card, cost: { kind: 'capped', maxUsd: 0.5 } } },
       Date.now(),
     );
-    expect(capped).toContain('Coût max : 0,50 $, à votre charge.');
+    expect(capped).toContain('Coût max : 0,50 $, à ta charge.');
     expect(renderConsentCard({ ...card, card: { ...card.card, cost: { kind: 'free' } } }, Date.now())).toContain(
       'Coût : gratuit.',
     );
@@ -222,6 +222,13 @@ describe('consent UI', () => {
     expect(html).toMatch(/value="not_now" autofocus>Pas maintenant/);
     expect(html).toContain('Sensibilité haute');
     expect(html.indexOf('Pas maintenant')).toBeLessThan(html.indexOf('Autoriser une fois'));
+  });
+
+  it('omits the high-sensitivity line for a low capability and words it in tu otherwise', () => {
+    const low = renderConsentCard({ ...card, card: { ...card.card, sensitivity: 'low' } }, Date.now());
+    expect(low).not.toContain('Sensibilité haute');
+    const high = renderConsentCard({ ...card, card: { ...card.card, sensitivity: 'high' } }, Date.now());
+    expect(high).toContain('Sensibilité haute : tu reliras le résultat avant envoi.');
   });
 
   it('escapes every reviewed field', () => {
