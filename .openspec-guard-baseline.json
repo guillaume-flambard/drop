@@ -1011,14 +1011,6 @@
       "file": "openspec/specs/node/spec.md"
     },
     {
-      "id": "sg_fc43953538b55d56",
-      "reason": "missing-selector",
-      "verdict": "fail",
-      "capability": "node",
-      "scenario": "Ligne de sensibilité haute",
-      "file": "openspec/specs/node/spec.md"
-    },
-    {
       "id": "sg_14592e749207e24b",
       "reason": "missing-selector",
       "verdict": "fail",
