@@ -7,7 +7,9 @@ import {
   decodeInvite,
   encodeInvite,
   isDropError,
+  isFactCapabilityId,
   HUMAN_ANSWER_OUTPUT_SCHEMA,
+  signFact,
   openEnvelope,
   ReplayCache,
   REPLAY_WINDOW_MS,
@@ -30,6 +32,7 @@ import {
   type Message,
   type MessageOf,
   type NodeId,
+  type Owner,
   type OwnerKind,
   type Receipt,
   type RequestedBy,
@@ -39,6 +42,16 @@ import {
 } from '@drop/protocol';
 import type { Funder } from './funding.ts';
 import { checkHumanAnswer } from './human-answer.ts';
+import {
+  draftFact,
+  FACT_IMPL,
+  FACT_OUTPUT_HASH,
+  factCard,
+  factResultHolds,
+  inAudience,
+  isLive,
+  type StoredFact,
+} from './facts.ts';
 import { applyRedactions, buildCard, implFor, runCapability, validateInput, type CapabilityImpl } from '@drop/runner';
 import type { AgentLink, LinkRequest, Peer, Published, TeamState } from './home.ts';
 
@@ -77,6 +90,8 @@ function replayFailureReason(error: unknown): string {
 }
 
 /** Executor states in which a drop has not sent its outcome yet; only these are echoed to a duplicate request. */
+/** Facts are served without a decision: a peer may ask for this many per minute, no more (T4.4 review). */
+const FACT_REQUESTS_PER_MINUTE = 10;
 const UNSETTLED_STATES: readonly DropState[] = ['awaiting_approval', 'approved', 'running', 'in_review'];
 
 export interface NodeStore {
@@ -94,6 +109,9 @@ export interface NodeStore {
   saveTeam(state: TeamState): void;
   links(): AgentLink[];
   saveLinks(links: AgentLink[]): void;
+  /** Published facts (T4.4): absent on stores that predate them, which then publish none. */
+  facts?(): StoredFact[];
+  saveFacts?(facts: StoredFact[]): void;
 }
 
 /** One member as the team panel shows them (T2.9): who, which agents, online or not, which capabilities. */
@@ -157,7 +175,7 @@ interface ExecutorDrop {
   costUsd: number;
   reviewed: boolean;
   /** Set when the approver answered by hand instead of running the capability (T4.3). */
-  answeredBy?: 'human';
+  answeredBy?: 'human' | 'fact';
   timestamps: { requested: number; decided?: number; started?: number; finished?: number; delivered?: number };
   /** The requester's capped key, kept in memory until the run ends, then dropped. */
   funding?: Funding | undefined;
@@ -211,6 +229,8 @@ export class NodeEngine extends EventEmitter {
   private readonly now: () => number;
   private readonly replay = new ReplayCache();
   private readonly invites = new Map<string, number>();
+  /** Recent fact requests per peer (T4.4), for FACT_REQUESTS_PER_MINUTE. */
+  private readonly factRequests = new Map<NodeId, number[]>();
   private readonly pairing = new Map<NodeId, { token: string; displayName: string }>();
   private readonly catalogs = new Map<NodeId, { cards: CapabilityCard[]; at: number }>();
   private readonly executing = new Map<string, ExecutorDrop>();
@@ -498,7 +518,8 @@ export class NodeEngine extends EventEmitter {
     this.outbound.set(dropId, outbound);
     let funding: Funding | undefined;
     try {
-      funding = await this.options.funder?.mint(dropId);
+      // A fact costs nothing: no capped key is minted for it (T4.4 review).
+      funding = isFactCapabilityId(entry.card.id) ? undefined : await this.options.funder?.mint(dropId);
     } catch (error) {
       this.outbound.delete(dropId);
       throw error;
@@ -698,7 +719,10 @@ export class NodeEngine extends EventEmitter {
         // Addressed to a gateway, never to a node.
         return;
       case 'catalog_request':
-        await this.send(from, { type: 'catalog', cards: await this.ownCards() });
+        await this.send(from, {
+          type: 'catalog',
+          cards: [...(await this.ownCards()), ...(await this.factCards(from))],
+        });
         return;
       case 'catalog':
         return this.onCatalog(from, message);
@@ -719,9 +743,11 @@ export class NodeEngine extends EventEmitter {
       case 'review_decision':
         return this.onReviewDecision(from, message);
       case 'drop_status':
-      case 'drop_result':
       case 'drop_error':
         this.onRequesterUpdate(from, message);
+        return;
+      case 'drop_result':
+        this.onRequesterUpdate(from, await this.screenFactResult(from, message));
         return;
       case 'receipt':
         return this.onReceipt(from, message);
@@ -811,6 +837,10 @@ export class NodeEngine extends EventEmitter {
       await this.send(from, { type: 'drop_error', dropId: message.dropId, ...CLAIM_ERRORS.expired });
       return;
     }
+    if (isFactCapabilityId(message.capabilityId)) {
+      await this.serveFact(from, message, now);
+      return;
+    }
     if (this.options.privateProfile && this.options.payer === 'owner' && message.funding) {
       await this.send(from, {
         type: 'drop_error',
@@ -841,46 +871,7 @@ export class NodeEngine extends EventEmitter {
       });
       return;
     }
-    if (this.options.store.claimDrop) {
-      let claim: DropClaim;
-      try {
-        claim = this.options.store.claimDrop(message.dropId, now);
-      } catch (error) {
-        this.log({
-          event: 'drop_rejected',
-          code: 'E_REPLAY_STATE',
-          reason: replayFailureReason(error),
-          dropId: message.dropId,
-          peer: from,
-        });
-        claim = 'capacity';
-      }
-      if (claim === 'expired') {
-        // The id passed the wall-clock window above, so only a persisted replay clock ahead of it can refuse it.
-        this.log({
-          event: 'drop_rejected',
-          code: 'E_EXPIRED',
-          reason: 'replay_clock_ahead',
-          dropId: message.dropId,
-          peer: from,
-        });
-      }
-      if (claim !== 'claimed') {
-        await this.send(from, { type: 'drop_error', dropId: message.dropId, ...CLAIM_ERRORS[claim] });
-        return;
-      }
-    }
-    if (this.executing.size >= MAX_ACTIVE_EXECUTING_DROPS) {
-      this.log({
-        event: 'drop_rejected',
-        code: 'E_RATE',
-        reason: 'execution_capacity',
-        dropId: message.dropId,
-        peer: from,
-      });
-      await this.send(from, { type: 'drop_error', dropId: message.dropId, ...CLAIM_ERRORS.capacity });
-      return;
-    }
+    if (!(await this.admit(from, message.dropId, now))) return;
     const drop: ExecutorDrop = {
       dropId: message.dropId,
       requester: from,
@@ -941,6 +932,245 @@ export class NodeEngine extends EventEmitter {
     });
     this.emit('approval', this.inbox.get(message.dropId));
     this.changed();
+  }
+
+  /** Anti-replay claim and execution capacity, shared by capabilities and facts; false once a refusal was sent. */
+  private async admit(from: NodeId, dropId: string, now: number): Promise<boolean> {
+    if (this.options.store.claimDrop) {
+      let claim: DropClaim;
+      try {
+        claim = this.options.store.claimDrop(dropId, now);
+      } catch (error) {
+        this.log({
+          event: 'drop_rejected',
+          code: 'E_REPLAY_STATE',
+          reason: replayFailureReason(error),
+          dropId,
+          peer: from,
+        });
+        claim = 'capacity';
+      }
+      if (claim === 'expired') {
+        // The id passed the wall-clock window above, so only a persisted replay clock ahead of it can refuse it.
+        this.log({
+          event: 'drop_rejected',
+          code: 'E_EXPIRED',
+          reason: 'replay_clock_ahead',
+          dropId,
+          peer: from,
+        });
+      }
+      if (claim !== 'claimed') {
+        await this.send(from, { type: 'drop_error', dropId, ...CLAIM_ERRORS[claim] });
+        return false;
+      }
+    }
+    if (this.executing.size >= MAX_ACTIVE_EXECUTING_DROPS) {
+      this.log({
+        event: 'drop_rejected',
+        code: 'E_RATE',
+        reason: 'execution_capacity',
+        dropId,
+        peer: from,
+      });
+      await this.send(from, { type: 'drop_error', dropId, ...CLAIM_ERRORS.capacity });
+      return false;
+    }
+    return true;
+  }
+
+  // ---- published facts (T4.4, D65) ---------------------------------------------------------------------------
+
+  /** What the owner publishes, with how many times each fact was served and whether it can still be served. */
+  facts(): (StoredFact['signed']['fact'] & { served: number; live: boolean })[] {
+    const now = this.now();
+    return this.storedFacts().map(({ signed, served }) => ({ ...signed.fact, served, live: isLive(signed.fact, now) }));
+  }
+
+  async publishFact(raw: unknown): Promise<StoredFact['signed']['fact']> {
+    const fact = draftFact(raw, {
+      factId: uuidv7(this.now()),
+      revision: 1,
+      owner: this.ownerOf(),
+      now: this.now(),
+      peers: this.peers().map((peer) => peer.nodeId),
+    });
+    const signed = await signFact(this.identity, fact);
+    this.updateFacts((facts) => [...facts, { signed, served: 0 }]);
+    this.changed();
+    return signed.fact;
+  }
+
+  /** A new signed revision of an active fact; the previous one is no longer served. */
+  async editFact(factId: string, raw: unknown): Promise<StoredFact['signed']['fact'] | undefined> {
+    const current = this.readFacts().find((entry) => entry.signed.fact.factId === factId)?.signed.fact;
+    if (current?.status !== 'active') return undefined;
+    const fact = draftFact(raw, {
+      factId,
+      revision: current.revision + 1,
+      owner: this.ownerOf(),
+      now: this.now(),
+      peers: this.peers().map((peer) => peer.nodeId),
+    });
+    const signed = await signFact(this.identity, fact);
+    return this.replaceRevision(current, signed) ? signed.fact : undefined;
+  }
+
+  /** Stops serving a fact and keeps it, signed as retired, for the record. */
+  async retireFact(factId: string): Promise<boolean> {
+    const current = this.readFacts().find((entry) => entry.signed.fact.factId === factId)?.signed.fact;
+    if (current?.status !== 'active') return false;
+    const signed = await signFact(this.identity, { ...current, status: 'retired' });
+    return this.replaceRevision(current, signed);
+  }
+
+  /**
+   * Swaps a fact for its new signed version only if nothing changed it meanwhile (same revision, still active):
+   * signing awaits, so a concurrent edit or retire must never be overwritten by a stale copy (T4.4 review).
+   */
+  private replaceRevision(current: StoredFact['signed']['fact'], signed: StoredFact['signed']): boolean {
+    const outcome = { replaced: false };
+    this.updateFacts((facts) =>
+      facts.map((entry) => {
+        const fact = entry.signed.fact;
+        if (fact.factId !== current.factId || fact.revision !== current.revision || fact.status !== 'active')
+          return entry;
+        outcome.replaced = true;
+        return { ...entry, signed };
+      }),
+    );
+    if (outcome.replaced) this.changed();
+    return outcome.replaced;
+  }
+
+  /** Facts as stored; an unreadable store serves no fact and is reported, without taking the catalog down with it. */
+  private storedFacts(): StoredFact[] {
+    try {
+      return this.readFacts();
+    } catch {
+      this.log({ event: 'facts_unreadable', code: 'E_FACT_STORE' });
+      return [];
+    }
+  }
+
+  private readFacts(): StoredFact[] {
+    return this.options.store.facts?.() ?? [];
+  }
+
+  /** Read, change and write with no await in between, so that concurrent actions never undo one another. */
+  private updateFacts(change: (facts: StoredFact[]) => StoredFact[]): void {
+    if (!this.options.store.saveFacts) throw new DropError('E_RUNNER', 'Ce Node ne sait pas garder de faits.');
+    this.options.store.saveFacts(change(this.readFacts()));
+  }
+
+  private ownerOf(): Owner {
+    return { kind: this.options.ownerKind, displayName: this.identity.displayName, nodeId: this.identity.nodeId };
+  }
+
+  /** The facts one peer may see: live ones whose audience includes it. Topics and keywords only, never statements. */
+  private async factCards(nodeId: NodeId): Promise<SignedCapabilityCard[]> {
+    const now = this.now();
+    const peers = this.peers().map((peer) => peer.nodeId);
+    const cards: SignedCapabilityCard[] = [];
+    for (const { signed } of this.storedFacts())
+      if (isLive(signed.fact, now) && inAudience(signed.fact, nodeId, peers))
+        cards.push(await signCard(this.identity, factCard(signed.fact, this.identity.nodeId)));
+    return cards;
+  }
+
+  /** The fact a request names, if this peer may have it now: live, in its audience, at the current revision. */
+  private servableFact(from: NodeId, message: MessageOf<'drop_request'>, now: number): StoredFact | undefined {
+    const peers = this.peers().map((peer) => peer.nodeId);
+    return this.storedFacts().find(({ signed }) => {
+      const card = factCard(signed.fact, this.identity.nodeId);
+      return (
+        card.id === message.capabilityId &&
+        card.version === message.capabilityVersion &&
+        isLive(signed.fact, now) &&
+        inAudience(signed.fact, from, peers)
+      );
+    });
+  }
+
+  /** At most FACT_REQUESTS_PER_MINUTE per peer: served without a decision, facts must not drain the owner's sends. */
+  private factRateExceeded(from: NodeId, now: number): boolean {
+    const recent = (this.factRequests.get(from) ?? []).filter((at) => at > now - 60_000);
+    recent.push(now);
+    this.factRequests.set(from, recent);
+    return recent.length > FACT_REQUESTS_PER_MINUTE;
+  }
+
+  /** Served without a consent card: publishing was the owner's consent (D65). Same refusal whatever the reason. */
+  private async serveFact(from: NodeId, message: MessageOf<'drop_request'>, now: number): Promise<void> {
+    const refuse = async (code: 'E_SCHEMA' | 'E_RATE', text: string): Promise<void> => {
+      await this.send(from, { type: 'drop_error', dropId: message.dropId, code, message: text });
+    };
+    if (!this.servableFact(from, message, now)) return refuse('E_SCHEMA', 'Fait indisponible.');
+    if (!FACT_IMPL.input.safeParse(message.input).success) return refuse('E_SCHEMA', 'Entrée invalide.');
+    if (this.factRateExceeded(from, now))
+      return refuse('E_RATE', 'Trop de demandes de faits : réessaie dans une minute.');
+    if (!(await this.admit(from, message.dropId, now))) return;
+    // Read again after the await: a retire or an edit made meanwhile wins.
+    const entry = this.servableFact(from, message, this.now());
+    if (!entry) return refuse('E_SCHEMA', 'Fait indisponible.');
+    const { fact } = entry.signed;
+    const drop: ExecutorDrop = {
+      dropId: message.dropId,
+      requester: from,
+      card: factCard(fact, this.identity.nodeId),
+      impl: FACT_IMPL,
+      config: {},
+      input: {},
+      purpose: message.purpose,
+      requestedBy: { ...message.requestedBy, nodeId: from },
+      state: 'approved',
+      approver: this.identity.nodeId,
+      expiresAt: now,
+      toolCalls: [],
+      costUsd: 0,
+      reviewed: true,
+      answeredBy: 'fact',
+      timestamps: { requested: now, decided: now, finished: now },
+    };
+    this.executing.set(drop.dropId, drop);
+    await this.deliver(drop, { kind: 'fact', fact, sig: entry.signed.sig }, FACT_OUTPUT_HASH);
+    // The counter is a convenience for the owner: counted by id and revision, and its failure never blocks delivery.
+    try {
+      this.updateFacts((facts) =>
+        facts.map((item) =>
+          item.signed.fact.factId === fact.factId && item.signed.fact.revision === fact.revision
+            ? { ...item, served: item.served + 1 }
+            : item,
+        ),
+      );
+      this.changed();
+    } catch {
+      this.log({ event: 'fact_counter', code: 'E_FACT_STORE', dropId: drop.dropId });
+    }
+  }
+
+  /**
+   * Requester side: a fact that does not hold (signature, card, validity) is refused, never shown (T4.4); so is a
+   * result that claims the fact schema for a capability that is not a fact.
+   */
+  private async screenFactResult(
+    from: NodeId,
+    message: MessageOf<'drop_result'>,
+  ): Promise<MessageOf<'drop_result' | 'drop_error'>> {
+    const drop = this.outbound.get(message.dropId);
+    if (drop?.executor !== from) return message;
+    const isFact = isFactCapabilityId(drop.capabilityId);
+    if (!isFact && message.outputSchemaHash !== FACT_OUTPUT_HASH) return message;
+    const holds =
+      isFact &&
+      (await factResultHolds(message.output, message.outputSchemaHash, {
+        capabilityId: drop.capabilityId,
+        executor: from,
+        now: this.now(),
+      }));
+    if (holds) return message;
+    this.log({ event: 'fact_rejected', code: 'E_OUTPUT_INVALID', dropId: message.dropId, peer: from });
+    return { type: 'drop_error', dropId: message.dropId, code: 'E_OUTPUT_INVALID', message: 'Fait reçu invalide.' };
   }
 
   private async onApprovalDecision(from: NodeId, message: MessageOf<'approval_decision'>): Promise<void> {

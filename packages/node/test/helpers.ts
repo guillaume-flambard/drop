@@ -1,3 +1,4 @@
+import type { StoredFact } from '../src/facts.ts';
 import { z } from 'zod';
 import { generateIdentity, verifyReceipt, type Identity, type Receipt } from '@drop/protocol';
 import { RelayClient, startRelay, type RelayHandle } from '@drop/relay';
@@ -11,6 +12,15 @@ export class MemoryStore implements NodeStore {
   readonly receiptList: Receipt[] = [];
   teamState: TeamState | undefined;
   linkList: AgentLink[] = [];
+  factList: StoredFact[] = [];
+
+  facts(): StoredFact[] {
+    return this.factList;
+  }
+
+  saveFacts(facts: StoredFact[]): void {
+    this.factList = structuredClone(facts);
+  }
 
   links(): AgentLink[] {
     return this.linkList;

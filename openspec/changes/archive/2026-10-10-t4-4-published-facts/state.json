@@ -1,0 +1,10 @@
+{
+  "phase": "READY_FOR_MANUAL_ACCEPTANCE",
+  "scope": "T4.4 faits publiés (niveau 1) : signés, servis sans modèle ni décision à leur public, jusqu'à expiration",
+  "requirements": { "total": 9, "covered": 9 },
+  "acceptance": { "total": 16, "verified": 16, "pending": 0, "failed": 0 },
+  "todos": { "p0_open": 0, "p1_open": 0 },
+  "risks": { "critical_open": 0, "high_open": 0 },
+  "verification": { "status": "PASS", "evidence": "evidence.md" },
+  "ready_for_manual_acceptance": true
+}
