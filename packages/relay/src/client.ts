@@ -10,6 +10,10 @@ export interface RelayClientOptions {
   onError?: (frame: Extract<ServerFrame, { type: 'error' }>) => void;
   /** An admission ticket to present with auth (T2.1), read at each connection; the relay ignores it once admitted. */
   admission?: () => unknown;
+  /** The fingerprint of the organization policy this node runs under, presented with auth (T4.10, D81). */
+  policy?: () => string | undefined;
+  /** Extra trusted certificate authority for a relay with its own certificate (T4.10). */
+  ca?: Buffer;
   minBackoffMs?: number;
   maxBackoffMs?: number;
 }
@@ -76,7 +80,7 @@ export class RelayClient {
   }
 
   private open(): void {
-    const socket = new WebSocket(this.options.url);
+    const socket = new WebSocket(this.options.url, this.options.ca ? { ca: this.options.ca } : {});
     this.socket = socket;
     socket.on('message', (data) => {
       const frame = parseFrame(ServerFrameSchema, data);
@@ -109,12 +113,14 @@ export class RelayClient {
         signDetached(this.options.identity, frame.challenge).then(
           (sig) => {
             const admission = this.options.admission?.();
+            const policy = this.options.policy?.();
             socket.send(
               JSON.stringify({
                 type: 'auth',
                 nodeId: this.options.identity.nodeId,
                 sig,
                 ...(admission === undefined ? {} : { admission }),
+                ...(policy === undefined ? {} : { policy }),
               }),
             );
           },

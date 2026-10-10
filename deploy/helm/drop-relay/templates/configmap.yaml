@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "drop-relay.name" . }}
+  labels:
+    {{- include "drop-relay.labels" . | nindent 4 }}
+data:
+  relay.config.json: {{ include "drop-relay.config" . | quote }}
+  {{- if .Values.policy.enabled }}
+  policy.json: {{ toJson .Values.policy.signedPolicy | quote }}
+  {{- end }}

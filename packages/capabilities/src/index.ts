@@ -100,7 +100,11 @@ export {
 
 export const capabilities: CapabilityImpl[] = [errorSummary, repoAnswer, mcpAnswer, a2aAnswer];
 
-export function privateCapabilities(network: PrivateNetwork): CapabilityImpl[] {
+export function privateCapabilities(
+  network: PrivateNetwork,
+  options: { allowModel?: (baseUrl: string) => boolean } = {},
+): CapabilityImpl[] {
+  const guard = options.allowModel ? { allowModel: options.allowModel } : {};
   return [
     createErrorSummary({
       readLines: async (source, window, signal) => {
@@ -108,8 +112,8 @@ export function privateCapabilities(network: PrivateNetwork): CapabilityImpl[] {
         return readLogLines(source, window, signal);
       },
     }),
-    createRepoAnswer({ network }),
-    createMcpAnswer({ network }),
+    createRepoAnswer({ network, ...guard }),
+    createMcpAnswer({ network, ...guard }),
     createA2aAnswer({ network }),
   ];
 }

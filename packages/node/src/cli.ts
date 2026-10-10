@@ -11,6 +11,7 @@ import { startDaemon } from './daemon.ts';
 import { AGENT_LABELS, detectAgents } from './detect.ts';
 import { bundledServer, cursorInstallLink, serverEntry } from './install.ts';
 import { applyOnboarding, previewOnboarding } from './onboarding.ts';
+import { clientAllowed, loadPolicy } from './policy.ts';
 import { isAgentKind, shareDetected } from './share.ts';
 import { oauthConnect } from './oauth.ts';
 import { DropHome, NodeConfigSchema } from './home.ts';
@@ -260,11 +261,22 @@ switch (command) {
     const target = rest[0] ?? fail(`drop ${command} <agent>|all`);
     const remove = command === 'uninstall';
     const detected = detectAgents();
-    const agents =
+    // The organization policy limits which clients may be connected; removing one always stays possible (T4.10).
+    const policy = remove
+      ? undefined
+      : (await loadPolicy().catch((error: unknown) => fail(error instanceof Error ? error.message : 'E_POLICY')))
+          ?.policy;
+    const agents = (
       target === 'all'
         ? detected.filter((agent) => agent.installed).map((agent) => agent.agent)
-        : [AgentKindSchema.parse(target)];
+        : [AgentKindSchema.parse(target)]
+    ).filter((agent) => {
+      if (clientAllowed(policy, agent)) return true;
+      process.stderr.write(`${AGENT_LABELS[agent]}: E_POLICY client not allowed by policy\n`);
+      return false;
+    });
     if (rest.includes('--link')) {
+      if (!clientAllowed(policy, 'cursor')) fail('E_POLICY client not allowed by policy');
       const server = bundledServer() ?? fail('the bundled server is missing: run `node scripts/bundle.ts` first');
       process.stdout.write(`${cursorInstallLink(serverEntry('cursor', home.root, server))}\n`);
       break;

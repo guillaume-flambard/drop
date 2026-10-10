@@ -1,0 +1,6 @@
+apiVersion: v2
+name: drop-relay
+description: The drop relay, hosted by an organization for its own nodes (T4.10, D81).
+type: application
+version: 0.1.0
+appVersion: '0.1.0'

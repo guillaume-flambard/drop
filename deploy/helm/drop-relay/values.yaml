@@ -1,0 +1,44 @@
+# The image built from docker/relay.Dockerfile, pushed to the organization's registry. Pin it by digest.
+image:
+  repository: registry.example.internal/drop-relay
+  tag: '0.1.0'
+  digest: ''
+  pullPolicy: IfNotPresent
+
+# relay.config.json, as the relay reads it. host must be 0.0.0.0 in a pod; paths point under /data (persistent) and
+# /policy (the organization policy). Without tls, TLS is ended by the ingress.
+config:
+  port: 7780
+  host: 0.0.0.0
+  allowedNodeIds: []
+  admittedPath: /data/admitted.json
+  revokedPath: /data/revoked.json
+
+# The signed organization policy (policy.json) and its issuer's public key. When set, every node must run it.
+policy:
+  enabled: false
+  signedPolicy: {}
+  issuer: ''
+
+# The relay serves wss itself with this certificate (a kubernetes.io/tls secret), on port 8443.
+tls:
+  enabled: false
+  secretName: ''
+
+ingress:
+  enabled: false
+  className: ''
+  host: relay.example.internal
+  tlsSecretName: ''
+  annotations: {}
+
+persistence:
+  size: 1Gi
+  storageClassName: ''
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    memory: 256Mi

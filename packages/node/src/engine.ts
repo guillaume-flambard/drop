@@ -259,6 +259,10 @@ export interface EngineOptions {
   agents?: () => string[];
   /** Runs a call from a linked assistant (T2.13) with the requester tools, in this user's name. */
   onAgentCall?: (call: { tool: string; args: Record<string, unknown> }) => Promise<{ text: string; isError: boolean }>;
+  /** False for a gateway the organization policy does not allow (T4.10): even links made before it stop answering. */
+  gatewayAllowed?: (gateway: string) => boolean;
+  /** False for an iroh relay the organization policy does not allow (T4.10): a peer address through it is refused. */
+  irohRelayAllowed?: (relay: string) => boolean;
 }
 
 const DECISION_ERRORS: Record<'deny' | 'not_now', DropErrorCode> = { deny: 'E_DENIED', not_now: 'E_NOT_NOW' };
@@ -410,8 +414,14 @@ export class NodeEngine extends EventEmitter {
 
   // ---- linked assistants (T2.13) -----------------------------------------------------------------------------
 
+  /**
+   * The links this node honours. Under a policy, a gateway it does not allow is no longer one, even if linked before:
+   * its envelopes are not opened and its calls not answered (T4.10). The store keeps the record.
+   */
   links(): AgentLink[] {
-    return this.options.store.links();
+    const allowed = this.options.gatewayAllowed;
+    const links = this.options.store.links();
+    return allowed ? links.filter((link) => allowed(link.gateway)) : links;
   }
 
   /**
@@ -420,7 +430,9 @@ export class NodeEngine extends EventEmitter {
    */
   async linkAssistant(gateway: NodeId, request: LinkRequest): Promise<void> {
     const { sessionId, clientId, clientName, redirectHost } = request;
-    const others = this.links().filter((link) => !(link.gateway === gateway && link.clientName === clientName));
+    const others = this.options.store
+      .links()
+      .filter((link) => !(link.gateway === gateway && link.clientName === clientName));
     this.options.store.saveLinks([
       ...others,
       { gateway, clientName, clientId, redirectHost, linkedAt: new Date(this.now()).toISOString() },
@@ -431,7 +443,7 @@ export class NodeEngine extends EventEmitter {
   }
 
   unlinkAssistant(gateway: NodeId, clientName: string): boolean {
-    const links = this.links();
+    const links = this.options.store.links();
     const kept = links.filter((link) => !(link.gateway === gateway && link.clientName === clientName));
     this.options.store.saveLinks(kept);
     this.changed();
@@ -921,7 +933,11 @@ export class NodeEngine extends EventEmitter {
         if (!this.peers().some((peer) => peer.nodeId === from)) return;
         // The schema keeps the address fields only; the message type is dropped.
         const address = IrohAddrSchema.safeParse(message);
-        if (!address.success || (address.data.relay !== undefined && !irohRelayAllowed(address.data.relay))) {
+        const relay = address.success ? address.data.relay : undefined;
+        if (
+          !address.success ||
+          (relay !== undefined && (!irohRelayAllowed(relay) || this.options.irohRelayAllowed?.(relay) === false))
+        ) {
           this.log({ event: 'iroh_addr_refused', code: 'E_SCHEMA', peer: from });
           return;
         }
