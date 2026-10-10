@@ -14,24 +14,29 @@ export function renderPanel(): string {
 <style>
 :root { color-scheme: light dark; --ground: #F7F6F3; --well: #EFEDE8; --card: #FFFFFF; --ink: #1A1A19; --soft: #55534E;
   --mute: #6B6862; --line: #E4E2DC; --edge: #DAD8D2; --accent: #0E5F58; --accent-on: #FFFFFF; --accent-soft: #E3EFEC;
-  --warn: #9A3412; --ok: #2E8B57; --wait: #B7791F; --shade: rgba(26, 26, 25, .08); }
+  --warn: #9A3412; --ok: #2E8B57; --wait: #B7791F; --shade: rgba(26, 26, 25, .08); --ease-out: cubic-bezier(.23, 1, .32, 1); }
 @media (prefers-color-scheme: dark) { :root { --ground: #1C1C1B; --well: #232321; --card: #2A2A28; --ink: #F2F1EE;
   --soft: #C9C6BE; --mute: #A29F97; --line: #34332F; --edge: #43413C; --accent: #5CC2B5; --accent-on: #122923;
   --accent-soft: #23403C; --warn: #F0A27A; --ok: #5FBF85; --wait: #E0A93B; --shade: rgba(0, 0, 0, .35); } }
 * { box-sizing: border-box; }
-html { scrollbar-width: thin; scrollbar-color: var(--edge) transparent; }
+html { scrollbar-width: thin; scrollbar-color: var(--edge) transparent; scroll-padding-top: 104px; }
 body { margin: 0; background: var(--ground); color: var(--ink); font: 13px/1.4 -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-  -webkit-font-smoothing: antialiased; -webkit-user-select: none; user-select: none; }
+  -webkit-font-smoothing: antialiased; -webkit-user-select: none; user-select: none; touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent; }
 .quote, code, .fields dd { -webkit-user-select: text; user-select: text; }
 button, input { font: inherit; color: inherit; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 button:disabled { opacity: .5; cursor: progress; }
 ::selection { background: var(--accent); color: var(--accent-on); }
 ::-webkit-scrollbar { width: 8px; } ::-webkit-scrollbar-thumb { background: var(--edge); border-radius: 8px; border: 2px solid var(--ground); }
-.icon { width: 14px; height: 14px; flex-shrink: 0; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.icon { width: 14px; height: 14px; flex-shrink: 0; fill: currentColor; }
+.name, .muted, .quote, .ledger ul, .fields dd { overflow-wrap: anywhere; }
 
-header { position: sticky; top: 0; z-index: 1; background: var(--ground); padding: 12px 14px 10px; display: flex; flex-direction: column; gap: 10px;
-  border-bottom: 1px solid var(--line); }
+header { position: sticky; top: 0; z-index: 1; padding: 12px 14px 10px; display: flex; flex-direction: column; gap: 10px;
+  background: color-mix(in srgb, var(--ground) 80%, transparent); -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%); border-bottom: .5px solid transparent; transition: border-color .2s ease; }
+header.edge { border-bottom-color: var(--edge); }
+#edge { height: 1px; margin-bottom: -1px; }
 .bar { display: flex; align-items: center; gap: 8px; }
 .mark { font-size: 15px; font-weight: 700; letter-spacing: -0.02em; }
 .status { margin-left: auto; display: flex; align-items: center; gap: 6px; color: var(--soft); font-size: 12px; min-width: 0; }
@@ -42,7 +47,7 @@ nav { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2px;
   border: 1px solid var(--line); }
 nav button { min-height: 26px; border-radius: 6px; border: none; background: transparent; color: var(--soft); font-size: 12px; font-weight: 500;
   cursor: default; display: flex; align-items: center; justify-content: center; gap: 5px; transition: background-color .15s, color .15s; }
-nav button:hover { color: var(--ink); }
+@media (hover: hover) { nav button:hover { color: var(--ink); } }
 nav button[aria-selected="true"] { background: var(--card); color: var(--ink); box-shadow: 0 1px 2px var(--shade), 0 0 0 .5px var(--edge); }
 .badge { min-width: 16px; height: 16px; padding: 0 5px; border-radius: 8px; background: var(--accent); color: var(--accent-on); font-size: 10px;
   font-weight: 600; line-height: 16px; font-variant-numeric: tabular-nums; }
@@ -58,13 +63,15 @@ h2:first-child { margin-top: 0; }
 
 .card { background: var(--card); border: .5px solid var(--edge); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 10px;
   box-shadow: 0 1px 2px var(--shade); }
-.card.ask { padding: 14px; gap: 12px; animation: arrive .22s cubic-bezier(.16, 1, .3, 1); }
-@keyframes arrive { from { opacity: 0; transform: translateY(4px); } }
+.card.ask { padding: 14px; gap: 12px; transition: opacity .16s ease-out, transform .16s ease-out; }
+.card.fresh { animation: arrive .24s var(--ease-out); }
+.card.leaving { opacity: 0; transform: scale(.98); pointer-events: none; }
+@keyframes arrive { from { opacity: 0; transform: translateY(6px) scale(.99); } }
 .who { display: flex; align-items: center; gap: 10px; }
 .who .muted { margin-top: 1px; }
 .avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-weight: 600; font-size: 11px;
   display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-.quote { margin: 0; font-size: 14px; line-height: 1.45; color: var(--ink); padding: 10px 12px; border-radius: 8px; background: var(--well); }
+.quote { margin: 0; text-wrap: pretty; font-size: 14px; line-height: 1.45; color: var(--ink); padding: 10px 12px; border-radius: 8px; background: var(--well); }
 .why { font-size: 12px; color: var(--soft); }
 .why b { font-weight: 600; color: var(--ink); }
 .ledger { display: flex; flex-direction: column; border-top: .5px solid var(--line); }
@@ -78,39 +85,44 @@ h2:first-child { margin-top: 0; }
 .cost { font-size: 11px; color: var(--mute); font-variant-numeric: tabular-nums; }
 .decision-actions { display: flex; align-items: center; gap: 6px; padding-top: 2px; }
 .decision-actions .subtle { margin-right: auto; padding-inline: 4px; border-color: transparent; background: transparent; color: var(--soft); box-shadow: none; }
-.decision-actions .subtle:hover { color: var(--ink); background: transparent; }
+@media (hover: hover) { .decision-actions .subtle:hover { color: var(--ink); background: transparent; } }
 .actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
 button.act { min-height: 30px; padding: 0 11px; white-space: nowrap; border-radius: 7px; border: .5px solid var(--edge); background: var(--card); color: var(--ink);
-  font-weight: 500; cursor: default; box-shadow: 0 .5px 1px var(--shade); transition: background-color .15s, transform .1s, filter .15s; }
-button.act:hover { background: var(--well); }
-button.act:active { transform: scale(.98); }
+  font-weight: 500; cursor: default; box-shadow: 0 .5px 1px var(--shade);
+  transition: transform .16s var(--ease-out), background-color .15s ease, filter .15s ease; }
+@media (hover: hover) { button.act:hover { background: var(--well); } button.fill:hover { background: var(--accent); filter: brightness(1.08); } }
+button.act:active { transform: scale(.97); }
 button.accent { color: var(--accent); }
 button.fill { background: var(--accent); border-color: var(--accent); color: var(--accent-on); }
-button.fill:hover { background: var(--accent); filter: brightness(1.08); }
 button.wide { width: 100%; }
 
 .fields { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; font-size: 12px; padding: 10px 12px; border-radius: 8px;
   background: var(--well); }
 .fields dt { color: var(--mute); } .fields dd { margin: 0; }
 .list { background: var(--card); border: .5px solid var(--edge); border-radius: 10px; box-shadow: 0 1px 2px var(--shade); overflow: hidden; }
-.list > div { padding: 9px 12px; min-height: 40px; position: relative; }
-.list > div + div::before { content: ""; position: absolute; top: 0; left: 12px; right: 0; border-top: .5px solid var(--line); }
+.list > * { padding: 9px 12px; min-height: 40px; position: relative; }
+.list > * + *::before { content: ""; position: absolute; top: 0; left: 12px; right: 0; border-top: .5px solid var(--line); }
 .state { font-size: 11px; color: var(--mute); white-space: nowrap; }
 .state.ok { color: var(--ok); } .state.bad { color: var(--warn); }
 .chips { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 6px; }
 .chip { font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--well); color: var(--soft); border: .5px solid var(--line); }
-.switch { width: 32px; height: 19px; border-radius: 999px; border: none; padding: 2px; display: flex; cursor: default; background: var(--edge);
-  justify-content: flex-start; flex-shrink: 0; transition: background-color .15s; }
-.switch[aria-checked="true"] { background: var(--accent); justify-content: flex-end; }
-.switch span { width: 15px; height: 15px; border-radius: 50%; background: #fff; display: block; box-shadow: 0 1px 2px rgba(0, 0, 0, .25); }
+.switch { width: 32px; height: 19px; border-radius: 999px; border: none; padding: 2px; display: block; cursor: default; background: var(--edge);
+  flex-shrink: 0; transition: background-color .2s ease; }
+.switch[aria-checked="true"] { background: var(--accent); }
+.switch span { width: 15px; height: 15px; border-radius: 50%; background: #FCFCFB; display: block; box-shadow: 0 1px 2px rgba(0, 0, 0, .25);
+  transition: transform .2s var(--ease-out); }
+.switch[aria-checked="true"] span { transform: translateX(13px); }
+.switch:active span { transform: scaleX(1.12); transform-origin: left; }
+.switch[aria-checked="true"]:active span { transform: translateX(11px) scaleX(1.12); }
 .steps { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
 .steps li { display: flex; gap: 8px; color: var(--soft); font-size: 12px; }
 .steps li span { width: 18px; height: 18px; border-radius: 50%; background: var(--well); border: .5px solid var(--edge); color: var(--ink);
   font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .empty { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; padding: 22px 16px; color: var(--soft); }
-.empty .icon { width: 22px; height: 22px; color: var(--ok); stroke-width: 1.4; }
+.empty .icon { width: 22px; height: 22px; color: var(--ok); }
 .empty strong { color: var(--ink); font-size: 13px; }
-input[type="text"] { min-height: 30px; border-radius: 7px; border: .5px solid var(--edge); padding: 0 9px; background: var(--card); width: 100%;
+.field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 500; }
+input[type="text"] { min-height: 30px; font-weight: 400; border-radius: 7px; border: .5px solid var(--edge); padding: 0 9px; background: var(--card); width: 100%;
   -webkit-user-select: text; user-select: text; }
 input[type="checkbox"] { accent-color: var(--accent); width: 14px; height: 14px; margin: 0; }
 input[aria-invalid="true"] { border-color: var(--warn); }
@@ -124,10 +136,14 @@ input[aria-invalid="true"] { border-color: var(--warn); }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 code { font: 11px/1.4 ui-monospace, SFMono-Regular, monospace; word-break: break-all; white-space: pre-wrap; display: block; padding: 8px 10px;
   border-radius: 7px; background: var(--well); }
-@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition-property: opacity, background-color, color !important; }
+  .card.leaving, button.act:active, .switch:active span { transform: none; } .switch[aria-checked="true"] span { transform: translateX(13px); } }
+@media (prefers-reduced-transparency: reduce) { header { background: var(--ground); -webkit-backdrop-filter: none; backdrop-filter: none; } }
+@media (prefers-contrast: more) { :root { --edge: #8C8981; --line: #B5B2AB; --mute: #4A4843; } .card, .list, button.act { border-width: 1px; } }
 </style>
 </head>
 <body>
+<div id="edge" aria-hidden="true"></div>
 <header>
 <div class="bar">
   <span class="mark">drop</span>
@@ -162,7 +178,7 @@ code { font: 11px/1.4 ui-monospace, SFMono-Regular, monospace; word-break: break
     if (form) { headers['Content-Type'] = 'application/x-www-form-urlencoded'; payload = new URLSearchParams(form).toString(); }
     else if (body !== undefined) { headers['Content-Type'] = 'application/json'; payload = JSON.stringify(body); }
     return fetch(path, { method: method, headers: headers, body: payload }).then(function (res) {
-      return res.json().then(function (data) { if (!res.ok) throw new Error((data && data.message) || 'erreur'); return data; });
+      return res.json().then(function (data) { if (!res.ok) throw new Error((data && data.message) || 'Action impossible. Réessaie dans un instant.'); return data; });
     });
   }
 
@@ -182,22 +198,21 @@ code { font: 11px/1.4 ui-monospace, SFMono-Regular, monospace; word-break: break
     return node;
   }
 
+  // Phosphor Icons regular set (MIT, phosphoricons.com): check, lock-simple, check-circle.
   var ICONS = {
-    give: ['M3.5 8.5l3 3 6-7'],
-    keep: ['M4.5 7.5h7v5.5h-7z', 'M6 7.5V5.5a2 2 0 0 1 4 0v2'],
-    calm: ['M8 2.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11z', 'M5.5 8.2l1.8 1.8 3.2-3.6']
+    give: 'M229.66,77.66l-128,128a8,8,0,0,1-11.32,0l-56-56a8,8,0,0,1,11.32-11.32L96,188.69,218.34,66.34a8,8,0,0,1,11.32,11.32Z',
+    keep: 'M208,80H176V56a48,48,0,0,0-96,0V80H48A16,16,0,0,0,32,96V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V96A16,16,0,0,0,208,80ZM96,56a32,32,0,0,1,64,0V80H96ZM208,208H48V96H208V208Z',
+    calm: 'M173.66,98.34a8,8,0,0,1,0,11.32l-56,56a8,8,0,0,1-11.32,0l-24-24a8,8,0,0,1,11.32-11.32L112,148.69l50.34-50.35A8,8,0,0,1,173.66,98.34ZM232,128A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z'
   };
 
   function icon(name) {
     var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    svg.setAttribute('viewBox', '0 0 16 16');
+    svg.setAttribute('viewBox', '0 0 256 256');
     svg.setAttribute('class', 'icon');
     svg.setAttribute('aria-hidden', 'true');
-    ICONS[name].forEach(function (d) {
-      var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-      path.setAttribute('d', d);
-      svg.appendChild(path);
-    });
+    var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', ICONS[name]);
+    svg.appendChild(path);
     return svg;
   }
 
@@ -220,20 +235,25 @@ code { font: 11px/1.4 ui-monospace, SFMono-Regular, monospace; word-break: break
     return name.split(/\\s+/).map(function (part) { return part.charAt(0); }).join('').slice(0, 2).toUpperCase();
   }
 
+  var USD = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'USD', currencyDisplay: 'narrowSymbol' });
+  var seen = {};
+
   function costLine(card, requester) {
     if (!card.cost) return null;
     if (card.cost.kind === 'free') return 'Coût : gratuit';
     var payer = card.paidBy === 'requester' ? 'payé par ' + requester : 'à ta charge';
-    if (card.cost.kind === 'capped') return 'Coût max : ' + card.cost.maxUsd.toFixed(2).replace('.', ',') + ' $, ' + payer;
+    if (card.cost.kind === 'capped') return 'Coût max : ' + USD.format(card.cost.maxUsd) + ', ' + payer;
     return 'Coût : ' + payer + ', non mesuré';
   }
 
   function decide(path, dropId, decision, button) {
     button.disabled = true;
     api('POST', path, undefined, { dropId: dropId, decision: decision }).then(function () {
+      var card = button.closest('.card');
+      if (card) card.classList.add('leaving');
       info = decision === 'allow_once' ? 'Demande autorisée une fois.' : decision === 'deny' ? 'Demande refusée.' : decision === 'not_now' ? 'Demande reportée.' : decision === 'send' ? 'Réponse envoyée.' : 'Réponse conservée sur ce Mac.';
       announce(info);
-      render(true);
+      setTimeout(function () { render(true); }, 160);
     }, function (error) { notice = error.message; announce('Action impossible. ' + notice); render(true); });
   }
 
@@ -241,7 +261,7 @@ code { font: 11px/1.4 ui-monospace, SFMono-Regular, monospace; word-break: break
     var who = item.requestedBy.displayName;
     var cost = costLine(item.card, who);
     var first = firstName(who);
-    return el('article', { class: 'card ask', 'aria-label': who + ' : ' + item.card.title },
+    return el('article', { class: 'card ask' + fresh(item.dropId), 'aria-label': who + ' : ' + item.card.title },
       el('div', { class: 'who' }, el('span', { class: 'avatar', 'aria-hidden': 'true', text: initials(who) }),
         el('div', { class: 'grow' }, el('div', {}, el('span', { class: 'name', text: who }), ' a besoin d’aide'),
           el('div', { class: 'muted', text: item.card.title + ' · via ' + agentName(item.requestedBy.agent) }))),
@@ -257,6 +277,12 @@ code { font: 11px/1.4 ui-monospace, SFMono-Regular, monospace; word-break: break
         el('button', { class: 'act fill', 'aria-label': 'Autoriser une fois : ' + item.card.title, onclick: function (event) { decide('/ui/decide', item.dropId, 'allow_once', event.currentTarget); } }, 'Autoriser une fois')));
   }
 
+  function fresh(dropId) {
+    if (seen[dropId]) return '';
+    seen[dropId] = true;
+    return ' fresh';
+  }
+
   function reviewCard(item) {
     var fields = el('dl', { class: 'fields' });
     var output = item.output || {};
@@ -265,7 +291,7 @@ code { font: 11px/1.4 ui-monospace, SFMono-Regular, monospace; word-break: break
       fields.appendChild(el('dt', { text: key }));
       fields.appendChild(el('dd', { text: Array.isArray(value) ? value.join(', ') : String(value) }));
     });
-    return el('article', { class: 'card ask', 'aria-label': 'À relire : ' + item.title },
+    return el('article', { class: 'card ask' + fresh(item.dropId), 'aria-label': 'À relire : ' + item.title },
       el('div', {}, el('div', { class: 'name', text: item.title }),
         el('div', { class: 'muted', text: 'À relire avant envoi. Rien n’est parti : tu peux envoyer ou garder pour toi.' })),
       fields,
@@ -308,11 +334,11 @@ code { font: 11px/1.4 ui-monospace, SFMono-Regular, monospace; word-break: break
   function renderTeam(view) {
     return api('GET', '/ui/team').then(function (data) {
       if (!data.team) {
-        var name = el('input', { type: 'text', placeholder: 'Nom de l’équipe', 'aria-label': 'Nom de l’équipe' });
+        var name = el('input', { type: 'text', name: 'team', autocomplete: 'off', spellcheck: 'false', placeholder: 'Ex. Atlas…' });
         view.appendChild(el('div', { class: 'card' },
           el('div', {}, el('div', { class: 'name', text: 'Pas encore d’équipe' }),
             el('div', { class: 'muted', text: 'Crée-la, puis invite tes collègues : chacun verra les outils des autres.' })),
-          name,
+          el('label', { class: 'field' }, 'Nom de l’équipe', name),
           el('div', { class: 'actions' }, el('button', { class: 'act fill', onclick: function () {
             if (!name.value.trim()) { name.setAttribute('aria-invalid', 'true'); announce('Donne un nom à l’équipe.'); name.focus(); return; }
             api('POST', '/ui/admin/team', { name: name.value.trim() }).then(function () { info = 'Équipe créée.'; announce(info); render(true); }, function (error) { notice = error.message; render(true); });
@@ -364,7 +390,7 @@ code { font: 11px/1.4 ui-monospace, SFMono-Regular, monospace; word-break: break
         if (plan.state === 'absent') return;
         var checkbox = plan.state === 'ready' ? el('input', { type: 'checkbox', 'aria-label': 'Connecter ' + plan.label }) : null;
         if (checkbox) { checkbox.checked = true; selectable.push({ plan: plan, checkbox: checkbox }); }
-        found.appendChild(el('div', { class: 'row' }, checkbox,
+        found.appendChild(el(checkbox ? 'label' : 'div', { class: 'row' }, checkbox,
           el('div', { class: 'grow' }, el('div', { class: 'name', text: plan.label }),
             el('div', { class: plan.state === 'error' || plan.state === 'conflict' ? 'error' : 'muted', text: plan.detail })),
           plan.state === 'already_connected' ? el('button', { class: 'act', onclick: function () {
@@ -543,6 +569,9 @@ code { font: 11px/1.4 ui-monospace, SFMono-Regular, monospace; word-break: break
   document.addEventListener('focusin', function (event) {
     if (pendingRefresh && !event.target.closest('#view')) { pendingRefresh = false; render(); }
   });
+  new IntersectionObserver(function (entries) {
+    document.querySelector('header').classList.toggle('edge', !entries[0].isIntersecting);
+  }).observe(document.getElementById('edge'));
   render();
 })();
 </script>
