@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { z } from 'zod';
 import { canonical } from './canonical.ts';
+import { MAX_CLOCK_SKEW_MS } from './envelope.ts';
 import { NodeIdSchema, signDetached, verifyDetached, type Identity } from './identity.ts';
 
 /** How long an admission ticket, and the invite that carries it, stays valid: a day, for a link sent by message (D26). */
@@ -35,13 +36,17 @@ export async function createAdmission(sponsor: Identity, now: number = Date.now(
   return { ...body, sig: await signDetached(sponsor, signedPart(body)) };
 }
 
-export type AdmissionCheck = 'ok' | 'invalid' | 'expired' | 'bad_signature';
+export type AdmissionCheck = 'ok' | 'invalid' | 'expired' | 'too_long' | 'bad_signature';
 
-/** Checks shape, expiry and the sponsor's signature. Whether the sponsor is admitted and the nonce unused is the relay's. */
+/**
+ * Checks shape, expiry and the sponsor's signature. A ticket meant to outlive the 24 h TTL is refused, so a leaked one
+ * cannot stay usable for months. Whether the sponsor is admitted and the nonce unused is the relay's.
+ */
 export async function verifyAdmission(raw: unknown, now: number = Date.now()): Promise<AdmissionCheck> {
   const parsed = AdmissionSchema.safeParse(raw);
   if (!parsed.success) return 'invalid';
   if (parsed.data.expiresAt <= now) return 'expired';
+  if (parsed.data.expiresAt > now + ADMISSION_TTL_MS + MAX_CLOCK_SKEW_MS) return 'too_long';
   const valid = await verifyDetached(parsed.data.sponsor, signedPart(parsed.data), parsed.data.sig).catch(() => false);
   return valid ? 'ok' : 'bad_signature';
 }

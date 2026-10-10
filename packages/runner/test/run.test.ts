@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { CapabilityCardSchema, DropError, sha256Hex } from '@drop/protocol';
@@ -381,5 +381,17 @@ describe('runCapability: step 6, secrets', () => {
   it('refuses a benign value that looks like a secret', async () => {
     const impl = fakeImpl(() => Promise.resolve({ answer: 'set PASSWORD=changeme in the docs', items: [] }));
     expect(await run(impl)).toMatchObject({ ok: false, code: 'E_SECRET_DETECTED' });
+  });
+});
+
+describe('runner: no listening port', () => {
+  it('imports no server module and never listens: it only runs capabilities in process', async () => {
+    const dir = join(import.meta.dirname, '..', 'src');
+    for (const name of await readdir(dir)) {
+      const source = await readFile(join(dir, name), 'utf8');
+      expect(source, name).not.toMatch(
+        /from '(?:node:)?(?:http|https|net|dgram|http2)'|from 'ws'|\.listen\(|createServer/,
+      );
+    }
   });
 });

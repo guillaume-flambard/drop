@@ -17,6 +17,7 @@ Le relais SHALL pouvoir tourner sur une machine interne choisie par le client, s
 Un Node SHALL ouvrir `wss://<relay>/v1`. Le relais MUST alors envoyer `{ challenge: <32 octets base64url> }`.
 
 #### Scenario: Défi envoyé à l'ouverture
+<!-- openspec-guard:test="relay contract > opens every connection with a 32-byte challenge" -->
 - **WHEN** un Node ouvre `wss://<relay>/v1`
 - **THEN** le premier message du relais est `{ challenge }` contenant 32 octets encodés en base64url
 
@@ -24,10 +25,12 @@ Un Node SHALL ouvrir `wss://<relay>/v1`. Le relais MUST alors envoyer `{ challen
 Le Node SHALL répondre `{ nodeId, sig, admission? }` où `sig` = Ed25519(challenge) avec la clé de `nodeId`. Le relais MUST vérifier cette signature, puis vérifier que `nodeId` figure dans `allowedNodeIds` ou parmi les Nodes admis par invitation ; sinon il MUST fermer la connexion avec le code `4401`.
 
 #### Scenario: Node autorisé
+<!-- openspec-guard:test="relay > direct delivery between two in-memory nodes" -->
 - **WHEN** un Node listé dans `allowedNodeIds` répond au défi avec une signature valide
 - **THEN** la connexion est authentifiée pour ce `nodeId`
 
 #### Scenario: AC: rejet d'un Node non autorisé
+<!-- openspec-guard:test="relay > rejects a node that is not allowed" -->
 - **WHEN** un Node absent de `allowedNodeIds` répond au défi avec une signature valide
 - **THEN** le relais ferme la connexion avec le code `4401`
 
@@ -35,10 +38,12 @@ Le Node SHALL répondre `{ nodeId, sig, admission? }` où `sig` = Ed25519(challe
 Après authentification, le relais MUST valider **seulement** le schéma `Envelope` et la taille de chaque enveloppe reçue. Il MUST NOT déchiffrer `body`.
 
 #### Scenario: Enveloppe hors schéma
+<!-- openspec-guard:test="relay contract > refuses an envelope that breaks the schema, and routes one whose body it cannot read, unchanged" -->
 - **WHEN** un Node authentifié envoie un objet qui ne respecte pas le schéma `Envelope`
 - **THEN** le relais ne le transmet pas
 
 #### Scenario: Corps jamais déchiffré
+<!-- openspec-guard:test="relay contract > refuses an envelope that breaks the schema, and routes one whose body it cannot read, unchanged" -->
 - **WHEN** le relais route une enveloppe valide
 - **THEN** il ne déchiffre pas `body`
 
@@ -46,6 +51,7 @@ Après authentification, le relais MUST valider **seulement** le schéma `Envelo
 Le relais MUST vérifier que le champ `from` de chaque enveloppe est égal au `nodeId` authentifié sur cette connexion ; sinon il MUST répondre par le code `4403` et ne pas transmettre l'enveloppe.
 
 #### Scenario: AC: rejet d'usurpation de from
+<!-- openspec-guard:test="relay > rejects a spoofed from" -->
 - **WHEN** un Node authentifié comme A envoie une enveloppe avec `from` = B
 - **THEN** le relais applique le code `4403` et ne transmet pas l'enveloppe
 
@@ -53,6 +59,7 @@ Le relais MUST vérifier que le champ `from` de chaque enveloppe est égal au `n
 Si le destinataire `to` est connecté, le relais SHALL lui transmettre l'enveloppe.
 
 #### Scenario: AC: livraison directe entre deux Nodes en mémoire
+<!-- openspec-guard:test="relay > direct delivery between two in-memory nodes" -->
 - **WHEN** dans un test d'intégration avec deux Nodes en mémoire connectés, A envoie une enveloppe à B
 - **THEN** B reçoit l'enveloppe inchangée
 
@@ -60,14 +67,17 @@ Si le destinataire `to` est connecté, le relais SHALL lui transmettre l'envelop
 Si `to` n'est pas connecté, le relais SHALL mettre l'enveloppe en file (max 100 enveloppes par destinataire, `maxQueuePerNode`), MUST purger chaque enveloppe à son `exp`, et SHALL livrer la file à la reconnexion du destinataire.
 
 #### Scenario: AC: livraison différée après reconnexion
+<!-- openspec-guard:test="relay > deferred delivery after reconnect" -->
 - **WHEN** dans un test d'intégration avec deux Nodes en mémoire, A envoie une enveloppe à B déconnecté, puis B se reconnecte avant `exp`
 - **THEN** B reçoit l'enveloppe à la reconnexion
 
 #### Scenario: Purge à l'expiration
+<!-- openspec-guard:test="relay > drops a queued envelope once it expires" -->
 - **WHEN** B se reconnecte après l'`exp` d'une enveloppe en file
 - **THEN** cette enveloppe n'est pas livrée
 
 #### Scenario: Plafond de file
+<!-- openspec-guard:test="relay contract > caps the queue of an offline node at maxQueuePerNode" -->
 - **WHEN** 100 enveloppes sont déjà en file pour un destinataire
 - **THEN** la file de ce destinataire ne dépasse pas 100 enveloppes
 
@@ -96,11 +106,38 @@ ne les oublie pas, et journaliser chaque admission avec son sponsor. `allowedNod
 - **WHEN** le relais redémarre après avoir admis un Node par invitation
 - **THEN** ce Node est encore authentifié, et `admittedPath` est en mode `0600`
 
+### Requirement: Révocation sans redémarrage
+`drop-relay revoke <nodeId> [--with-invited]` SHALL ajouter le Node à `revokedPath` (mode `0600`), que le relais relit
+toutes les 2 s : il MUST alors couper la connexion du Node avec `4401`, oublier sa file, et le refuser ensuite, même
+listé dans `allowedNodeIds` ou présentant un nouveau ticket, et refuser les tickets qu'il a signés. Avec
+`--with-invited`, les Nodes qu'il a fait admettre sont révoqués aussi, de proche en proche (T2.19, D75).
+
+#### Scenario: Node révoqué
+<!-- openspec-guard:test="relay > revokes a node without a restart: cut off at once, never back, and no longer a sponsor (T2.19)" -->
+- **WHEN** l'opérateur révoque Natha, admise par Julie, pendant qu'elle est connectée
+- **THEN** sa connexion est coupée, un nouveau ticket de Julie ne la fait pas revenir, ses propres tickets sont refusés, et Julie reste admise
+
+#### Scenario: Révocation avec ses invités
+<!-- openspec-guard:test="relay > revoking with --with-invited also cuts off the nodes it admitted, transitively (T2.19)" -->
+- **WHEN** l'opérateur révoque Natha avec `--with-invited`, après qu'elle a fait admettre Paul
+- **THEN** Natha et Paul sont coupés, et Zoé, admise par Julie, reste connectée
+
+### Requirement: Plafond global d'admissions
+Le relais MUST refuser une admission quand `maxAdmissionsPerDay` Nodes (100 par défaut) ont été admis dans les
+dernières 24 h, tous sponsors confondus, ce qui borne la vitesse à laquelle les admissions se propagent (T2.19, D75).
+
+#### Scenario: Plafond atteint
+<!-- openspec-guard:test="relay > caps admissions per day across all sponsors (T2.19)" -->
+- **WHEN** le plafond est de 2 et que deux Nodes ont été admis aujourd'hui par deux sponsors différents
+- **THEN** un troisième ticket valide est refusé avec `4401`, et le relais journalise `global_quota`
+
 ### Requirement: Aucun stockage hors de la file
-Le relais MUST NOT stocker autre chose que la file courte des enveloppes en attente et l'état d'admission
-(`admittedPath`) : ni contenu déchiffré, ni historique des enveloppes livrées.
+Le relais MUST NOT stocker autre chose que la file courte des enveloppes en attente, l'état d'admission
+(`admittedPath`) et les révocations qu'il lit (`revokedPath`) : ni contenu déchiffré, ni historique des enveloppes
+livrées.
 
 #### Scenario: Rien gardé après livraison
+<!-- openspec-guard:test="relay contract > logs the id, from, to, size and outcome of each envelope, and keeps no copy once delivered" -->
 - **WHEN** une enveloppe a été livrée à son destinataire
 - **THEN** le relais n'en garde aucune copie, ni en mémoire ni sur disque
 
@@ -108,10 +145,12 @@ Le relais MUST NOT stocker autre chose que la file courte des enveloppes en atte
 Le relais MUST NOT journaliser `body`. Il SHALL journaliser seulement `id`, `from`, `to`, la taille et l'issue de chaque enveloppe.
 
 #### Scenario: AC: aucun champ body dans les logs
+<!-- openspec-guard:test="relay > no body field in the logs" -->
 - **WHEN** un test route des enveloppes puis inspecte la sortie de log du relais
 - **THEN** aucune entrée ne contient de champ `body` ni sa valeur
 
 #### Scenario: Champs journalisés
+<!-- openspec-guard:test="relay contract > logs the id, from, to, size and outcome of each envelope, and keeps no copy once delivered" -->
 - **WHEN** une enveloppe est routée
 - **THEN** l'entrée de log contient `id`, `from`, `to`, la taille et l'issue
 
@@ -119,6 +158,7 @@ Le relais MUST NOT journaliser `body`. Il SHALL journaliser seulement `id`, `fro
 Le relais SHALL envoyer un ping toutes les 25 s à chaque Node et MUST le déconnecter après 2 pings sans réponse.
 
 #### Scenario: Node muet
+<!-- openspec-guard:test="relay contract > closes a node that misses two pings" -->
 - **WHEN** un Node ne répond pas à 2 pings
 - **THEN** le relais ferme sa connexion
 
@@ -126,6 +166,7 @@ Le relais SHALL envoyer un ping toutes les 25 s à chaque Node et MUST le décon
 Le relais MUST limiter chaque Node authentifié à `rateLimitPerMinute` tentatives par minute (60 par défaut) à travers ses reconnexions, y compris les trames malformées ou trop grandes. Une tentative hors quota MUST recevoir `E_RATE`, sauf si WebSocket a déjà fermé la connexion pour dépassement de `maxPayload` ; cette trame MUST néanmoins compter pour l'identité authentifiée.
 
 #### Scenario: AC: rate limit
+<!-- openspec-guard:test="relay > rate limit" -->
 - **WHEN** dans un test d'intégration un Node envoie une 61e enveloppe dans la même minute
 - **THEN** le relais la rejette avec `{ error: 'E_RATE' }` et ne la transmet pas
 
@@ -171,20 +212,23 @@ Le relais MUST fermer la connexion après un refus `E_RATE` afin de libérer les
 En v1, un redémarrage du relais SHALL entraîner la perte de la file d'attente ; ce comportement est assumé.
 
 #### Scenario: Redémarrage
+<!-- openspec-guard:test="relay contract > loses its queue when it restarts, as v1 assumes" -->
 - **WHEN** le relais redémarre avec des enveloppes en file
 - **THEN** ces enveloppes sont perdues et ne sont pas livrées
 
 ### Requirement: Fichier de configuration du relais
-Le relais SHALL lire `relay.config.json` de la forme `{ port, allowedNodeIds: string[], maxQueuePerNode, rateLimitPerMinute }`.
+Le relais SHALL lire `relay.config.json` de la forme `{ port, allowedNodeIds: string[], maxQueuePerNode, rateLimitPerMinute, admittedPath?, maxAdmissionsPerSponsorPerDay?, maxAdmissionsPerDay?, revokedPath? }`. Sans `admittedPath`, les admissions par invitation durent jusqu'au redémarrage.
 
 #### Scenario: Configuration chargée
+<!-- openspec-guard:test="relay > reads relay.config.json, with the admission settings optional" -->
 - **WHEN** le relais démarre avec un `relay.config.json` valide
-- **THEN** il écoute sur `port` et applique `allowedNodeIds`, `maxQueuePerNode` et `rateLimitPerMinute`
+- **THEN** il écoute sur `port` et applique `allowedNodeIds`, `maxQueuePerNode`, `rateLimitPerMinute` et, s'ils sont fournis, `admittedPath` et `maxAdmissionsPerSponsorPerDay`
 
 ### Requirement: Commande drop relay allow
 `drop relay allow <nodeId>` SHALL ajouter `nodeId` à `allowedNodeIds` en éditant `relay.config.json`. En v1, la prise en compte MUST nécessiter un redémarrage du relais.
 
 #### Scenario: Ajout d'un Node autorisé
+<!-- openspec-guard:test="relay contract > drop-relay allow adds a node to relay.config.json, which a restart applies" -->
 - **WHEN** on lance `drop relay allow <nodeId>` puis on redémarre le relais
 - **THEN** `nodeId` figure dans `allowedNodeIds` et peut s'authentifier
 
