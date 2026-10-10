@@ -1,16 +1,12 @@
-import { execFileSync } from 'node:child_process';
-import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { agentConfigPath, type AgentKind } from '@drop/capabilities';
 
 /**
- * `drop install <agent>` (T2.5): adds drop's requester MCP server to a coding agent, the way that agent documents it.
- * Claude Code and Codex through their own CLI (`claude mcp add --scope user`, `codex mcp add`,
- * https://developers.openai.com/codex/mcp); Cursor and Claude Desktop by adding a `drop` entry to their `mcpServers`
- * file, after a one-time backup. The server is the bundled `drop-mcp.mjs` (D29), copied into DROP_HOME/bin so it keeps
- * working when the repo or the app moves.
+ * Command construction for the local onboarding service. The service owns preflight, backup, concurrency checks and
+ * writes; this module only describes one add or remove operation for each supported agent.
  */
 export interface ServerEntry {
   command: string;
@@ -18,8 +14,16 @@ export interface ServerEntry {
   env: Record<string, string>;
 }
 
+/** A manual step: what to paste where, in the client's own format, when drop writes nothing (D66). */
+export interface ManualStep {
+  kind: 'manual';
+  format: 'json' | 'yaml';
+  snippet: string;
+  steps: string;
+}
+
 export type InstallStep =
-  { kind: 'run'; argv: string[]; mayFail?: boolean } | { kind: 'json'; file: string; entry: ServerEntry | null };
+  { kind: 'run'; argv: string[] } | { kind: 'json'; file: string; entry: ServerEntry | null } | ManualStep;
 
 export const SERVER_NAME = 'drop';
 
@@ -40,103 +44,175 @@ export function installSteps(agent: AgentKind, entry: ServerEntry | null, home: 
   const env = Object.entries(entry?.env ?? {}).map(([key, value]) => `${key}=${value}`);
   switch (agent) {
     case 'claude_code':
-      return [
-        { kind: 'run', argv: ['claude', 'mcp', 'remove', '--scope', 'user', SERVER_NAME], mayFail: true },
-        ...(entry
-          ? [
-              {
-                kind: 'run' as const,
-                argv: [
-                  'claude',
-                  'mcp',
-                  'add',
-                  '--scope',
-                  'user',
-                  SERVER_NAME,
-                  ...env.flatMap((pair) => ['-e', pair]),
-                  '--',
-                  entry.command,
-                  ...entry.args,
-                ],
-              },
-            ]
-          : []),
-      ];
+      return entry
+        ? [
+            {
+              kind: 'run',
+              argv: [
+                'claude',
+                'mcp',
+                'add',
+                '--scope',
+                'user',
+                SERVER_NAME,
+                ...env.flatMap((pair) => ['-e', pair]),
+                '--',
+                entry.command,
+                ...entry.args,
+              ],
+            },
+          ]
+        : [{ kind: 'run', argv: ['claude', 'mcp', 'remove', '--scope', 'user', SERVER_NAME] }];
     case 'codex':
-      return [
-        { kind: 'run', argv: ['codex', 'mcp', 'remove', SERVER_NAME], mayFail: true },
-        ...(entry
-          ? [
-              {
-                kind: 'run' as const,
-                argv: [
-                  'codex',
-                  'mcp',
-                  'add',
-                  SERVER_NAME,
-                  ...env.flatMap((pair) => ['--env', pair]),
-                  '--',
-                  entry.command,
-                  ...entry.args,
-                ],
-              },
-            ]
-          : []),
-      ];
+      return entry
+        ? [
+            {
+              kind: 'run',
+              argv: [
+                'codex',
+                'mcp',
+                'add',
+                SERVER_NAME,
+                ...env.flatMap((pair) => ['--env', pair]),
+                '--',
+                entry.command,
+                ...entry.args,
+              ],
+            },
+          ]
+        : [{ kind: 'run', argv: ['codex', 'mcp', 'remove', SERVER_NAME] }];
+    case 'gemini_cli':
+      return entry
+        ? [
+            {
+              kind: 'run',
+              argv: [
+                'gemini',
+                'mcp',
+                'add',
+                '--scope',
+                'user',
+                ...env.flatMap((pair) => ['-e', pair]),
+                SERVER_NAME,
+                entry.command,
+                ...entry.args,
+              ],
+            },
+          ]
+        : [{ kind: 'run', argv: ['gemini', 'mcp', 'remove', '--scope', 'user', SERVER_NAME] }];
+    case 'vscode':
+      // `code --add-mcp` writes the user profile's mcp.json; VS Code has no official removal command.
+      return entry
+        ? [
+            {
+              kind: 'run',
+              argv: ['code', '--add-mcp', JSON.stringify({ name: SERVER_NAME, type: 'stdio', ...entry })],
+            },
+          ]
+        : [
+            {
+              kind: 'manual',
+              format: 'json',
+              snippet: SERVER_NAME,
+              steps:
+                'Dans VS Code : commande « MCP: Open User Configuration », retire l’entrée drop sous servers, puis enregistre.',
+            },
+          ];
     case 'cursor':
     case 'claude_desktop':
+    case 'cline':
       return [{ kind: 'json', file: agentConfigPath(agent, home), entry }];
+    case 'opencode':
+    case 'devin_desktop':
+    case 'zed':
+    case 'goose':
+    case 'roo_code':
+    case 'jetbrains':
+      return entry ? [manualStep(agent, entry)] : [manualRemoval(agent)];
   }
 }
 
-/** Sets or removes `mcpServers.drop` in an agent's JSON file, keeping everything else; backs the file up once. */
-export function applyJsonStep(file: string, entry: ServerEntry | null): void {
-  const existed = existsSync(file);
-  const config = existed ? (JSON.parse(readFileSync(file, 'utf8')) as Record<string, unknown>) : {};
-  if (existed && !existsSync(`${file}.bak-drop`)) copyFileSync(file, `${file}.bak-drop`);
-  const others = Object.entries(
-    typeof config.mcpServers === 'object' && config.mcpServers !== null ? config.mcpServers : {},
-  ).filter(([name]) => name !== SERVER_NAME);
-  const servers = Object.fromEntries(entry ? [...others, [SERVER_NAME, entry]] : others);
-  mkdirSync(dirname(file), { recursive: true });
-  writeFileSync(file, `${JSON.stringify({ ...config, mcpServers: servers }, null, 2)}\n`);
+const stdio = (entry: ServerEntry) => ({ command: entry.command, args: entry.args, env: entry.env });
+const pretty = (value: unknown): string => JSON.stringify(value, null, 2);
+
+/** The copyable configuration of a client drop does not write, in that client's own format and place. */
+export function manualStep(agent: AgentKind, entry: ServerEntry): ManualStep {
+  switch (agent) {
+    case 'opencode':
+      return {
+        kind: 'manual',
+        format: 'json',
+        snippet: pretty({
+          mcp: {
+            servers: {
+              [SERVER_NAME]: { type: 'local', command: [entry.command, ...entry.args], environment: entry.env },
+            },
+          },
+        }),
+        steps:
+          'Ajoute l’entrée drop sous mcp.servers dans ~/.config/opencode/opencode.jsonc (ou opencode.json), sans toucher au reste, puis relance OpenCode.',
+      };
+    case 'zed':
+      return {
+        kind: 'manual',
+        format: 'json',
+        snippet: pretty({ context_servers: { [SERVER_NAME]: stdio(entry) } }),
+        steps:
+          'Dans Zed : commande « zed: open settings file », ajoute l’entrée drop sous context_servers, puis enregistre.',
+      };
+    case 'goose':
+      return {
+        kind: 'manual',
+        format: 'yaml',
+        snippet: [
+          `  ${SERVER_NAME}:`,
+          `    name: ${SERVER_NAME}`,
+          '    type: stdio',
+          `    cmd: ${JSON.stringify(entry.command)}`,
+          '    args:',
+          ...entry.args.map((arg) => `      - ${JSON.stringify(arg)}`),
+          '    envs:',
+          ...Object.entries(entry.env).map(([key, value]) => `      ${key}: ${JSON.stringify(value)}`),
+          '    enabled: true',
+          '    timeout: 300',
+        ].join('\n'),
+        steps:
+          'Lance « goose configure », puis Add Extension et Command-line Extension ; ou colle ce bloc sous la clé extensions existante de ~/.config/goose/config.yaml (crée-la si elle manque), puis relance goose.',
+      };
+    case 'devin_desktop':
+      return {
+        kind: 'manual',
+        format: 'json',
+        snippet: pretty({ mcpServers: { [SERVER_NAME]: stdio(entry) } }),
+        steps:
+          'Dans Devin Desktop : Cascade, MCP, View raw config, ajoute l’entrée drop sous mcpServers, puis rafraîchis la liste des serveurs.',
+      };
+    case 'roo_code':
+      return {
+        kind: 'manual',
+        format: 'json',
+        snippet: pretty({ mcpServers: { [SERVER_NAME]: stdio(entry) } }),
+        steps:
+          'Roo Code est archivé depuis le 15 mai 2026 : préfère Cline. Sinon, dans Roo Code, Edit Global MCP, ajoute l’entrée drop sous mcpServers.',
+      };
+    default:
+      return {
+        kind: 'manual',
+        format: 'json',
+        snippet: pretty({ mcpServers: { [SERVER_NAME]: stdio(entry) } }),
+        steps:
+          'Dans ton IDE JetBrains : Settings, Tools, AI Assistant, Model Context Protocol (MCP), Add, puis colle ce JSON. Si drop est déjà dans Claude Desktop, « Import from Claude » suffit. Pour Junie : ~/.junie/mcp/mcp.json.',
+      };
+  }
 }
 
-export interface InstallOptions {
-  dropHome: string;
-  home?: string;
-  /** Runs an agent CLI; tests pass a recorder. */
-  run?: (argv: string[]) => void;
-  serverSource?: string;
-}
-
-/** Installs (or with `remove`, uninstalls) drop in one agent. Returns the steps taken, for display. */
-export function install(agent: AgentKind, options: InstallOptions, remove = false): InstallStep[] {
-  let entry: ServerEntry | null = null;
-  if (!remove) {
-    const source = options.serverSource ?? bundledServer();
-    if (!source) throw new Error('the bundled server is missing: run `node scripts/bundle.ts` first');
-    const bin = join(options.dropHome, 'bin');
-    mkdirSync(bin, { recursive: true });
-    const target = join(bin, 'drop-mcp.mjs');
-    copyFileSync(source, target);
-    chmodSync(target, 0o755);
-    entry = serverEntry(agent, options.dropHome, target);
-  }
-  const run = options.run ?? ((argv: string[]) => execFileSync(argv[0] ?? '', argv.slice(1), { stdio: 'ignore' }));
-  const steps = installSteps(agent, entry, options.home);
-  for (const step of steps) {
-    if (step.kind === 'json') {
-      applyJsonStep(step.file, step.entry);
-      continue;
-    }
-    try {
-      run(step.argv);
-    } catch (error) {
-      if (!step.mayFail) throw error;
-    }
-  }
-  return steps;
+function manualRemoval(agent: AgentKind): ManualStep {
+  return {
+    kind: 'manual',
+    format: 'json',
+    snippet: SERVER_NAME,
+    steps: `Retire l’entrée drop de la configuration de ${agent === 'goose' ? 'goose (extensions)' : 'ce client'}, à l’endroit où tu l’as ajoutée.`,
+  };
 }
 
 /** A Cursor install link (https://cursor.com/docs/mcp/install-links.md): name plus the base64 of the mcp.json entry. */

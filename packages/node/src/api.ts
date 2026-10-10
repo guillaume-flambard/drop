@@ -1,7 +1,14 @@
 import { timingSafeEqual } from 'node:crypto';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { z } from 'zod';
+import { AGENTS, type AgentKind } from '@drop/capabilities';
+import { decodeInvite, DropError, isDropError, RequesterAgentSchema } from '@drop/protocol';
 import type { NodeEngine } from './engine.ts';
+import { LinkRequestSchema, type LinkRequest } from './home.ts';
+import { InternetSettingsSchema, type InternetSettings } from './iroh.ts';
+import { renderPanel } from './panel.ts';
+import { routeFacts, routeQuestion, takesQuestion } from './route.ts';
+import { teamAgent } from './a2a-inbound.ts';
 import { renderInbox, renderPage } from './ui.ts';
 
 export interface LocalApiOptions {
@@ -11,8 +18,89 @@ export interface LocalApiOptions {
   /** Fetches fresh catalogs when the cache is older than 60 s; resolves when answers arrived or timed out. */
   refreshCatalogs: () => Promise<void>;
   relayUrl: string;
+  /** Opaque process instance marker used only by the Mac shell to recognize its own child. */
+  shellInstance?: string;
   now?: () => number;
+  /** Owner actions of the app's panel (T2.4), wired by the daemon; absent in tests of the drop routes. */
+  admin?: AdminHooks;
+  /**
+   * Where the browser brings back an OAuth sign-in (T2.17): exchanges the code of a pending sign-in, by its single-use
+   * state, and resolves to the server's host. The browser cannot send the local token: the state is the check.
+   */
+  oauthCallback?: (state: string, code: string) => Promise<string>;
 }
+
+function escapeText(text: string): string {
+  return text.replace(/[&<>"']/g, (char) => `&#${String(char.charCodeAt(0))};`);
+}
+
+function signInPage(res: ServerResponse, status: number, message: string): void {
+  res.writeHead(status, {
+    'Content-Type': 'text/html; charset=utf-8',
+    'Content-Security-Policy': "default-src 'none'",
+    'Cache-Control': 'no-store',
+    'Referrer-Policy': 'no-referrer',
+  });
+  res.end(
+    `<!doctype html><html lang="fr"><meta charset="utf-8"><title>drop</title><body style="font:16px system-ui;margin:3em"><p>${escapeText(message)}</p></body></html>`,
+  );
+}
+
+/** What the panel can do beyond deciding: see and share tools, install drop in agents, create a team. */
+export interface AdminHooks {
+  status(): { displayName: string; nodeId: string; relayConnected: boolean; lan?: string; internet?: string };
+  tools(): unknown;
+  share(body: {
+    agent: string;
+    server: string;
+    label?: string | undefined;
+    tools?: string[] | undefined;
+  }): Promise<unknown>;
+  unshare(capabilityId: string): boolean;
+  install(agent: string, remove: boolean): unknown;
+  onboardingPreview?(): unknown;
+  onboardingApply?(
+    selections: {
+      agent: AgentKind;
+      fingerprint: string;
+      action: 'connect' | 'disconnect';
+    }[],
+  ): unknown;
+  /** Project-level configurations (T4.5): known or added folders only. */
+  projects?(): unknown;
+  addProject?(dir: string): unknown;
+  removeProject?(dir: string): boolean;
+  createTeam(name: string): unknown;
+  /** Internet by iroh (T4.2b): the owner's choice and the program's state. */
+  internet?(): unknown;
+  setInternet?(settings: InternetSettings): unknown;
+  link(gateway: string, request: LinkRequest): Promise<unknown>;
+  /** Starts drop's OAuth sign-in to a detected remote MCP server (T2.17): the URL to open, or `connected`. */
+  connect(agent: string, server: string): Promise<unknown>;
+  unlink(gateway: string, client: string): boolean;
+}
+
+const ShareBody = z.object({
+  agent: z.string().min(1),
+  server: z.string().min(1),
+  label: z.string().min(2).max(60).optional(),
+  tools: z.array(z.string().min(1)).max(30).optional(),
+});
+
+const OnboardingBody = z.object({
+  selections: z
+    .array(
+      z.object({
+        agent: z.enum(AGENTS),
+        fingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+        action: z.enum(['connect', 'disconnect']),
+      }),
+    )
+    .min(1)
+    .max(AGENTS.length),
+});
+
+const ProjectBody = z.object({ dir: z.string().min(1).max(1024) });
 
 export interface LocalApi {
   port: number;
@@ -24,29 +112,43 @@ const DropRequestBody = z.object({
   capabilityId: z.string(),
   input: z.unknown(),
   purpose: z.string().min(1).max(140),
-  agent: z.enum(['claude_code', 'codex', 'cursor', 'other']).default('other'),
+  agent: RequesterAgentSchema.default('other'),
+});
+
+const AskBody = z.object({
+  question: z.string().trim().min(10).max(300),
+  purpose: z.string().trim().min(1).max(140).optional(),
+  agent: RequesterAgentSchema.default('other'),
 });
 
 const MAX_BODY_BYTES = 128 * 1024;
+/** A hand-written answer carries up to 160 KiB of JSON (T4.3): only its route reads more. */
+const MAX_ANSWER_BODY_BYTES = 200 * 1024;
 
 function json(res: ServerResponse, status: number, body: unknown): void {
-  res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
-  res.end(JSON.stringify(body));
+  const payload = JSON.stringify(body);
+  res.writeHead(status, {
+    'Content-Type': 'application/json; charset=utf-8',
+    'Cache-Control': 'no-store',
+    'Content-Length': Buffer.byteLength(payload),
+  });
+  res.end(payload);
 }
 
 function sameToken(given: string, expected: string): boolean {
+  if (!given.trim() || !expected.trim()) return false;
   const a = Buffer.from(given);
   const b = Buffer.from(expected);
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
-async function readBody(req: IncomingMessage): Promise<string> {
+async function readBody(req: IncomingMessage, limit = MAX_BODY_BYTES): Promise<string> {
   const chunks: Buffer[] = [];
   let size = 0;
   for await (const chunk of req) {
     const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk));
     size += buffer.length;
-    if (size > MAX_BODY_BYTES) throw new Error('body too large');
+    if (size > limit) throw new Error('body too large');
     chunks.push(buffer);
   }
   return Buffer.concat(chunks).toString('utf8');
@@ -62,13 +164,19 @@ function parseForm(body: string): URLSearchParams {
  * which blocks DNS rebinding.
  */
 export function startLocalApi(options: LocalApiOptions): Promise<LocalApi> {
+  if (!options.token.trim()) return Promise.reject(new Error('E_TOKEN local token empty'));
   const { engine } = options;
   const now = options.now ?? Date.now;
   let boundPort = options.port;
 
-  const authorized = (req: IncomingMessage, url: URL): boolean => {
+  const localHost = (req: IncomingMessage): boolean => {
     const host = req.headers.host ?? '';
-    if (host !== `127.0.0.1:${String(boundPort)}` && host !== `localhost:${String(boundPort)}`) return false;
+    return host === `127.0.0.1:${String(boundPort)}` || host === `localhost:${String(boundPort)}`;
+  };
+  const team = teamAgent({ engine, refreshCatalogs: options.refreshCatalogs });
+
+  const authorized = (req: IncomingMessage, url: URL): boolean => {
+    if (!localHost(req)) return false;
     const header = req.headers.authorization ?? '';
     const bearer = header.startsWith('Bearer ') ? header.slice('Bearer '.length) : '';
     const query = url.searchParams.get('token') ?? '';
@@ -77,6 +185,39 @@ export function startLocalApi(options: LocalApiOptions): Promise<LocalApi> {
 
   const handle = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     const url = new URL(req.url ?? '/', 'http://127.0.0.1');
+    // The A2A agent card (T2.14) is public to local clients, as A2A expects: it names the token the calls need.
+    if ((req.method ?? 'GET') === 'GET' && url.pathname === '/.well-known/agent-card.json' && localHost(req)) {
+      json(res, 200, team.cardJson(`http://127.0.0.1:${String(boundPort)}/a2a`));
+      return;
+    }
+    if (
+      (req.method ?? 'GET') === 'GET' &&
+      url.pathname === '/_shell/health' &&
+      options.shellInstance &&
+      localHost(req)
+    ) {
+      json(res, 200, { instance: options.shellInstance });
+      return;
+    }
+    if ((req.method ?? 'GET') === 'GET' && url.pathname === '/oauth/callback' && localHost(req)) {
+      const state = url.searchParams.get('state') ?? '';
+      const code = url.searchParams.get('code') ?? '';
+      if (url.searchParams.has('error')) {
+        signInPage(res, 400, 'Connexion refusée. Tu peux fermer cet onglet et réessayer depuis drop.');
+        return;
+      }
+      if (!options.oauthCallback || !state || !code) {
+        signInPage(res, 400, 'Lien de connexion incomplet.');
+        return;
+      }
+      try {
+        const host = await options.oauthCallback(state, code);
+        signInPage(res, 200, `drop est connecté à ${host}. Tu peux fermer cet onglet et partager cet outil.`);
+      } catch {
+        signInPage(res, 400, 'Cette connexion a expiré ou a déjà servi. Recommence depuis drop.');
+      }
+      return;
+    }
     if (!authorized(req, url)) {
       json(res, 401, { error: 'unauthorized' });
       return;
@@ -113,9 +254,61 @@ export function startLocalApi(options: LocalApiOptions): Promise<LocalApi> {
       try {
         const drop = await engine.requestDrop(parsed.data);
         json(res, 201, { dropId: drop.dropId, owner: drop.ownerName, title: drop.title });
-      } catch {
+      } catch (error) {
+        if (isDropError(error, 'E_RATE')) {
+          json(res, 429, { error: 'E_RATE', message: 'Trop de demandes actives.' });
+          return;
+        }
+        if (isDropError(error, 'E_TOO_LARGE')) {
+          json(res, 413, { error: 'E_TOO_LARGE', message: 'Enveloppe trop grande.' });
+          return;
+        }
         json(res, 404, { error: 'E_UNKNOWN_CAPABILITY', message: 'no such capability among paired peers' });
       }
+      return;
+    }
+    if (method === 'POST' && path === '/a2a') {
+      await team.endpoint.handle(req, res, await readBody(req));
+      return;
+    }
+    if (method === 'POST' && path === '/ask') {
+      // « Demander à mon équipe » (T2.12, D32): routed by rules, then one drop per chosen capability.
+      const parsed = AskBody.safeParse(JSON.parse(await readBody(req)));
+      if (!parsed.success) {
+        json(res, 400, { error: 'E_SCHEMA', message: 'a question of 10 to 300 characters is needed' });
+        return;
+      }
+      if (!engine.catalogIsFresh()) await options.refreshCatalogs();
+      const catalog = engine.catalog();
+      // A published fact that matches goes first and alone; otherwise the usual routing (T4.4).
+      const facts = routeFacts(catalog, parsed.data.question);
+      const routes = facts.length > 0 ? facts : routeQuestion(catalog, parsed.data.question);
+      const asked = [];
+      for (const route of routes) {
+        try {
+          const drop = await engine.requestDrop({
+            capabilityId: route.capabilityId,
+            input: route.fact ? {} : { question: parsed.data.question },
+            purpose: parsed.data.purpose ?? 'Pas de raison précisée.',
+            agent: parsed.data.agent,
+          });
+          asked.push({ dropId: drop.dropId, ...route });
+        } catch (error) {
+          if (isDropError(error, 'E_RATE')) {
+            json(res, 429, { error: 'E_RATE', message: 'Trop de demandes actives.', asked });
+            return;
+          }
+          if (isDropError(error, 'E_TOO_LARGE')) {
+            json(res, 413, { error: 'E_TOO_LARGE', message: 'Enveloppe trop grande.', asked });
+            return;
+          }
+          throw error;
+        }
+      }
+      const helpers = catalog
+        .filter(takesQuestion)
+        .map((entry) => ({ ownerName: entry.ownerName, title: entry.card.title, online: entry.online }));
+      json(res, 200, { asked, helpers });
       return;
     }
     const dropMatch = /^\/drops\/([0-9a-f-]{36})$/.exec(path);
@@ -162,13 +355,185 @@ export function startLocalApi(options: LocalApiOptions): Promise<LocalApi> {
       res.end(renderPage(''));
       return;
     }
+    if (method === 'GET' && path === '/app') {
+      res.writeHead(200, {
+        'Content-Type': 'text/html; charset=utf-8',
+        'Cache-Control': 'no-store',
+        'Referrer-Policy': 'no-referrer',
+        'Content-Security-Policy':
+          "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'",
+      });
+      res.end(renderPanel());
+      return;
+    }
     if (method === 'GET' && path === '/ui/inbox') {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
       res.end(renderInbox(engine.pending(), now()));
       return;
     }
     if (method === 'GET' && path === '/ui/pending') {
-      json(res, 200, { pending: engine.pending() });
+      // Who a hand-written answer reaches first (T4.3): the executor's name from the local peer store, not from the card.
+      const peers = engine.peers();
+      const pending = engine.pending().map((item) => {
+        const executor = peers.find((peer) => peer.nodeId === item.executor);
+        return executor ? { ...item, executorName: executor.displayName } : item;
+      });
+      json(res, 200, { pending });
+      return;
+    }
+    if (method === 'GET' && path === '/ui/outbound') {
+      json(res, 200, { drops: engine.outboundDrops().slice(0, 50) });
+      return;
+    }
+    if (path.startsWith('/ui/admin/')) {
+      const admin = options.admin;
+      if (!admin) {
+        json(res, 404, { error: 'not_found' });
+        return;
+      }
+      try {
+        if (method === 'GET' && path === '/ui/admin/status') {
+          json(res, 200, admin.status());
+          return;
+        }
+        if (method === 'GET' && path === '/ui/admin/tools') {
+          json(res, 200, admin.tools());
+          return;
+        }
+        if (method === 'GET' && path === '/ui/admin/onboarding') {
+          if (!admin.onboardingPreview) {
+            json(res, 404, { error: 'not_found' });
+            return;
+          }
+          json(res, 200, admin.onboardingPreview());
+          return;
+        }
+        const body: unknown = method === 'POST' ? JSON.parse((await readBody(req)) || '{}') : {};
+        if (method === 'GET' && path === '/ui/admin/projects' && admin.projects) {
+          json(res, 200, { projects: admin.projects() });
+          return;
+        }
+        if (
+          method === 'POST' &&
+          (path === '/ui/admin/projects' || path === '/ui/admin/projects/remove') &&
+          admin.addProject &&
+          admin.removeProject
+        ) {
+          const parsed = ProjectBody.safeParse(body);
+          if (!parsed.success) {
+            json(res, 400, { error: 'E_SCHEMA', message: 'Indique le chemin complet du dossier.' });
+            return;
+          }
+          if (path === '/ui/admin/projects/remove') {
+            const removed = admin.removeProject(parsed.data.dir);
+            json(res, removed ? 200 : 404, { ok: removed });
+            return;
+          }
+          try {
+            json(res, 200, { ok: true, dir: admin.addProject(parsed.data.dir) });
+          } catch (error) {
+            const code = error instanceof Error && error.message.startsWith('E_') ? error.message : 'E_PROJECT_PATH';
+            json(res, 400, {
+              error: code,
+              message:
+                code === 'E_PROJECT_LIMIT'
+                  ? '50 dossiers au plus.'
+                  : 'Dossier introuvable : indique le chemin complet d’un dossier de projet (ni la racine, ni ton dossier personnel).',
+            });
+          }
+          return;
+        }
+        if (path === '/ui/admin/internet' && admin.internet && admin.setInternet) {
+          if (method === 'GET') {
+            json(res, 200, admin.internet());
+            return;
+          }
+          const parsed = InternetSettingsSchema.safeParse(body);
+          if (!parsed.success) {
+            json(res, 400, {
+              error: 'E_SCHEMA',
+              message:
+                'Adresse de relais invalide : elle doit commencer par https:// (http seulement sur ce Mac, pour un essai).',
+            });
+            return;
+          }
+          json(res, 200, await admin.setInternet(parsed.data));
+          return;
+        }
+        if (method === 'POST' && path === '/ui/admin/onboarding') {
+          if (!admin.onboardingApply) {
+            json(res, 404, { error: 'not_found' });
+            return;
+          }
+          const parsed = OnboardingBody.safeParse(body);
+          if (!parsed.success) {
+            json(res, 400, { error: 'E_SCHEMA' });
+            return;
+          }
+          json(res, 200, { results: admin.onboardingApply(parsed.data.selections) });
+          return;
+        }
+        if (method === 'POST' && path === '/ui/admin/share') {
+          const parsed = ShareBody.safeParse(body);
+          if (!parsed.success) {
+            json(res, 400, { error: 'E_SCHEMA' });
+            return;
+          }
+          json(res, 200, await admin.share(parsed.data));
+          return;
+        }
+        const field = (name: string): string => {
+          const value = (body as Record<string, unknown>)[name];
+          return typeof value === 'string' ? value : '';
+        };
+        if (method === 'POST' && path === '/ui/admin/unshare') {
+          json(res, 200, { ok: admin.unshare(field('capabilityId')) });
+          return;
+        }
+        if (method === 'POST' && path === '/ui/admin/install') {
+          if (admin.onboardingApply) {
+            json(res, 409, { error: 'E_PREVIEW_REQUIRED' });
+            return;
+          }
+          json(res, 200, admin.install(field('agent'), (body as { remove?: unknown }).remove === true));
+          return;
+        }
+        if (method === 'POST' && path === '/ui/admin/connect') {
+          json(res, 200, await admin.connect(field('agent'), field('server')));
+          return;
+        }
+        if (method === 'POST' && path === '/ui/admin/link') {
+          const request = LinkRequestSchema.safeParse({
+            sessionId: field('session'),
+            clientId: field('clientId'),
+            clientName: field('client'),
+            redirectHost: field('redirect'),
+          });
+          if (!request.success) {
+            json(res, 400, { error: 'E_SCHEMA' });
+            return;
+          }
+          json(res, 200, await admin.link(field('gateway'), request.data));
+          return;
+        }
+        if (method === 'POST' && path === '/ui/admin/unlink') {
+          json(res, 200, { ok: admin.unlink(field('gateway'), field('client')) });
+          return;
+        }
+        if (method === 'POST' && path === '/ui/admin/team') {
+          json(res, 200, admin.createTeam(field('name')));
+          return;
+        }
+      } catch (error) {
+        const code = (error as { code?: unknown } | null)?.code;
+        json(res, 400, {
+          error: 'E_ADMIN',
+          message: error instanceof Error ? error.message.slice(0, 300) : 'failed',
+          ...(typeof code === 'string' && code.startsWith('E_SHARE_') ? { code } : {}),
+        });
+        return;
+      }
+      json(res, 404, { error: 'not_found' });
       return;
     }
     if (method === 'GET' && path === '/ui/team') {
@@ -204,8 +569,79 @@ export function startLocalApi(options: LocalApiOptions): Promise<LocalApi> {
       json(res, done ? 200 : 404, { ok: done });
       return;
     }
+    // The owner answers by hand (T4.3): checked by the engine before anything leaves, refused with a stable code.
+    if (method === 'POST' && path === '/ui/answer') {
+      let raw: string;
+      try {
+        raw = await readBody(req, MAX_ANSWER_BODY_BYTES);
+      } catch {
+        json(res, 413, { ok: false, code: 'E_TOO_LARGE', message: 'Réponse trop volumineuse pour être envoyée.' });
+        return;
+      }
+      try {
+        let body: unknown;
+        try {
+          body = JSON.parse(raw);
+        } catch {
+          throw new DropError('E_SCHEMA', 'Réponse illisible : recharge le panneau et réessaie.');
+        }
+        const { dropId, ...answer } =
+          typeof body === 'object' && body !== null ? (body as Record<string, unknown>) : {};
+        const done = await engine.answer(typeof dropId === 'string' ? dropId : '', answer);
+        json(res, done ? 200 : 404, { ok: done });
+      } catch (error) {
+        if (!isDropError(error)) throw error;
+        json(res, 400, { ok: false, code: error.code, message: error.message });
+      }
+      return;
+    }
+    // « Ce que je publie » (T4.4): list, publish, edit and retire facts; refusals carry a stable code.
+    if (path === '/ui/facts' || path.startsWith('/ui/facts/')) {
+      if (method === 'GET' && path === '/ui/facts') {
+        json(res, 200, {
+          facts: engine.facts(),
+          peers: engine.peers().map((peer) => ({ nodeId: peer.nodeId, displayName: peer.displayName })),
+        });
+        return;
+      }
+      const target = /^\/ui\/facts\/([0-9a-f-]{36})(\/retire)?$/.exec(path);
+      if (method !== 'POST' || (path !== '/ui/facts' && !target)) {
+        json(res, 404, { error: 'not_found' });
+        return;
+      }
+      try {
+        if (target?.[2]) {
+          const done = await engine.retireFact(target[1] ?? '');
+          json(res, done ? 200 : 404, { ok: done });
+          return;
+        }
+        let body: unknown;
+        try {
+          body = JSON.parse(await readBody(req));
+        } catch {
+          throw new DropError('E_SCHEMA', 'Fait illisible : recharge le panneau et réessaie.');
+        }
+        const fact = target ? await engine.editFact(target[1] ?? '', body) : await engine.publishFact(body);
+        json(res, fact ? 200 : 404, fact ? { ok: true, fact } : { ok: false });
+      } catch (error) {
+        if (!isDropError(error)) throw error;
+        json(res, 400, { ok: false, code: error.code, message: error.message });
+      }
+      return;
+    }
     if (method === 'POST' && path === '/ui/invite') {
       json(res, 200, { code: await engine.invite(options.relayUrl) });
+      return;
+    }
+    // Shows who invites before anything is sent: the panel asks « Rejoindre » first (T4.14).
+    if (method === 'POST' && path === '/ui/pair/preview') {
+      const code = parseForm(await readBody(req)).get('code') ?? '';
+      try {
+        const invite = decodeInvite(code);
+        json(res, 200, { displayName: invite.displayName, ...(invite.team ? { team: invite.team.name } : {}) });
+      } catch {
+        json(res, 400, { error: 'E_INVITE' });
+      }
       return;
     }
     if (method === 'POST' && path === '/ui/pair') {

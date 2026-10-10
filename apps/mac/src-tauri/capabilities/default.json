@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "The panel is a page served by the local drop node; it needs no Tauri command.",
+  "windows": ["panel"],
+  "permissions": ["core:default", "deep-link:default"]
+}

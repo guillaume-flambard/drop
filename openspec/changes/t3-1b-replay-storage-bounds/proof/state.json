@@ -1,0 +1,90 @@
+{
+  "change": "t3-1b-replay-storage-bounds",
+  "phase": "VERIFYING",
+  "status": "VERIFYING_FORMAL_REVIEW_PENDING",
+  "requirements": [
+    "REQ-1 UUIDv7 for new drop requests",
+    "REQ-2 bounded durable anti-replay across restart and clock rollback",
+    "REQ-3 per-node relay rate across reconnect"
+  ],
+  "acceptance": {
+    "protocol_uuidv7": "passed",
+    "protocol_uppercase_canonicalization": "passed",
+    "node_expiry_future": "passed",
+    "node_restart_rollback": "passed",
+    "node_saturation": "passed",
+    "node_corruption": "passed",
+    "node_case_replay_and_migration": "passed",
+    "node_foreign_lock_age": "passed",
+    "node_missing_clock_after_migration": "passed",
+    "node_missing_marker_directory": "passed_full_suite",
+    "node_partial_marker_loss": "passed_full_suite",
+    "node_missing_version_after_purge": "passed_full_suite",
+    "relay_malformed_frame_quota": "passed",
+    "relay_oversized_frame_quota": "passed",
+    "relay_websocket_payload_limit_quota": "passed",
+    "relay_websocket_invalid_utf8_quota": "passed",
+    "node_duplicate_review_decision": "passed_full_suite",
+    "node_review_expiry_while_sending": "passed_full_suite",
+    "relay_reconnect": "passed",
+    "relay_uncorrelated_rate_close": "passed_full_suite",
+    "relay_decoy_id_rate_close": "passed_full_suite",
+    "replay_clock_temp_cleanup": "passed_full_suite"
+  },
+  "workGraph": {
+    "P0-1": "DONE",
+    "P0-2": "DONE",
+    "P0-3": "DONE",
+    "P1-1": "DONE",
+    "P1-2": "VERIFYING",
+    "P1-3": "TODO",
+    "P1-4": "DONE",
+    "P1-5": "DONE",
+    "P1-6": "DONE",
+    "P1-7": "DONE",
+    "P1-8": "DONE",
+    "P1-9": "DONE",
+    "P1-10": "DONE",
+    "P1-11": "DONE",
+    "P1-12": "DONE",
+    "P1-13": "DONE",
+    "P1-14": "DONE"
+  },
+  "risks": [
+    {
+      "id": "R-1",
+      "severity": "high",
+      "status": "mitigated_pending_final_review",
+      "description": "Replay and quota bypasses fixed, including ws pre-message errors and concurrent review-decision delivery; foreign lock age takeover and missing clock after migration fail closed, pending formal scoped review"
+    },
+    {
+      "id": "R-2",
+      "severity": "high",
+      "status": "mitigated_in_T3.1c_pending_formal_closure",
+      "description": "T3.1c bounds executing and outbound with tests; CSO finding 369ec22b77cbf3bf1de4e4b432896a67 has static mitigation evidence, but its partial recheck cannot formally close it before pilot T3.5"
+    },
+    {
+      "id": "R-3",
+      "severity": "high",
+      "status": "tracked_in_T3.1d",
+      "description": "A relay E_RATE refusal may leave an executor result unsent while a receipt claims delivery; T3.1d explicitly owns retryable E_RATE and outbound quota behavior before the pilot"
+    }
+  ],
+  "verification": {
+    "targetedTests": "passed",
+    "lint": "passed",
+    "typecheck": "passed",
+    "fullTests": "passed_353_of_353_current_worktree",
+    "openspecValidate": "passed",
+    "guard": "passed_436_criteria_161_linked_baseline_plus0_minus0",
+    "review": "isolated_gstack_cycles_found_missing_marker_directory_partial_marker_loss_and_missing_version;_all_red_green_fixed;_three_edit_cycle_limit_reached_before_final_zero_edit_pass;_formal_review_pending",
+    "cso": "run_1791572557316-4a4997eecdb7bea6_finished_partial_snapshot_only_no_security_domains_assessed;_prior_HIGH_memory_finding_remains_open_in_T3.1c"
+  },
+  "remaining": [
+    "Formal gstack /review bound to final T3.1b diff b0d9cb5; final zero-edit pass remains after the three-cycle review limit",
+    "T3.1c mitigates HIGH memory availability finding; formal closure is still blocked by partial CSO coverage and blocks T3.5, not the T3.1b replay-store contract",
+    "T3.1d owns relay E_RATE retry and outbound quota after the isolated adversarial pass identified possible result loss",
+    "CSO completeness remains partial: Semgrep Docker socket unavailable and snapshot exclusions",
+    "Archive and mark T3.1b done only after required review validates its own contract"
+  ]
+}

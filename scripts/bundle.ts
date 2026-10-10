@@ -2,17 +2,19 @@
 // (https://nodejs.org/api/typescript.html, "Type stripping in dependencies"), so a distributed drop is one JS file each.
 //   dist/drop.mjs       the node CLI and daemon (`drop serve`, `drop install`…)
 //   dist/drop-mcp.mjs   the requester MCP server that agents start
+//   dist/drop-relay.mjs the internally hosted relay
 //   dist/drop.mcpb      a Claude Desktop bundle around drop-mcp.mjs (https://github.com/anthropics/mcpb, manifest 0.3)
 // Development keeps running the .ts sources directly (D16).
-// Usage: node scripts/bundle.ts [--mcpb]
+// Usage: node scripts/bundle.ts [--mcpb] [--out <dir>] (default dist/; the tests bundle into a temporary directory)
 import { execFileSync } from 'node:child_process';
 import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const dist = join(root, 'dist');
+const outIndex = process.argv.indexOf('--out');
+const dist = outIndex > 0 ? resolve(process.argv[outIndex + 1] ?? '') : join(root, 'dist');
 const version = (
   JSON.parse(readFileSync(join(root, 'packages', 'node', 'package.json'), 'utf8')) as { version: string }
 ).version;
@@ -43,7 +45,12 @@ await build({
   entryPoints: [join(root, 'packages', 'requester-mcp', 'src', 'index.ts')],
   outfile: join(dist, 'drop-mcp.mjs'),
 });
-process.stdout.write(`dist/drop.mjs and dist/drop-mcp.mjs (version ${version})\n`);
+await build({
+  ...common,
+  entryPoints: [join(root, 'packages', 'relay', 'src', 'cli.ts')],
+  outfile: join(dist, 'drop-relay.mjs'),
+});
+process.stdout.write(`${dist}/drop.mjs, ${dist}/drop-mcp.mjs and ${dist}/drop-relay.mjs (version ${version})\n`);
 
 if (process.argv.includes('--mcpb')) {
   const staging = join(dist, 'mcpb');

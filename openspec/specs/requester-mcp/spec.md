@@ -156,22 +156,72 @@ README du package `packages/requester-mcp`.
 - **THEN** Codex voit et appelle `list_capabilities`, `request_drop` et `get_drop_result`
 
 ### Requirement: Installation dans les agents
-`drop install <agent>|all` SHALL ajouter le serveur `drop` à Claude Code et Codex par leur propre CLI (`claude mcp add
---scope user`, `codex mcp add`), et à Cursor et Claude Desktop en ajoutant la seule entrée `drop` à leur fichier
-`mcpServers` après une sauvegarde unique ; `drop uninstall` MUST ne retirer que cette entrée (T2.5, D29). Le serveur
-installé est le fichier assemblé `drop-mcp.mjs`, copié dans `DROP_HOME/bin` et lancé par le chemin absolu de node.
+`drop install <agent>|all` SHALL ajouter le serveur `drop` par les CLI officielles pour Claude Code et Codex, et par `mcpServers.drop` pour Cursor et Claude Desktop. Il MUST refuser un conflit et conserver une sauvegarde privée bornée avant écriture. `drop uninstall` MUST retirer seulement l'entrée reconnue. Le serveur assemblé `drop-mcp.mjs` SHALL être copié atomiquement dans `DROP_HOME/bin` et lancé par le chemin absolu de Node (T2.5, T3.3, D29, D45).
 
 #### Scenario: CLI officielles
-<!-- openspec-guard:test="installing drop in the coding agents (T2.5) > uses the official CLI of Claude Code and Codex, with the bundled server copied into DROP_HOME" -->
+<!-- openspec-guard:test="local agent onboarding (T3.3) > uses each CLI without a preceding remove and verifies its resulting configuration" -->
 - **WHEN** on lance `drop install claude_code` puis `drop install codex`
-- **THEN** drop est déclaré par `claude mcp add --scope user drop` et `codex mcp add drop`, avec `DROP_AGENT` et `DROP_HOME`
+- **THEN** drop est déclaré par `claude mcp add --scope user drop` et `codex mcp add drop`, avec `DROP_AGENT` et `DROP_HOME`, sans retrait préventif
 
 #### Scenario: Fichiers de Cursor et Claude Desktop préservés
-<!-- openspec-guard:test="installing drop in the coding agents (T2.5) > adds and removes only the drop entry in the Cursor and Claude Desktop files, after one backup" -->
-- **WHEN** on installe puis désinstalle drop dans Cursor dont le fichier déclare déjà d'autres serveurs
-- **THEN** les autres serveurs et réglages restent, une sauvegarde `.bak-drop` est faite une fois, et seule l'entrée `drop` part
+<!-- openspec-guard:test="local agent onboarding (T3.3) > AC-CONNECT-06 removes only the owned entry after a third-party addition" -->
+- **WHEN** on installe puis désinstalle drop dans un fichier qui déclare déjà d'autres serveurs ou reçoit un ajout tiers
+- **THEN** les autres serveurs et réglages restent, une sauvegarde privée bornée est conservée, et seule l'entrée `drop` part
 
 #### Scenario: Lien d'installation Cursor
-<!-- openspec-guard:test="installing drop in the coding agents (T2.5) > builds a Cursor install link that carries the server entry" -->
+<!-- openspec-guard:test="agent installation command construction (T2.5) > builds a Cursor install link with the server entry" -->
 - **WHEN** on lance `drop install cursor --link`
 - **THEN** on obtient un lien `cursor://anysphere.cursor-deeplink/mcp/install` dont `config` est l'entrée du serveur en base64
+
+### Requirement: Fichiers assemblés autonomes
+Le paquet SHALL séparer sa bibliothèque (`src/lib.ts`, ce qu'importent le Node et la passerelle, sans effet de bord)
+de son point d'entrée (`src/index.ts`, qui démarre le serveur). Dans `drop.mjs`, où `import.meta.main` vaut vrai pour
+tout le fichier, le serveur du demandeur MUST NOT démarrer ; `drop-mcp.mjs` MUST le démarrer (T2.18).
+
+#### Scenario: Premier lancement du fichier assemblé
+<!-- openspec-guard:test="the bundled files that ship outside the repo (D29, T2.18) > drop.mjs runs its own command on a fresh DROP_HOME, without starting the requester MCP server" -->
+- **WHEN** on lance `drop.mjs init` puis `drop.mjs help` dans un `DROP_HOME` neuf, puis `drop-mcp.mjs`
+- **THEN** les deux commandes réussissent, et `drop-mcp.mjs` répond à `initialize` comme serveur MCP `drop`
+
+### Requirement: Question à plusieurs personnes
+Le serveur SHALL exposer `request_drops({ purpose, requests: { capability_id, input }[] })` (2 à 10 demandes) et
+`get_drop_results({ drop_ids, wait_seconds })` (T2.10, D28). `request_drops` MUST valider toutes les entrées avant
+d'envoyer quoi que ce soit ; si une seule est invalide, rien ne part. `get_drop_results` MUST rendre chaque réponse
+reçue encadrée comme donnée avec son propriétaire, et l'état des autres (en attente, refusée, expirée).
+
+#### Scenario: Tout ou rien à l'envoi
+<!-- openspec-guard:test="requester MCP tools > fan-out: one question to several capabilities, all checked before any is sent (T2.10)" -->
+- **WHEN** l'agent envoie une question à deux capacités dont une est inconnue
+- **THEN** rien n'est envoyé et l'agent apprend laquelle pose problème ; avec deux capacités valides, les deux partent avec le même `purpose`
+
+#### Scenario: Réponses assemblables
+<!-- openspec-guard:test="requester MCP tools > fan-out results: each answer framed as data with its owner, the others with their state (T2.10)" -->
+- **WHEN** une réponse est reçue, une autre attend l'accord et une troisième est refusée
+- **THEN** l'agent reçoit « 1 réponse(s) reçue(s) sur 3 », la réponse dans `<drop_result>` avec son propriétaire, puis l'état des deux autres
+
+### Requirement: Demander à mon équipe
+Le serveur SHALL exposer `ask_team({ question, why? })` : une question en langage courant, sans identifiant de capacité
+ni schéma (T2.12, D32), pour les personnes qui ne connaissent pas les agents. Le Node choisit les destinataires ; l'outil
+MUST dire à qui la question est partie et pourquoi, ou, si personne ne correspond, ne rien envoyer et dire qui peut aider.
+
+#### Scenario: Destinataires expliqués
+<!-- openspec-guard:test="requester MCP tools > ask_team tells who was asked and why, or who can help when nothing matches (T2.12)" -->
+- **WHEN** la question est routée vers Julie (Figma) et Natha (GitHub, hors ligne)
+- **THEN** l'agent apprend qui a reçu la question, pourquoi, que Natha est hors ligne, et les `drop_ids` à suivre
+- **AND** quand rien ne correspond, rien n'est envoyé et l'agent reçoit la liste de qui peut aider
+
+### Requirement: Présentation d'un fait publié
+Le MCP demandeur SHALL présenter un résultat portant l'empreinte de `FACT_OUTPUT_SCHEMA` comme un fait publié, avec son propriétaire et sa fin de validité, toujours encadré comme une donnée.
+
+#### Scenario: AC: fait présenté
+<!-- openspec-guard:test="published facts (T4.4) > presents a fact with its owner and end of validity" -->
+- **WHEN** un agent lit un fait publié par Julie valable jusqu'au 9 novembre
+- **THEN** le texte commence par « Fait publié par Julie » et donne la date de fin
+
+### Requirement: Agent inconnu ramené à other
+Le MCP demandeur SHALL transmettre comme agent la valeur de `DROP_AGENT` si elle fait partie des agents acceptés, et `other` sinon.
+
+#### Scenario: AC: agent inconnu
+<!-- openspec-guard:test="mcp clients (T4.5) > reports an unknown DROP_AGENT as other" -->
+- **WHEN** `DROP_AGENT` vaut `zed`, puis `chatgpt`
+- **THEN** les demandes portent `zed`, puis `other`

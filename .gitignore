@@ -1,6 +1,7 @@
 node_modules/
 dist/
 coverage/
+.gstack/
 *.tsbuildinfo
 .DS_Store
 
@@ -11,3 +12,13 @@ coverage/
 *.key
 id_ed25519*
 .npmrc
+
+# Mac app (T2.4): build output, generated schemas, resources copied by scripts/build-mac.ts, unused icon sets
+apps/mac/src-tauri/target/
+apps/mac/src-tauri/gen/
+apps/mac/src-tauri/resources/
+apps/mac/src-tauri/icons/android/
+apps/mac/src-tauri/icons/ios/
+apps/mac/src-tauri/icons/Square*.png
+apps/mac/src-tauri/icons/StoreLogo.png
+apps/mac/src-tauri/icons/64x64.png

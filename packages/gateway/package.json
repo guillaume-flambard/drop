@@ -1,0 +1,19 @@
+{
+  "name": "@drop/gateway",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "bin": {
+    "drop-gateway": "./src/cli.ts"
+  },
+  "dependencies": {
+    "@drop/protocol": "workspace:*",
+    "@drop/relay": "workspace:*",
+    "@drop/requester-mcp": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "zod": "^4.6.5"
+  }
+}

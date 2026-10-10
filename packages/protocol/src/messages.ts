@@ -4,14 +4,38 @@ import { CapabilityIdSchema, SignedCapabilityCardSchema } from './capability.ts'
 import { NodeIdSchema, OwnerKindSchema } from './identity.ts';
 import { DropStateSchema } from './lifecycle.ts';
 import { ReceiptSchema } from './receipt.ts';
+import { HumanAnswerSchema } from './human-answer.ts';
+import { IrohAddrSchema } from './iroh.ts';
 
 const DropId = z.uuid();
+// overwrite keeps the UUIDv7 pattern in the exported JSON Schema, unlike refine/transform.
+const NewDropId = z.uuidv7().overwrite((id) => id.toLowerCase());
 const Timestamp = z.number().int().nonnegative();
+
+/** The thirteen MCP clients of D55 and `other` (T4.5, D66): which agent asked, shown on the consent card. */
+export const REQUESTER_AGENTS = [
+  'claude_code',
+  'claude_desktop',
+  'cursor',
+  'codex',
+  'opencode',
+  'gemini_cli',
+  'devin_desktop',
+  'zed',
+  'goose',
+  'vscode',
+  'cline',
+  'roo_code',
+  'jetbrains',
+  'other',
+] as const;
+export const RequesterAgentSchema = z.enum(REQUESTER_AGENTS);
 
 export const RequestedBySchema = z.object({
   nodeId: NodeIdSchema,
   displayName: z.string().min(1).max(80),
-  agent: z.enum(['claude_code', 'codex', 'cursor', 'other']),
+  // An agent this node does not know yet (a newer peer) reads as `other`, never as an invalid request (T4.5 review).
+  agent: RequesterAgentSchema.catch('other'),
 });
 export type RequestedBy = z.infer<typeof RequestedBySchema>;
 
@@ -56,6 +80,7 @@ export const DropErrorCodeSchema = z.enum([
   'E_DENIED',
   'E_NOT_NOW',
   'E_EXPIRED',
+  'E_RATE',
   'E_BUDGET',
   'E_OUTPUT_INVALID',
   'E_SECRET_DETECTED',
@@ -76,16 +101,44 @@ export const MessageSchema = z.discriminatedUnion('type', [
     displayName: z.string().min(1).max(80),
     ownerKind: OwnerKindSchema,
   }),
+  // A node's local-network discovery key, sent to each of its peers (T4.2c, D67): 32 bytes, base64url.
+  z.object({ type: z.literal('lan_key'), key: z.string().regex(/^[A-Za-z0-9_-]{43}$/) }),
+  // A node's iroh addresses, sent to each of its peers at start and on change (T4.2b, D68).
+  z.object({ type: z.literal('iroh_addr'), ...IrohAddrSchema.shape }),
   z.object({
     type: z.literal('team_roster'),
     team: TeamSchema,
     members: z.array(TeamMemberSchema).max(200),
   }),
+  // A user's own assistant (Claude, ChatGPT) reaching their node through the gateway (T2.13, D31).
+  // `link_grant` repeats what the user saw in the app (the assistant, its OAuth client, the domain the answer returns
+  // to): the gateway binds the session only if all of it is the session's own, so a forged link cannot pass for Claude.
+  z.object({
+    type: z.literal('link_grant'),
+    sessionId: z.string().regex(/^[A-Za-z0-9_-]{16,64}$/),
+    clientId: z.string().regex(/^[A-Za-z0-9_-]{8,64}$/),
+    clientName: z.string().min(1).max(80),
+    redirectHost: z.string().min(1).max(253),
+  }),
+  // `clientId` names the linked assistant the call comes from, so removing one link cuts off that assistant only.
+  z.object({
+    type: z.literal('agent_call'),
+    callId: z.string().regex(/^[A-Za-z0-9_-]{8,64}$/),
+    clientId: z.string().regex(/^[A-Za-z0-9_-]{8,64}$/),
+    tool: z.enum(['ask_team', 'get_drop_results', 'list_capabilities']),
+    args: z.record(z.string(), z.unknown()),
+  }),
+  z.object({
+    type: z.literal('agent_reply'),
+    callId: z.string().regex(/^[A-Za-z0-9_-]{8,64}$/),
+    text: z.string().max(60_000),
+    isError: z.boolean(),
+  }),
   z.object({ type: z.literal('catalog_request') }),
   z.object({ type: z.literal('catalog'), cards: z.array(SignedCapabilityCardSchema) }),
   z.object({
     type: z.literal('drop_request'),
-    dropId: DropId,
+    dropId: NewDropId,
     capabilityId: CapabilityIdSchema,
     capabilityVersion: z.string(),
     input: z.unknown(),
@@ -109,6 +162,8 @@ export const MessageSchema = z.discriminatedUnion('type', [
     decision: z.enum(['allow_once', 'deny', 'not_now']),
     decidedAt: Timestamp,
   }),
+  // In place of approval_decision: the approver answers by hand, which consents to this request only (T4.3).
+  z.object({ type: z.literal('human_answer'), dropId: DropId, answer: HumanAnswerSchema, decidedAt: Timestamp }),
   z.object({ type: z.literal('review_request'), dropId: DropId, output: z.unknown(), expiresAt: Timestamp }),
   z.object({
     type: z.literal('review_decision'),

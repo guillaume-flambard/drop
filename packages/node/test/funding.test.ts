@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import type { Funding } from '@drop/protocol';
 import type { CapabilityImpl } from '@drop/runner';
@@ -53,6 +53,24 @@ function fakeFunder(): Funder & { released: string[] } {
 }
 
 describe('the requester pays with a capped key (T2.3, D27)', () => {
+  it('refuses unsolicited funding in an owner-paid private profile before consent', async () => {
+    const seen: (Funding | undefined)[] = [];
+    const m = (mesh = await startMesh([keyWitness(seen)], {
+      requester: { funder: fakeFunder() },
+      executor: { privateProfile: true, payer: 'owner' },
+    }));
+    const drop = await m.requester.engine.requestDrop({
+      capabilityId: 'test.paid_answer',
+      input: { question: 'État du projet ?' },
+      purpose: 'Test privé',
+      agent: 'codex',
+    });
+    await until(() => m.requester.engine.drop(drop.dropId)?.error?.code === 'E_DENIED');
+    expect(m.approver.engine.pending()).toEqual([]);
+    expect(seen).toEqual([]);
+    expect(JSON.stringify(m.executor.store.receiptList)).not.toContain(KEY);
+  });
+
   it('sends the key to the executor only, shows who pays on the card, and deletes the key when the drop ends', async () => {
     const seen: (Funding | undefined)[] = [];
     const funder = fakeFunder();
@@ -156,5 +174,120 @@ describe('OpenRouter capped keys', () => {
     });
     expect(await refusing.mint('d')).toBeUndefined();
     expect(codes).toEqual(['E_FUNDING_NO_MANAGEMENT_KEY', 'E_FUNDING_HTTP_401']);
+  });
+
+  it('retains a failed key deletion and retries it without another drop', async () => {
+    let now = Date.parse('2026-10-08T16:00:00.000Z');
+    let deletes = 0;
+    const codes: string[] = [];
+    const funder = openRouterFunder(config, {
+      env: { OPENROUTER_MANAGEMENT_KEY: 'mgmt-key' },
+      now: () => now,
+      log: (code) => codes.push(code),
+      fetch: (_input, init) => {
+        if (init?.method === 'POST') return Promise.resolve(Response.json({ key: KEY, data: { hash: 'abc123' } }));
+        deletes += 1;
+        return Promise.resolve(new Response(null, { status: deletes === 1 ? 503 : 204 }));
+      },
+    });
+    expect(await funder.mint('drop-1')).toBeDefined();
+    await expect(funder.release('drop-1')).rejects.toThrow('E_FUNDING_RELEASE');
+    expect(deletes).toBe(1);
+    await funder.retryPending?.();
+    expect(deletes).toBe(1);
+    now += 30_000;
+    await funder.retryPending?.();
+    expect(deletes).toBe(2);
+    await funder.release('drop-1');
+    expect(deletes).toBe(2);
+    expect(codes).toContain('E_FUNDING_RELEASE_HTTP_503');
+  });
+
+  it('retries a failed deletion on node ticks after relay refusal', async () => {
+    let deletes = 0;
+    const funder = openRouterFunder(config, {
+      env: { OPENROUTER_MANAGEMENT_KEY: 'mgmt-key' },
+      now: () => mesh?.clock.now ?? Date.now(),
+      fetch: (_input, init) => {
+        if (init?.method === 'POST') return Promise.resolve(Response.json({ key: KEY, data: { hash: 'abc123' } }));
+        deletes += 1;
+        return Promise.resolve(new Response(null, { status: deletes === 1 ? 503 : 204 }));
+      },
+    });
+    const m = (mesh = await startMesh([keyWitness([])], { requester: { funder } }));
+    vi.spyOn(m.requester.transport, 'send').mockResolvedValue('E_RATE');
+    await expect(
+      m.requester.engine.requestDrop({
+        capabilityId: 'test.paid_answer',
+        input: { question: 'État du projet ?' },
+        purpose: 'Test privé',
+        agent: 'codex',
+      }),
+    ).rejects.toMatchObject({ code: 'E_RATE' });
+    expect(m.requester.engine.memoryStats().outbound).toBe(0);
+    expect(deletes).toBe(1);
+    m.clock.now += 30_000;
+    await m.requester.engine.tick();
+    expect(deletes).toBe(2);
+  });
+
+  it('refuses to mint beyond the pending-key cap before contacting the provider', async () => {
+    let posts = 0;
+    let now = Date.parse('2026-10-08T16:00:00.000Z');
+    const funder = openRouterFunder(config, {
+      env: { OPENROUTER_MANAGEMENT_KEY: 'mgmt-key' },
+      now: () => now,
+      fetch: () => {
+        posts += 1;
+        return Promise.resolve(Response.json({ key: KEY, data: { hash: `hash-${String(posts)}` } }));
+      },
+    });
+    for (let index = 0; index < 8_192; index += 1) expect(await funder.mint(`drop-${String(index)}`)).toBeDefined();
+    await expect(funder.mint('overflow')).rejects.toMatchObject({ code: 'E_RATE' });
+    expect(posts).toBe(8_192);
+    now += 2 * 3_600_000 + 1;
+    expect(await funder.mint('after-expiry')).toBeDefined();
+    expect(posts).toBe(8_193);
+  }, 60_000);
+
+  it('reserves pending-key capacity before concurrent provider calls and refuses duplicate drop ids', async () => {
+    const replies: Array<(response: Response) => void> = [];
+    let posts = 0;
+    const funder = openRouterFunder(config, {
+      env: { OPENROUTER_MANAGEMENT_KEY: 'mgmt-key' },
+      maxPendingKeys: 2,
+      fetch: () => {
+        posts += 1;
+        return new Promise<Response>((resolve) => replies.push(resolve));
+      },
+    });
+    const first = funder.mint('drop-1');
+    const second = funder.mint('drop-2');
+    const third = funder.mint('drop-3');
+    const duplicate = funder.mint('drop-1');
+    expect(posts).toBe(2);
+    await expect(third).rejects.toMatchObject({ code: 'E_RATE' });
+    await expect(duplicate).rejects.toMatchObject({ code: 'E_RATE' });
+    replies[0]?.(Response.json({ key: KEY, data: { hash: 'hash-1' } }));
+    replies[1]?.(Response.json({ key: KEY, data: { hash: 'hash-2' } }));
+    expect(await first).toBeDefined();
+    expect(await second).toBeDefined();
+  });
+
+  it('frees a reserved key slot when the provider rejects creation', async () => {
+    let posts = 0;
+    const funder = openRouterFunder(config, {
+      env: { OPENROUTER_MANAGEMENT_KEY: 'mgmt-key' },
+      maxPendingKeys: 1,
+      fetch: () => {
+        posts += 1;
+        return Promise.resolve(
+          posts === 1 ? new Response(null, { status: 503 }) : Response.json({ key: KEY, data: { hash: 'hash-2' } }),
+        );
+      },
+    });
+    expect(await funder.mint('drop-1')).toBeUndefined();
+    expect(await funder.mint('drop-2')).toBeDefined();
+    expect(posts).toBe(2);
   });
 });

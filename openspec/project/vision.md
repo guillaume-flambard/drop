@@ -1,51 +1,57 @@
 # Vision et périmètre
 
-> Contexte descriptif, lu par les agents avant chaque change. Les exigences normatives vivent dans
-> `openspec/specs/<capacité>/spec.md` ; en cas d'écart, la spec fait foi.
+Résumé de la vision. La référence descriptive complète est le [PRD](../../docs/product/PRD.md), avec ses statuts existant, visé et hypothèse. Cap adopté le 9 octobre 2026 (D34 à D38), précisé le 10 octobre (D47 à D58). Le [bilan](../../docs/AVANCEMENT.md) sépare le prototype vérifié de ce qui reste à construire. Les contrats normatifs vivent dans `openspec/specs/`.
 
-## Le produit en une phrase
+## Le produit
 
-Quand l'agent d'une personne est bloqué parce qu'une ressource appartient à quelqu'un d'autre, il envoie une
-**demande typée** à une **capacité** publiée par ce propriétaire ; le propriétaire **autorise une fois** ; la capacité
-s'exécute **chez lui**, avec ses accès ; seul un **résultat typé et filtré** revient. Aucun accès ne change de main.
+**La réponse, pas l'accès.** Un agent pose une question bornée, le propriétaire de la source décide, puis seule la réponse validée revient, dans l'infrastructure du client. drop implémente A2A et MCP et s'y place comme couche de consentement humain ; A2A est un standard existant, pas un protocole à remplacer.
 
-UX de référence : AirDrop. `Guillaume needs → Julie can help → Ask → Allow once → Result.`
+Promesse publique (D52), toujours avec sa limite : les données restent sur la machine du propriétaire, seule une réponse approuvée en sort, chiffrée, vers la personne qui l'a demandée. drop contrôle ce qui passe par drop ; un connecteur ou un modèle choisi par le propriétaire peut avoir ses propres flux.
+
+## Pour qui
+
+Décision D48. Premiers essais : Guillaume puis deux amis techniques dans des contextes différents. Conception selon les exigences d'une entreprise souveraine (A2A, aucune dépendance externe). Adoption visée par les petites équipes et les PME. Le demandeur est technique ; le propriétaire de la donnée peut ne pas l'être, et peut ne pas avoir d'agent (D49). Rien n'est encore validé avec de vrais utilisateurs ; D24 conditionne toujours le pilote.
+
+## Expérience cible
+
+- Mac d'abord : une icône discrète de barre de menus, les consentements et les demandes en cours ; Windows puis Linux.
+- Deux confirmations pour raccorder ses agents ; quatre adaptateurs livrés, treize clients visés (D55). Aucun partage implicite.
+- Une échelle d'échanges (D50) : fait publié, petite question sur un contexte déclaré, capacité, tâche déléguée avec jalons. La conversation libre entre agents est exclue.
+- Un contexte partagé décentralisé (D51) : chaque fait reste chez son propriétaire.
+- Trois modes de connexion (D53) : réseau local, iroh sur Internet, relais d'entreprise ; aucun relais de secours par défaut.
+- Le modèle déjà disponible chez le client passe en premier ; les capacités déterministes n'en demandent aucun.
 
 ## Principes
 
-1. **Get the answer, not the access.** Ne jamais partager un accès quand partager une réponse suffit.
-2. **La capacité est un contrat typé, pas une conversation.** Entrée, sortie, outils autorisés, sensibilité, règle
-   d'approbation : tout est déclaré à l'avance.
-3. **La sécurité est aussi dans la sémantique.** On conçoit les capacités pour que la question dangereuse ne puisse
-   pas être posée (`customer.segment` plutôt que `is_arr_above(x)`). Les seuils appartiennent au propriétaire.
-4. **Le LLM travaille à l'intérieur d'un cadre déterministe.** Il ne choisit ni ses outils ni ce qui sort.
-5. **Relais d'abord, LAN en optimisation.** Le produit marche à 2 000 km. Bonjour n'est qu'un raccourci, plus tard.
-6. **Consentement lisible en 3 secondes.** Un verbe, un objet, ce qui sort. Jamais un scope OAuth ni un nom d'outil MCP.
+1. Une capacité fixe entrée, sortie, outils, budget et approbateur avant la demande. Le LLM ne décide jamais des permissions.
+2. Une requête distante est une donnée non fiable. Autorisation et contrôles de sortie restent déterministes.
+3. Le profil privé fonctionne dans le périmètre du client. Sans serveur externe imposé ne signifie pas sans serveur.
+4. Aucune sortie réseau non autorisée ni repli cloud silencieux. Le payeur ne change pas la destination des données du propriétaire.
+5. Le chiffrement et le scanner de secrets ne prouvent pas l'absence de toute fuite. Connecteurs, modèles et agents joints font partie de la frontière à vérifier.
+6. Une petite question ne lit jamais la session vivante d'un agent ; aucun agent n'écrit chez un autre.
+7. Sécurité essentielle, auto-hébergement et modèles internes appartiennent au socle gratuit.
 
-## Ordre du projet : mesurer, puis construire
+## Gratuit et payant
 
-- **Étape 0 — `blocked-observer`.** Mesurer combien de fois des agents réels sont bloqués par une ressource détenue
-  par quelqu'un d'autre, et si une réponse bornée aurait suffi. Aucun réseau, aucun daemon.
-- **Étape 1 — prototype Mac + VPS.** Relais sur le VPS, deux capacités : `production.error_summary` (le VPS est
-  propriétaire, preuve de divulgation minimale) et `repo.answer` (localité, la démo « magique »).
-- **Étape 2 — pilote** (hors de ce kit de specs) : seulement si l'étape 0 franchit le seuil go/no-go.
+**Socle libre sous Apache-2.0** : protocole et capacités, A2A et MCP, relais privé, application, consentement, filtrage et reçus locaux. Pas de taxe par requête ni de service propriétaire obligatoire.
 
-## Hors périmètre (ne pas construire)
+Rien de payant avant d'avoir des utilisateurs (D57). Contrats d'installation et de support, puis un pack entreprise (politiques, SSO, export d'audit), restent des hypothèses sans tarif. Identité, chiffrement et contrôle des sorties ne deviennent jamais des options payantes. Voir [le cadre open source](../../docs/OPEN_SOURCE.md).
 
-- Task Drop (travail long et ouvert délégué à un autre agent).
-- Conversation libre agent-à-agent, orchestration multi-agents, handoff de contexte.
-- Application de barre de menu native, découverte Bonjour/mDNS, console d'organisation, SSO.
-- Tout argument ou fonctionnalité de « réduction de licences ».
-- Login par abonnement Claude ou ChatGPT dans le runner : clé API uniquement.
+## Ordre et limites
+
+L'ordre unique est [TASKS](../../docs/TASKS.md) ; les phases sont décrites dans le [plan](../../docs/product/IMPLEMENTATION_PLAN.md). La série T3 reste le chemin de sécurité avant tout pilote.
+
+Hors cible : conversation libre entre agents, index central ou RAG d'entreprise, relais de secours actif par défaut, partage d'identifiants, remplacement des agents existants. Le dépôt reste privé tant que la préparation de publication n'est pas validée. Le nom du produit reste à choisir ; « drop » est un nom de code.
 
 ## Vocabulaire
 
-| Terme | Sens |
-| --- | --- |
-| Owner | Propriétaire d'une capacité. Type générique : `human`, `team`, `machine`, `service`. La v1 n'affiche que des noms de personnes. |
-| Node | Un processus `drop` qui a une identité (paire de clés) : le poste de Guillaume, le VPS. |
-| Capability | Contrat publié : id, version, schémas d'entrée et de sortie, outils autorisés, sensibilité, règle d'approbation, budget. |
-| Drop | Une demande unique d'exécution d'une capacité. |
-| Grant | Décision de l'approbateur : `allow_once`, `deny`, `not_now`. |
-| Approver | Le Node humain qui valide une demande (peut différer du Node qui exécute, ex. VPS exécute, Mac approuve). |
-| Receipt | Trace signée d'un Drop : hash entrée/sortie, outils appelés, décision, horodatages. |
+| Terme      | Sens                                                                                      |
+| ---------- | ----------------------------------------------------------------------------------------- |
+| Owner      | Propriétaire d'une capacité : personne, équipe, machine ou service.                       |
+| Node       | Processus drop doté d'une identité cryptographique, sur un poste ou un serveur du client. |
+| Capability | Contrat publié déterminant ce qui est accessible et ce qui peut sortir.                   |
+| Drop       | Demande unique d'exécution d'une capacité.                                                |
+| Grant      | Décision `allow_once`, `deny` ou `not_now`.                                               |
+| Approver   | Node qui valide ; il peut être distinct de l'exécuteur.                                   |
+| Receipt    | Trace signée contenant des hash et métadonnées, sans contenu ni secret.                   |
+| Fait       | Information signée qu'un propriétaire marque partageable, avec sa validité (visé, D51).   |

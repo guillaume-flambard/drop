@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       name="description"
-      content="Le guide de drop : comprendre le parcours, l'architecture, la confidentialité et les prérequis pour essayer le prototype."
+      content="Comprendre drop : la réponse, pas l’accès. Parcours, niveaux d’échange, raccordement des agents, modes de connexion, modèles, confidentialité et limites du prototype."
     />
     <meta name="theme-color" content="#2548ed" />
     <title>Le guide · drop</title>
@@ -20,41 +20,42 @@
           ><img src="favicon.svg" width="34" height="34" alt="" />drop</a
         >
         <nav class="nav" aria-label="Navigation principale">
-          <a class="desktop-link" href="index.html#principe">Le principe</a
-          ><a href="guide.html" aria-current="page">Le guide</a><a href="avancement.html">Avancement</a
-          ><span class="header-note">Un projet Memo Labs</span>
+          <a href="demarrer.html">Démarrer</a><a class="desktop-link" href="cas.html">Cas d'usage</a
+          ><a class="desktop-link" href="securite.html">Sécurité</a><a href="guide.html" aria-current="page">Le guide</a
+          ><a href="avancement.html">Avancement</a><span class="header-note">Un projet Memo Labs</span>
         </nav>
       </div>
     </header>
     <main id="contenu" class="wrap">
       <div class="page-title">
-        <span class="pill">Documentation du prototype</span>
-        <h1>Une question.<br />Tout un chemin de confiance.</h1>
+        <span class="pill">Guide · Existant et visé</span>
+        <h1>Vos agents collaborent.<br />Vous gardez la main.</h1>
         <p>
-          Voici ce qui se passe entre « il me manque une information » et « je peux continuer ». Sans avoir besoin de
-          connaître les protocoles.
+          Repositionnement du 10 octobre 2026 : une couche de consentement au-dessus d’A2A et MCP. Chaque section sépare
+          ce qui existe dans le prototype de ce qui est visé, avec sa tâche.
         </p>
       </div>
       <div class="doc-layout">
         <nav class="toc" aria-label="Sommaire du guide">
-          <a href="#parcours">Le parcours</a><a href="#architecture">Les pièces du système</a
-          ><a href="#confidentialite">Qui reçoit quoi ?</a><a href="#essayer">Essayer le prototype</a
-          ><a href="#questions">Questions fréquentes</a><a href="#sources">Aller plus loin</a>
+          <a href="#parcours">L’échange</a><a href="#echelle">Les niveaux d’échange</a
+          ><a href="#connexion">Connecter ses agents</a><a href="#architecture">Se connecter</a
+          ><a href="#modeles">Le modèle</a><a href="#confidentialite">Qui reçoit quoi ?</a
+          ><a href="#essayer">Le prototype actuel</a><a href="#open-source">Gratuit et ouvert</a
+          ><a href="#sources">Les documents</a>
         </nav>
         <article class="article">
           <section id="parcours">
             <h2>La réponse traverse.<br />Le propriétaire décide.</h2>
             <p>
-              Guillaume veut savoir si le dépôt de Julie gère le mode sombre. Son agent lui pose la question via une
-              capacité publiée par Julie. Elle voit la demande, choisit de l'autoriser, puis relit la réponse avant
-              qu'elle parte.
+              Guillaume veut savoir si le dépôt de Julie gère le mode sombre. Son agent pose la question via une
+              capacité publiée par Julie. Elle autorise la demande et relit la réponse avant qu’elle parte.
             </p>
             <figure>
               <img
                 src="diagrams/journey.svg"
                 width="1120"
                 height="390"
-                alt="Cinq étapes : demander, autoriser, exécuter avec les outils prévus, relire les réponses sensibles, recevoir le résultat."
+                alt="Demander, autoriser, exécuter avec les outils prévus, relire les réponses sensibles et recevoir le résultat. Connecter un agent ne publie pas de capacité."
               />
               <figcaption>
                 La relecture concerne les capacités sensibles.
@@ -63,8 +64,8 @@
             </figure>
             <ol>
               <li>
-                <strong>Une question et une raison.</strong> L'agent choisit dans les capacités disponibles. L'entrée
-                est validée avant l'envoi.
+                <strong>Une question et une raison.</strong> L’agent choisit dans les capacités publiées. La demande
+                reçue est une donnée non fiable, validée avant exécution.
               </li>
               <li>
                 <strong>Un accord pour cette demande.</strong> Le propriétaire peut autoriser une fois, refuser ou
@@ -72,93 +73,270 @@
               </li>
               <li>
                 <strong>Une exécution encadrée.</strong> Les outils, le budget et la forme de la réponse sont fixés par
-                la capacité.
+                la capacité avant l’appel au modèle.
               </li>
               <li>
-                <strong>Une relecture quand c'est sensible.</strong> Les réponses sur le code ou sur un serveur MCP
-                repassent par le propriétaire.
+                <strong>Une relecture quand c’est sensible.</strong> Le propriétaire relit le résultat avant son envoi.
+                Une sortie invalide est rejetée.
               </li>
               <li>
-                <strong>Une réponse et une trace.</strong> Le demandeur reçoit le résultat autorisé. Le reçu signé
+                <strong>Une réponse et une trace.</strong> Le demandeur reçoit le résultat autorisé. Un reçu signé
                 conserve des empreintes et des métadonnées.
               </li>
             </ol>
             <div class="note">
               <p>
-                <strong>Et si la réponse est non ?</strong> Un refus termine cette demande. « Pas maintenant » ne
-                déclenche aucune relance automatique. Une demande expirée n'est pas exécutée.
+                <strong>Le refus fait partie du parcours.</strong> Il termine la demande. « Pas maintenant » ne
+                déclenche pas de relance automatique. Une demande expirée n’est pas exécutée.
               </p>
             </div>
           </section>
-          <section id="architecture">
-            <h2>Chacun garde son environnement.</h2>
+          <section id="echelle">
+            <h2>Quatre niveaux d’échange.<br />Un cinquième exclu.</h2>
             <p>
-              Un <strong>Node</strong> est le processus drop qui tourne sur une machine. Il porte son identité et ses
-              demandes. Le <strong>relais</strong> permet à deux Nodes de se joindre à distance. Le
-              <strong>runner</strong> exécute une action chez le propriétaire.
+              Chaque niveau a ses propres contrôles. Seul le niveau 3 existe aujourd’hui ; l’ordre de livraison prévu
+              est 3, puis 1, 2 et 4.
+            </p>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th scope="col">Niveau</th>
+                    <th scope="col">Ce qui se passe</th>
+                    <th scope="col">Statut</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>1. Fait publié</td>
+                    <td>
+                      Le propriétaire marque une information comme partageable ; elle est servie telle quelle, sans
+                      modèle, jusqu’à son expiration.
+                    </td>
+                    <td>Visé (T4.4)</td>
+                  </tr>
+                  <tr>
+                    <td>2. Petite question</td>
+                    <td>
+                      Un modèle répond dans un appel neuf, sans outil, à partir d’un contexte déclaré partageable.
+                      Jamais depuis la session en cours de l’agent du propriétaire.
+                    </td>
+                    <td>Visé (T4.9)</td>
+                  </tr>
+                  <tr>
+                    <td>3. Capacité</td>
+                    <td>
+                      Outils, budget et approbateur fixés avant la demande ; sortie validée par schéma puis scannée.
+                    </td>
+                    <td>Existant</td>
+                  </tr>
+                  <tr>
+                    <td>4. Tâche déléguée</td>
+                    <td>
+                      Tâche longue avec jalons d’approbation, budget plafonné, expiration et nouvel accord si le
+                      périmètre s’élargit.
+                    </td>
+                    <td>Visé (T4.11)</td>
+                  </tr>
+                  <tr>
+                    <td>5. Conversation libre</td>
+                    <td>
+                      Des agents qui discutent sans cadre : les études citées par le projet y mesurent des fuites.
+                    </td>
+                    <td>Exclu</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <h3>Un propriétaire sans agent</h3>
+            <p>
+              Deux voies sont visées. Répondre à la main dans le panneau, par un texte ou un fichier, avec le même
+              consentement et le même reçu (T4.3). Ou laisser un agent inclus répondre après accord, avec un modèle
+              choisi par le propriétaire (T4.8).
+            </p>
+            <h3>Un contexte partagé, sans index central</h3>
+            <p>
+              Visé (T4.12) : chaque fait reste chez son propriétaire, signé, daté, avec son public. Seul un catalogue de
+              sujets sans contenu circule, pour savoir à qui demander. Personne n’écrit chez un autre : une proposition
+              passe par une boîte de suggestions que l’humain valide.
+            </p>
+            <div class="note">
+              <p>
+                <strong>Les limites sont écrites d’avance.</strong> Une réponse livrée ne se rappelle pas. Le catalogue
+                révèle qui sait quoi. Plusieurs réponses partielles peuvent s’agréger. L’index central reste exclu.
+              </p>
+            </div>
+          </section>
+          <section id="connexion">
+            <h2>Deux confirmations pour les agents compatibles.</h2>
+            <p>
+              <strong>Ce parcours existe dans le panneau local (T3.3).</strong> Il passe ses tests sur fixtures ; la
+              recette humaine sur un Mac et l’app distribuée restent à faire (T3.4). Aucun modèle ni abonnement n’est
+              nécessaire pour raccorder un agent ou consulter l’équipe.
+            </p>
+            <ol>
+              <li>
+                <strong>Analyser ce Mac.</strong> Lecture locale des configurations connues. Aperçu des agents
+                compatibles, des destinations et des modifications proposées ; aucune valeur de secret affichée et aucun
+                serveur découvert exécuté.
+              </li>
+              <li>
+                <strong>Connecter les agents sélectionnés.</strong> Validation de la sélection, sauvegarde des
+                configurations et ajout des outils drop. Chaque agent reçoit son propre résultat : connecté, absent, non
+                pris en charge ou en erreur.
+              </li>
+            </ol>
+            <p>
+              Les adaptateurs livrés concernent <strong>Claude Code, Codex, Cursor et Claude Desktop</strong>. Neuf
+              autres clients MCP sont visés, avec leurs configurations globales et par projet (T4.5) : OpenCode, Gemini
+              CLI, Windsurf, Zed, goose, VS Code Copilot, Cline, Roo Code et JetBrains AI. Les autres agents reçoivent
+              une configuration à copier. La détection est déterministe : aucun modèle ne fouille la machine.
+            </p>
+            <p>
+              ChatGPT n’accepte qu’un serveur MCP distant en HTTPS. Il passera, en option, par une passerelle publique
+              exploitée par Guillaume (T2.13, non livrée) ; une entreprise pourra l’interdire par sa politique (T4.10).
+            </p>
+            <div class="note">
+              <p>
+                <strong>Connecter ne publie rien.</strong> Le raccordement donne à votre agent les outils pour demander
+                des réponses. Partager une source avec l’équipe reste un geste séparé : dans le panneau, un interrupteur
+                la partage avec ses outils en lecture seule par défaut.
+              </p>
+            </div>
+            <h3>Ce qui reste une étape séparée</h3>
+            <p>
+              Installer l’app, accorder une permission système, rejoindre une équipe par invitation, choisir un modèle
+              ou en télécharger un ne sont pas inclus dans les deux confirmations. Une équipe hors ligne n’empêche pas
+              le raccordement local : le panneau affiche cet état à part.
+            </p>
+            <h3>Revenir en arrière</h3>
+            <p>
+              Le parcours sauvegarde les configurations et évite les doublons si l’on recommence. Un fichier modifié
+              depuis l’analyse ou illisible est refusé sans être écrasé. Le retrait d’un agent enlève seulement l’entrée
+              ajoutée par drop, même si un autre outil a modifié le fichier entre-temps. Chaque agent a son propre
+              résultat. Ces comportements sont vérifiés par des tests, pas encore par une recette humaine.
+            </p>
+            <p>
+              Le consentement et le suivi sont accessibles dans la <strong>barre de menus du Mac</strong>. Windows
+              (T3.7) viendra ensuite, puis Linux (T3.8), avec une validation propre à chaque plateforme.
+            </p>
+            <a class="text-link" href="downloads/ONBOARDING.md" download>Lire les états et critères du raccordement</a>
+          </section>
+          <section id="architecture">
+            <h2>Trois façons de se connecter.</h2>
+            <p>
+              Chaque machine utilise un <strong>Node</strong> drop avec sa propre identité. Le runner exécute la
+              capacité chez son propriétaire, dans le cadre prévu. A2A suppose des adresses HTTPS joignables : il ne
+              fournit ni découverte locale ni traversée des pare-feu domestiques. drop doit donc fournir la connexion.
+            </p>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th scope="col">Mode</th>
+                    <th scope="col">Pour qui et comment</th>
+                    <th scope="col">Statut</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Réseau local</td>
+                    <td>Même bureau : découverte automatique, aucun serveur.</td>
+                    <td>Visé (T4.2)</td>
+                  </tr>
+                  <tr>
+                    <td>Internet</td>
+                    <td>Amis, petite équipe : connexion directe pair à pair (iroh), taux de réussite à mesurer.</td>
+                    <td>Visé (T4.2)</td>
+                  </tr>
+                  <tr>
+                    <td>Entreprise</td>
+                    <td>Informatique interne : relais drop exploité par l’équipe, connexions sortantes des Nodes.</td>
+                    <td>
+                      Relais et image Docker de laboratoire existants ; paquet entreprise (binaire, Docker, Helm) et
+                      politique visés (T4.10)
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p>
+              Par défaut, aucun relais de secours. Si la connexion directe échoue, l’app expliquera pourquoi et
+              proposera d’en activer un : relais de test d’un tiers, relais Memo Labs sur demande d’une équipe, ou
+              relais auto-hébergé. Le chiffrement de bout en bout reste actif dans tous les modes.
             </p>
             <figure>
               <img
                 src="diagrams/architecture.svg"
                 width="1120"
                 height="390"
-                alt="L'agent demandeur passe par un connecteur et son Node. Un relais route l'enveloppe chiffrée vers le Node du propriétaire, qui gère le consentement et l'exécution."
+                alt="Mode relais : l’agent demandeur, le relais exploité par l’équipe, le Node du propriétaire et son modèle restent dans le périmètre de l’organisation."
               />
               <figcaption>
-                Celui qui approuve peut être sur une autre machine que celle qui exécute.
+                Le mode relais, celui du prototype actuel, vérifié sur fixtures. Les modes sans serveur sont visés.
                 <a href="diagrams/architecture.svg">Ouvrir le schéma en grand</a>.
               </figcaption>
             </figure>
-            <h3>Une capacité, c'est un contrat d'action.</h3>
+            <h3>MCP pour les outils, A2A pour les agents</h3>
             <p>
-              Elle décrit ce que l'on peut demander, les outils utilisables, le résultat attendu, sa sensibilité et son
-              budget. Une question reçue ne peut pas élargir la liste des outils.
+              drop ne concurrence pas A2A : il l’implémente et s’y place comme couche de consentement humain. MCP
+              raccorde l’agent à ses outils drop et permet des capacités fondées sur des sources déjà connectées. Les
+              ponts A2A entrants et sortants existent dans le prototype ; ils ne remplacent pas les règles
+              d’autorisation et de sortie.
             </p>
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Capacité</th>
-                    <th>Ce qui revient</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td><code>production.error_summary</code></td>
-                    <td>État du service, compteurs et catégories d'erreurs. Sans modèle.</td>
-                  </tr>
-                  <tr>
-                    <td><code>repo.answer</code></td>
-                    <td>Réponse courte, verdict et noms de fichiers. Avec relecture.</td>
-                  </tr>
-                  <tr>
-                    <td><code>mcp.answer.&lt;nom&gt;</code></td>
-                    <td>Réponse courte et noms de sources d'un outil connecté. Avec relecture.</td>
-                  </tr>
-                </tbody>
-              </table>
+            <p>
+              Une capacité décrit l’entrée, la sortie, les outils utilisables, la sensibilité et le budget. La question
+              reçue ne peut pas élargir ce contrat. Le résumé d’erreurs de production peut fonctionner sans modèle ; les
+              questions sur un dépôt ou une source MCP nécessitent un modèle adapté.
+            </p>
+            <h3>Aucun service externe obligatoire</h3>
+            <p>
+              L’organisation garde la maîtrise du relais et des destinations autorisées. Un déploiement entièrement
+              interne inclut aussi les modèles, les connecteurs et les agents A2A joints. Visé (T4.10) : une politique
+              signée, déployée par l’informatique, fixe les clients et les fournisseurs de modèles autorisés, impose le
+              relais interne et interdit les passerelles publiques. Le poste l’applique et le relais la vérifie à
+              nouveau.
+            </p>
+          </section>
+          <section id="modeles">
+            <h2>Garder le modèle que vous avez déjà.</h2>
+            <p>
+              La première option est votre endpoint existant, choisi explicitement : un modèle sur votre Mac ou un
+              service interne d’entreprise. Une capacité déterministe évite tout appel à un modèle quand elle suffit.
+            </p>
+            <p>
+              Pour une équipe sans modèle, <strong>Ollama et Qwen3.5 4B ou 9B sont des candidats à évaluer</strong>.
+              Leur téléchargement doit être consenti. Ils n’ont pas encore été mesurés pour les capacités drop :
+              mémoire, latence, qualité des réponses et fiabilité des appels d’outils restent à qualifier (T3.2).
+            </p>
+            <div class="note">
+              <p>
+                <strong>Gratuit ne veut pas dire sans coût matériel.</strong> Le modèle occupe du stockage et de la
+                mémoire, et mobilise la machine. Son usage reste soumis à sa propre licence. Le guide des modèles
+                distingue les poids à télécharger de la mémoire nécessaire à l’exécution.
+              </p>
             </div>
-            <h3>L'agent a trois outils.</h3>
-            <pre><code>list_capabilities   Découvrir les capacités
-request_drop        Envoyer une demande
-get_drop_result     Récupérer la réponse</code></pre>
             <p>
-              MCP est le format de connexion entre l'agent et ces outils. Le connecteur parle à l'API locale du Node ;
-              c'est le Node qui rejoint le relais.
+              Un service cloud gratuit reste distant. Dans la cible privée, une panne du modèle doit produire une erreur
+              visible ; aucun repli vers un fournisseur externe n’est autorisé.
             </p>
+            <a class="text-link" href="downloads/MODELS.md" download
+              >Lire les sources et le plan de qualification des modèles</a
+            >
           </section>
           <section id="confidentialite">
             <h2>Qui reçoit quoi ?</h2>
             <p>
-              La promesse porte sur le partage d'une réponse autorisée. Pour l'évaluer, il faut aussi regarder le chemin
-              du contexte utilisé pour fabriquer cette réponse.
+              La confidentialité dépend de tout le chemin de la demande. drop contrôle ce qui passe par drop ; un
+              connecteur MCP, un modèle ou un agent A2A choisi par le propriétaire peut avoir ses propres flux, que drop
+              ne voit pas.
             </p>
             <div class="table-wrap">
               <table>
                 <thead>
                   <tr>
-                    <th>Destinataire</th>
-                    <th>Informations reçues</th>
+                    <th scope="col">Destinataire</th>
+                    <th scope="col">Informations reçues</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -168,118 +346,117 @@ get_drop_result     Récupérer la réponse</code></pre>
                   </tr>
                   <tr>
                     <td>Le relais</td>
-                    <td>Du contenu chiffré et les métadonnées nécessaires au routage.</td>
+                    <td>
+                      Les enveloppes chiffrées et les métadonnées de routage : expéditeur, destinataire, identifiant,
+                      horodatages et taille.
+                    </td>
                   </tr>
                   <tr>
                     <td>Le propriétaire</td>
                     <td>La question et sa raison ; il utilise ses propres accès.</td>
                   </tr>
                   <tr>
-                    <td>Un fournisseur LLM distant</td>
-                    <td>La question et les résultats d'outils transmis au modèle.</td>
+                    <td>Le modèle choisi</td>
+                    <td>
+                      La question et les résultats d’outils nécessaires à son appel. Il doit rester dans le périmètre
+                      autorisé.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>Un agent A2A joint</td>
+                    <td>
+                      Les données prévues par la capacité. Ses propres outils, modèles et destinations doivent être
+                      vérifiés.
+                    </td>
                   </tr>
                 </tbody>
               </table>
             </div>
-            <div class="note">
-              <p>
-                <strong>Localité et confidentialité sont deux sujets distincts.</strong> Le fournisseur configuré par
-                défaut est OpenRouter. Si un modèle distant est utilisé, du contexte peut lui être transmis. Un modèle
-                local compatible peut être configuré.
-              </p>
-            </div>
             <p>
-              Le contrôle des outils, la validation du résultat, le scanner de secrets et la relecture forment plusieurs
-              protections. Ils ne constituent pas un audit indépendant ou une garantie absolue contre une fuite. Les
-              outils MCP partagés doivent être examinés par le propriétaire.
+              Le profil privé limite les destinations réseau du Node à des adresses privées explicites, sans DNS ni
+              redirection. Sa recette (T3.1) a tourné avec Internet bloqué, sur fixtures. Le prototype n’envoie aucune
+              télémétrie. Un vrai modèle et des agents réels restent à qualifier (T3.2).
             </p>
+            <p>
+              Les outils fixés à l’avance, la validation de sortie, le scanner de secrets et la relecture forment
+              plusieurs protections. Le journal local garde des reçus signés (empreintes et métadonnées), pas une copie
+              de ce qui est sorti. Ils ne remplacent pas une revue de sécurité indépendante et ne permettent pas de
+              promettre « zéro fuite ».
+            </p>
+            <a class="text-link" href="downloads/ACCEPTANCE.md" download
+              >Lire les preuves exigées avant de déclarer le profil privé livré</a
+            >
           </section>
           <section id="essayer">
-            <h2>Essayer, côté développeur.</h2>
+            <h2>Le prototype actuel, côté développeur.</h2>
             <p>
-              Le prototype se lance depuis le dépôt. L’installation locale des connecteurs existe. Le paquet npm public
-              et l’app Mac restent à distribuer.
-            </p>
-            <h3>1. Vérifier les prérequis</h3>
-            <p>
-              Un clone du dépôt, Node <strong>22.18 ou supérieur</strong> et pnpm <strong>11.27.0</strong>, version
-              déclarée lors de ce bilan.
+              Le dépôt reste privé. Les personnes qui y ont accès peuvent installer les dépendances et exécuter les
+              tests avec Node 22.18 ou supérieur et la version de pnpm déclarée dans <code>package.json</code>.
             </p>
             <pre><code>pnpm install
 pnpm -r lint
 pnpm -r typecheck
 pnpm -r test</code></pre>
             <p>
-              Les tests utilisent des données locales et des fournisseurs simulés. Aucune clé de modèle n'est
-              nécessaire.
-            </p>
-            <h3>2. Rejouer la démo</h3>
-            <pre><code>bash scripts/demo-local.sh</code></pre>
-            <p>
-              Le script démarre un relais et trois Nodes temporaires sur les ports 7790 à 7793. Il joue un résumé
-              d'erreurs puis une question sur un dépôt.
+              Les tests du dépôt utilisent des données locales et des fournisseurs simulés. Ils ne demandent pas de clé
+              de modèle.
             </p>
             <div class="note">
               <p>
-                <strong>La deuxième partie utilise OpenRouter.</strong> Elle demande le réseau et une clé dans
-                <code>OPENROUTER_API_KEY</code>, ou dans l'entrée macOS <code>OpenRouter API Key</code>. La durée dépend
-                du fournisseur. Le script arrête ses processus à la fin et conserve le dossier temporaire.
+                <strong>Le bootstrap Mac choisit un relais privé.</strong> Le modèle doit être choisi explicitement,
+                sans téléchargement automatique. Une build signée a été acceptée par la notarisation d’Apple le 10
+                octobre 2026 sur le Mac de Guillaume ; sa preuve n’est pas encore archivée (T3.4). Aucun installateur
+                public n’est proposé.
               </p>
             </div>
-            <h3>3. Connecter son agent</h3>
+            <h3>Rejouer la démonstration historique</h3>
+            <pre><code>bash scripts/demo-local.sh</code></pre>
             <p>
-              Le Node doit être initialisé, autorisé sur un relais et lancé avec <code>serve</code>. Le guide
-              téléchargeable détaille ces étapes et renvoie aux configurations Claude Code et Codex du dépôt.
+              Cette démonstration lance un relais et des Nodes temporaires. La partie question sur un dépôt utilise
+              OpenRouter et exige le réseau ainsi qu’une clé. Elle ne valide pas le futur parcours privé. Le guide
+              complet détaille les prérequis et les traces conservées.
             </p>
             <a class="button" href="downloads/GUIDE.md" download>Télécharger le guide complet</a>
           </section>
-          <section id="questions">
-            <h2>Quelques questions utiles.</h2>
-            <details>
-              <summary>Qui paie le modèle ?</summary>
-              <p>
-                Le demandeur peut financer une demande avec une clé plafonnée et chiffrée pour l'exécuteur, si le
-                financement est configuré. Le propriétaire peut aussi utiliser sa propre clé. Le payeur et le coût
-                annoncé sont indiqués avant l'accord.
-              </p>
-            </details>
-            <details>
-              <summary>Est-ce que drop fonctionne avec Figma ou Notion ?</summary>
-              <p>
-                La capacité générique mcp.answer peut utiliser un serveur MCP déjà configuré chez le propriétaire. La
-                liste d'outils est fixée à la publication. Les usages réels chez Julie et Natha restent une étape de
-                validation, pas une intégration certifiée pour chaque outil.
-              </p>
-            </details>
-            <details>
-              <summary>Est-ce que toute l'équipe est découverte automatiquement ?</summary>
-              <p>
-                Un annuaire signé est maintenant implémenté. Rejoindre l’équipe par invitation propage les membres et
-                leur appairage ; la commande team montre leurs agents et leurs capacités. L’app Mac et les demandes
-                multiples restent à construire.
-              </p>
-            </details>
-            <details>
-              <summary>Est-ce un produit prêt à déployer en entreprise ?</summary>
-              <p>
-                Le cœur a été implémenté et démontré. Il reste notamment l’app Mac, la distribution publique, les essais
-                utilisateurs et une dette de traçabilité entre specs et tests. Le bilan donne les preuves et les limites
-                précises.
-              </p>
-            </details>
+          <section id="open-source">
+            <h2>Un socle libre.<br />Rien de payant avant les utilisateurs.</h2>
+            <p>
+              <strong>Socle gratuit :</strong> consentement, protections essentielles, reçus, relais auto-hébergé, A2A
+              et MCP, sous licence Apache-2.0 pour le code détenu par le projet. Les dépendances et les modèles gardent
+              leurs licences propres. La sécurité n’est jamais une option payante.
+            </p>
+            <p>
+              <strong>Hypothèses de financement, sans tarif :</strong> des contrats d’installation et de support, puis
+              un pack entreprise (console de politiques, SSO, export d’audit, versions maintenues) si un grand compte le
+              demande par écrit. Rien n’est vendu aujourd’hui. « drop » reste un nom de code.
+            </p>
+            <p>
+              Le dépôt reste privé tant que les contrôles de publication ne sont pas passés : historique et secrets,
+              licences tierces, CI indépendante du lab, procédure de signalement privé, distribution et signature des
+              binaires (T3.6). Aucun téléchargement public de l’app n’est proposé ici.
+            </p>
+            <a class="text-link" href="downloads/OPEN_SOURCE.md" download
+              >Lire la préparation de l’ouverture et de la contribution</a
+            >
           </section>
           <section id="sources">
-            <h2>Une documentation que l'on peut vérifier.</h2>
+            <h2>Des documents pour construire la suite.</h2>
             <p>
-              Le dépôt conserve le code, les contrats OpenSpec, les décisions et les captures de démonstration. Ce guide
-              décrit le fonctionnement ; les specs restent la source normative.
+              Les specs OpenSpec portent le contrat. L’index des tâches fixe l’ordre des chantiers. La référence produit
+              (PRD, TRD, parcours, UX/UI, schéma et plan) vit dans <code>docs/product/</code> du dépôt. Les documents
+              suivants détaillent le prototype et les preuves encore nécessaires ; chacun porte sa propre date.
             </p>
             <div class="download-row">
-              <a href="downloads/GUIDE.md" download>Guide en Markdown</a
-              ><a href="downloads/AVANCEMENT.md" download>Bilan en Markdown</a
-              ><a href="avancement.html">Lire le bilan sur le site</a>
+              <a href="downloads/GUIDE.md" download>Guide complet</a
+              ><a href="downloads/AVANCEMENT.md" download>Bilan sourcé</a
+              ><a href="downloads/ONBOARDING.md" download>Connexion des agents</a
+              ><a href="downloads/MODELS.md" download>Modèles</a
+              ><a href="downloads/OPEN_SOURCE.md" download>Open source</a
+              ><a href="downloads/ACCEPTANCE.md" download>Critères d’acceptation</a>
             </div>
-            <p class="date">Documentation fondée sur le dépôt au 8 octobre 2026.</p>
+            <p class="date">
+              Page mise à jour le 10 octobre 2026. <a href="avancement.html">Lire l’état du projet</a>.
+            </p>
           </section>
         </article>
       </div>
@@ -288,8 +465,9 @@ pnpm -r test</code></pre>
       <div class="wrap footer-inner">
         <a class="logo" href="index.html">drop</a>
         <div class="footer-links">
-          <a href="guide.html">Documentation</a><a href="avancement.html">État du projet</a
-          ><a href="guide.html#essayer">Essayer le prototype</a>
+          <a href="demarrer.html">Démarrer</a><a href="cas.html">Cas d'usage</a><a href="securite.html">Sécurité</a
+          ><a href="guide.html">Documentation</a><a href="avancement.html">État du projet</a
+          ><a href="guide.html#open-source">Open source</a>
         </div>
         <span>Nom de code, par Memo Labs.</span>
       </div>

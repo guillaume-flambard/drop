@@ -83,15 +83,18 @@ export async function sealEnvelope(
 export class ReplayCache {
   private readonly seen = new Map<string, number>();
   private readonly windowMs: number;
+  private readonly maxEntries: number;
 
-  constructor(windowMs: number = REPLAY_WINDOW_MS) {
+  constructor(windowMs: number = REPLAY_WINDOW_MS, maxEntries = 65_536) {
     this.windowMs = windowMs;
+    this.maxEntries = maxEntries;
   }
 
   /** Returns false when the id was already seen inside the window. */
   check(id: string, now: number): boolean {
     for (const [key, expiresAt] of this.seen) if (expiresAt <= now) this.seen.delete(key);
     if (this.seen.has(id)) return false;
+    if (this.seen.size >= this.maxEntries) return false;
     this.seen.set(id, now + this.windowMs);
     return true;
   }
@@ -107,6 +110,11 @@ export interface OpenOptions {
    * E_UNKNOWN_PEER, in spec order.
    */
   acceptPairToken?: (token: string) => boolean;
+  /**
+   * The gateway's counterpart of acceptPairToken (T2.13): an unknown node may send a `link_grant` for a link session
+   * this returns true for. That is how a user's node first reaches the gateway, after approving the link in its app.
+   */
+  acceptLinkSession?: (sessionId: string) => boolean;
 }
 
 export interface Opened {
@@ -129,7 +137,8 @@ export async function openEnvelope(recipient: Identity, raw: unknown, options: O
   }
 
   const known = options.isKnownPeer(envelope.from);
-  if (!known && !options.acceptPairToken) throw new DropError('E_UNKNOWN_PEER', 'sender is not a paired peer');
+  if (!known && !options.acceptPairToken && !options.acceptLinkSession)
+    throw new DropError('E_UNKNOWN_PEER', 'sender is not a paired peer');
 
   if (envelope.exp <= now || envelope.ts > now + MAX_CLOCK_SKEW_MS || envelope.exp > envelope.ts + MAX_TTL_MS) {
     throw new DropError('E_EXPIRED', 'envelope expired or out of time window');
@@ -161,7 +170,9 @@ export async function openEnvelope(recipient: Identity, raw: unknown, options: O
     throw new DropError('E_MESSAGE_SCHEMA', 'invalid message');
   }
 
-  if (!known && !(message.type === 'pair_request' && options.acceptPairToken?.(message.oneTimeToken) === true)) {
+  const pairing = message.type === 'pair_request' && options.acceptPairToken?.(message.oneTimeToken) === true;
+  const linking = message.type === 'link_grant' && options.acceptLinkSession?.(message.sessionId) === true;
+  if (!known && !pairing && !linking) {
     throw new DropError('E_UNKNOWN_PEER', 'sender is not a paired peer');
   }
   return { envelope, message };

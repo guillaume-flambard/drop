@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { applyRedactions, scanSecrets } from '../src/index.ts';
-import { ENTROPY_THRESHOLD, SECRET_PATTERNS, shannonEntropy } from '../src/secrets.ts';
+import { ENTROPY_THRESHOLD, looksLikeJwt, SECRET_PATTERNS, shannonEntropy } from '../src/secrets.ts';
 
 // Built at runtime so this file itself never contains a literal that looks like a live credential.
 const fake = {
@@ -48,6 +48,36 @@ describe('scanSecrets: each pattern detects', () => {
 
   it('reports an Anthropic key under both sk kinds', () => {
     expect(scanSecrets(fake.anthropic)).toEqual(['anthropic_key', 'sk_key']);
+  });
+});
+
+describe('scanSecrets: the patterns named in the spec', () => {
+  it('flags a PEM private key header', () => {
+    expect(scanSecrets(`x\n${fake.pemPkcs8}\n`)).toContain('pem_private_key');
+  });
+
+  it('flags an Anthropic key', () => {
+    expect(scanSecrets(`token ${fake.anthropic}`)).toContain('anthropic_key');
+  });
+
+  it('flags GitHub, Slack and AWS tokens', () => {
+    expect(scanSecrets([fake.github, fake.slack, fake.aws])).toEqual(
+      expect.arrayContaining(['github_token', 'slack_token', 'aws_access_key']),
+    );
+  });
+
+  it('flags a JWT', () => {
+    expect(scanSecrets(`Bearer ${fake.jwt}`)).toContain('jwt');
+  });
+
+  it('flags a PASSWORD= assignment', () => {
+    expect(scanSecrets('PASSWORD=hunter2')).toContain('credential_assignment');
+  });
+
+  it('flags a string of more than 32 characters with an entropy above 4.5', () => {
+    expect(fake.highEntropy.length).toBeGreaterThan(32);
+    expect(shannonEntropy(fake.highEntropy)).toBeGreaterThan(ENTROPY_THRESHOLD);
+    expect(scanSecrets(`blob ${fake.highEntropy} end`)).toContain('high_entropy');
   });
 });
 
@@ -163,5 +193,27 @@ describe('applyRedactions', () => {
 
   it('removes everything for an empty path', () => {
     expect(applyRedactions(output, [''])).toEqual({});
+  });
+});
+
+describe('secret scanner bounds (T4.3 review)', () => {
+  it('finds a JWT in linear time, even in a long run of JWT-like prefixes', () => {
+    // Same verdicts as the former regex, which backtracked quadratically.
+    const former = /eyJ[A-Za-z0-9_-]*\.eyJ[A-Za-z0-9_-]*\./;
+    const cases = [
+      'Bearer ' + fake.jwt,
+      'eyJ.eyJ.',
+      'eyJ.eyJ',
+      'x eyJ!a.eyJb.',
+      'eyJa.b eyJ.',
+      'aeyJb.eyJc.d',
+      'eyJa.eyJ!.',
+      'eyJ..eyJ.',
+    ];
+    for (const text of cases) expect(looksLikeJwt(text)).toBe(former.test(text));
+    expect(scanSecrets(['Bearer ' + fake.jwt])).toContain('jwt');
+    const started = performance.now();
+    scanSecrets(['eyJ'.repeat(45_000)]);
+    expect(performance.now() - started).toBeLessThan(1_000);
   });
 });

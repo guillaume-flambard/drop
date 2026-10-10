@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { privateConfig, migratePrivate, rollbackPrivate } from './private-config.ts';
+import { PrivateNetworkSchema } from '@drop/protocol';
 import { readFileSync } from 'node:fs';
 import { parseArgs } from 'node:util';
 import { z } from 'zod';
@@ -6,15 +8,21 @@ import { AGENTS, capabilities, connectMcp, McpAnswerConfigSchema } from '@drop/c
 import { implFor } from '@drop/runner';
 import { createTeam, generateIdentity, OwnerKindSchema, type ConsentCost } from '@drop/protocol';
 import { startDaemon } from './daemon.ts';
-import { AGENT_LABELS, detectAgents, shareId } from './detect.ts';
-import { bundledServer, cursorInstallLink, install, serverEntry } from './install.ts';
+import { AGENT_LABELS, detectAgents } from './detect.ts';
+import { bundledServer, cursorInstallLink, serverEntry } from './install.ts';
+import { applyOnboarding, previewOnboarding } from './onboarding.ts';
+import { isAgentKind, shareDetected } from './share.ts';
+import { oauthConnect } from './oauth.ts';
 import { DropHome, NodeConfigSchema } from './home.ts';
 import { costLine } from './ui.ts';
 
 const AgentKindSchema = z.enum(AGENTS);
 
 const USAGE = `drop <command>
-  init --name <name> --kind human|team|machine|service --relay <wss://…> [--port 7781]
+  init --name <name> [--kind human|team|machine|service] [--relay <internal URL>] [--port 7781]
+       [--profile private|legacy] [--network <policy.json>]
+  migrate-private --relay <url> [--network <policy.json>]  stop daemon first; backs up config
+  rollback-private               stop daemon first; restores unchanged migrated config
   serve                          daemon: relay, local API, consent UI, runner
   invite                         print a one-time pairing code (daemon must run)
   pair <code>                    pair with the node that issued the code (daemon must run)
@@ -30,6 +38,7 @@ const USAGE = `drop <command>
   detect [--json]                the coding agents on this machine, drop in each, and their MCP servers
   share <agent>/<server> [--label <text>] [--tools a,b] [--id mcp.answer.<name>] [--approver <nodeId>]
                                  answer from a detected MCP server (read-only tools by default; secrets stay put)
+  connect <agent>/<server>       sign drop in to a remote MCP server that needs OAuth, in the browser (daemon must run)
   pending                        requests waiting for your decision
   approve|deny|not-now <dropId>  decide from the terminal
   review <dropId> send|discard [--redact <field>]…
@@ -38,7 +47,8 @@ const USAGE = `drop <command>
 
 const INSTRUCTIONS = `Si tu es bloqué par une ressource, une donnée ou un contexte qui appartient à un collègue, appelle
 \`list_capabilities\`. Si une capacité correspond, propose à l'utilisateur de l'utiliser et attends son accord avant
-d'appeler \`request_drop\`.`;
+d'appeler \`request_drop\`. Si la réponse est éparpillée entre plusieurs personnes, utilise \`request_drops\` puis
+\`get_drop_results\`, et dis d'où vient chaque information.`;
 
 function fail(message: string): never {
   process.stderr.write(`${message}\n`);
@@ -90,18 +100,43 @@ switch (command) {
         kind: { type: 'string' },
         relay: { type: 'string' },
         port: { type: 'string' },
+        network: { type: 'string' },
+        profile: { type: 'string' },
       },
     });
-    if (!values.name || !values.relay) fail('drop init --name <name> --kind human --relay wss://…');
+    if (!values.name) fail('drop init --name <name> [--relay <internal URL>]');
+    if (values.profile && !['private', 'legacy'].includes(values.profile)) fail('unknown profile');
+    const relayUrl = values.relay ?? 'ws://127.0.0.1:7780/v1';
+    const network = values.network
+      ? PrivateNetworkSchema.parse(JSON.parse(readFileSync(values.network, 'utf8')))
+      : undefined;
     const ownerKind = OwnerKindSchema.parse(values.kind ?? 'human');
     const identity = await generateIdentity(values.name);
     home.init(
       identity,
-      NodeConfigSchema.parse({ relayUrl: values.relay, ownerKind, apiPort: Number(values.port ?? 7781) }),
+      values.profile === 'legacy'
+        ? NodeConfigSchema.parse({ relayUrl, ownerKind, apiPort: Number(values.port ?? 7781) })
+        : privateConfig(relayUrl, ownerKind, Number(values.port ?? 7781), network),
     );
     process.stdout.write(
       `initialized ${home.root}\nnodeId ${identity.nodeId}\njoin the relay: \`drop pair <invite code>\` from a member (or, for a first node, ask the relay operator to run: drop-relay allow ${identity.nodeId})\n`,
     );
+    break;
+  }
+  case 'migrate-private': {
+    const { values } = parseArgs({ args: rest, options: { relay: { type: 'string' }, network: { type: 'string' } } });
+    if (!values.relay) fail('migrate-private requires --relay');
+    migratePrivate(
+      home,
+      values.relay,
+      values.network ? PrivateNetworkSchema.parse(JSON.parse(readFileSync(values.network, 'utf8'))) : undefined,
+    );
+    process.stdout.write('private profile configured; restart the daemon; backup: private-migration.json\n');
+    break;
+  }
+  case 'rollback-private': {
+    rollbackPrivate(home);
+    process.stdout.write('previous configuration restored; restart the daemon\n');
     break;
   }
   case 'serve': {
@@ -122,6 +157,23 @@ switch (command) {
     };
     process.on('SIGINT', stop);
     process.on('SIGTERM', stop);
+    // Launched by the Mac app (T4.18): the app holds this stdin pipe open; the system closes it when the app dies,
+    // even when killed, so the daemon never outlives its shell. A terminal or a script never sets this variable.
+    if (process.env.DROP_EXIT_WITH_PARENT === 'stdin') {
+      let gone = false;
+      const parentGone = (): void => {
+        if (gone) return;
+        gone = true;
+        process.stderr.write(
+          `${JSON.stringify({ at: new Date().toISOString(), event: 'daemon_parent_gone', code: 'E_PARENT_GONE' })}\n`,
+        );
+        stop();
+      };
+      process.stdin.once('end', parentGone);
+      process.stdin.once('close', parentGone);
+      process.stdin.once('error', parentGone);
+      process.stdin.resume();
+    }
     break;
   }
   case 'invite': {
@@ -218,12 +270,18 @@ switch (command) {
       break;
     }
     for (const agent of agents) {
-      try {
-        install(agent, { dropHome: home.root }, remove);
-        process.stdout.write(`${remove ? 'removed from' : 'added to'} ${AGENT_LABELS[agent]}\n`);
-      } catch (error) {
-        process.stderr.write(`${AGENT_LABELS[agent]}: ${error instanceof Error ? error.message : 'failed'}\n`);
+      const plan = previewOnboarding({ dropHome: home.root }).find((item) => item.agent === agent);
+      if (!plan || plan.state === 'absent' || plan.state === 'error' || plan.state === 'conflict') {
+        process.stderr.write(`${AGENT_LABELS[agent]}: ${plan?.detail ?? 'E_AGENT_INVALID'}\n`);
+        continue;
       }
+      const result = applyOnboarding(
+        [{ agent, fingerprint: plan.fingerprint, action: remove ? 'disconnect' : 'connect' }],
+        { dropHome: home.root },
+      )[0];
+      if (result?.state === 'connected' || result?.state === 'disconnected' || result?.state === 'already_connected')
+        process.stdout.write(`${AGENT_LABELS[agent]}: ${result.detail}\n`);
+      else process.stderr.write(`${AGENT_LABELS[agent]}: ${result?.detail ?? 'E_ONBOARDING_FAILED'}\n`);
     }
     if (!remove) process.stdout.write('restart the agent so it loads drop\n');
     break;
@@ -259,46 +317,41 @@ switch (command) {
         approver: { type: 'string', multiple: true },
       },
     });
-    const [agentName, serverName] = (positionals[0] ?? fail('drop share <agent>/<server>')).split('/');
-    const agent = detectAgents().find((candidate) => candidate.agent === agentName);
-    const server = agent?.servers.find((candidate) => candidate.name === serverName);
-    if (!agent || !server) fail(`no MCP server ${positionals[0] ?? ''}; see \`drop detect\``);
-    if (!server.shareable) fail(`${server.name} is part of drop itself`);
-    const source = { transport: 'agent' as const, agent: agent.agent, name: server.name };
-    let tools =
-      values.tools
-        ?.split(',')
-        .map((tool) => tool.trim())
-        .filter(Boolean) ?? [];
-    if (tools.length === 0) {
-      const client = await connectMcp(source);
-      try {
-        const listed = (await client.listTools()).tools;
-        tools = listed.filter((tool) => tool.annotations?.readOnlyHint === true).map((tool) => tool.name);
-        if (tools.length === 0)
-          fail(
-            `${server.name} marks no tool as read-only; choose with --tools among: ${listed.map((tool) => tool.name).join(', ')}`,
-          );
-      } finally {
-        await client.close();
-      }
+    const [agentName = '', serverName = ''] = (positionals[0] ?? fail('drop share <agent>/<server>')).split('/');
+    if (!isAgentKind(agentName)) fail(`unknown agent ${agentName}; one of ${AGENTS.join(', ')}`);
+    try {
+      const shared = await shareDetected(
+        home,
+        {
+          agent: agentName,
+          server: serverName,
+          label: values.label,
+          tools: values.tools?.split(',').map((tool) => tool.trim()),
+          capabilityId: values.id,
+          approvers: values.approver,
+        },
+        oauthConnect(home, home.config().apiPort),
+      );
+      process.stdout.write(
+        `published ${shared.capabilityId}: « Répondre à partir de ${shared.label} » with ${String(shared.tools.length)} tools (${shared.tools.join(', ')}) from ${AGENT_LABELS[agentName]}\n`,
+      );
+    } catch (error) {
+      fail(error instanceof Error ? error.message : 'share failed');
     }
-    const capabilityId = values.id ?? shareId(server);
-    const config = McpAnswerConfigSchema.parse({
-      label:
-        values.label ?? `mon ${server.kind ? server.kind.charAt(0).toUpperCase() + server.kind.slice(1) : server.name}`,
-      server: source,
-      tools,
-    });
-    home.publish({
-      capabilityId,
-      approverNodeIds: values.approver ?? [home.identity().nodeId],
-      config,
-      publishedAt: new Date().toISOString(),
-    });
-    process.stdout.write(
-      `published ${capabilityId}: « Répondre à partir de ${config.label} » with ${String(tools.length)} tools (${tools.join(', ')}) from ${AGENT_LABELS[agent.agent]}\n(restart \`drop serve\` if it is running)\n`,
-    );
+    break;
+  }
+  case 'connect': {
+    const target = rest[0] ?? fail('drop connect <agent>/<server>');
+    const [agent = '', server = ''] = target.split('/');
+    const started = (await api(home, 'POST', '/ui/admin/connect', { agent, server })) as {
+      connected?: boolean;
+      authorizationUrl?: string;
+    };
+    if (started.connected) process.stdout.write(`drop is already signed in to ${server}\n`);
+    else
+      process.stdout.write(
+        `finish signing in in your browser (it opens on macOS), within 10 minutes:\n${started.authorizationUrl ?? ''}\nthen run: drop share ${target}\n`,
+      );
     break;
   }
   case 'mcp-tools': {
@@ -306,7 +359,9 @@ switch (command) {
     const raw: unknown = JSON.parse(readFileSync(values.config ?? fail('drop mcp-tools --config <file.json>'), 'utf8'));
     // Only the server part is needed here: the tool list may still be empty while the owner is choosing.
     const server = McpAnswerConfigSchema.shape.server.parse((raw as { server?: unknown }).server);
-    const client = await connectMcp(server);
+    const client = await connectMcp(server, process.env, {
+      network: home.config().profile === 'private' ? home.config().network : undefined,
+    });
     try {
       for (const tool of (await client.listTools()).tools) {
         const hint = tool.annotations?.destructiveHint

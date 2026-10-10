@@ -1,0 +1,11 @@
+{
+  "phase": "READY_FOR_MANUAL_ACCEPTANCE",
+  "scope": "T4.0a mise en vérité des documents, du site et de la spec product-foundation",
+  "requirements": { "total": 5, "covered": 5 },
+  "acceptance": { "total": 5, "verified": 5, "pending": 0, "failed": 0 },
+  "todos": { "p0_open": 0, "p1_open": 0 },
+  "risks": { "critical_open": 0, "high_open": 0 },
+  "verification": { "status": "PASS", "evidence": "evidence.md" },
+  "manual_acceptance": "Guillaume relit le site et le README",
+  "ready_for_manual_acceptance": true
+}
