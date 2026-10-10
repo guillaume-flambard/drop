@@ -2,8 +2,12 @@
  * The menu bar panel (T2.4), served by the node at /app and shown by the Mac app in a window under its tray icon. It
  * has tabs Demandes, Équipe and Mes outils. It talks only
  * to this node's own API (same origin, bearer token from the URL). Everything a peer wrote is inserted with
- * textContent, never as HTML. No backtick and no dollar-brace in the script below: it lives in a template string.
+ * textContent, never as HTML. No backtick and no dollar-brace in the script below: it lives in a template string. The
+ * one exception is KNOWN_ASSISTANT_HOSTS, a constant of this file injected as JSON.
  */
+/** Where Claude and ChatGPT send their authorization codes back: the app names them, and warns about any other (D71). */
+export const KNOWN_ASSISTANT_HOSTS = ['claude.ai', 'chatgpt.com', 'chat.openai.com'];
+
 export function renderPanel(): string {
   return `<!doctype html>
 <html lang="fr">
@@ -194,6 +198,9 @@ code { font: 11px/1.4 ui-monospace, SFMono-Regular, monospace; word-break: break
   function announce(message) {
     document.getElementById('announcement').textContent = message;
   }
+  // A shared server that needs an OAuth sign-in (T2.17): the panel offers it, then the owner shares again.
+  var signInOffer = null;
+  var signInLink = '';
 
   function api(method, path, body, form) {
     var headers = { Authorization: 'Bearer ' + token };
@@ -780,7 +787,11 @@ code { font: 11px/1.4 ui-monospace, SFMono-Regular, monospace; word-break: break
               onclick: function (event) {
                 event.currentTarget.disabled = true;
                 var call = shared ? api('POST', '/ui/admin/unshare', { capabilityId: shared }) : api('POST', '/ui/admin/share', { agent: agent.agent, server: server.name });
-                call.then(function () { info = shared ? 'Outil retiré du partage.' : 'Outil partagé après consentement.'; announce(info); render(true); }, function (error) { notice = error.message; render(true); });
+                call.then(function () { info = shared ? 'Outil retiré du partage.' : 'Outil partagé après consentement.'; announce(info); render(true); }, function (error) {
+                  notice = error.message;
+                  if (error.code === 'E_SHARE_OAUTH') signInOffer = { agent: agent.agent, server: server.name };
+                  render(true);
+                });
               } }, el('span', {}))));
         });
         view.appendChild(card);
@@ -790,7 +801,7 @@ code { font: 11px/1.4 ui-monospace, SFMono-Regular, monospace; word-break: break
         var linked = el('div', { class: 'list' });
         data.links.forEach(function (link) {
           linked.appendChild(el('div', { class: 'row' },
-            el('div', { class: 'grow' }, el('div', { class: 'name', text: link.clientName }), el('div', { class: 'muted', text: 'peut demander à ton équipe en ton nom' })),
+            el('div', { class: 'grow' }, el('div', { class: 'name', text: link.clientName + (link.redirectHost ? ' (' + link.redirectHost + ')' : '') }), el('div', { class: 'muted', text: 'peut demander à ton équipe en ton nom' })),
             el('button', { class: 'act', 'aria-label': 'Retirer ' + link.clientName, onclick: function () {
               api('POST', '/ui/admin/unlink', { gateway: link.gateway, client: link.clientName }).then(function () { render(true); });
             } }, 'Retirer')));
@@ -799,6 +810,22 @@ code { font: 11px/1.4 ui-monospace, SFMono-Regular, monospace; word-break: break
       }
       view.appendChild(el('div', { class: 'lead', text: 'Qui paie le modèle : ' + (data.payer === 'owner' ? 'toi' : 'celui qui demande') }));
     });
+  }
+
+  function signInCard(offer) {
+    return el('div', { class: 'card' },
+      el('div', { text: 'drop doit se connecter à ' + offer.server + ' une fois, en ton nom. Le jeton reste sur ce Mac.' }),
+      el('button', { class: 'act fill', onclick: function () {
+        signInOffer = null;
+        api('POST', '/ui/admin/connect', offer).then(function (data) {
+          info = data.connected
+            ? 'drop est déjà connecté à ' + offer.server + ' : partage-le de nouveau.'
+            : 'Termine la connexion dans ton navigateur, puis partage ' + offer.server + ' de nouveau.';
+          announce(info);
+          signInLink = data.authorizationUrl || '';
+          render(true);
+        }, function (error) { notice = error.message; render(true); });
+      } }, 'Se connecter à ' + offer.server));
   }
 
   function render(focusResult) {
@@ -816,6 +843,12 @@ code { font: 11px/1.4 ui-monospace, SFMono-Regular, monospace; word-break: break
     next.setAttribute('aria-busy', 'true');
     if (notice) { next.appendChild(el('div', { class: 'notice error', role: 'alert', text: notice })); notice = ''; }
     if (info) { next.appendChild(el('div', { class: 'notice', text: info })); info = ''; }
+    if (signInOffer) next.appendChild(signInCard(signInOffer));
+    // The sign-in page comes from the remote server: shown as a link only if it is https, never javascript: or else.
+    if (signInLink.indexOf('https://') === 0) {
+      next.appendChild(el('a', { class: 'act', href: signInLink, target: '_blank', rel: 'noopener noreferrer', text: 'Ouvrir la page de connexion' }));
+      signInLink = '';
+    }
     var loading = el('div', { class: 'loading' }, el('span', { class: 'sr-only', text: 'Chargement…' }), el('div', {}), el('div', {}));
     next.appendChild(loading);
     view.replaceWith(next);
@@ -880,26 +913,40 @@ code { font: 11px/1.4 ui-monospace, SFMono-Regular, monospace; word-break: break
   // Opened from a drop://link link (T2.13): an assistant such as Claude or ChatGPT asks to reach the team in this
   // user's name, through a gateway. Nothing happens until the user clicks.
   var linkParams = new URLSearchParams(location.search);
-  var linkRequest = linkParams.get('link') ? { session: linkParams.get('link'), gateway: linkParams.get('gateway') || '', client: linkParams.get('client') || 'Un assistant' } : null;
+  var linkRequest = linkParams.get('link') ? {
+    session: linkParams.get('link'),
+    gateway: linkParams.get('gateway') || '',
+    client: linkParams.get('client') || 'Un assistant',
+    clientId: linkParams.get('clientId') || '',
+    redirect: linkParams.get('redirect') || ''
+  } : null;
+  var knownHosts = ${JSON.stringify(KNOWN_ASSISTANT_HOSTS)};
   if (linkRequest) history.replaceState(null, '', '/app?token=' + encodeURIComponent(token));
 
+  // The assistant's name comes from whoever registered it; the return domain is what tells Claude from an impostor.
+  // The node's link_grant repeats both, and the gateway refuses it unless they are the session's own.
   function linkCard(view, status) {
     var request = linkRequest;
     var trusted = status.gateways.indexOf(request.gateway) >= 0;
+    var complete = request.clientId !== '' && request.redirect !== '';
+    var known = knownHosts.indexOf(request.redirect) >= 0;
+    var who = request.client + (request.redirect ? ' (' + request.redirect + ')' : '');
     view.appendChild(el('div', { class: 'card' },
-      el('strong', { text: 'Autoriser ' + request.client + ' à demander à ton équipe ?' }),
+      el('strong', { text: 'Autoriser ' + who + ' à demander à ton équipe ?' }),
       el('div', { text: request.client + ' pourra poser des questions à tes collègues en ton nom. Chacun continue d’accepter ou de refuser chaque question ; personne ne reçoit d’accès.' }),
       trusted ? null : el('div', { class: 'error', text: 'Attention : cette demande ne passe pas par la passerelle officielle de drop. Refuse si tu n’en es pas à l’origine.' }),
+      !complete ? el('div', { class: 'error', text: 'Ce lien est incomplet : redemande l’autorisation depuis ton assistant.' })
+        : known ? null : el('div', { class: 'error', text: 'Attention : les réponses partiront vers ' + request.redirect + ', qui n’est ni Claude ni ChatGPT. Refuse si tu n’as pas ajouté toi-même cet assistant.' }),
       el('div', { class: 'actions' },
         el('button', { class: 'act', onclick: function () { linkRequest = null; info = 'Raccordement refusé.'; announce(info); render(true); } }, 'Refuser'),
-        el('button', { class: 'act fill', onclick: function () {
-          api('POST', '/ui/admin/link', { gateway: request.gateway, session: request.session, client: request.client }).then(function () {
+        complete ? el('button', { class: 'act fill', onclick: function () {
+          api('POST', '/ui/admin/link', { gateway: request.gateway, session: request.session, client: request.client, clientId: request.clientId, redirect: request.redirect }).then(function () {
             linkRequest = null;
             info = request.client + ' est relié. Tu peux revenir dans ta conversation.';
             announce(info);
             render(true);
           }, function (error) { notice = error.message; render(true); });
-        } }, 'Autoriser'))));
+        } }, 'Autoriser') : null)));
   }
 
   // Opened from a drop://pair link (T4.14): show who invites, then pair only after « Rejoindre ». The code leaves the

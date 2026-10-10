@@ -955,3 +955,11 @@ Le Node SHALL raccorder Gemini CLI et VS Code par leurs commandes officielles, e
 <!-- openspec-guard:test="mcp clients (T4.5) > offers a client-specific copyable configuration where no safe automatic connection exists" -->
 - **WHEN** l'analyse trouve OpenCode, Zed, goose ou JetBrains AI
 - **THEN** leur état est `manual`, rien n'est écrit, et l'extrait suit le format du client
+
+### Requirement: Retour de connexion OAuth sur l'API locale
+L'API locale SHALL accepter `GET /oauth/callback?state=…&code=…` sans jeton mais seulement avec son en-tête `Host`, et MUST n'échanger le code que pour une connexion en cours dont le `state`, à usage unique, a moins de 10 min (T2.17, D74). La page de réponse n'autorise aucune ressource. `POST /ui/admin/connect { agent, server }`, derrière le jeton, ouvre la connexion dans le navigateur (macOS, https seulement). Un refus de partage pour OAuth porte `E_SHARE_OAUTH`.
+
+#### Scenario: Retour du navigateur
+<!-- openspec-guard:test="remote MCP servers behind OAuth (T2.17) > takes the sign-in callback on the local API without its token, for a pending state only" -->
+- **WHEN** le navigateur revient avec un `state` en cours, un `state` inconnu, sans code, avec un refus, ou par un autre hôte
+- **THEN** seul le premier échange le code ; les autres reçoivent une page d'erreur ou 401, et `/ui/admin/connect` exige le jeton
