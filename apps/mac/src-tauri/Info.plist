@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>NSLocalNetworkUsageDescription</key>
+  <string>drop trouve tes collègues sur le même réseau pour échanger directement, sans serveur.</string>
+  <key>NSBonjourServices</key>
+  <array>
+    <string>_drop._tcp</string>
+  </array>
+</dict>
+</plist>

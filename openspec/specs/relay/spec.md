@@ -195,3 +195,11 @@ L’opérateur SHALL pouvoir révoquer un Node au redémarrage du relais. Un Nod
 <!-- openspec-guard:test="relay > keeps revoked members and their sponsored invitations refused after restore" -->
 - **WHEN** un membre admis est révoqué et le relais est redémarré depuis un état sauvegardé
 - **THEN** le membre reste refusé et ne peut parrainer de nouveau membre ; la recette VM ou conteneur conserve cette preuve.
+
+### Requirement: Défi signé seulement au format attendu
+Le Node MUST NOT signer pour un relais autre chose qu'un défi de 32 octets encodé en base64url ; tout autre texte reçu comme défi est ignoré. Ainsi un relais ne peut pas obtenir une preuve de session locale, un ticket ou un reçu signé.
+
+#### Scenario: AC: défi hors format ignoré
+<!-- openspec-guard:test="relay > signs only a 32-byte challenge, never another text a relay sends" -->
+- **WHEN** un relais envoie comme défi un texte qui n'est pas 32 octets en base64url, puis un défi conforme
+- **THEN** le Node ne répond qu'au défi conforme
