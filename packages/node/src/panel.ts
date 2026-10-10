@@ -130,6 +130,17 @@ input[type="text"] { min-height: 30px; font-weight: 400; border-radius: 7px; bor
 input[type="checkbox"] { accent-color: var(--accent); width: 14px; height: 14px; margin: 0; }
 input[aria-invalid="true"] { border-color: var(--warn); }
 .error { color: var(--warn); font-size: 12px; }
+textarea { min-height: 96px; resize: vertical; font: inherit; font-size: 13px; font-weight: 400; line-height: 1.45; color: var(--ink); width: 100%;
+  border-radius: 7px; border: .5px solid var(--edge); padding: 7px 9px; background: var(--card); -webkit-user-select: text; user-select: text; }
+input[type="file"] { font-size: 12px; font-weight: 400; color: var(--soft); max-width: 100%; }
+.composer { display: flex; flex-direction: column; gap: 8px; padding-top: 8px; border-top: .5px solid var(--line); }
+.composer .counter { font-size: 11px; font-weight: 400; color: var(--mute); font-variant-numeric: tabular-nums; align-self: flex-end; }
+.composer .attached { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--soft); overflow-wrap: anywhere; }
+.composer .actions, .answer-row { display: flex; justify-content: flex-end; gap: 6px; }
+.answer-row { justify-content: flex-start; }
+.filepreview { margin: 0; max-height: 160px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: 11px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--ink); padding: 8px 10px; border-radius: 8px; background: var(--well); -webkit-user-select: text; user-select: text; }
+.answer-row .act { padding-inline: 4px; border-color: transparent; background: transparent; color: var(--soft); box-shadow: none; }
 .notice { border-radius: 8px; padding: 9px 11px; background: var(--accent-soft); color: var(--ink); font-size: 12px; }
 .notice.error { background: transparent; border: .5px solid var(--warn); color: var(--ink); }
 .notice.error button { margin-top: 8px; }
@@ -170,6 +181,7 @@ code { font: 11px/1.4 ui-monospace, SFMono-Regular, monospace; word-break: break
   var manualConnector = null;
   var renderVersion = 0;
   var pendingRefresh = false;
+  var focusNext = null;
 
   function announce(message) {
     document.getElementById('announcement').textContent = message;
@@ -181,7 +193,10 @@ code { font: 11px/1.4 ui-monospace, SFMono-Regular, monospace; word-break: break
     if (form) { headers['Content-Type'] = 'application/x-www-form-urlencoded'; payload = new URLSearchParams(form).toString(); }
     else if (body !== undefined) { headers['Content-Type'] = 'application/json'; payload = JSON.stringify(body); }
     return fetch(path, { method: method, headers: headers, body: payload }).then(function (res) {
-      return res.json().then(function (data) { if (!res.ok) throw new Error((data && data.message) || 'Action impossible. Réessaie dans un instant.'); return data; });
+      return res.json().then(function (data) {
+        if (!res.ok) { var error = new Error((data && data.message) || 'Action impossible. Réessaie dans un instant.'); error.code = data && data.code; throw error; }
+        return data;
+      });
     });
   }
 
@@ -241,7 +256,10 @@ code { font: 11px/1.4 ui-monospace, SFMono-Regular, monospace; word-break: break
     E_CONFIG_CHANGED: 'La configuration a changé depuis l’analyse. Relance l’analyse.',
     E_CLI_COMMAND: 'L’agent n’a pas accepté l’ajout du connecteur. Réessaie ou ajoute drop à la main.',
     E_CLI_UNVERIFIED: 'L’agent n’a pas confirmé l’ajout du connecteur. Réessaie ou ajoute drop à la main.',
-    E_AGENT_INVALID: 'Agent non pris en charge.'
+    E_AGENT_INVALID: 'Agent non pris en charge.',
+    E_SECRET_DETECTED: 'Secret détecté dans ta réponse : retire-le, rien n’est parti.',
+    E_TOO_LARGE: 'Réponse trop longue : 8 000 caractères et un fichier de 128 Kio au plus.',
+    E_SCHEMA: 'Réponse vide ou fichier illisible : écris un texte ou joins un fichier texte.'
   };
 
   function explain(detail) {
@@ -254,6 +272,8 @@ code { font: 11px/1.4 ui-monospace, SFMono-Regular, monospace; word-break: break
 
   var USD = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'USD', currencyDisplay: 'narrowSymbol' });
   var seen = {};
+  // Hand-written answers being composed, by dropId: a live refresh rebuilds the card without losing them (T4.3).
+  var drafts = {};
 
   function costLine(card, requester) {
     if (!card.cost) return null;
@@ -298,6 +318,95 @@ code { font: 11px/1.4 ui-monospace, SFMono-Regular, monospace; word-break: break
     if (expired && !editing()) render();
   }, 1000);
 
+  var MEDIA = { md: 'text/markdown', csv: 'text/csv', json: 'application/json' };
+
+  // Moves the focus to a given control after the next render, so keyboard and VoiceOver users keep their place.
+  function focusTo(key) {
+    focusNext = key;
+    render();
+  }
+
+  function attach(item, draft, input) {
+    var file = input.files && input.files[0];
+    if (!file) return;
+    if (file.size > 128 * 1024) { notice = explain('E_TOO_LARGE'); announce(notice); input.value = ''; focusTo(item.dropId + ':file'); return; }
+    var reader = new FileReader();
+    reader.onload = function () {
+      var content = String(reader.result);
+      // readAsText replaces bytes that are not UTF-8: what would leave is not what the file says.
+      if (content.indexOf('\\uFFFD') !== -1) { notice = 'Fichier illisible : enregistre-le en UTF-8, puis joins-le à nouveau.'; announce(notice); focusTo(item.dropId + ':file'); return; }
+      var ext = file.name.split('.').pop().toLowerCase();
+      draft.file = { name: file.name, mediaType: MEDIA[ext] || 'text/plain', content: content, size: file.size };
+      focusTo(item.dropId + ':unattach');
+    };
+    reader.onerror = function () { notice = explain('E_SCHEMA'); announce(notice); focusTo(item.dropId + ':file'); };
+    reader.readAsText(file);
+  }
+
+  function sendAnswer(item, draft, button) {
+    var file = draft.file ? { name: draft.file.name, mediaType: draft.file.mediaType, content: draft.file.content } : undefined;
+    var payload = { dropId: item.dropId, text: draft.text, file: file };
+    if (new Blob([JSON.stringify(payload)]).size > 160 * 1024) {
+      draft.stage = 'write';
+      notice = explain('E_TOO_LARGE');
+      announce('Action impossible. ' + notice);
+      focusTo(item.dropId + ':answer');
+      return;
+    }
+    button.disabled = true;
+    api('POST', '/ui/answer', payload).then(function () {
+      delete drafts[item.dropId];
+      var card = button.closest('.card');
+      if (card) card.classList.add('leaving');
+      info = 'Réponse envoyée.';
+      announce(info);
+      setTimeout(function () { render(true); }, 160);
+    }, function (error) {
+      draft.stage = 'write';
+      notice = error.code === 'E_SECRET_DETECTED' ? error.message + ' (E_SECRET_DETECTED)' : error.code ? explain(error.code) : error.message;
+      announce('Action impossible. ' + notice);
+      focusTo(item.dropId + ':answer');
+    });
+  }
+
+  // « Répondre moi-même » (T4.3): write, then review exactly what will leave, then send. Nothing leaves before « Envoyer ».
+  // When the capability lives on another node, that node receives the answer first: it is named from the local peer
+  // store (executorName), never from the card a peer sent.
+  function composer(item, who) {
+    var draft = drafts[item.dropId];
+    var route = item.executorName ? el('div', { class: 'cost', text: 'Ta réponse part chez ' + item.executorName + ', qui gère cet outil, puis vers ' + who + '.' }) : null;
+    var close = el('button', { class: 'act', 'data-focus': item.dropId + ':cancel', onclick: function () { delete drafts[item.dropId]; focusTo(item.dropId + ':compose'); } }, 'Annuler');
+    if (draft.stage === 'review') {
+      return el('div', { class: 'composer', role: 'group', 'aria-label': 'Ta réponse, à relire' },
+        el('div', { class: 'label', text: item.executorName ? item.executorName + ' recevra exactement, pour ' + who + ' :' : who + ' recevra exactement :' }),
+        draft.text.trim() ? el('p', { class: 'quote', text: draft.text }) : null,
+        draft.file ? el('div', { class: 'attached', text: 'Fichier : ' + draft.file.name + ' (' + Math.ceil(draft.file.size / 1024) + ' Kio, ' + draft.file.content.replace(/\\n$/, '').split('\\n').length + ' lignes)' }) : null,
+        draft.file ? el('pre', { class: 'filepreview', tabindex: '0', 'aria-label': 'Contenu de ' + draft.file.name, text: draft.file.content }) : null,
+        el('div', { class: 'cost', text: 'Les secrets reconnus bloquent l’envoi. Rien n’est parti.' }),
+        el('div', { class: 'actions' },
+          el('button', { class: 'act', 'data-focus': item.dropId + ':edit', onclick: function () { draft.stage = 'write'; focusTo(item.dropId + ':answer'); } }, 'Modifier'),
+          el('button', { class: 'act fill', 'data-focus': item.dropId + ':send', 'aria-label': 'Envoyer ta réponse : ' + item.card.title, onclick: function (event) { sendAnswer(item, draft, event.currentTarget); } }, 'Envoyer')));
+    }
+    var counter = el('span', { class: 'counter', 'aria-live': 'off', text: draft.text.length + ' / 8 000' });
+    var text = el('textarea', { maxlength: '8000', rows: '5', 'data-focus': item.dropId + ':answer', 'aria-label': 'Ta réponse à ' + who });
+    text.value = draft.text;
+    text.addEventListener('input', function () { draft.text = text.value; counter.textContent = draft.text.length + ' / 8 000'; });
+    var picker = el('input', { type: 'file', 'data-focus': item.dropId + ':file', accept: '.txt,.md,.csv,.json,.log,text/plain,text/markdown,text/csv,application/json', 'aria-label': 'Joindre un fichier texte' });
+    picker.addEventListener('change', function () { attach(item, draft, picker); });
+    return el('div', { class: 'composer', role: 'group', 'aria-label': 'Répondre moi-même' },
+      el('label', { class: 'field' }, 'Ta réponse', text), counter, route,
+      draft.file
+        ? el('div', { class: 'attached' }, 'Fichier : ' + draft.file.name,
+          el('button', { class: 'act', 'data-focus': item.dropId + ':unattach', onclick: function () { draft.file = null; focusTo(item.dropId + ':file'); } }, 'Retirer'))
+        : el('label', { class: 'field' }, 'Fichier texte (facultatif, 128 Kio au plus)', picker),
+      el('div', { class: 'actions' }, close,
+        el('button', { class: 'act fill', 'data-focus': item.dropId + ':review', onclick: function () {
+          if (!draft.text.trim() && !draft.file) { text.setAttribute('aria-invalid', 'true'); announce('Écris une réponse ou joins un fichier.'); text.focus(); return; }
+          draft.stage = 'review';
+          focusTo(item.dropId + ':send');
+        } }, 'Relire la réponse')));
+  }
+
   function approvalCard(item) {
     var who = item.requestedBy.displayName;
     var cost = costLine(item.card, who);
@@ -318,7 +427,13 @@ code { font: 11px/1.4 ui-monospace, SFMono-Regular, monospace; word-break: break
       el('div', { class: 'decision-actions' },
         el('button', { class: 'act subtle', autofocus: 'autofocus', 'data-focus': item.dropId + ':not_now', 'aria-label': 'Reporter : ' + item.card.title, onclick: function (event) { decide('/ui/decide', item.dropId, 'not_now', event.currentTarget); } }, 'Pas maintenant'),
         el('button', { class: 'act', 'data-focus': item.dropId + ':deny', 'aria-label': 'Refuser : ' + item.card.title, onclick: function (event) { decide('/ui/decide', item.dropId, 'deny', event.currentTarget); } }, 'Refuser'),
-        el('button', { class: 'act fill', 'data-focus': item.dropId + ':allow', 'aria-label': 'Autoriser une fois : ' + item.card.title, onclick: function (event) { decide('/ui/decide', item.dropId, 'allow_once', event.currentTarget); } }, 'Autoriser une fois')));
+        el('button', { class: 'act fill', 'data-focus': item.dropId + ':allow', 'aria-label': 'Autoriser une fois : ' + item.card.title, onclick: function (event) { decide('/ui/decide', item.dropId, 'allow_once', event.currentTarget); } }, 'Autoriser une fois')),
+      drafts[item.dropId]
+        ? composer(item, who)
+        : el('div', { class: 'answer-row' }, el('button', { class: 'act', 'data-focus': item.dropId + ':compose', 'aria-label': 'Répondre moi-même : ' + item.card.title, onclick: function () {
+          drafts[item.dropId] = { stage: 'write', text: '', file: null };
+          focusTo(item.dropId + ':answer');
+        } }, 'Répondre moi-même')));
   }
 
   function fresh(dropId) {
@@ -370,6 +485,8 @@ code { font: 11px/1.4 ui-monospace, SFMono-Regular, monospace; word-break: break
   function renderRequests(view) {
     return Promise.all([api('GET', '/ui/pending'), api('GET', '/ui/outbound')]).then(function (data) {
       var pending = data[0].pending;
+      // A draft whose card was decided, answered elsewhere or expired leaves the page memory with it.
+      Object.keys(drafts).forEach(function (id) { if (!pending.some(function (item) { return item.dropId === id; })) delete drafts[id]; });
       var badge = document.getElementById('badge');
       badge.hidden = pending.length === 0;
       badge.textContent = String(pending.length);
@@ -552,7 +669,10 @@ code { font: 11px/1.4 ui-monospace, SFMono-Regular, monospace; word-break: break
           el('div', { text: message }), el('button', { class: 'act', onclick: function () { render(true); } }, 'Réessayer')));
         announce(message);
       }
-      if (focusResult) {
+      var wanted = focusNext && Array.prototype.find.call(next.querySelectorAll('[data-focus]'), function (node) { return node.getAttribute('data-focus') === focusNext; });
+      focusNext = null;
+      if (wanted) wanted.focus();
+      else if (focusResult) {
         var target = next.querySelector('h2, [role="alert"], .notice, button');
         if (target) { target.setAttribute('tabindex', '-1'); target.focus(); }
       } else if (!document.activeElement || document.activeElement === document.body) {

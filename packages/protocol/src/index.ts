@@ -12,5 +12,6 @@ export * from './messages.ts';
 export * from './receipt.ts';
 export * from './schemas.ts';
 export * from './team.ts';
+export * from './human-answer.ts';
 
 export * from './private-network.ts';
