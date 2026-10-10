@@ -1,0 +1,3 @@
+{"at":"2026-10-10T12:19:21.749Z","event":"send_failed","code":"E_RATE","peer":"vwHmg3seCFNzyt-skLqilcxaOc1GdejZhkABi2IDxbA"}
+{"at":"2026-10-10T12:19:22.759Z","event":"send_failed","code":"E_RATE","reason":"flush_refused","peer":"vwHmg3seCFNzyt-skLqilcxaOc1GdejZhkABi2IDxbA"}
+{"at":"2026-10-10T12:19:23.766Z","event":"send_failed","code":"E_RATE","reason":"flush_refused","peer":"vwHmg3seCFNzyt-skLqilcxaOc1GdejZhkABi2IDxbA"}

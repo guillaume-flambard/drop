@@ -1,0 +1,29 @@
+{
+  "campaign": "seed1-50n",
+  "seed": 1,
+  "nodes": 50,
+  "owners": 10,
+  "durationMs": 180000,
+  "totals": {
+    "delivered": 124,
+    "not_now": 14,
+    "denied": 14,
+    "error": 8
+  },
+  "errors": {
+    "E_SIM_TIMEOUT": 8
+  },
+  "latencyMs": {
+    "count": 124,
+    "median": 100,
+    "p95": 187,
+    "max": 44308
+  },
+  "memoryKb": {
+    "relayMax": 68800,
+    "nodeMaxMedian": 73584,
+    "nodeMaxMax": 94656,
+    "sumOfPeaks": 3691760
+  },
+  "leaks": 0
+}
