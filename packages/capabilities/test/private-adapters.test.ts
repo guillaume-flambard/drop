@@ -69,9 +69,11 @@ describe('private adapters', () => {
       res.end('{}');
     });
     const policy = { origins: ['http://127.0.0.1:11434'] };
-    await expect(connectMcp({ transport: 'http', url: source, headersFromEnv: {} }, {}, policy)).rejects.toThrow();
     await expect(
-      connectMcp({ transport: 'stdio', command: 'must-never-be-executed', args: [], env: [] }, {}, policy),
+      connectMcp({ transport: 'http', url: source, headersFromEnv: {} }, {}, { network: policy }),
+    ).rejects.toThrow();
+    await expect(
+      connectMcp({ transport: 'stdio', command: 'must-never-be-executed', args: [], env: [] }, {}, { network: policy }),
     ).rejects.toThrow('E_DENIED');
     expect(connections).toBe(0);
   });
