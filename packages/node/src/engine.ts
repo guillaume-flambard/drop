@@ -85,6 +85,16 @@ export interface Transport {
 interface QueuedEnvelope {
   envelope: Envelope;
   order: number;
+  /** A state message (T4.2e): only the newest of its kind per peer stays in the outbox. */
+  kind?: CoalescedKind;
+}
+
+/** Messages that describe a whole state, which the next one replaces (T4.2e, D79). Nothing else is ever coalesced. */
+const COALESCED_KINDS = ['lan_key', 'iroh_addr', 'team_roster', 'catalog'] as const;
+type CoalescedKind = (typeof COALESCED_KINDS)[number];
+
+function coalescedKind(type: Message['type']): CoalescedKind | undefined {
+  return (COALESCED_KINDS as readonly string[]).includes(type) ? (type as CoalescedKind) : undefined;
 }
 
 export type DropClaim = 'claimed' | 'duplicate' | 'expired' | 'capacity';
@@ -270,6 +280,8 @@ export class NodeEngine extends EventEmitter {
   private readonly outbound = new Map<string, OutboundDrop>();
   private readonly inbox = new Map<string, InboxItem>();
   private readonly outbox: QueuedEnvelope[] = [];
+  /** The order of the newest state message sent to each peer, per kind, live or queued (T4.2e): older ones are stale. */
+  private readonly latestState = new Map<string, number>();
   private outboxInFlight: QueuedEnvelope | undefined;
   private outboxFlush: Promise<void> | undefined;
   private nextOutboxOrder = 0;
@@ -504,7 +516,11 @@ export class NodeEngine extends EventEmitter {
     // Off: peers learn there is nothing to dial any more, rather than waiting on a dead address.
     const announced = address ?? (had ? { direct: [] } : undefined);
     if (!announced) return;
-    for (const peer of this.peers()) await this.send(peer.nodeId, { type: 'iroh_addr', ...announced });
+    for (const peer of this.peers()) {
+      // A newer address is being announced: this one is stale, for the peers not reached yet too.
+      if (this.irohAddress !== address) return;
+      await this.send(peer.nodeId, { type: 'iroh_addr', ...announced });
+    }
   }
 
   /** Where a peer, or the node an invite is being used for, said it can be reached by iroh. */
@@ -803,7 +819,7 @@ export class NodeEngine extends EventEmitter {
       const [queued] = this.outbox.splice(index, 1);
       if (!queued) continue;
       const { envelope } = queued;
-      if (envelope.exp <= this.now()) continue;
+      if (envelope.exp <= this.now() || this.isStale(queued)) continue;
       this.outboxInFlight = queued;
       let outcome: string;
       try {
@@ -1638,11 +1654,27 @@ export class NodeEngine extends EventEmitter {
     return true;
   }
 
+  /** A state message older than the last one of its kind sent to the same peer (T4.2e, D79). */
+  private isStale(queued: QueuedEnvelope): boolean {
+    if (!queued.kind) return false;
+    return (this.latestState.get(`${queued.envelope.to}|${queued.kind}`) ?? -1) > queued.order;
+  }
+
   private queueOutbox(queued: QueuedEnvelope): void {
     const now = this.now();
     for (let index = this.outbox.length - 1; index >= 0; index -= 1) {
       const entry = this.outbox[index];
       if (entry && entry.envelope.exp <= now) this.outbox.splice(index, 1);
+    }
+    // One state message per peer and kind: the newest wins, by send order, even against a failed send coming back or a
+    // newer one already delivered live.
+    if (queued.kind) {
+      const same = (entry: QueuedEnvelope) => entry.kind === queued.kind && entry.envelope.to === queued.envelope.to;
+      if (this.isStale(queued)) return;
+      for (let index = this.outbox.length - 1; index >= 0; index -= 1) {
+        const entry = this.outbox[index];
+        if (entry && same(entry)) this.outbox.splice(index, 1);
+      }
     }
     const insertAt = this.outbox.findIndex((entry) => entry.order > queued.order);
     if (insertAt === -1) this.outbox.push(queued);
@@ -1654,8 +1686,11 @@ export class NodeEngine extends EventEmitter {
   }
 
   private async send(to: NodeId, message: Message, options: { queueOffline?: boolean } = {}): Promise<string> {
-    const envelope = await sealEnvelope(this.identity, to, message, { now: this.now() });
+    // The order is taken before any wait, so that it follows the order of the calls.
     const order = this.nextOutboxOrder++;
+    const kind = coalescedKind(message.type);
+    if (kind) this.latestState.set(`${to}|${kind}`, order);
+    const envelope = await sealEnvelope(this.identity, to, message, { now: this.now() });
     let outcome: string;
     try {
       outcome = await this.options.transport.send(envelope);
@@ -1663,7 +1698,8 @@ export class NodeEngine extends EventEmitter {
       this.log({ event: 'send_failed', code: 'E_RUNNER', reason: 'transport_exception', peer: to });
       outcome = 'offline';
     }
-    if (outcome === 'offline' && options.queueOffline !== false) this.queueOutbox({ envelope, order });
+    if (outcome === 'offline' && options.queueOffline !== false)
+      this.queueOutbox({ envelope, order, ...(kind ? { kind } : {}) });
     else if (outcome !== 'delivered' && outcome !== 'queued')
       this.log({ event: 'send_failed', code: outcome, peer: to });
     return outcome;
