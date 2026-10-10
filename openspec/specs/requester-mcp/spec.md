@@ -173,6 +173,16 @@ README du package `packages/requester-mcp`.
 - **WHEN** on lance `drop install cursor --link`
 - **THEN** on obtient un lien `cursor://anysphere.cursor-deeplink/mcp/install` dont `config` est l'entrée du serveur en base64
 
+### Requirement: Fichiers assemblés autonomes
+Le paquet SHALL séparer sa bibliothèque (`src/lib.ts`, ce qu'importent le Node et la passerelle, sans effet de bord)
+de son point d'entrée (`src/index.ts`, qui démarre le serveur). Dans `drop.mjs`, où `import.meta.main` vaut vrai pour
+tout le fichier, le serveur du demandeur MUST NOT démarrer ; `drop-mcp.mjs` MUST le démarrer (T2.18).
+
+#### Scenario: Premier lancement du fichier assemblé
+<!-- openspec-guard:test="the bundled files that ship outside the repo (D29, T2.18) > drop.mjs runs its own command on a fresh DROP_HOME, without starting the requester MCP server" -->
+- **WHEN** on lance `drop.mjs init` puis `drop.mjs help` dans un `DROP_HOME` neuf, puis `drop-mcp.mjs`
+- **THEN** les deux commandes réussissent, et `drop-mcp.mjs` répond à `initialize` comme serveur MCP `drop`
+
 ### Requirement: Question à plusieurs personnes
 Le serveur SHALL exposer `request_drops({ purpose, requests: { capability_id, input }[] })` (2 à 10 demandes) et
 `get_drop_results({ drop_ids, wait_seconds })` (T2.10, D28). `request_drops` MUST valider toutes les entrées avant

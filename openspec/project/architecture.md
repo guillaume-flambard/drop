@@ -78,3 +78,14 @@ Le runner n’écoute aucun port. L’API du Node écoute localement et reste au
 T3.1 remplace le bootstrap Mac public par un relais loopback ou explicitement configuré. Le runtime privé propose Ollama local et exige un modèle explicite ; le financement ne remplace plus sa destination. Les transports privés autorisent des IP privées littérales exactes, sans DNS, redirection ni proxy implicite. Les sources MCP stdio non isolées sont refusées. Voir [PRIVATE_PROFILE](../../docs/PRIVATE_PROFILE.md). Le raccordement groupé en deux confirmations, avec sauvegarde et restauration, est livré (T3.3). A2A entrant et sortant existent, sans démontrer la conformité à tout A2A ni la souveraineté de bout en bout.
 
 T3.1 prouve le cycle privé dans un conteneur sans Internet, avec deux Nodes et des fixtures MCP/modèle ; cela ne qualifie pas un vrai modèle ni tous les agents tiers. T3.2 qualifie les modèles. T3.3 a livré le raccordement. T3.4 termine l’app distribuable. T3.5 apporte les preuves d’ensemble. Ordre et reprise des anciens chantiers : [TASKS](../../docs/TASKS.md).
+
+## Composants de l'étape 2 réunis (D76)
+
+La branche principale a ajouté, avant la réunion du 10 octobre 2026, des composants que ce document garde hors du profil privé :
+
+- **Passerelle** (`packages/gateway`, T2.13, D31, D71) : rend drop joignable depuis Claude et ChatGPT en ligne par OAuth et MCP distant ; la liaison se confirme dans l'app ; elle voit questions et réponses en clair. Désactivée dans le profil privé.
+- **Relais** : en plus de la révocation inscrite dans sa config (T3.1), un fichier de révocations relu à chaud, avec propagation aux nœuds admis par un nœud révoqué, et un plafond global d'admissions par jour (T2.19, D75).
+- **mcp.answer** : connexion OAuth de drop à des serveurs MCP distants, jetons sous `DROP_HOME/oauth` (T2.17, D74), et partage vérifié qui explique pourquoi un serveur est inutilisable (T2.16, D73). Le profil privé n'utilise ni l'un ni l'autre : ses sources passent par sa politique de destinations.
+- **App Mac** : mise à jour signée proposée dans le menu, seulement dans un build fait avec la clé de mise à jour (T2.4, D70, D76).
+- **Site** : pages publiques et fichiers de mise à jour servis par l'image drop (T2.6, D72).
+- `requester-mcp` sépare sa bibliothèque (`src/lib.ts`) de son point d'entrée (`src/index.ts`) pour qu'un fichier assemblé ne démarre jamais le serveur (T2.18).
