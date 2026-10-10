@@ -5,6 +5,7 @@ import { NodeIdSchema, OwnerKindSchema } from './identity.ts';
 import { DropStateSchema } from './lifecycle.ts';
 import { ReceiptSchema } from './receipt.ts';
 import { HumanAnswerSchema } from './human-answer.ts';
+import { IrohAddrSchema } from './iroh.ts';
 
 const DropId = z.uuid();
 // overwrite keeps the UUIDv7 pattern in the exported JSON Schema, unlike refine/transform.
@@ -102,6 +103,8 @@ export const MessageSchema = z.discriminatedUnion('type', [
   }),
   // A node's local-network discovery key, sent to each of its peers (T4.2c, D67): 32 bytes, base64url.
   z.object({ type: z.literal('lan_key'), key: z.string().regex(/^[A-Za-z0-9_-]{43}$/) }),
+  // A node's iroh addresses, sent to each of its peers at start and on change (T4.2b, D68).
+  z.object({ type: z.literal('iroh_addr'), ...IrohAddrSchema.shape }),
   z.object({
     type: z.literal('team_roster'),
     team: TeamSchema,

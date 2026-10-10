@@ -41,7 +41,9 @@ import {
   type TeamMember,
   type UnsignedReceipt,
 } from '@drop/protocol';
+import { IrohAddrSchema, type IrohAddr } from '@drop/protocol';
 import type { Funder } from './funding.ts';
+import { irohRelayAllowed } from './iroh.ts';
 import { checkHumanAnswer } from './human-answer.ts';
 import {
   carriesInvite,
@@ -127,6 +129,9 @@ export interface NodeStore {
   /** Local-network discovery keys of the peers (T4.2c): kept apart, owner-only. */
   lanKeys?(): Record<string, string>;
   saveLanKey?(nodeId: string, key: string): void;
+  /** Iroh addresses of the peers (T4.2b): kept apart, owner-only. */
+  irohAddrs?(): Record<string, IrohAddr>;
+  saveIrohAddr?(nodeId: string, address: IrohAddr): void;
 }
 
 /** One member as the team panel shows them (T2.9): who, which agents, online or not, which capabilities. */
@@ -251,7 +256,10 @@ export class NodeEngine extends EventEmitter {
   private lanKeysCache: { at: number; keys: Record<string, string> } | undefined;
   /** Recent fact requests per peer (T4.4), for FACT_REQUESTS_PER_MINUTE. */
   private readonly factRequests = new Map<NodeId, number[]>();
-  private readonly pairing = new Map<NodeId, { token: string; displayName: string }>();
+  private readonly pairing = new Map<NodeId, { token: string; displayName: string; iroh?: IrohAddr }>();
+  /** This node's iroh addresses while the Internet mode runs (T4.2b). */
+  private irohAddress: IrohAddr | undefined;
+  private irohAddrsCache: { at: number; addrs: Record<string, IrohAddr> } | undefined;
   private readonly catalogs = new Map<NodeId, { cards: CapabilityCard[]; at: number }>();
   private readonly executing = new Map<string, ExecutorDrop>();
   /** Minimal duplicate response, without the request input, tools, config or funding. */
@@ -340,8 +348,10 @@ export class NodeEngine extends EventEmitter {
   /** A pairing code that also carries an admission ticket, so a newcomer can join the relay with it (T2.1). */
   async invite(relayUrl: string): Promise<string> {
     const admission = await createAdmission(this.identity, this.now());
-    const invite = createInvite(this.identity, relayUrl, this.now(), admission, this.team()?.team);
+    const invite = createInvite(this.identity, relayUrl, this.now(), admission, this.team()?.team, this.irohAddress);
     this.invites.set(invite.oneTimeToken, invite.expiresAt);
+    // Direct paths must let the invitee in now, not at their next refresh (T4.2b live run).
+    this.emit('access');
     return encodeInvite(invite);
   }
 
@@ -350,7 +360,12 @@ export class NodeEngine extends EventEmitter {
     if (invite.admission) this.options.onAdmission?.(invite.admission);
     // Joining a team: the roster arrives from the inviter once paired (T2.9).
     if (invite.team && !this.team()) this.options.store.saveTeam({ team: invite.team, members: [this.selfMember()] });
-    this.pairing.set(invite.nodeId, { token: invite.oneTimeToken, displayName: invite.displayName });
+    this.pairing.set(invite.nodeId, {
+      token: invite.oneTimeToken,
+      displayName: invite.displayName,
+      ...(invite.iroh ? { iroh: invite.iroh } : {}),
+    });
+    this.emit('access');
     await this.send(invite.nodeId, {
       type: 'pair_request',
       oneTimeToken: invite.oneTimeToken,
@@ -451,11 +466,51 @@ export class NodeEngine extends EventEmitter {
 
   /** Sends this node's discovery key to every peer: at start, so that peers paired before it changed keep up. */
   async announceLanKey(): Promise<void> {
-    for (const peer of this.peers()) await this.shareLanKey(peer.nodeId);
+    for (const peer of this.peers()) await this.shareDirectPaths(peer.nodeId);
   }
 
-  private async shareLanKey(nodeId: NodeId): Promise<void> {
+  /** What a peer needs to reach this node directly: its local-network key and, when it runs, its iroh addresses. */
+  private async shareDirectPaths(nodeId: NodeId): Promise<void> {
     await this.send(nodeId, { type: 'lan_key', key: this.lanKey });
+    if (this.irohAddress) await this.send(nodeId, { type: 'iroh_addr', ...this.irohAddress });
+  }
+
+  // ---- Internet (T4.2b, D68) ---------------------------------------------------------------------------------
+
+  /** Records this node's iroh addresses; when they change, every peer learns them, queued like any message. */
+  async setIrohAddress(address: IrohAddr | undefined): Promise<void> {
+    if (JSON.stringify(address) === JSON.stringify(this.irohAddress)) return;
+    const had = this.irohAddress !== undefined;
+    this.irohAddress = address;
+    // Off: peers learn there is nothing to dial any more, rather than waiting on a dead address.
+    const announced = address ?? (had ? { direct: [] } : undefined);
+    if (!announced) return;
+    for (const peer of this.peers()) await this.send(peer.nodeId, { type: 'iroh_addr', ...announced });
+  }
+
+  /** Where a peer, or the node an invite is being used for, said it can be reached by iroh. */
+  irohAddressOf(nodeId: string): IrohAddr | undefined {
+    return this.peerIrohAddrs()[nodeId] ?? this.pairing.get(nodeId)?.iroh;
+  }
+
+  /** Who may connect by iroh: paired peers and pairings in progress, and anyone while an invite is live (D60). */
+  irohAccess(): { peers: string[]; open: boolean } {
+    const peers = new Set<string>([...this.peers().map((peer) => peer.nodeId), ...this.pairing.keys()]);
+    peers.delete(this.identity.nodeId);
+    return { peers: [...peers].sort(), open: this.hasLiveInvite() };
+  }
+
+  private peerIrohAddrs(): Record<string, IrohAddr> {
+    const now = this.now();
+    if (this.irohAddrsCache && now - this.irohAddrsCache.at < 2000) return this.irohAddrsCache.addrs;
+    let addrs: Record<string, IrohAddr> = {};
+    try {
+      addrs = this.options.store.irohAddrs?.() ?? {};
+    } catch {
+      this.log({ event: 'iroh_addrs_unreadable', code: 'E_SCHEMA' });
+    }
+    this.irohAddrsCache = { at: now, addrs };
+    return addrs;
   }
 
   // ---- team (T2.9) -------------------------------------------------------------------------------------------
@@ -542,7 +597,7 @@ export class NodeEngine extends EventEmitter {
             via: from,
           });
           introduced.push(member.nodeId);
-          await this.shareLanKey(member.nodeId);
+          await this.shareDirectPaths(member.nodeId);
         }
       } else if (member.nodeId === from && JSON.stringify(known) !== JSON.stringify(member)) {
         members.set(from, member);
@@ -800,6 +855,23 @@ export class NodeEngine extends EventEmitter {
           this.lanKeysCache = undefined;
         }
         return;
+      case 'iroh_addr': {
+        // Only a known peer, for itself, with a relay this node would accept: https, or http on loopback for tests.
+        if (!this.peers().some((peer) => peer.nodeId === from)) return;
+        // The schema keeps the address fields only; the message type is dropped.
+        const address = IrohAddrSchema.safeParse(message);
+        if (!address.success || (address.data.relay !== undefined && !irohRelayAllowed(address.data.relay))) {
+          this.log({ event: 'iroh_addr_refused', code: 'E_SCHEMA', peer: from });
+          return;
+        }
+        try {
+          this.options.store.saveIrohAddr?.(from, address.data);
+        } catch {
+          this.log({ event: 'iroh_addr_not_saved', code: 'E_SCHEMA', peer: from });
+        }
+        this.irohAddrsCache = undefined;
+        return;
+      }
       case 'catalog_request':
         await this.send(from, {
           type: 'catalog',
@@ -852,7 +924,7 @@ export class NodeEngine extends EventEmitter {
       ownerKind: this.options.ownerKind,
     });
     this.log({ event: 'paired', peer: from });
-    await this.shareLanKey(from);
+    await this.shareDirectPaths(from);
     const state = this.team();
     if (state && !state.members.some((member) => member.nodeId === from)) {
       const newcomer: TeamMember = {
@@ -879,7 +951,7 @@ export class NodeEngine extends EventEmitter {
       pairedAt: new Date(this.now()).toISOString(),
     });
     this.log({ event: 'paired', peer: from });
-    await this.shareLanKey(from);
+    await this.shareDirectPaths(from);
     if (this.team()) await this.sendRoster(from);
     this.changed();
   }
