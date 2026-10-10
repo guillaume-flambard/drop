@@ -27,7 +27,8 @@ export const CapabilityCardSchema = z.object({
   outputSchema: JsonSchemaSchema,
   receives: z.array(z.string().min(1)).min(1),
   neverReceives: z.array(z.string().min(1)).min(1),
-  approval: z.enum(['always', 'auto_low']),
+  // v1 asks every time unless the card says otherwise.
+  approval: z.enum(['always', 'auto_low']).default('always'),
   maxOutputChars: z.number().int().positive(),
   budget: z.object({
     maxSeconds: z.number().positive(),
