@@ -523,7 +523,9 @@ describe('protocol contract', () => {
     await expectCode(
       openEnvelope(
         bob,
-        { ...good, sig: good.sig.slice(0, -2) + 'AA' },
+        // The first character carries 6 signature bits: a different one always breaks the signature, unlike a fixed
+        // suffix that the random signature may already end with.
+        { ...good, sig: (good.sig.startsWith('A') ? 'B' : 'A') + good.sig.slice(1) },
         {
           isKnownPeer: () => true,
           replay: new ReplayCache(),
