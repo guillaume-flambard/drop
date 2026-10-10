@@ -11,10 +11,30 @@ const DropId = z.uuid();
 const NewDropId = z.uuidv7().overwrite((id) => id.toLowerCase());
 const Timestamp = z.number().int().nonnegative();
 
+/** The thirteen MCP clients of D55 and `other` (T4.5, D66): which agent asked, shown on the consent card. */
+export const REQUESTER_AGENTS = [
+  'claude_code',
+  'claude_desktop',
+  'cursor',
+  'codex',
+  'opencode',
+  'gemini_cli',
+  'devin_desktop',
+  'zed',
+  'goose',
+  'vscode',
+  'cline',
+  'roo_code',
+  'jetbrains',
+  'other',
+] as const;
+export const RequesterAgentSchema = z.enum(REQUESTER_AGENTS);
+
 export const RequestedBySchema = z.object({
   nodeId: NodeIdSchema,
   displayName: z.string().min(1).max(80),
-  agent: z.enum(['claude_code', 'codex', 'cursor', 'other']),
+  // An agent this node does not know yet (a newer peer) reads as `other`, never as an invalid request (T4.5 review).
+  agent: RequesterAgentSchema.catch('other'),
 });
 export type RequestedBy = z.infer<typeof RequestedBySchema>;
 

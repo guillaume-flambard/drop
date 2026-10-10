@@ -563,7 +563,7 @@ describe('protocol contract', () => {
     }
   });
 
-  it('refuses a drop_request with a purpose over 140 characters or an unknown agent, as E_MESSAGE_SCHEMA', async () => {
+  it('refuses a drop_request with a purpose over 140 characters, and reads an unknown agent as other (D66)', async () => {
     const { alice, bob } = await pair();
     const request = {
       type: 'drop_request',
@@ -576,10 +576,11 @@ describe('protocol contract', () => {
     };
     expect((await openRaw(alice, bob, request)).type).toBe('drop_request');
     await expectCode(openRaw(alice, bob, { ...request, purpose: 'x'.repeat(141) }), 'E_MESSAGE_SCHEMA');
-    await expectCode(
-      openRaw(alice, bob, { ...request, requestedBy: { ...request.requestedBy, agent: 'copilot' } }),
-      'E_MESSAGE_SCHEMA',
-    );
+    const unknown = await openRaw(alice, bob, {
+      ...request,
+      requestedBy: { ...request.requestedBy, agent: 'copilot' },
+    });
+    expect(unknown.type === 'drop_request' && unknown.requestedBy.agent).toBe('other');
   });
 
   it('requires every consent field in approval_request', async () => {

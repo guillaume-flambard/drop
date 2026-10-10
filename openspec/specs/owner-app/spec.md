@@ -98,6 +98,14 @@ L'onglet « Mes outils » SHALL montrer « Ce que je publie » : sujet, énoncé
 - **WHEN** le propriétaire ouvre « Mes outils »
 - **THEN** il voit ses faits, peut en ajouter, modifier et retirer, et un fait expiré est grisé
 
+### Requirement: Analyse des treize clients dans le panneau
+« Connecter mes agents » SHALL analyser les treize clients, séparer configuration globale et projets, proposer d'ajouter ou de retirer un dossier de projet, et montrer pour un client `manual` son extrait et sa marche à suivre. Les textes « quatre agents » MUST disparaître.
+
+#### Scenario: AC: analyse et projets dans le panneau
+<!-- openspec-guard:test="menu bar panel (T4.5) > analyses thirteen clients, separates global and project configurations, and shows manual steps" -->
+- **WHEN** le propriétaire analyse ce Mac
+- **THEN** il voit les treize clients, une section projets avec ajout et retrait de dossier, et les étapes manuelles des clients qui en ont besoin
+
 ### Requirement: Mises à jour signées
 Une app construite avec la clé de mise à jour SHALL chercher une version au lancement puis toutes les 6 h sur `https://drop.memolabs.dev/updates/latest.json` et la proposer dans le menu ; rien ne s'installe sans ce clic (D70). L'archive MUST être signée par cette clé pour la version annoncée (`requireSignedVersion`), sinon refusée. Sans la clé, l'app ne cherche aucune mise à jour (D76). La construction MUST refuser un manifeste signé pour une autre version.
 

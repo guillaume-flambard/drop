@@ -382,14 +382,14 @@ Le corps déchiffré SHALL être une union discriminée sur `type`. Tous les mes
 `drop_request` SHALL aller du demandeur à l'exécuteur avec `dropId`, `capabilityId`, `capabilityVersion`, `input` (JSON), `purpose` (≤ 140 car.) et `requestedBy` (`{ nodeId, displayName, agent: 'claude_code' | 'codex' | 'cursor' | 'other' }`). Le `dropId` d'une nouvelle demande MUST être un UUIDv7 horodaté ; un UUID d'une autre version MUST être rejeté avant tout consentement. Les lettres hexadécimales d'un UUIDv7 MUST être normalisées en minuscules avant l'admission et le stockage anti-rejeu.
 
 #### Scenario: purpose trop long
-<!-- openspec-guard:test="protocol contract > refuses a drop_request with a purpose over 140 characters or an unknown agent, as E_MESSAGE_SCHEMA" -->
+<!-- openspec-guard:test="protocol contract > refuses a drop_request with a purpose over 140 characters, and reads an unknown agent as other (D66)" -->
 - **WHEN** un `drop_request` a un `purpose` de 141 caractères
 - **THEN** il est rejeté avec `E_MESSAGE_SCHEMA`
 
 #### Scenario: agent inconnu
-<!-- openspec-guard:test="protocol contract > refuses a drop_request with a purpose over 140 characters or an unknown agent, as E_MESSAGE_SCHEMA" -->
-- **WHEN** `requestedBy.agent` vaut `'copilot'`
-- **THEN** il est rejeté avec `E_MESSAGE_SCHEMA`
+<!-- openspec-guard:test="protocol contract > refuses a drop_request with a purpose over 140 characters, and reads an unknown agent as other (D66)" -->
+- **WHEN** `requestedBy.agent` vaut une valeur inconnue, comme `'copilot'`
+- **THEN** la demande est acceptée et l'agent est lu comme `other` (D66)
 
 #### Scenario: AC: identifiant UUIDv7 obligatoire
 <!-- openspec-guard:test="drop request id > rejects UUIDv4 for a new drop request" -->
@@ -630,3 +630,11 @@ Un fait SHALL être annoncé par une carte `fact.f<factId en hex>` de version `1
 <!-- openspec-guard:test="published facts (T4.4) > serves a fact without a decision, with a signed receipt marked fact" -->
 - **WHEN** un pair du public demande un fait actif
 - **THEN** il reçoit le fait signé sous l'empreinte de `FACT_OUTPUT_SCHEMA` et un reçu `answeredBy: 'fact'`
+
+### Requirement: Agent du demandeur parmi les treize clients
+`requestedBy.agent` SHALL accepter `claude_code`, `claude_desktop`, `cursor`, `codex`, `opencode`, `gemini_cli`, `devin_desktop`, `zed`, `goose`, `vscode`, `cline`, `roo_code`, `jetbrains` et `other` ; toute autre valeur MUST être lue comme `other`, pour qu'un pair plus récent ne voie pas ses demandes refusées.
+
+#### Scenario: AC: agents acceptés
+<!-- openspec-guard:test="requested-by agent (T4.5) > accepts the thirteen clients and other, and reads any other value as other" -->
+- **WHEN** une demande porte `agent: 'zed'`, puis `agent: 'chatgpt'`
+- **THEN** la première garde `zed` et la seconde est lue comme `other`
