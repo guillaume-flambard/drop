@@ -7,7 +7,7 @@ Principe directeur : **Get the answer, not the access.**
 
 Lis `openspec/project/vision.md` une fois par session avant de coder.
 
-Cap adopté le 9 octobre 2026 : socle A2A/MCP privé et open source, app Mac Tauri en barre de menus, puis Windows et Linux. `docs/ACCEPTANCE.md` porte les critères futurs à promouvoir dans les specs pendant les tâches T3.*. Les contrats runtime historiques ne prouvent pas le profil privé. Suivre D34 à D38 et l’ordre de `docs/TASKS.md` ; aucun défaut cloud du prototype ne doit être présenté comme exigence de la cible.
+Cap adopté le 9 octobre 2026 : socle A2A/MCP privé et open source, app Mac Tauri en barre de menus, puis Windows et Linux. `docs/ACCEPTANCE.md` porte les critères futurs à promouvoir dans les specs pendant les tâches T3.*. Les contrats runtime historiques ne prouvent pas le profil privé. Suivre D34 à D38 et l’ordre de `docs/TASKS.md` ; aucun défaut cloud du prototype ne doit être présenté comme exigence de la cible. Repositionnement du 10 octobre 2026 : D47 à D58 ; la référence descriptive du produit est `docs/product/` (PRD, TRD, parcours, UX/UI, schéma backend, plan).
 
 ## Où vit quoi
 
@@ -58,7 +58,7 @@ Reste dans le périmètre de la ligne de l'index. Un manque découvert devient u
 - WebSocket : `ws`. Pas de framework web lourd.
 - Runner LLM : n'importe quel fournisseur compatible OpenAI (endpoint choisi par le propriétaire ; Ollama local en option ; OpenRouter, Groq,
   Gemini, OpenAI, Anthropic…) par `fetch`, sans SDK. Clé API par variable d'environnement nommée dans la config, jamais
-  un login d'abonnement. Les outils du modèle sont fournis par la capacité, jamais par le fournisseur (D19). Le prototype utilise encore OpenRouter par défaut ; T3.1 impose le choix local/interne et aucun repli distant dans le profil privé cible (D34, D37).
+  un login d'abonnement. Les outils du modèle sont fournis par la capacité, jamais par le fournisseur (D19). Depuis T3.1, le défaut est un endpoint local (Ollama) sans modèle présélectionné, que le propriétaire doit choisir, sans repli distant dans le profil privé (D34, D37, D40) ; OpenRouter reste une option explicite.
 
 Ne pas ajouter de dépendance hors de cette liste sans l'écrire dans `docs/DECISIONS.md` avec la raison.
 

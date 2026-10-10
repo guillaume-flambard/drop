@@ -2,7 +2,7 @@
 
 ## Applicabilité depuis le 9 octobre 2026
 
-D34 à D38 fixent la cible adoptée. Les décisions antérieures restent des preuves historiques : D7/D22 (relais lab), D20 (OpenRouter par défaut), D27/D28 (financement demandeur) et D31 (passerelle distante) ne sont pas des exigences du profil privé. T3.1 remplace les défauts imposés ; les intégrations cloud historiques restent des options explicites hors profil privé. D24 reste inchangée. Les deux entrées D30 sont conservées avec leur titre pour ne pas casser les références historiques.
+D34 à D38 fixent la cible adoptée. Les décisions antérieures restent des preuves historiques : D7/D22 (relais lab), D20 (OpenRouter par défaut), D27/D28 (financement demandeur) et D31 (passerelle distante) ne sont pas des exigences du profil privé. T3.1 remplace les défauts imposés ; les intégrations cloud historiques restent des options explicites hors profil privé. D24 reste inchangée. Les deux entrées D30 sont conservées avec leur titre pour ne pas casser les références historiques. Depuis le 10 octobre 2026, D47 à D58 précisent la cible : D31 n’est plus une cible de départ, la délégation et le contexte partagé décentralisé sortent du hors-périmètre, et la connexion compte trois modes sans relais de secours par défaut.
 
 Format : `D<n> — date — décision — raison`. Les agents ajoutent ici toute décision non écrite dans les specs.
 
