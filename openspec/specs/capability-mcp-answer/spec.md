@@ -94,3 +94,29 @@ La connexion et la découverte des outils MCP MUST appliquer la politique privé
 <!-- openspec-guard:test="private adapters > refuses HTTP discovery outside policy and refuses stdio before spawning it" -->
 - **WHEN** un serveur HTTP hors politique ou un serveur stdio non isolé est découvert
 - **THEN** aucune connexion ni exécution de ce serveur n’a lieu.
+### Requirement: Partage vérifié
+Partager un serveur détecté (`drop share`, panneau) SHALL toujours s'y connecter d'abord et MUST ne rien publier si :
+le serveur exige une connexion OAuth (401 ou 403 sans en-tête `Authorization`), refuse son jeton (401 ou 403 avec
+en-tête), ne répond pas, n'offre pas un outil choisi, ou marque un outil choisi `destructiveHint`. Le message MUST dire
+quoi faire, en français, puisque le panneau l'affiche tel quel ; à l'exécution, ces mêmes cas restent `E_RUNNER` (T2.16,
+D73).
+
+#### Scenario: Serveur que drop ne peut pas utiliser
+<!-- openspec-guard:test="detecting agents and their MCP servers (T2.8) > drop share checks the server first: OAuth-only, refused token, unreachable, missing or destructive tools (T2.16)" -->
+- **WHEN** Natha partage un serveur qui exige OAuth, un serveur qui refuse son jeton, un serveur éteint, un outil absent ou un outil destructif
+- **THEN** le partage échoue avec un message qui nomme la cause, et aucune capacité n'est publiée
+- **AND** le même serveur partagé avec des outils offerts et en lecture est publié
+
+### Requirement: Serveurs distants avec OAuth
+Pour un serveur MCP distant à OAuth avec enregistrement dynamique, drop SHALL s'enregistrer comme son propre client puis obtenir ses jetons par code d'autorisation et PKCE S256, dans le navigateur du propriétaire (T2.17, D74). Les jetons MUST rester sous `DROP_HOME/oauth` (0700, fichiers 0600), hors des journaux et des pairs, et être rafraîchis. Une exécution ou un partage MUST ne jamais lancer de connexion : sans jetons valides, ils échouent. Un jeton configuré dans l'agent passe en premier.
+
+#### Scenario: Connexion unique puis rafraîchissement
+<!-- openspec-guard:test="remote MCP servers behind OAuth (T2.17) > signs in once (registration, PKCE, consent), keeps the tokens 0600, refreshes them, and stops when revoked" -->
+- **WHEN** Natha connecte drop à son serveur Notion, puis que le jeton d'accès expire, puis que la connexion est révoquée
+- **THEN** drop s'enregistre une fois sous le nom « drop », garde ses jetons en 0600, les rafraîchit à l'expiration, et échoue comme un serveur OAuth après la révocation
+- **AND** avant la connexion, un appel échoue sans rien enregistrer ; un `state` inconnu ou déjà utilisé est refusé
+
+#### Scenario: Partage après connexion
+<!-- openspec-guard:test="remote MCP servers behind OAuth (T2.17) > drop share uses the tokens of a sign-in, and says how to sign in before one" -->
+- **WHEN** Natha partage le serveur Notion avant, puis après la connexion de drop
+- **THEN** le premier partage indique `drop connect claude_code/notion`, le second publie les outils en lecture du serveur

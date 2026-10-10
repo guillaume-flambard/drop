@@ -14,10 +14,13 @@ import {
   type Identity,
 } from '@drop/protocol';
 import {
+  allowNode,
   RelayClient,
-  startRelay,
-  revokeNode,
   readRelayConfig,
+  revokeInConfig,
+  revokeNode,
+  RelayConfigSchema,
+  startRelay,
   type RelayHandle,
   type RelayLogEntry,
 } from '../src/index.ts';
@@ -29,13 +32,19 @@ afterEach(async () => {
 
 async function relayFor(
   identities: Identity[],
-  extra: { rateLimitPerMinute?: number; admittedPath?: string; maxAdmissionsPerSponsorPerDay?: number } = {},
+  extra: {
+    rateLimitPerMinute?: number;
+    admittedPath?: string;
+    revokedPath?: string;
+    maxAdmissionsPerSponsorPerDay?: number;
+    maxAdmissionsPerDay?: number;
+  } = {},
   options: { now?: () => number; pingIntervalMs?: number } = {},
 ) {
   const logs: RelayLogEntry[] = [];
   const relay = await startRelay(
     { port: 0, allowedNodeIds: identities.map((identity) => identity.nodeId), ...extra },
-    { logger: (entry) => logs.push(entry), ...options },
+    { logger: (entry) => logs.push(entry), revocationPollMs: 20, ...options },
   );
   cleanups.push(() => relay.close());
   return { relay, logs };
@@ -84,8 +93,8 @@ describe('relay', () => {
       statePath,
       JSON.stringify({ admitted: [{ nodeId: bob.nodeId, sponsor: alice.nodeId, at: Date.now() }], spentNonces: [] }),
     );
-    expect(revokeNode(configPath, bob.nodeId)).toBe(true);
-    expect(revokeNode(configPath, bob.nodeId)).toBe(false);
+    expect(revokeInConfig(configPath, bob.nodeId)).toBe(true);
+    expect(revokeInConfig(configPath, bob.nodeId)).toBe(false);
     // Restoration uses both the config (revocations) and admissions, including the revoked member's old entry.
     const restoredConfig = readRelayConfig(configPath);
     const relay = await startRelay(restoredConfig, { logger: () => undefined });
@@ -98,6 +107,27 @@ describe('relay', () => {
     await until(() => denied.statuses.includes('unauthorized') && sponsored.statuses.includes('unauthorized'));
     expect(denied.instance.connected).toBe(false);
     expect(sponsored.instance.connected).toBe(false);
+  });
+
+  it('reads relay.config.json, with the admission settings optional', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'relay-config-'));
+    const minimal = join(dir, 'minimal.json');
+    writeFileSync(minimal, JSON.stringify({ port: 8787, allowedNodeIds: ['a'] }));
+    expect(RelayConfigSchema.parse(readRelayConfig(minimal))).toMatchObject({
+      port: 8787,
+      allowedNodeIds: ['a'],
+      maxQueuePerNode: 100,
+      rateLimitPerMinute: 60,
+      maxAdmissionsPerSponsorPerDay: 20,
+      maxAdmissionsPerDay: 100,
+    });
+    const full = join(dir, 'full.json');
+    const admittedPath = join(dir, 'admitted.json');
+    writeFileSync(
+      full,
+      JSON.stringify({ port: 1, allowedNodeIds: [], admittedPath, maxAdmissionsPerSponsorPerDay: 0 }),
+    );
+    expect(readRelayConfig(full)).toMatchObject({ admittedPath, maxAdmissionsPerSponsorPerDay: 0 });
   });
 
   it('direct delivery between two in-memory nodes', async () => {
@@ -561,5 +591,228 @@ describe('relay', () => {
     expect(outcomes).toEqual(
       expect.arrayContaining(['sponsor_not_admitted', 'bad_signature', 'admitted', 'sponsor_quota']),
     );
+  });
+
+  it('revokes a node without a restart: cut off at once, never back, and no longer a sponsor (T2.19)', async () => {
+    const [julie, natha, paul] = await Promise.all(['Julie', 'Natha', 'Paul'].map((name) => generateIdentity(name)));
+    if (!julie || !natha || !paul) throw new Error('identities');
+    const dir = mkdtempSync(join(tmpdir(), 'relay-revoke-'));
+    const revokedPath = join(dir, 'revoked.json');
+    const { relay, logs } = await relayFor([julie], { admittedPath: join(dir, 'admitted.json'), revokedPath });
+    const n = client(relay, natha, await createAdmission(julie));
+    await n.instance.waitReady();
+
+    revokeNode(revokedPath, natha.nodeId);
+    expect(statSync(revokedPath).mode & 0o777).toBe(0o600);
+    await until(() => n.statuses.includes('unauthorized'));
+    expect(logs).toContainEqual(
+      expect.objectContaining({ event: 'revocation', outcome: 'revoked', nodeId: natha.nodeId }),
+    );
+
+    // A fresh ticket from an admitted sponsor does not bring a revoked node back, and its own tickets are worthless.
+    const again = client(relay, natha, await createAdmission(julie));
+    await until(() => again.statuses.includes('unauthorized'));
+    const viaNatha = client(relay, paul, await createAdmission(natha));
+    await until(() => viaNatha.statuses.includes('unauthorized'));
+    const outcomes = logs.filter((entry) => entry.event === 'admission').map((entry) => entry.outcome);
+    expect(outcomes).toEqual(expect.arrayContaining(['revoked', 'sponsor_not_admitted']));
+    // Julie, who invited her, keeps her place.
+    const j = client(relay, julie);
+    await j.instance.waitReady();
+  });
+
+  it('revoking with --with-invited also cuts off the nodes it admitted, transitively (T2.19)', async () => {
+    const [julie, natha, paul, zoe] = await Promise.all(
+      ['Julie', 'Natha', 'Paul', 'Zoé'].map((name) => generateIdentity(name)),
+    );
+    if (!julie || !natha || !paul || !zoe) throw new Error('identities');
+    const dir = mkdtempSync(join(tmpdir(), 'relay-cascade-'));
+    const revokedPath = join(dir, 'revoked.json');
+    const { relay } = await relayFor([julie], { admittedPath: join(dir, 'admitted.json'), revokedPath });
+    const n = client(relay, natha, await createAdmission(julie));
+    await n.instance.waitReady();
+    const p = client(relay, paul, await createAdmission(natha));
+    await p.instance.waitReady();
+    const z = client(relay, zoe, await createAdmission(julie));
+    await z.instance.waitReady();
+
+    revokeNode(revokedPath, natha.nodeId, { withInvited: true });
+    await until(() => n.statuses.includes('unauthorized') && p.statuses.includes('unauthorized'));
+    expect(z.statuses).not.toContain('unauthorized');
+    expect(readFileSync(revokedPath, 'utf8')).toContain('"withInvited": true');
+  });
+
+  it('caps admissions per day across all sponsors (T2.19)', async () => {
+    const [julie, bob, a, b, c] = await Promise.all(
+      ['Julie', 'Bob', 'A', 'B', 'C'].map((name) => generateIdentity(name)),
+    );
+    if (!julie || !bob || !a || !b || !c) throw new Error('identities');
+    const { relay, logs } = await relayFor([julie, bob], { maxAdmissionsPerDay: 2 });
+    await client(relay, a, await createAdmission(julie)).instance.waitReady();
+    await client(relay, b, await createAdmission(bob)).instance.waitReady();
+    const third = client(relay, c, await createAdmission(julie));
+    await until(() => third.statuses.includes('unauthorized'));
+    expect(logs).toContainEqual(expect.objectContaining({ event: 'admission', outcome: 'global_quota' }));
+  });
+});
+
+/** Authenticates by hand on a raw socket, to send frames the regular client would refuse to build. */
+function rawAuthed(relay: RelayHandle, identity: Identity, options: { autoPong?: boolean } = {}) {
+  const socket = new WebSocket(relay.url, { autoPong: options.autoPong ?? true });
+  const frames: { type: string; [key: string]: unknown }[] = [];
+  const closed = new Promise<number>((resolve) => {
+    socket.on('close', (code) => {
+      resolve(code);
+    });
+  });
+  const ready = new Promise<void>((resolve, reject) => {
+    socket.on('message', (data) => {
+      const frame = JSON.parse(Buffer.isBuffer(data) ? data.toString('utf8') : '{}') as {
+        type: string;
+        challenge?: string;
+      };
+      frames.push(frame);
+      if (frame.type === 'challenge')
+        void signDetached(identity, frame.challenge ?? '').then((sig) => {
+          socket.send(JSON.stringify({ type: 'auth', nodeId: identity.nodeId, sig }));
+        }, reject);
+      if (frame.type === 'ready') resolve();
+    });
+  });
+  cleanups.push(() => {
+    socket.terminate();
+  });
+  return { socket, frames, ready, closed };
+}
+
+describe('relay contract', () => {
+  it('opens every connection with a 32-byte challenge', async () => {
+    const alice = await generateIdentity('Alice');
+    const { relay } = await relayFor([alice]);
+    const first = await new Promise<{ type: string; challenge: string }>((resolve) => {
+      const socket = new WebSocket(relay.url);
+      cleanups.push(() => {
+        socket.terminate();
+      });
+      socket.once('message', (data) => {
+        resolve(
+          JSON.parse(Buffer.isBuffer(data) ? data.toString('utf8') : '{}') as { type: string; challenge: string },
+        );
+      });
+    });
+    expect(first.type).toBe('challenge');
+    expect(first.challenge).toMatch(/^[A-Za-z0-9_-]+$/);
+    expect(Buffer.from(first.challenge, 'base64url')).toHaveLength(32);
+  });
+
+  it('refuses an envelope that breaks the schema, and routes one whose body it cannot read, unchanged', async () => {
+    const alice = await generateIdentity('Alice');
+    const bob = await generateIdentity('Bob');
+    const { relay, logs } = await relayFor([alice, bob]);
+    const a = rawAuthed(relay, alice);
+    const b = client(relay, bob);
+    await Promise.all([a.ready, b.instance.waitReady()]);
+    a.socket.send(JSON.stringify({ type: 'envelope', envelope: { to: bob.nodeId, body: 'x' } }));
+    await until(() => a.frames.some((frame) => frame.type === 'error' && frame.error === 'E_SCHEMA'));
+    expect(b.received).toEqual([]);
+    // The relay holds no key: a body that is not even a sealed box goes through untouched.
+    const valid = await sealEnvelope(alice, bob.nodeId, { type: 'catalog_request' });
+    const opaque = { ...valid, body: Buffer.from('not a sealed box at all').toString('base64url') };
+    a.socket.send(JSON.stringify({ type: 'envelope', envelope: opaque }));
+    await until(() => b.received.length === 1);
+    expect(b.received[0]).toEqual(opaque);
+    expect(logs).toContainEqual(
+      expect.objectContaining({ event: 'envelope', outcome: 'E_SCHEMA', nodeId: alice.nodeId }),
+    );
+  });
+
+  it('logs the id, from, to, size and outcome of each envelope, and keeps no copy once delivered', async () => {
+    const alice = await generateIdentity('Alice');
+    const bob = await generateIdentity('Bob');
+    const { relay, logs } = await relayFor([alice, bob]);
+    const a = client(relay, alice);
+    const b = client(relay, bob);
+    await Promise.all([a.instance.waitReady(), b.instance.waitReady()]);
+    const envelope = await sealEnvelope(alice, bob.nodeId, { type: 'catalog_request' });
+    expect(await a.instance.send(envelope)).toBe('delivered');
+    expect(logs).toContainEqual({
+      event: 'envelope',
+      outcome: 'delivered',
+      id: envelope.id,
+      from: alice.nodeId,
+      to: bob.nodeId,
+      size: expect.any(Number) as number,
+    });
+    // Bob comes back: nothing is delivered twice, the relay kept nothing.
+    b.instance.close();
+    const again = client(relay, bob);
+    await again.instance.waitReady();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(again.received).toEqual([]);
+  });
+
+  it('caps the queue of an offline node at maxQueuePerNode', async () => {
+    const alice = await generateIdentity('Alice');
+    const bob = await generateIdentity('Bob');
+    const relay = await startRelay(
+      { port: 0, allowedNodeIds: [alice.nodeId, bob.nodeId], maxQueuePerNode: 3, rateLimitPerMinute: 100 },
+      { logger: () => undefined },
+    );
+    cleanups.push(() => relay.close());
+    const a = client(relay, alice);
+    await a.instance.waitReady();
+    const outcomes: string[] = [];
+    for (let index = 0; index < 4; index += 1)
+      outcomes.push(await a.instance.send(await sealEnvelope(alice, bob.nodeId, { type: 'catalog_request' })));
+    expect(outcomes).toEqual(['queued', 'queued', 'queued', 'E_QUEUE_FULL']);
+    const b = client(relay, bob);
+    await until(() => b.received.length === 3);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(b.received).toHaveLength(3);
+  });
+
+  it('loses its queue when it restarts, as v1 assumes', async () => {
+    const alice = await generateIdentity('Alice');
+    const bob = await generateIdentity('Bob');
+    const first = await startRelay(
+      { port: 0, allowedNodeIds: [alice.nodeId, bob.nodeId] },
+      { logger: () => undefined },
+    );
+    const a = client(first, alice);
+    await a.instance.waitReady();
+    expect(await a.instance.send(await sealEnvelope(alice, bob.nodeId, { type: 'catalog_request' }))).toBe('queued');
+    const port = first.port;
+    await first.close();
+    const second = await startRelay({ port, allowedNodeIds: [alice.nodeId, bob.nodeId] }, { logger: () => undefined });
+    cleanups.push(() => second.close());
+    const b = client(second, bob);
+    await b.instance.waitReady();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(b.received).toEqual([]);
+  });
+
+  it('closes a node that misses two pings', async () => {
+    const alice = await generateIdentity('Alice');
+    const relay = await startRelay(
+      { port: 0, allowedNodeIds: [alice.nodeId] },
+      { logger: () => undefined, pingIntervalMs: 20 },
+    );
+    cleanups.push(() => relay.close());
+    const mute = rawAuthed(relay, alice, { autoPong: false });
+    await mute.ready;
+    expect(await mute.closed).toBeGreaterThan(0);
+  });
+
+  it('drop-relay allow adds a node to relay.config.json, which a restart applies', async () => {
+    const alice = await generateIdentity('Alice');
+    const dir = mkdtempSync(join(tmpdir(), 'relay-allow-'));
+    const configPath = join(dir, 'relay.config.json');
+    writeFileSync(configPath, JSON.stringify({ port: 0, allowedNodeIds: [] }));
+    expect(allowNode(configPath, alice.nodeId)).toBe(true);
+    expect(allowNode(configPath, alice.nodeId)).toBe(false);
+    expect(readRelayConfig(configPath).allowedNodeIds).toEqual([alice.nodeId]);
+    const relay = await startRelay(readRelayConfig(configPath), { logger: () => undefined });
+    cleanups.push(() => relay.close());
+    await client(relay, alice).instance.waitReady();
   });
 });
