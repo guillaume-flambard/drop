@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync, mkdirSync, writeFileSync, copyFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { generateIdentity, type Identity } from '@drop/protocol';
-import { startRelay, revokeNode, readRelayConfig, type RelayHandle } from '@drop/relay';
+import { startRelay, revokeInConfig, readRelayConfig, type RelayHandle } from '@drop/relay';
 import { startDaemon, type Daemon } from '../src/daemon.ts';
 import { DropHome } from '../src/home.ts';
 import { privateConfig } from '../src/private-config.ts';
@@ -192,7 +192,7 @@ export async function provePrivateSystem(): Promise<{ scenarios: string[]; reque
     writeFileSync(configPath, JSON.stringify({ ...relayConfig, port: relayPort, admittedPath: 'admitted.json' }), {
       mode: 0o600,
     });
-    revokeNode(configPath, requesterId.nodeId);
+    revokeInConfig(configPath, requesterId.nodeId);
     const restored = join(root, 'restored');
     mkdirSync(restored, { mode: 0o700 });
     for (const file of ['relay.config.json', 'admitted.json']) copyFileSync(join(root, file), join(restored, file));
