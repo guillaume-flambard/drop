@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { isDropError, openEnvelope, ReplayCache, sealEnvelope, type Identity, type NodeId } from '@drop/protocol';
 import { RelayClient } from '@drop/relay';
+import type { LinkClaim } from './oauth.ts';
 
 /**
  * The gateway's side of the relay (T2.13): it receives `link_grant` from a user's node for a pending OAuth session,
@@ -12,7 +13,8 @@ export interface BridgeOptions {
   relayUrl: string;
   /** True for a pending OAuth session waiting for its link_grant. */
   isPendingSession: (sessionId: string) => boolean;
-  onLinkGrant: (sessionId: string, nodeId: NodeId, clientName: string) => void;
+  /** Binds the session to the node if the claim matches it; false when it does not (logged as E_LINK_MISMATCH). */
+  onLinkGrant: (sessionId: string, nodeId: NodeId, claim: LinkClaim) => boolean;
   /** Nodes that granted a link, from the persisted tokens: they may reply. */
   isLinkedNode: (nodeId: NodeId) => boolean;
   callTimeoutMs?: number;
@@ -50,12 +52,13 @@ export class Bridge {
     this.client.close();
   }
 
-  /** Sends one tool call to the user's node and waits for its reply. */
+  /** Sends one tool call from a linked assistant to the user's node and waits for its reply. */
   async call(
-    nodeId: NodeId,
+    link: { nodeId: NodeId; clientId: string },
     tool: 'ask_team' | 'get_drop_results' | 'list_capabilities',
     args: Record<string, unknown>,
   ) {
+    const { nodeId, clientId } = link;
     const callId = randomBytes(12).toString('base64url');
     const reply = new Promise<{ text: string; isError: boolean }>((resolve) => {
       this.pending.set(callId, { nodeId, resolve });
@@ -68,7 +71,13 @@ export class Bridge {
         });
       }, this.options.callTimeoutMs ?? 58_000);
     });
-    const envelope = await sealEnvelope(this.options.identity, nodeId, { type: 'agent_call', callId, tool, args });
+    const envelope = await sealEnvelope(this.options.identity, nodeId, {
+      type: 'agent_call',
+      callId,
+      clientId,
+      tool,
+      args,
+    });
     const outcome = await this.client.send(envelope);
     if (outcome !== 'delivered' && outcome !== 'queued') {
       this.pending.delete(callId);
@@ -87,7 +96,9 @@ export class Bridge {
         acceptLinkSession: (sessionId) => this.options.isPendingSession(sessionId),
       });
       if (message.type === 'link_grant') {
-        this.options.onLinkGrant(message.sessionId, envelope.from, message.clientName);
+        const { clientId, clientName, redirectHost } = message;
+        if (!this.options.onLinkGrant(message.sessionId, envelope.from, { clientId, clientName, redirectHost }))
+          this.options.log?.('link_grant rejected: E_LINK_MISMATCH');
         return;
       }
       if (message.type === 'agent_reply') {
