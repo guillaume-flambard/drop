@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { decodeInvite, DropError, isDropError } from '@drop/protocol';
 import type { NodeEngine } from './engine.ts';
 import { renderPanel } from './panel.ts';
-import { routeQuestion, takesQuestion } from './route.ts';
+import { routeFacts, routeQuestion, takesQuestion } from './route.ts';
 import { teamAgent } from './a2a-inbound.ts';
 import { renderInbox, renderPage } from './ui.ts';
 
@@ -226,13 +226,15 @@ export function startLocalApi(options: LocalApiOptions): Promise<LocalApi> {
       }
       if (!engine.catalogIsFresh()) await options.refreshCatalogs();
       const catalog = engine.catalog();
-      const routes = routeQuestion(catalog, parsed.data.question);
+      // A published fact that matches goes first and alone; otherwise the usual routing (T4.4).
+      const facts = routeFacts(catalog, parsed.data.question);
+      const routes = facts.length > 0 ? facts : routeQuestion(catalog, parsed.data.question);
       const asked = [];
       for (const route of routes) {
         try {
           const drop = await engine.requestDrop({
             capabilityId: route.capabilityId,
-            input: { question: parsed.data.question },
+            input: route.fact ? {} : { question: parsed.data.question },
             purpose: parsed.data.purpose ?? 'Pas de raison précisée.',
             agent: parsed.data.agent,
           });
@@ -466,6 +468,40 @@ export function startLocalApi(options: LocalApiOptions): Promise<LocalApi> {
           typeof body === 'object' && body !== null ? (body as Record<string, unknown>) : {};
         const done = await engine.answer(typeof dropId === 'string' ? dropId : '', answer);
         json(res, done ? 200 : 404, { ok: done });
+      } catch (error) {
+        if (!isDropError(error)) throw error;
+        json(res, 400, { ok: false, code: error.code, message: error.message });
+      }
+      return;
+    }
+    // « Ce que je publie » (T4.4): list, publish, edit and retire facts; refusals carry a stable code.
+    if (path === '/ui/facts' || path.startsWith('/ui/facts/')) {
+      if (method === 'GET' && path === '/ui/facts') {
+        json(res, 200, {
+          facts: engine.facts(),
+          peers: engine.peers().map((peer) => ({ nodeId: peer.nodeId, displayName: peer.displayName })),
+        });
+        return;
+      }
+      const target = /^\/ui\/facts\/([0-9a-f-]{36})(\/retire)?$/.exec(path);
+      if (method !== 'POST' || (path !== '/ui/facts' && !target)) {
+        json(res, 404, { error: 'not_found' });
+        return;
+      }
+      try {
+        if (target?.[2]) {
+          const done = await engine.retireFact(target[1] ?? '');
+          json(res, done ? 200 : 404, { ok: done });
+          return;
+        }
+        let body: unknown;
+        try {
+          body = JSON.parse(await readBody(req));
+        } catch {
+          throw new DropError('E_SCHEMA', 'Fait illisible : recharge le panneau et réessaie.');
+        }
+        const fact = target ? await engine.editFact(target[1] ?? '', body) : await engine.publishFact(body);
+        json(res, fact ? 200 : 404, fact ? { ok: true, fact } : { ok: false });
       } catch (error) {
         if (!isDropError(error)) throw error;
         json(res, 400, { ok: false, code: error.code, message: error.message });

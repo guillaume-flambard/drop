@@ -138,6 +138,10 @@ input[type="file"] { font-size: 12px; font-weight: 400; color: var(--soft); max-
 .composer .attached { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--soft); overflow-wrap: anywhere; }
 .composer .actions, .answer-row { display: flex; justify-content: flex-end; gap: 6px; }
 .answer-row { justify-content: flex-start; }
+.card.faded { opacity: .55; }
+select { min-height: 30px; font: inherit; font-size: 12px; font-weight: 400; border-radius: 7px; border: .5px solid var(--edge); padding: 0 6px; background: var(--card); color: var(--ink); }
+.choices { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 400; }
+.choices label { display: flex; align-items: center; gap: 6px; }
 .filepreview { margin: 0; max-height: 160px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: 11px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace;
   color: var(--ink); padding: 8px 10px; border-radius: 8px; background: var(--well); -webkit-user-select: text; user-select: text; }
 .answer-row .act { padding-inline: 4px; border-color: transparent; background: transparent; color: var(--soft); box-shadow: none; }
@@ -182,6 +186,8 @@ code { font: 11px/1.4 ui-monospace, SFMono-Regular, monospace; word-break: break
   var renderVersion = 0;
   var pendingRefresh = false;
   var focusNext = null;
+  // The fact being written in « Ce que je publie » (T4.4), kept across live refreshes.
+  var factDraft = null;
 
   function announce(message) {
     document.getElementById('announcement').textContent = message;
@@ -297,7 +303,7 @@ code { font: 11px/1.4 ui-monospace, SFMono-Regular, monospace; word-break: break
   // True while a field or a box in the view has the focus: only then is a refresh deferred.
   function editing() {
     var active = document.activeElement;
-    return Boolean(active && active.closest('#view') && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA'));
+    return Boolean(active && active.closest('#view') && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.tagName === 'SELECT'));
   }
 
   function countdown(expiresAt) {
@@ -553,8 +559,113 @@ code { font: 11px/1.4 ui-monospace, SFMono-Regular, monospace; word-break: break
     });
   }
 
+  var DATE = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+
+  function factForm(peers) {
+    var draft = factDraft;
+    function field(label, node) { return el('label', { class: 'field' }, label, node); }
+    function bound(node, key) { node.value = draft[key]; node.addEventListener('input', function () { draft[key] = node.value; }); return node; }
+    var topic = bound(el('input', { type: 'text', maxlength: '120', 'data-focus': 'fact:topic' }), 'topic');
+    var statement = bound(el('textarea', { maxlength: '1000', rows: '4', 'data-focus': 'fact:statement' }), 'statement');
+    var keywords = bound(el('input', { type: 'text', maxlength: '330', placeholder: 'Ex. déploiement, mise en production' }), 'keywords');
+    var label = bound(el('input', { type: 'text', maxlength: '200', placeholder: 'Ex. Planning des releases' }), 'label');
+    var url = bound(el('input', { type: 'url', maxlength: '500', placeholder: 'https://… (facultatif)' }), 'url');
+    var days = el('select', {}, el('option', { value: '7', text: '7 jours' }), el('option', { value: '30', text: '30 jours' }),
+      el('option', { value: '90', text: '90 jours' }), el('option', { value: '365', text: '1 an' }));
+    if (!days.querySelector('option[value="' + draft.validDays + '"]')) days.appendChild(el('option', { value: String(draft.validDays), text: draft.validDays + ' jours' }));
+    days.value = String(draft.validDays);
+    days.addEventListener('change', function () { draft.validDays = Number(days.value); });
+    var team = el('input', { type: 'radio', name: 'audience', value: 'team' });
+    var chosen = el('input', { type: 'radio', name: 'audience', value: 'peers' });
+    team.checked = draft.audience === 'team';
+    chosen.checked = draft.audience === 'peers';
+    team.addEventListener('change', function () { draft.audience = 'team'; render(); });
+    chosen.addEventListener('change', function () { draft.audience = 'peers'; render(); });
+    var people = el('div', { class: 'choices' });
+    if (draft.audience === 'peers') peers.forEach(function (peer) {
+      var box = el('input', { type: 'checkbox' });
+      box.checked = draft.nodeIds.indexOf(peer.nodeId) !== -1;
+      box.addEventListener('change', function () {
+        draft.nodeIds = draft.nodeIds.filter(function (id) { return id !== peer.nodeId; });
+        if (box.checked) draft.nodeIds.push(peer.nodeId);
+      });
+      people.appendChild(el('label', {}, box, peer.displayName));
+    });
+    function submit(event) {
+      var button = event.currentTarget;
+      if (!draft.topic.trim() || !draft.statement.trim() || !draft.label.trim()) { announce('Sujet, énoncé et source sont nécessaires.'); topic.focus(); return; }
+      button.disabled = true;
+      var body = {
+        topic: draft.topic, statement: draft.statement, validDays: draft.validDays,
+        keywords: draft.keywords.split(',').map(function (word) { return word.trim(); }).filter(Boolean),
+        source: draft.url.trim() ? { label: draft.label, url: draft.url.trim() } : { label: draft.label },
+        audience: draft.audience === 'team' ? { kind: 'team' } : { kind: 'peers', nodeIds: draft.nodeIds }
+      };
+      api('POST', draft.factId ? '/ui/facts/' + draft.factId : '/ui/facts', body).then(function () {
+        info = draft.factId ? 'Fait modifié : la nouvelle version remplace l’ancienne.' : 'Fait publié : il est servi tel quel jusqu’à sa date de fin.';
+        factDraft = null;
+        announce(info);
+        render(true);
+      }, function (error) {
+        notice = error.code === 'E_SECRET_DETECTED' ? error.message + ' (E_SECRET_DETECTED)' : error.code ? error.message + ' (' + error.code + ')' : error.message;
+        announce('Action impossible. ' + notice);
+        focusTo('fact:topic');
+      });
+    }
+    return el('div', { class: 'card composer', role: 'group', 'aria-label': draft.factId ? 'Modifier le fait' : 'Publier un fait' },
+      field('Sujet', topic), field('Énoncé', statement), field('Mots-clés (séparés par des virgules, 8 au plus)', keywords),
+      field('Source', label), field('Lien de la source', url), field('Valable', days),
+      el('div', { class: 'field' }, 'Public', el('div', { class: 'choices' },
+        el('label', {}, team, 'Tous mes pairs appairés'), el('label', {}, chosen, 'Des personnes choisies')), people),
+      el('div', { class: 'cost', text: 'Servi tel quel, sans te redemander, à ce public seulement. Les secrets reconnus bloquent la publication.' }),
+      el('div', { class: 'actions' },
+        el('button', { class: 'act', onclick: function () { factDraft = null; render(true); } }, 'Annuler'),
+        el('button', { class: 'act fill', onclick: submit }, draft.factId ? 'Enregistrer' : 'Publier')));
+  }
+
+  // « Ce que je publie » (T4.4, D65): facts served as is to their audience, until their end date.
+  function factsSection(view, data) {
+    view.appendChild(el('h2', { text: 'Ce que je publie' }));
+    if (!data) { view.appendChild(el('div', { class: 'notice error', role: 'alert', text: 'Impossible de lire tes faits publiés. Ils ne sont plus servis tant que ce n’est pas réglé.' })); return; }
+    var names = {};
+    data.peers.forEach(function (peer) { names[peer.nodeId] = peer.displayName; });
+    if (factDraft) { view.appendChild(factForm(data.peers)); return; }
+    if (data.facts.length === 0) view.appendChild(el('div', { class: 'card empty' },
+      el('strong', { text: 'Rien de publié' }),
+      el('div', { class: 'muted', text: 'Un fait publié est servi tel quel à ton équipe, sans te redemander, jusqu’à sa date de fin.' })));
+    data.facts.forEach(function (fact) {
+      var state = fact.status === 'retired' ? 'Retiré' : fact.live ? null : 'Expiré';
+      var audience = fact.audience.kind === 'team' ? 'Tous mes pairs' : fact.audience.nodeIds.map(function (id) { return names[id] || 'un pair'; }).join(', ');
+      view.appendChild(el('article', { class: 'card' + (fact.live ? '' : ' faded'), 'aria-label': fact.topic + (state ? ' (' + state + ')' : '') },
+        el('div', { class: 'name', text: fact.topic + (state ? ' · ' + state : '') }),
+        el('p', { class: 'quote', text: fact.statement }),
+        el('div', { class: 'muted', text: 'Source : ' + fact.source.label + (fact.source.url ? ' (' + fact.source.url + ')' : '') }),
+        el('div', { class: 'cost', text: 'Jusqu’au ' + DATE.format(fact.validTo) + ' · ' + audience + ' · servi ' + fact.served + ' fois' }),
+        fact.status === 'active' ? el('div', { class: 'actions' },
+          el('button', { class: 'act', 'aria-label': 'Retirer : ' + fact.topic, onclick: function (event) {
+            event.currentTarget.disabled = true;
+            api('POST', '/ui/facts/' + fact.factId + '/retire', {}).then(function () { info = 'Fait retiré : il n’est plus servi.'; announce(info); render(true); },
+              function (error) { notice = error.message; render(true); });
+          } }, 'Retirer'),
+          el('button', { class: 'act', 'aria-label': 'Modifier : ' + fact.topic, onclick: function () {
+            factDraft = { factId: fact.factId, topic: fact.topic, statement: fact.statement, keywords: fact.keywords.join(', '),
+              label: fact.source.label, url: fact.source.url || '', validDays: Math.max(1, Math.round((fact.validTo - fact.publishedAt) / 86400000)),
+              audience: fact.audience.kind, nodeIds: fact.audience.kind === 'peers' ? fact.audience.nodeIds.slice() : [] };
+            focusTo('fact:topic');
+          } }, 'Modifier')) : null));
+    });
+    view.appendChild(el('button', { class: 'act wide', onclick: function () {
+      factDraft = { factId: null, topic: '', statement: '', keywords: '', label: '', url: '', validDays: 30, audience: 'team', nodeIds: [] };
+      focusTo('fact:topic');
+    } }, 'Publier un fait'));
+  }
+
   function renderTools(view) {
-    return api('GET', '/ui/admin/tools').then(function (data) {
+    // A failing fact store must not take the rest of « Mes outils » down with it.
+    var facts = api('GET', '/ui/facts').catch(function () { return null; });
+    return Promise.all([api('GET', '/ui/admin/tools'), facts]).then(function (all) {
+      var data = all[0];
+      factsSection(view, all[1]);
       view.appendChild(el('h2', { text: 'Connecter mes agents' }));
       var steps = el('ol', { class: 'steps' },
         el('li', {}, el('span', { 'aria-hidden': 'true', text: '1' }), 'Analyse locale des quatre agents compatibles.'),
