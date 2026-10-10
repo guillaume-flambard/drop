@@ -353,7 +353,7 @@ Le consentement SHALL être offert par deux surfaces, l'UI web locale et la noti
 - **THEN** l'accès est refusé
 
 ### Requirement: Notification macOS
-Sur macOS, le Node SHALL émettre une notification via `osascript` avec le titre « {Nom} a besoin d'aide » et pour sous-titre le titre de la capacité ; un clic SHALL ouvrir l'UI locale. Seule exception : quand la variable d'environnement `DROP_NOTIFY` vaut `off`, réservée au banc de simulation (T4.1), le Node MUST n'émettre aucune notification ; aucun message d'un pair ne peut la modifier.
+Sur macOS, le Node SHALL notifier chaque demande avec le titre « {Nom} a besoin d'aide » et pour sous-titre le titre de la capacité ; un clic SHALL ouvrir l'UI locale. Lancé par l'app Mac (`DROP_NOTIFY=shell`), il MUST remettre la notification à l'app, qui l'affiche avec son icône ; ailleurs, il utilise `osascript`. `DROP_NOTIFY=off`, réservé au banc de simulation, MUST l'empêcher.
 
 #### Scenario: Notification émise
 - **WHEN** une demande de Julie pour « Résumer les erreurs de production » arrive sur macOS
@@ -364,6 +364,11 @@ Sur macOS, le Node SHALL émettre une notification via `osascript` avec le titre
 - **WHEN** le Node tourne sur macOS avec `DROP_NOTIFY=off`
 - **THEN** aucune notification n'est émise
 
+#### Scenario: AC: notification remise à l'app
+<!-- openspec-guard:test="notifications (T4.14) > AC hands the notification to the Mac app as one JSON line in shell mode" -->
+- **WHEN** le Node tourne avec `DROP_NOTIFY=shell` et qu'une demande arrive
+- **THEN** il écrit une seule ligne JSON `dropNotify` portant titre et sous-titre, et n'appelle pas `osascript`
+
 ### Requirement: Pas de notification sous Linux
 Sous Linux, le Node SHALL ne pas émettre de notification ; `drop pending` suffit.
 
@@ -372,7 +377,7 @@ Sous Linux, le Node SHALL ne pas émettre de notification ; `drop pending` suffi
 - **THEN** aucune notification n'est émise et la demande est visible par `drop pending`
 
 ### Requirement: Contenu exact de la carte de consentement
-La carte SHALL afficher exactement ce contenu, dans cet ordre (ligne « Sensibilité haute » seulement si `high`) :
+La carte SHALL afficher exactement ce contenu, dans cet ordre (ligne « Sensibilité haute » seulement si `high`), au tutoiement sur la page historique comme dans le panneau :
 
 ```text
 {requestedBy.displayName} a besoin d'aide            via {agent}
@@ -383,8 +388,8 @@ Pourquoi : {purpose}
 
 {displayName} recevra :            {receives[]}
 {displayName} ne recevra jamais :  {neverReceives[]}
-Coût max : {maxUsd} $, à votre charge.   (ou « gratuit », ou « non mesuré » ; absent si la capacité ne coûte rien)
-Sensibilité haute : vous relirez le résultat avant envoi.   (si high)
+Coût max : {maxUsd} $, à ta charge.   (ou « gratuit », ou « non mesuré » ; absent si la capacité ne coûte rien)
+Sensibilité haute : tu reliras le résultat avant envoi.   (si high)
 
 Expire dans {mm:ss}
 
@@ -397,8 +402,9 @@ Expire dans {mm:ss}
 - **THEN** les éléments apparaissent dans l'ordre : demandeur et agent, titre, aperçu de l'entrée, « Pourquoi », « recevra », « ne recevra jamais », coût éventuel, sensibilité haute éventuelle, « Expire dans », puis les boutons « Pas maintenant », « Refuser », « Autoriser une fois »
 
 #### Scenario: Ligne de sensibilité haute
+<!-- openspec-guard:test="consent UI > omits the high-sensitivity line for a low capability and words it in tu otherwise" -->
 - **WHEN** la capacité est `low`
-- **THEN** la ligne « Sensibilité haute : vous relirez le résultat avant envoi. » est absente
+- **THEN** la ligne « Sensibilité haute : tu reliras le résultat avant envoi. » est absente
 
 ### Requirement: Aucun identifiant technique sur la carte
 La carte de consentement MUST NOT afficher d'identifiant technique : ni `nodeId`, ni nom d'outil, ni id de capacité.

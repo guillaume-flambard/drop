@@ -4,10 +4,12 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::fs;
-use std::io::{Read, Write};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpStream;
 use std::path::PathBuf;
-use std::process::{Child, Command, Stdio};
+use std::process::{Child, ChildStdout, Command, Stdio};
+#[cfg(target_os = "macos")]
+use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::thread;
@@ -139,9 +141,13 @@ fn start_daemon(app: &AppHandle, marker: &str, port: u16) -> Result<(), &'static
     }
     let log = fs::File::create(drop_home().join("daemon.log")).map_err(|_| "E_LOG")?;
     let mut command = drop_command(app, &["serve"]);
-    command.stdout(Stdio::null());
+    // The daemon hands notifications to the app as JSON lines on stdout (T4.14), so they carry the app's icon.
+    command.stdout(Stdio::piped()).env("DROP_NOTIFY", "shell");
     command.stderr(log).env("DROP_SHELL_INSTANCE", marker);
-    let child = command.spawn().map_err(|_| "E_SPAWN")?;
+    let mut child = command.spawn().map_err(|_| "E_SPAWN")?;
+    if let Some(stdout) = child.stdout.take() {
+        relay_notifications(app.clone(), stdout);
+    }
     *app.state::<Daemon>().child.lock().map_err(|_| "E_STATE")? = Some(child);
     Ok(())
 }
@@ -372,6 +378,66 @@ fn show_panel(app: &AppHandle, near: Option<PhysicalPosition<f64>>) {
     let _ = window.show();
     let _ = window.set_focus();
 }
+
+/// Notifications handed over by the daemon (`DROP_NOTIFY=shell`, T4.14): one JSON object per line. Anything else
+/// on stdout is ignored. Peer text arrives as JSON strings and stays plain notification text, cut at 200 characters.
+fn relay_notifications(app: AppHandle, stdout: ChildStdout) {
+    thread::spawn(move || {
+        // Split on bytes: one malformed line must not stop the reader and close the daemon's stdout.
+        for raw in BufReader::new(stdout).split(b'\n').map_while(Result::ok) {
+            let line = String::from_utf8_lossy(&raw);
+            let Ok(value) = serde_json::from_str::<serde_json::Value>(&line) else {
+                continue;
+            };
+            let Some(notice) = value.get("dropNotify") else {
+                continue;
+            };
+            let text = |key: &str| {
+                notice
+                    .get(key)
+                    .and_then(serde_json::Value::as_str)
+                    .map(|s| s.chars().take(200).collect::<String>())
+            };
+            if let (Some(title), Some(subtitle)) = (text("title"), text("subtitle")) {
+                show_notification(&app, title, subtitle);
+            }
+        }
+    });
+}
+
+/// Notifications waiting for a click at once; beyond this, new ones are shown without waiting.
+#[cfg(target_os = "macos")]
+static WAITING: AtomicUsize = AtomicUsize::new(0);
+#[cfg(target_os = "macos")]
+const MAX_WAITING: usize = 8;
+#[cfg(target_os = "macos")]
+static IDENTITY: std::sync::Once = std::sync::Once::new();
+
+/// Shown under the app's identity, hence its icon; a click opens the panel where it last was.
+#[cfg(target_os = "macos")]
+fn show_notification(app: &AppHandle, title: String, body: String) {
+    let app = app.clone();
+    let identifier = app.config().identifier.clone();
+    thread::spawn(move || {
+        IDENTITY.call_once(|| {
+            if let Err(error) = mac_notification_sys::set_application(&identifier) {
+                eprintln!("E_NOTIFY cannot use the app identity: {error}");
+            }
+        });
+        let wait = WAITING.fetch_add(1, Ordering::SeqCst) < MAX_WAITING;
+        let mut options = mac_notification_sys::Notification::new();
+        options.wait_for_click(wait);
+        match mac_notification_sys::send_notification(&title, None, &body, Some(&options)) {
+            Ok(mac_notification_sys::NotificationResponse::Click) => show_panel(&app, None),
+            Ok(_) => {}
+            Err(error) => eprintln!("E_NOTIFY {error}"),
+        }
+        WAITING.fetch_sub(1, Ordering::SeqCst);
+    });
+}
+
+#[cfg(not(target_os = "macos"))]
+fn show_notification(_app: &AppHandle, _title: String, _body: String) {}
 
 fn toggle_panel(app: &AppHandle, near: PhysicalPosition<f64>) {
     if let Some(window) = app.get_webview_window("panel") {

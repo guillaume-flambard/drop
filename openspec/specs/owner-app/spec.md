@@ -53,6 +53,21 @@ Le panneau SHALL d'abord montrer l'analyse locale expurgée des adaptateurs conn
 - **WHEN** aucun des quatre adaptateurs n'est détecté, ou que l'agent de l'utilisateur n'est pas pris en charge
 - **THEN** le panneau propose la configuration manuelle et n'élargit aucune permission
 
+### Requirement: Invitation confirmée avant appairage
+Ouvert par un lien `drop://pair`, le panneau SHALL afficher qui invite et, s'il y a lieu, l'équipe, comme texte, puis attendre « Rejoindre » ou « Refuser ». Il MUST NOT envoyer de demande d'appairage avant « Rejoindre ». Le code d'invitation MUST rester hors de l'URL une fois le panneau ouvert.
+
+#### Scenario: AC: aucun appairage sans clic
+<!-- openspec-guard:test="menu bar panel and its admin routes (T4.14) > previews an invitation without pairing and pairs only after Rejoindre" -->
+- **WHEN** le panneau est ouvert avec une invitation valide
+- **THEN** la prévisualisation montre l'inviteur sans appairer, et l'appairage n'a lieu qu'après « Rejoindre »
+
+### Requirement: Carte et relecture conformes dans le panneau
+Le panneau SHALL afficher sur la carte de consentement la ligne de sensibilité haute quand elle s'applique, le compte à rebours « Expire dans » et faire de « Pas maintenant » le bouton par défaut au clavier. Pour une capacité sensible, son écran de relecture SHALL proposer une case par champ de premier niveau pour le retirer avant l'envoi.
+
+#### Scenario: AC: carte et relecture du panneau
+<!-- openspec-guard:test="menu bar panel and its admin routes (T4.14) > renders expiry, high sensitivity, a default Pas maintenant and per-field redaction" -->
+- **WHEN** le panneau rend une carte de capacité sensible puis son écran de relecture
+- **THEN** la carte montre la sensibilité haute, « Expire dans » et « Pas maintenant » par défaut, et la relecture propose une case par champ qui ajoute ce champ aux retraits envoyés
 ### Requirement: Mises à jour signées
 Une app construite avec la clé de mise à jour SHALL chercher une version au lancement puis toutes les 6 h sur `https://drop.memolabs.dev/updates/latest.json` et la proposer dans le menu ; rien ne s'installe sans ce clic (D70). L'archive MUST être signée par cette clé pour la version annoncée (`requireSignedVersion`), sinon refusée. Sans la clé, l'app ne cherche aucune mise à jour (D76). La construction MUST refuser un manifeste signé pour une autre version.
 

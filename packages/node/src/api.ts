@@ -1,7 +1,7 @@
 import { timingSafeEqual } from 'node:crypto';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { z } from 'zod';
-import { isDropError } from '@drop/protocol';
+import { decodeInvite, isDropError } from '@drop/protocol';
 import type { NodeEngine } from './engine.ts';
 import { LinkRequestSchema, type LinkRequest } from './home.ts';
 import { renderPanel } from './panel.ts';
@@ -499,6 +499,17 @@ export function startLocalApi(options: LocalApiOptions): Promise<LocalApi> {
     }
     if (method === 'POST' && path === '/ui/invite') {
       json(res, 200, { code: await engine.invite(options.relayUrl) });
+      return;
+    }
+    // Shows who invites before anything is sent: the panel asks « Rejoindre » first (T4.14).
+    if (method === 'POST' && path === '/ui/pair/preview') {
+      const code = parseForm(await readBody(req)).get('code') ?? '';
+      try {
+        const invite = decodeInvite(code);
+        json(res, 200, { displayName: invite.displayName, ...(invite.team ? { team: invite.team.name } : {}) });
+      } catch {
+        json(res, 400, { error: 'E_INVITE' });
+      }
       return;
     }
     if (method === 'POST' && path === '/ui/pair') {
