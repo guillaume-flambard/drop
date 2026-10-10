@@ -19,7 +19,7 @@ export const ReceiptSchema = z.object({
   decision: z.enum(['allow_once', 'deny', 'not_now', 'expired']),
   reviewed: z.boolean(),
   /** Who produced the output: absent on receipts written before T4.3. */
-  answeredBy: z.enum(['capability', 'human']).optional(),
+  answeredBy: z.enum(['capability', 'human', 'fact']).optional(),
   toolCalls: z.array(z.object({ name: z.string(), count: z.number().int().nonnegative() })),
   costUsd: z.number().nonnegative().optional(),
   errorCode: z.string().optional(),

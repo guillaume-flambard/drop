@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isBinary, isUnsafeLabel } from './text-guards.ts';
 
 /** A hand-written answer (T4.3, D64): the owner answers instead of running the capability. */
 export const HUMAN_ANSWER_MAX_TEXT = 8000;
@@ -9,25 +10,6 @@ export const HUMAN_ANSWER_MAX_JSON_BYTES = 160 * 1024;
 /** Text the secret scanner can read. Binary formats come later, with a control of their own. */
 export const HUMAN_ANSWER_MEDIA_TYPES = ['text/plain', 'text/markdown', 'text/csv', 'application/json'] as const;
 
-/** C0 and C1 control characters other than tab and line ends mark binary content (U+009B is an 8-bit escape). */
-function isBinary(value: string): boolean {
-  for (let index = 0; index < value.length; index += 1) {
-    const code = value.charCodeAt(index);
-    if ((code < 32 && code !== 9 && code !== 10 && code !== 13) || (code >= 127 && code <= 159)) return true;
-  }
-  return false;
-}
-
-/** A file name shows in the requester's tools: no control character at all, and no bidi override to disguise it. */
-function isUnsafeName(value: string): boolean {
-  for (let index = 0; index < value.length; index += 1) {
-    const code = value.charCodeAt(index);
-    if (code < 32 || (code >= 127 && code <= 159)) return true;
-    if (code === 0x200e || code === 0x200f || (code >= 0x202a && code <= 0x202e) || (code >= 0x2066 && code <= 0x2069))
-      return true;
-  }
-  return false;
-}
 const utf8Bytes = (value: string): number => new TextEncoder().encode(value).length;
 
 const PlainText = (max: number) =>
@@ -42,7 +24,7 @@ export const HumanAnswerFileSchema = z.object({
     .trim()
     .min(1)
     .max(120)
-    .refine((name) => !isUnsafeName(name), 'unsafe file name'),
+    .refine((name) => !isUnsafeLabel(name), 'unsafe file name'),
   mediaType: z.enum(HUMAN_ANSWER_MEDIA_TYPES),
   content: PlainText(HUMAN_ANSWER_MAX_FILE_BYTES).refine(
     (content) => utf8Bytes(content) <= HUMAN_ANSWER_MAX_FILE_BYTES,

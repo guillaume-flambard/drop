@@ -310,3 +310,38 @@ describe('menu bar panel (T4.3)', () => {
     expect(() => new Script(script ?? '')).not.toThrow();
   });
 });
+
+describe('menu bar panel (T4.4)', () => {
+  it('lists what I publish with add, edit and retire, and greys out an expired fact', () => {
+    const html = renderPanel();
+    const section = html.slice(
+      html.indexOf('function factsSection(view, data)'),
+      html.indexOf('function renderTools(view)'),
+    );
+    expect(section).toContain("el('h2', { text: 'Ce que je publie' })");
+    expect(section).toContain("'Publier un fait'");
+    expect(section).toContain("'Modifier'");
+    expect(section).toContain("api('POST', '/ui/facts/' + fact.factId + '/retire', {})");
+    // Expired or retired facts are greyed out and say so.
+    expect(section).toContain("class: 'card' + (fact.live ? '' : ' faded')");
+    expect(section).toContain("fact.status === 'retired' ? 'Retiré' : fact.live ? null : 'Expiré'");
+    expect(section).toContain("' · servi ' + fact.served + ' fois'");
+    // Statements and sources are inserted as text only.
+    expect(section).toContain("el('p', { class: 'quote', text: fact.statement })");
+    expect(section).not.toContain('innerHTML');
+    const form = html.slice(
+      html.indexOf('function factForm(peers)'),
+      html.indexOf('function factsSection(view, data)'),
+    );
+    expect(form).toContain("api('POST', draft.factId ? '/ui/facts/' + draft.factId : '/ui/facts', body)");
+    expect(form).toContain("'Tous mes pairs appairés'");
+    expect(form).toContain("'Des personnes choisies'");
+    expect(html).toContain("var facts = api('GET', '/ui/facts').catch(function () { return null; });");
+    expect(section).toContain("'Impossible de lire tes faits publiés.");
+    // Editing keeps the fact's own duration instead of resetting it.
+    expect(section).toContain('validDays: Math.max(1, Math.round((fact.validTo - fact.publishedAt) / 86400000))');
+    expect(html).toContain('.card.faded { opacity: .55; }');
+    const script = /<script>([\s\S]*?)<\/script>/.exec(html)?.[1];
+    expect(() => new Script(script ?? '')).not.toThrow();
+  });
+});
