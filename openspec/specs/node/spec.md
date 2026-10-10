@@ -992,3 +992,11 @@ Sur une session locale, le Node qui se connecte SHALL d'abord prouver qu'il dét
 <!-- openspec-guard:test="local network privacy (T4.2c) > says nothing to a connection that cannot knock with a key it holds" -->
 - **WHEN** une connexion se tait, frappe avec un mauvais secret ou dit bonjour d'emblée, puis qu'un nœud rejoue le jeton d'un pair à sa propre adresse
 - **THEN** la connexion ne reçoit rien, et le nœud qui appelle ce faux pair n'envoie jamais son identifiant
+
+### Requirement: Retour de connexion OAuth sur l'API locale
+L'API locale SHALL accepter `GET /oauth/callback?state=…&code=…` sans jeton mais seulement avec son en-tête `Host`, et MUST n'échanger le code que pour une connexion en cours dont le `state`, à usage unique, a moins de 10 min (T2.17, D74). La page de réponse n'autorise aucune ressource. `POST /ui/admin/connect { agent, server }`, derrière le jeton, ouvre la connexion dans le navigateur (macOS, https seulement). Un refus de partage pour OAuth porte `E_SHARE_OAUTH`.
+
+#### Scenario: Retour du navigateur
+<!-- openspec-guard:test="remote MCP servers behind OAuth (T2.17) > takes the sign-in callback on the local API without its token, for a pending state only" -->
+- **WHEN** le navigateur revient avec un `state` en cours, un `state` inconnu, sans code, avec un refus, ou par un autre hôte
+- **THEN** seul le premier échange le code ; les autres reçoivent une page d'erreur ou 401, et `/ui/admin/connect` exige le jeton

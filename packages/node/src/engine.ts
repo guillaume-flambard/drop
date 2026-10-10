@@ -65,7 +65,7 @@ import {
   type StoredFact,
 } from './facts.ts';
 import { applyRedactions, buildCard, implFor, runCapability, validateInput, type CapabilityImpl } from '@drop/runner';
-import type { AgentLink, Peer, Published, TeamState } from './home.ts';
+import type { AgentLink, LinkRequest, Peer, Published, TeamState } from './home.ts';
 
 export const APPROVAL_TTL_MS = 10 * 60_000;
 export const REVIEW_TTL_MS = 10 * 60_000;
@@ -366,11 +366,18 @@ export class NodeEngine extends EventEmitter {
     return this.options.store.links();
   }
 
-  /** The user approved, in the app, that this assistant asks the team in their name through this gateway. */
-  async linkAssistant(gateway: NodeId, sessionId: string, clientName: string): Promise<void> {
+  /**
+   * The user approved, in the app, that this assistant asks the team in their name through this gateway. The grant
+   * repeats what the app showed; the gateway refuses it if that is not the session's own client and return domain.
+   */
+  async linkAssistant(gateway: NodeId, request: LinkRequest): Promise<void> {
+    const { sessionId, clientId, clientName, redirectHost } = request;
     const others = this.links().filter((link) => !(link.gateway === gateway && link.clientName === clientName));
-    this.options.store.saveLinks([...others, { gateway, clientName, linkedAt: new Date(this.now()).toISOString() }]);
-    await this.send(gateway, { type: 'link_grant', sessionId, clientName });
+    this.options.store.saveLinks([
+      ...others,
+      { gateway, clientName, clientId, redirectHost, linkedAt: new Date(this.now()).toISOString() },
+    ]);
+    await this.send(gateway, { type: 'link_grant', sessionId, clientId, clientName, redirectHost });
     this.log({ event: 'assistant_linked', peer: gateway });
     this.changed();
   }
@@ -384,14 +391,18 @@ export class NodeEngine extends EventEmitter {
   }
 
   private async onAgentCall(from: NodeId, message: MessageOf<'agent_call'>): Promise<void> {
-    if (!this.links().some((link) => link.gateway === from)) return;
+    const viaGateway = this.links().filter((link) => link.gateway === from);
+    if (viaGateway.length === 0) return;
+    const linked = viaGateway.some((link) => link.clientId === undefined || link.clientId === message.clientId);
     const handler = this.options.onAgentCall;
-    const reply = handler
-      ? await handler({ tool: message.tool, args: message.args }).catch(() => ({
-          text: 'Erreur du Node.',
-          isError: true,
-        }))
-      : { text: "Ce Node n'accepte pas les assistants reliés.", isError: true };
+    const reply = !linked
+      ? { text: "Cet assistant n'est plus relié à drop : relie-le de nouveau depuis ses réglages.", isError: true }
+      : handler
+        ? await handler({ tool: message.tool, args: message.args }).catch(() => ({
+            text: 'Erreur du Node.',
+            isError: true,
+          }))
+        : { text: "Ce Node n'accepte pas les assistants reliés.", isError: true };
     await this.send(from, {
       type: 'agent_reply',
       callId: message.callId,
