@@ -74,6 +74,26 @@ Trois recherches web menées pendant le grilling qui a produit D47 à D58. Lége
 
 Ces emplacements sont ceux documentés le 10 octobre 2026 ; T4.5 les revérifie dans la doc de chaque version avant d'écrire un adaptateur.
 
+**Revérification T4.5 (10 octobre 2026, docs officielles et installation locale ; la table ci-dessus reste l'état initial).**
+
+| Client | Global | Projet | Format, clé | Ajout officiel | Installé ici |
+|---|---|---|---|---|---|
+| Claude Code | `~/.claude.json` (`mcpServers`, et `projects[chemin].mcpServers` pour la portée locale) | `.mcp.json` | JSON, `mcpServers` | `claude mcp add` | oui, 2.1.288 |
+| Claude Desktop | `~/Library/Application Support/Claude/claude_desktop_config.json` | aucun | JSON, `mcpServers` (stdio seulement) | aucun | oui |
+| Cursor | `~/.cursor/mcp.json` | `.cursor/mcp.json` | JSON, `mcpServers` | aucun (lien `cursor://` avec confirmation) | oui, sans CLI |
+| Codex | `$CODEX_HOME/config.toml` (`~/.codex`) | `.codex/config.toml`, projets de confiance seulement | TOML, `[mcp_servers.<nom>]` | `codex mcp add` (global seulement) | oui, 0.156.1 |
+| OpenCode | `~/.config/opencode/opencode.json` ou `.jsonc` | `opencode.json(c)`, `.opencode/opencode.json(c)` | JSONC ; en v2 `mcp.servers.<nom>`, `command` en tableau, `environment` | `opencode mcp add --global`, pas de `remove` | oui, 2.0.26, fichier JSONC commenté |
+| Gemini CLI | `~/.gemini/settings.json` (`GEMINI_CLI_HOME`) | `.gemini/settings.json` | JSON, `mcpServers` | `gemini mcp add -s user` / `remove` (portée projet par défaut) | non (dossier présent pour Antigravity) |
+| Devin Desktop (ex-Windsurf) | `~/.config/devin/mcp_config.json` ; la FAQ cite encore `~/.codeium/windsurf/` | `.devin/mcp_config.json` (CLI) | JSON, `mcpServers` | `devin mcp add` (CLI Devin) | non |
+| Zed | `~/.config/zed/settings.json` | `.zed/settings.json`, après confiance du dossier | JSONC, `context_servers` | aucun | non (dossier présent) |
+| goose | `~/.config/goose/config.yaml` | aucun | YAML, `extensions.<id>` avec `cmd`, `args`, `envs`, `uri` | `goose configure`, interactif | non |
+| VS Code (Copilot) | `~/Library/Application Support/Code/User/mcp.json` (profil) | `.vscode/mcp.json`, `.mcp.json` | JSONC, `servers` | `code --add-mcp` (profil, pas de retrait) | oui, 1.141.0 |
+| Cline | `~/.cline/data/settings/cline_mcp_settings.json` (`CLINE_MCP_SETTINGS_PATH`) | aucun | JSON, `mcpServers` | `cline mcp add` | non |
+| Roo Code | `globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json` | `.roo/mcp.json` | JSON, `mcpServers` | aucun ; **projet archivé le 15 mai 2026** | non |
+| JetBrains AI | interface seulement (Settings, Tools, AI Assistant, Model Context Protocol), import depuis Claude Desktop ; Junie : `~/.junie/mcp/mcp.json` | Junie : `.junie/mcp/mcp.json` | JSON, `mcpServers` | aucun | non |
+
+Sources : https://code.claude.com/docs/en/mcp, https://modelcontextprotocol.io/docs/develop/connect-local-servers, https://cursor.com/docs/context/mcp, https://learn.chatgpt.com/docs/extend/mcp?surface=cli, https://opencode.ai/v2/docs/mcp-servers/, https://geminicli.com/docs/tools/mcp-server/, https://docs.devin.ai/desktop/cascade/mcp, https://zed.dev/docs/ai/mcp, https://goose-docs.ai/docs/guides/config-files, https://code.visualstudio.com/docs/copilot/customization/mcp-servers, https://docs.cline.bot/mcp/mcp-overview.md, https://roocodeinc.github.io/Roo-Code/features/mcp/using-mcp-in-roo, https://www.jetbrains.com/help/ai-assistant/mcp.html, https://junie.jetbrains.com/docs/junie-cli-mcp-configuration.html. Un dossier de configuration seul ne prouve pas qu'un client est installé : ceux de Zed, goose, Devin et Gemini existent ici sans l'application.
+
 ## 5. Capacité de simulation (mesures locales)
 
 - [F] VPS lab : 8 cœurs, 16 Go, environ 70 conteneurs, 7,2 Gio disponibles et 5,6 Gio de swap occupés sur 8 lors de la mesure ; inadapté à la simulation. Mac : 10 cœurs, 16 Go, environ 7 Go libres.

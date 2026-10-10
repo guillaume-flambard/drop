@@ -1,7 +1,8 @@
 import { timingSafeEqual } from 'node:crypto';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { z } from 'zod';
-import { decodeInvite, DropError, isDropError } from '@drop/protocol';
+import { AGENTS, type AgentKind } from '@drop/capabilities';
+import { decodeInvite, DropError, isDropError, RequesterAgentSchema } from '@drop/protocol';
 import type { NodeEngine } from './engine.ts';
 import { renderPanel } from './panel.ts';
 import { routeFacts, routeQuestion, takesQuestion } from './route.ts';
@@ -37,11 +38,15 @@ export interface AdminHooks {
   onboardingPreview?(): unknown;
   onboardingApply?(
     selections: {
-      agent: 'claude_code' | 'claude_desktop' | 'cursor' | 'codex';
+      agent: AgentKind;
       fingerprint: string;
       action: 'connect' | 'disconnect';
     }[],
   ): unknown;
+  /** Project-level configurations (T4.5): known or added folders only. */
+  projects?(): unknown;
+  addProject?(dir: string): unknown;
+  removeProject?(dir: string): boolean;
   createTeam(name: string): unknown;
   link(gateway: string, session: string, client: string): Promise<unknown>;
   unlink(gateway: string, client: string): boolean;
@@ -58,14 +63,16 @@ const OnboardingBody = z.object({
   selections: z
     .array(
       z.object({
-        agent: z.enum(['claude_code', 'claude_desktop', 'cursor', 'codex']),
+        agent: z.enum(AGENTS),
         fingerprint: z.string().regex(/^[a-f0-9]{64}$/),
         action: z.enum(['connect', 'disconnect']),
       }),
     )
     .min(1)
-    .max(4),
+    .max(AGENTS.length),
 });
+
+const ProjectBody = z.object({ dir: z.string().min(1).max(1024) });
 
 export interface LocalApi {
   port: number;
@@ -77,13 +84,13 @@ const DropRequestBody = z.object({
   capabilityId: z.string(),
   input: z.unknown(),
   purpose: z.string().min(1).max(140),
-  agent: z.enum(['claude_code', 'codex', 'cursor', 'other']).default('other'),
+  agent: RequesterAgentSchema.default('other'),
 });
 
 const AskBody = z.object({
   question: z.string().trim().min(10).max(300),
   purpose: z.string().trim().min(1).max(140).optional(),
-  agent: z.enum(['claude_code', 'codex', 'cursor', 'other']).default('other'),
+  agent: RequesterAgentSchema.default('other'),
 });
 
 const MAX_BODY_BYTES = 128 * 1024;
@@ -355,6 +362,40 @@ export function startLocalApi(options: LocalApiOptions): Promise<LocalApi> {
           return;
         }
         const body: unknown = method === 'POST' ? JSON.parse((await readBody(req)) || '{}') : {};
+        if (method === 'GET' && path === '/ui/admin/projects' && admin.projects) {
+          json(res, 200, { projects: admin.projects() });
+          return;
+        }
+        if (
+          method === 'POST' &&
+          (path === '/ui/admin/projects' || path === '/ui/admin/projects/remove') &&
+          admin.addProject &&
+          admin.removeProject
+        ) {
+          const parsed = ProjectBody.safeParse(body);
+          if (!parsed.success) {
+            json(res, 400, { error: 'E_SCHEMA', message: 'Indique le chemin complet du dossier.' });
+            return;
+          }
+          if (path === '/ui/admin/projects/remove') {
+            const removed = admin.removeProject(parsed.data.dir);
+            json(res, removed ? 200 : 404, { ok: removed });
+            return;
+          }
+          try {
+            json(res, 200, { ok: true, dir: admin.addProject(parsed.data.dir) });
+          } catch (error) {
+            const code = error instanceof Error && error.message.startsWith('E_') ? error.message : 'E_PROJECT_PATH';
+            json(res, 400, {
+              error: code,
+              message:
+                code === 'E_PROJECT_LIMIT'
+                  ? '50 dossiers au plus.'
+                  : 'Dossier introuvable : indique le chemin complet d’un dossier de projet (ni la racine, ni ton dossier personnel).',
+            });
+          }
+          return;
+        }
         if (method === 'POST' && path === '/ui/admin/onboarding') {
           if (!admin.onboardingApply) {
             json(res, 404, { error: 'not_found' });
