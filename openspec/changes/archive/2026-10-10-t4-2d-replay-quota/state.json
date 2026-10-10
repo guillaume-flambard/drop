@@ -1,0 +1,10 @@
+{
+  "phase": "READY_FOR_MANUAL_ACCEPTANCE",
+  "scope": "T4.2d : un inconnu n'occupe pas le cache anti-rejeu ; liaison à usage unique ; purge bornée",
+  "requirements": { "total": 1, "covered": 1 },
+  "acceptance": { "total": 3, "verified": 3, "pending": 0, "failed": 0 },
+  "todos": { "p0_open": 0, "p1_open": 0 },
+  "risks": { "critical_open": 0, "high_open": 0 },
+  "verification": { "status": "PASS", "evidence": "evidence.md", "cso": "partial: run closed after a refused submission, coverage not recorded by the helper; assessment in evidence.md" },
+  "ready_for_manual_acceptance": true
+}

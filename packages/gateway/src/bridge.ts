@@ -11,8 +11,8 @@ import type { LinkClaim } from './oauth.ts';
 export interface BridgeOptions {
   identity: Identity;
   relayUrl: string;
-  /** True for a pending OAuth session waiting for its link_grant. */
-  isPendingSession: (sessionId: string) => boolean;
+  /** True once for a pending OAuth session waiting for its link_grant, which it claims (T4.2d): false after. */
+  claimPendingSession: (sessionId: string) => boolean;
   /** Binds the session to the node if the claim matches it; false when it does not (logged as E_LINK_MISMATCH). */
   onLinkGrant: (sessionId: string, nodeId: NodeId, claim: LinkClaim) => boolean;
   /** Nodes that granted a link, from the persisted tokens: they may reply. */
@@ -44,6 +44,11 @@ export class Bridge {
 
   start(): void {
     this.client.start();
+  }
+
+  /** Counts only, for diagnostics and bounded-memory tests (T4.2d). */
+  memoryStats(): { replay: number; pending: number } {
+    return { replay: this.replay.size(), pending: this.pending.size };
   }
 
   close(): void {
@@ -93,7 +98,7 @@ export class Bridge {
       const { envelope, message } = await openEnvelope(this.options.identity, raw, {
         isKnownPeer: (nodeId) => this.options.isLinkedNode(nodeId),
         replay: this.replay,
-        acceptLinkSession: (sessionId) => this.options.isPendingSession(sessionId),
+        acceptLinkSession: (sessionId) => this.options.claimPendingSession(sessionId),
       });
       if (message.type === 'link_grant') {
         const { clientId, clientName, redirectHost } = message;
