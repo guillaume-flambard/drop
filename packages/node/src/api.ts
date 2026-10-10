@@ -5,6 +5,7 @@ import { AGENTS, type AgentKind } from '@drop/capabilities';
 import { decodeInvite, DropError, isDropError, RequesterAgentSchema } from '@drop/protocol';
 import type { NodeEngine } from './engine.ts';
 import { LinkRequestSchema, type LinkRequest } from './home.ts';
+import { InternetSettingsSchema, type InternetSettings } from './iroh.ts';
 import { renderPanel } from './panel.ts';
 import { routeFacts, routeQuestion, takesQuestion } from './route.ts';
 import { teamAgent } from './a2a-inbound.ts';
@@ -47,7 +48,7 @@ function signInPage(res: ServerResponse, status: number, message: string): void 
 
 /** What the panel can do beyond deciding: see and share tools, install drop in agents, create a team. */
 export interface AdminHooks {
-  status(): { displayName: string; nodeId: string; relayConnected: boolean };
+  status(): { displayName: string; nodeId: string; relayConnected: boolean; lan?: string; internet?: string };
   tools(): unknown;
   share(body: {
     agent: string;
@@ -70,6 +71,9 @@ export interface AdminHooks {
   addProject?(dir: string): unknown;
   removeProject?(dir: string): boolean;
   createTeam(name: string): unknown;
+  /** Internet by iroh (T4.2b): the owner's choice and the program's state. */
+  internet?(): unknown;
+  setInternet?(settings: InternetSettings): unknown;
   link(gateway: string, request: LinkRequest): Promise<unknown>;
   /** Starts drop's OAuth sign-in to a detected remote MCP server (T2.17): the URL to open, or `connected`. */
   connect(agent: string, server: string): Promise<unknown>;
@@ -437,6 +441,23 @@ export function startLocalApi(options: LocalApiOptions): Promise<LocalApi> {
                   : 'Dossier introuvable : indique le chemin complet d’un dossier de projet (ni la racine, ni ton dossier personnel).',
             });
           }
+          return;
+        }
+        if (path === '/ui/admin/internet' && admin.internet && admin.setInternet) {
+          if (method === 'GET') {
+            json(res, 200, admin.internet());
+            return;
+          }
+          const parsed = InternetSettingsSchema.safeParse(body);
+          if (!parsed.success) {
+            json(res, 400, {
+              error: 'E_SCHEMA',
+              message:
+                'Adresse de relais invalide : elle doit commencer par https:// (http seulement sur ce Mac, pour un essai).',
+            });
+            return;
+          }
+          json(res, 200, await admin.setInternet(parsed.data));
           return;
         }
         if (method === 'POST' && path === '/ui/admin/onboarding') {

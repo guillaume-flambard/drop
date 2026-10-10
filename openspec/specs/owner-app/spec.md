@@ -106,6 +106,14 @@ L'onglet « Mes outils » SHALL montrer « Ce que je publie » : sujet, énoncé
 - **WHEN** le propriétaire analyse ce Mac
 - **THEN** il voit les treize clients, une section projets avec ajout et retrait de dossier, et les étapes manuelles des clients qui en ont besoin
 
+### Requirement: Choix du relais Internet
+« Mes outils » SHALL proposer « Connexion par Internet » : désactivée (par défaut), direct seulement, mon relais ou celui de l'équipe (adresse), ou relais de test de n0 signalé comme tiers qui voit les adresses IP. L'état MUST dire si le programme est prêt et expliquer un échec.
+
+#### Scenario: AC: choix du relais
+<!-- openspec-guard:test="internet (T4.2b) > lets the owner choose no relay, their own relay or the n0 test relays, flagged as third party" -->
+- **WHEN** le propriétaire choisit son relais, puis les relais de test de n0
+- **THEN** la configuration garde son choix, et le panneau signale n0 comme un tiers de test qui voit les adresses IP
+
 ### Requirement: Mises à jour signées
 Une app construite avec la clé de mise à jour SHALL chercher une version au lancement puis toutes les 6 h sur `https://drop.memolabs.dev/updates/latest.json` et la proposer dans le menu ; rien ne s'installe sans ce clic (D70). L'archive MUST être signée par cette clé pour la version annoncée (`requireSignedVersion`), sinon refusée. Sans la clé, l'app ne cherche aucune mise à jour (D76). La construction MUST refuser un manifeste signé pour une autre version.
 

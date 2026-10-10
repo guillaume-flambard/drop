@@ -21,12 +21,23 @@ import type { DropHome } from './home.ts';
 import { notify } from './notify.ts';
 import { LanService } from './lan.ts';
 import { mdnsDiscovery } from './lan-mdns.ts';
+import {
+  IrohService,
+  assertInternetAllowed,
+  irohBinary,
+  privateSocket,
+  relayChoice,
+  sendInOrder,
+  type InternetSettings,
+} from './iroh.ts';
 import { addProject, listProjects, removeProject } from './projects.ts';
 
 export interface Daemon {
   engine: NodeEngine;
   relay: RelayClient;
   lan: LanService;
+  /** Internet by iroh (T4.2b): replaced when the owner changes the relay. */
+  iroh(): IrohService;
   api: LocalApi;
   uiUrl: string;
   /** The menu bar panel (T2.4). */
@@ -47,7 +58,7 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
   const token = home.localToken();
   const log = options.log ?? ((line: string) => process.stderr.write(`${line}\n`));
   // The engine is built before the relay client that delivers to it; the transport reads the client lazily.
-  const link: { relay?: RelayClient; lan?: LanService; apiPort?: number } = {};
+  const link: { relay?: RelayClient; lan?: LanService; iroh?: IrohService; apiPort?: number } = {};
   // An unreadable local-network key turns the local mode off, logged, rather than inventing a new identity silently.
   let lanKey: string | undefined;
   try {
@@ -76,12 +87,9 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
               ? createMcpAnswer({ connect: (server) => connectMcp(server, process.env, oauth) })
               : impl,
           ),
-    // A direct local session first (T4.2), then the configured relay; otherwise the outbox keeps the envelope.
+    // A direct local session first (T4.2), then iroh (T4.2b), then the configured relay; otherwise the outbox.
     transport: {
-      send: async (envelope) => {
-        if (link.lan && (await link.lan.send(envelope)) === 'delivered') return 'delivered';
-        return link.relay ? link.relay.send(envelope) : 'offline';
-      },
+      send: (envelope) => sendInOrder(envelope, [link.lan, link.iroh], link.relay),
     },
     log: (entry) => {
       log(JSON.stringify({ at: new Date().toISOString(), ...entry }));
@@ -155,6 +163,57 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
   });
   link.lan = lan;
   await lan.start();
+  // The private profile never reaches a third party (D34): checked at start too, for a file edited by hand.
+  const internetAllowed = (settings: InternetSettings): void => {
+    assertInternetAllowed(settings, config);
+  };
+  let internet: InternetSettings = { mode: 'off' };
+  try {
+    internet = home.internet();
+    internetAllowed(internet);
+  } catch {
+    internet = { mode: 'off' };
+    log(JSON.stringify({ at: new Date().toISOString(), event: 'internet_settings_refused', code: 'E_IROH_SETTINGS' }));
+  }
+  const startIroh = async (settings: InternetSettings): Promise<IrohService> => {
+    const relayUrl = relayChoice(settings);
+    const service = new IrohService({
+      identity,
+      binary: irohBinary(),
+      enabled: settings.mode !== 'off' && process.env.DROP_INTERNET !== 'off',
+      ...(relayUrl ? { relay: relayUrl } : {}),
+      ...(config.profile === 'private' ? { allowSocket: privateSocket } : {}),
+      access: () => engine.irohAccess(),
+      addressOf: (nodeId) => engine.irohAddressOf(nodeId),
+      onEnvelope: (envelope) => {
+        void engine.handleEnvelope(envelope).catch(() => {
+          log('E_RUNNER envelope handling failed');
+        });
+      },
+      // Peers learn where to reach this node when the program starts and whenever its addresses change.
+      onAddress: (address) => {
+        engine.setIrohAddress(address).catch(() => {
+          log('E_RUNNER iroh address not shared');
+        });
+      },
+      log: (entry) => {
+        log(JSON.stringify({ at: new Date().toISOString(), ...entry }));
+      },
+    });
+    link.iroh = service;
+    await service.start();
+    return service;
+  };
+  let iroh = await startIroh(internet);
+  let internetChanges: Promise<unknown> = Promise.resolve();
+  let closing = false;
+  // Who may connect changes with invites, pairings and peers: tell the program at once.
+  const pushAccess = () => {
+    link.iroh?.refresh();
+  };
+  engine.on('access', pushAccess);
+  engine.on('change', pushAccess);
+
   // Peers learn this node's discovery key again at each start; queued like any message when they are away.
   if (lanEnabled)
     engine.announceLanKey().catch(() => {
@@ -173,7 +232,25 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
         nodeId: identity.nodeId,
         relayConnected: relay.connected,
         lan: lan.state(),
+        internet: iroh.state(),
       }),
+      internet: () => ({ settings: internet, available: irohBinary() !== undefined, ...iroh.status() }),
+      // One change at a time, and never during shutdown: two saves at once must not leave a second program running.
+      setInternet: (settings) => {
+        internetAllowed(settings);
+        const change = internetChanges.then(async () => {
+          if (closing) throw new DropError('E_DENIED', 'E_DENIED drop is stopping');
+          home.saveInternet(settings);
+          internet = settings;
+          await iroh.stop();
+          delete link.iroh;
+          await engine.setIrohAddress(undefined);
+          iroh = await startIroh(settings);
+          return { ok: true, ...iroh.status() };
+        });
+        internetChanges = change.catch(() => undefined);
+        return change;
+      },
       tools: () => {
         const shared: Record<string, string> = {};
         for (const published of home.published()) {
@@ -255,8 +332,8 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
     void engine.tick().catch(() => {
       log('E_RUNNER tick failed');
     });
-    // A peer that appears on the local network gets what waited for it, even with no relay.
-    if (lan.state() === 'on')
+    // A peer that appears on the local network or by Internet gets what waited for it, even with no relay.
+    if (lan.state() === 'on' || iroh.state() === 'on')
       void engine.flushOutbox().catch(() => {
         log('E_RUNNER flush failed');
       });
@@ -266,6 +343,7 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
     engine,
     relay,
     lan,
+    iroh: () => iroh,
     api,
     uiUrl,
     panelUrl,
@@ -273,6 +351,9 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
       clearInterval(ticker);
       relay.close();
       await lan.stop();
+      closing = true;
+      await internetChanges;
+      await iroh.stop();
       await api.close();
     },
   };

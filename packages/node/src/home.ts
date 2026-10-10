@@ -1,5 +1,6 @@
 import { StoredFactSchema, type StoredFact } from './facts.ts';
 import { decodeLanKey, newLanKey } from './lan-tags.ts';
+import { InternetSettingsSchema, type InternetSettings } from './iroh.ts';
 import { randomBytes } from 'node:crypto';
 import {
   appendFileSync,
@@ -23,6 +24,8 @@ import { FundingConfigSchema } from './funding.ts';
 import type { DropClaim } from './engine.ts';
 import {
   PrivateNetworkSchema,
+  IrohAddrSchema,
+  type IrohAddr,
   assertPrivateDestination,
   TeamMemberSchema,
   TeamSchema,
@@ -421,6 +424,34 @@ export class DropHome {
     writeDurablePrivate(
       join(this.root, 'lan-keys.json'),
       `${JSON.stringify({ ...this.lanKeys(), [nodeId]: key }, null, 2)}\n`,
+    );
+  }
+
+  /** The iroh addresses peers sent (T4.2b), kept apart from peers.json, owner-only. */
+  irohAddrs(): Record<string, IrohAddr> {
+    const path = join(this.root, 'iroh-addrs.json');
+    if (!existsSync(path)) return {};
+    return z.record(z.string(), IrohAddrSchema).parse(JSON.parse(readFileSync(path, 'utf8')));
+  }
+
+  saveIrohAddr(nodeId: string, address: IrohAddr): void {
+    writeDurablePrivate(
+      join(this.root, 'iroh-addrs.json'),
+      `${JSON.stringify({ ...this.irohAddrs(), [nodeId]: address }, null, 2)}\n`,
+    );
+  }
+
+  /** The owner's Internet choice from the panel (T4.2b): off until they pick one. */
+  internet(): InternetSettings {
+    const path = join(this.root, 'internet.json');
+    if (!existsSync(path)) return { mode: 'off' };
+    return InternetSettingsSchema.parse(JSON.parse(readFileSync(path, 'utf8')));
+  }
+
+  saveInternet(settings: InternetSettings): void {
+    writeDurablePrivate(
+      join(this.root, 'internet.json'),
+      `${JSON.stringify(InternetSettingsSchema.parse(settings))}\n`,
     );
   }
 

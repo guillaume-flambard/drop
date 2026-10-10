@@ -710,10 +710,55 @@ code { font: 11px/1.4 ui-monospace, SFMono-Regular, monospace; word-break: break
       } }, 'Ajouter ce dossier'))));
   }
 
+  // Internet by iroh (T4.2b, D68): off by default; no relay unless the owner picks one; n0's relays flagged as a third party.
+  function internetSection(view, internet) {
+    var settings = internet.settings || { mode: 'off' };
+    var STATES = {
+      off: 'Désactivée.',
+      starting: 'Démarrage…',
+      on: 'Active : tes collègues appairés peuvent te joindre par Internet.',
+      failed: 'Arrêtée après une erreur : nouvel essai bientôt.',
+      unavailable: 'Indisponible sur ce Mac : le programme de connexion par Internet n’est pas installé.'
+    };
+    view.appendChild(el('h2', { text: 'Connexion par Internet' }));
+    view.appendChild(el('div', { class: 'lead', text: 'Pour joindre un collègue hors de ton réseau, sans serveur drop. Le contenu reste chiffré de bout en bout.' }));
+    view.appendChild(el('div', { class: internet.message ? 'error' : 'muted', role: 'status', text: (STATES[internet.state] || '') + (internet.message ? ' ' + internet.message : '') }));
+    var relay = el('input', { type: 'url', autocomplete: 'off', spellcheck: 'false', placeholder: 'https://relais.mon-equipe.fr', 'aria-label': 'Adresse du relais iroh', 'data-focus': 'internet:relay' });
+    relay.value = settings.mode === 'relay' ? settings.relay : '';
+    var CHOICES = [
+      { mode: 'off', label: 'Désactivée', detail: '' },
+      { mode: 'direct', label: 'Direct seulement', detail: 'Sans relais : marche quand l’un de vous est joignable directement.' },
+      { mode: 'relay', label: 'Mon relais ou celui de l’équipe', detail: 'Un relais iroh que vous hébergez. Il voit vos adresses IP, jamais le contenu.' },
+      { mode: 'n0', label: 'Relais de test de n0', detail: 'Un tiers, pour tester seulement : il voit vos adresses IP, jamais le contenu.' }
+    ];
+    var radios = [];
+    var group = el('fieldset', { class: 'card' }, el('legend', { class: 'name', text: 'Relais' }));
+    CHOICES.forEach(function (choice) {
+      var radio = el('input', { type: 'radio', name: 'internet-mode', value: choice.mode, 'data-focus': 'internet:' + choice.mode });
+      radio.checked = settings.mode === choice.mode;
+      radios.push(radio);
+      group.appendChild(el('label', { class: 'row' }, radio, el('div', { class: 'grow' }, el('div', { text: choice.label }),
+        choice.detail ? el('div', { class: 'muted', text: choice.detail }) : null)));
+    });
+    group.appendChild(el('label', { class: 'field' }, 'Adresse du relais (mon relais ou celui de l’équipe)', relay));
+    group.appendChild(el('div', { class: 'actions' }, el('button', { class: 'act', onclick: function (event) {
+      var picked = radios.filter(function (radio) { return radio.checked; })[0];
+      var mode = picked ? picked.value : 'off';
+      if (mode === 'relay' && !relay.value.trim()) { relay.setAttribute('aria-invalid', 'true'); announce('Indique l’adresse du relais.'); relay.focus(); return; }
+      var button = event.currentTarget;
+      button.disabled = true;
+      api('POST', '/ui/admin/internet', mode === 'relay' ? { mode: mode, relay: relay.value.trim() } : { mode: mode }).then(function () {
+        info = 'Connexion par Internet mise à jour.'; announce(info); render(true);
+      }, function (error) { notice = error.message; announce('Action impossible. ' + notice); render(true); });
+    } }, 'Enregistrer')));
+    view.appendChild(group);
+  }
+
   function renderTools(view) {
     // A failing fact store must not take the rest of « Mes outils » down with it.
     var facts = api('GET', '/ui/facts').catch(function () { return null; });
-    return Promise.all([api('GET', '/ui/admin/tools'), facts]).then(function (all) {
+    var internet = api('GET', '/ui/admin/internet').catch(function () { return null; });
+    return Promise.all([api('GET', '/ui/admin/tools'), facts, internet]).then(function (all) {
       var data = all[0];
       factsSection(view, all[1]);
       view.appendChild(el('h2', { text: 'Connecter mes agents' }));
@@ -809,6 +854,7 @@ code { font: 11px/1.4 ui-monospace, SFMono-Regular, monospace; word-break: break
         view.appendChild(linked);
       }
       view.appendChild(el('div', { class: 'lead', text: 'Qui paie le modèle : ' + (data.payer === 'owner' ? 'toi' : 'celui qui demande') }));
+      if (all[2]) internetSection(view, all[2]);
     });
   }
 

@@ -1,6 +1,6 @@
 import type { StoredFact } from '../src/facts.ts';
 import { z } from 'zod';
-import { generateIdentity, verifyReceipt, type Identity, type Receipt } from '@drop/protocol';
+import { generateIdentity, verifyReceipt, type Identity, type IrohAddr, type Receipt } from '@drop/protocol';
 import { RelayClient, startRelay, type RelayHandle } from '@drop/relay';
 import type { CapabilityImpl } from '@drop/runner';
 import { NodeEngine, type EngineOptions, type NodeStore, type Transport } from '../src/engine.ts';
@@ -14,6 +14,15 @@ export class MemoryStore implements NodeStore {
   linkList: AgentLink[] = [];
   factList: StoredFact[] = [];
   lanKeyMap: Record<string, string> = {};
+  irohAddrMap: Record<string, IrohAddr> = {};
+
+  irohAddrs(): Record<string, IrohAddr> {
+    return this.irohAddrMap;
+  }
+
+  saveIrohAddr(nodeId: string, address: IrohAddr): void {
+    this.irohAddrMap = { ...this.irohAddrMap, [nodeId]: address };
+  }
 
   lanKeys(): Record<string, string> {
     return this.lanKeyMap;

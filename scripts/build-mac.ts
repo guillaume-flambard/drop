@@ -78,6 +78,27 @@ if (identity) {
     { stdio: 'inherit' },
   );
 }
+// Internet by iroh (T4.2b, D68): its program sits next to the bundled Node, signed the same way, with its notices.
+const irohCrate = join(root, 'crates', 'drop-iroh');
+execFileSync('cargo', ['build', '--release', '--locked', '--manifest-path', join(irohCrate, 'Cargo.toml')], {
+  stdio: 'inherit',
+});
+copyFileSync(join(irohCrate, 'target', 'release', 'drop-iroh'), join(resources, 'drop-iroh'));
+chmodSync(join(resources, 'drop-iroh'), 0o755);
+if (identity) {
+  execFileSync(
+    'codesign',
+    ['--force', '--options', 'runtime', '--timestamp', '--sign', identity, join(resources, 'drop-iroh')],
+    { stdio: 'inherit' },
+  );
+}
+execFileSync(
+  process.execPath,
+  [join(root, 'scripts', 'drop-iroh-notice.ts'), join(resources, 'drop-iroh-NOTICE.txt')],
+  {
+    stdio: 'inherit',
+  },
+);
 copyFileSync(join(root, 'dist', 'drop.mjs'), join(resources, 'drop.mjs'));
 copyFileSync(join(root, 'dist', 'drop-mcp.mjs'), join(resources, 'drop-mcp.mjs'));
 
@@ -133,6 +154,7 @@ const manifest = {
   artifacts: {
     dmg: { name: dmg, sha256: sha256(dmgPath) },
     node: { sha256: sha256(join(resources, 'node')) },
+    iroh: { sha256: sha256(join(resources, 'drop-iroh')) },
     cli: { sha256: sha256(join(resources, 'drop.mjs')) },
     mcp: { sha256: sha256(join(resources, 'drop-mcp.mjs')) },
   },
