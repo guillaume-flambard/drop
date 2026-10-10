@@ -1,18 +1,26 @@
+import { randomBytes } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import {
   createAdmission,
+  DropError,
   createTeam,
   createInvite,
   decodeInvite,
   encodeInvite,
   isDropError,
+  isFactCapabilityId,
+  HUMAN_ANSWER_OUTPUT_SCHEMA,
+  signFact,
   openEnvelope,
   ReplayCache,
+  REPLAY_WINDOW_MS,
+  MAX_CLOCK_SKEW_MS,
   sealEnvelope,
   sha256Hex,
   signCard,
   signReceipt,
   uuidv7,
+  uuidv7Timestamp,
   verifyCard,
   verifyReceipt,
   type CapabilityCard,
@@ -25,6 +33,7 @@ import {
   type Message,
   type MessageOf,
   type NodeId,
+  type Owner,
   type OwnerKind,
   type Receipt,
   type RequestedBy,
@@ -32,25 +41,97 @@ import {
   type TeamMember,
   type UnsignedReceipt,
 } from '@drop/protocol';
+import { IrohAddrSchema, type IrohAddr } from '@drop/protocol';
 import type { Funder } from './funding.ts';
+import { irohRelayAllowed } from './iroh.ts';
+import { checkHumanAnswer } from './human-answer.ts';
+import {
+  carriesInvite,
+  carriesTag,
+  decodeLanKey,
+  inviteTag,
+  lanEpoch,
+  lanTag,
+  MAX_INVITE_TAGS,
+  newLanKey,
+  type LanAnnouncement,
+} from './lan-tags.ts';
+import {
+  draftFact,
+  FACT_IMPL,
+  FACT_OUTPUT_HASH,
+  factCard,
+  factResultHolds,
+  inAudience,
+  isLive,
+  type StoredFact,
+} from './facts.ts';
 import { applyRedactions, buildCard, implFor, runCapability, validateInput, type CapabilityImpl } from '@drop/runner';
-import type { Peer, Published, TeamState } from './home.ts';
+import type { AgentLink, LinkRequest, Peer, Published, TeamState } from './home.ts';
 
 export const APPROVAL_TTL_MS = 10 * 60_000;
 export const REVIEW_TTL_MS = 10 * 60_000;
 export const CATALOG_TTL_MS = 60_000;
+export const MAX_ACTIVE_EXECUTING_DROPS = 1_024;
+export const MAX_COMPLETED_ERRORS = 1_024;
+export const MAX_OUTBOUND_DROPS = 1_024;
+export const MAX_INBOX_ITEMS = 1_024;
+export const MAX_OUTBOX_ENVELOPES = 1_024;
 
 export interface Transport {
   send(envelope: Envelope): Promise<string>;
 }
 
+interface QueuedEnvelope {
+  envelope: Envelope;
+  order: number;
+}
+
+export type DropClaim = 'claimed' | 'duplicate' | 'expired' | 'capacity';
+
+const CLAIM_ERRORS: Record<Exclude<DropClaim, 'claimed'>, { code: DropErrorCode; message: string }> = {
+  duplicate: { code: 'E_DENIED', message: 'Demande déjà reçue ; créez une nouvelle demande.' },
+  expired: { code: 'E_EXPIRED', message: 'Demande expirée ou horloge désynchronisée.' },
+  capacity: { code: 'E_RATE', message: 'Trop de demandes reçues ; réessayez plus tard.' },
+};
+
+/** Stable log reason for a replay-store failure: our own E_REPLAY_STATE text or the fs error code, never a path. */
+function replayFailureReason(error: unknown): string {
+  const prefix = 'E_REPLAY_STATE ';
+  if (error instanceof Error && error.message.startsWith(prefix)) return error.message.slice(prefix.length);
+  if (error instanceof Error && 'code' in error && typeof error.code === 'string') return error.code;
+  return 'unknown';
+}
+
+/** Executor states in which a drop has not sent its outcome yet; only these are echoed to a duplicate request. */
+/** Facts are served without a decision: a peer may ask for this many per minute, no more (T4.4 review). */
+const FACT_REQUESTS_PER_MINUTE = 10;
+const UNSETTLED_STATES: readonly DropState[] = ['awaiting_approval', 'approved', 'running', 'in_review'];
+
 export interface NodeStore {
+  /**
+   * Persistent anti-replay: 'duplicate' for a known id, 'expired' outside the freshness window measured against a
+   * durable high-water clock, 'capacity' when the bounded store is full. A throw (lock, corruption, I/O) is treated
+   * by the engine as 'capacity', so the request is refused before consent.
+   */
+  claimDrop?(dropId: string, now: number): DropClaim;
   peers(): Peer[];
   savePeer(peer: Peer): void;
   published(): Published[];
   appendReceipt(receipt: Receipt): void;
   team(): TeamState | undefined;
   saveTeam(state: TeamState): void;
+  links(): AgentLink[];
+  saveLinks(links: AgentLink[]): void;
+  /** Published facts (T4.4): absent on stores that predate them, which then publish none. */
+  facts?(): StoredFact[];
+  saveFacts?(facts: StoredFact[]): void;
+  /** Local-network discovery keys of the peers (T4.2c): kept apart, owner-only. */
+  lanKeys?(): Record<string, string>;
+  saveLanKey?(nodeId: string, key: string): void;
+  /** Iroh addresses of the peers (T4.2b): kept apart, owner-only. */
+  irohAddrs?(): Record<string, IrohAddr>;
+  saveIrohAddr?(nodeId: string, address: IrohAddr): void;
 }
 
 /** One member as the team panel shows them (T2.9): who, which agents, online or not, which capabilities. */
@@ -108,9 +189,13 @@ interface ExecutorDrop {
   expiresAt: number;
   reviewExpiresAt?: number;
   output?: Record<string, unknown> | undefined;
+  /** The refusal or failure sent to the requester, replayed verbatim to a duplicate request. */
+  error?: { code: DropErrorCode; message: string };
   toolCalls: { name: string; count: number }[];
   costUsd: number;
   reviewed: boolean;
+  /** Set when the approver answered by hand instead of running the capability (T4.3). */
+  answeredBy?: 'human' | 'fact';
   timestamps: { requested: number; decided?: number; started?: number; finished?: number; delivered?: number };
   /** The requester's capped key, kept in memory until the run ends, then dropped. */
   funding?: Funding | undefined;
@@ -125,12 +210,16 @@ export interface CatalogEntry {
 export interface EngineLogEntry {
   event: string;
   code?: string;
+  /** Stable cause behind a code, e.g. which replay-store check failed. Never a path or payload. */
+  reason?: string;
   dropId?: string;
   peer?: string;
 }
 
 export interface EngineOptions {
   identity: Identity;
+  /** Local-network discovery key, 32 bytes base64url (T4.2c); a fresh one per process when absent. */
+  lanKey?: string;
   ownerKind: OwnerKind;
   store: NodeStore;
   transport: Transport;
@@ -143,8 +232,11 @@ export interface EngineOptions {
   funder?: Funder;
   /** Executor side: who pays the model. 'requester' (default, D27) uses the requester's key when one is sent. */
   payer?: 'requester' | 'owner';
+  privateProfile?: boolean;
   /** The coding agents this node's human uses, shared with the team (T2.9). */
   agents?: () => string[];
+  /** Runs a call from a linked assistant (T2.13) with the requester tools, in this user's name. */
+  onAgentCall?: (call: { tool: string; args: Record<string, unknown> }) => Promise<{ text: string; isError: boolean }>;
 }
 
 const DECISION_ERRORS: Record<'deny' | 'not_now', DropErrorCode> = { deny: 'E_DENIED', not_now: 'E_NOT_NOW' };
@@ -159,15 +251,34 @@ export class NodeEngine extends EventEmitter {
   private readonly now: () => number;
   private readonly replay = new ReplayCache();
   private readonly invites = new Map<string, number>();
-  private readonly pairing = new Map<NodeId, { token: string; displayName: string }>();
+  /** This node's local-network discovery key (T4.2c): from DROP_HOME, or one per process in tests. */
+  private readonly lanKey: string;
+  private lanKeysCache: { at: number; keys: Record<string, string> } | undefined;
+  /** Recent fact requests per peer (T4.4), for FACT_REQUESTS_PER_MINUTE. */
+  private readonly factRequests = new Map<NodeId, number[]>();
+  private readonly pairing = new Map<NodeId, { token: string; displayName: string; iroh?: IrohAddr }>();
+  /** This node's iroh addresses while the Internet mode runs (T4.2b). */
+  private irohAddress: IrohAddr | undefined;
+  private irohAddrsCache: { at: number; addrs: Record<string, IrohAddr> } | undefined;
   private readonly catalogs = new Map<NodeId, { cards: CapabilityCard[]; at: number }>();
   private readonly executing = new Map<string, ExecutorDrop>();
+  /** Minimal duplicate response, without the request input, tools, config or funding. */
+  private readonly completedErrors = new Map<
+    string,
+    { requester: NodeId; error: ExecutorDrop['error']; expiresAt: number }
+  >();
   private readonly outbound = new Map<string, OutboundDrop>();
   private readonly inbox = new Map<string, InboxItem>();
-  private readonly outbox: Envelope[] = [];
+  private readonly outbox: QueuedEnvelope[] = [];
+  private outboxInFlight: QueuedEnvelope | undefined;
+  private outboxFlush: Promise<void> | undefined;
+  private nextOutboxOrder = 0;
 
   constructor(options: EngineOptions) {
     super();
+    this.lanKey = options.lanKey ?? newLanKey();
+    // A predictable key would let anyone recognize and knock: refuse it rather than fall back.
+    if (!decodeLanKey(this.lanKey)) throw new DropError('E_SCHEMA', 'E_LAN_KEY invalid local-network key');
     this.options = options;
     this.identity = options.identity;
     this.now = options.now ?? Date.now;
@@ -183,8 +294,24 @@ export class NodeEngine extends EventEmitter {
     return [...this.inbox.values()].sort((a, b) => a.expiresAt - b.expiresAt);
   }
 
+  /** Counts only; safe for local diagnostics and bounded-memory tests. */
+  memoryStats(): { executing: number; completedErrors: number; outbound: number; inbox: number; outbox: number } {
+    return {
+      executing: this.executing.size,
+      completedErrors: this.completedErrors.size,
+      outbound: this.outbound.size,
+      inbox: this.inbox.size,
+      outbox: this.outbox.length + (this.outboxInFlight ? 1 : 0),
+    };
+  }
+
   drop(dropId: string): OutboundDrop | undefined {
     return this.outbound.get(dropId);
+  }
+
+  /** This node's own questions, newest first: what the panel shows under « Mes questions en cours » (T2.4). */
+  outboundDrops(): OutboundDrop[] {
+    return [...this.outbound.values()].sort((a, b) => b.createdAt - a.createdAt);
   }
 
   catalog(): CatalogEntry[] {
@@ -221,8 +348,10 @@ export class NodeEngine extends EventEmitter {
   /** A pairing code that also carries an admission ticket, so a newcomer can join the relay with it (T2.1). */
   async invite(relayUrl: string): Promise<string> {
     const admission = await createAdmission(this.identity, this.now());
-    const invite = createInvite(this.identity, relayUrl, this.now(), admission, this.team()?.team);
+    const invite = createInvite(this.identity, relayUrl, this.now(), admission, this.team()?.team, this.irohAddress);
     this.invites.set(invite.oneTimeToken, invite.expiresAt);
+    // Direct paths must let the invitee in now, not at their next refresh (T4.2b live run).
+    this.emit('access');
     return encodeInvite(invite);
   }
 
@@ -231,7 +360,12 @@ export class NodeEngine extends EventEmitter {
     if (invite.admission) this.options.onAdmission?.(invite.admission);
     // Joining a team: the roster arrives from the inviter once paired (T2.9).
     if (invite.team && !this.team()) this.options.store.saveTeam({ team: invite.team, members: [this.selfMember()] });
-    this.pairing.set(invite.nodeId, { token: invite.oneTimeToken, displayName: invite.displayName });
+    this.pairing.set(invite.nodeId, {
+      token: invite.oneTimeToken,
+      displayName: invite.displayName,
+      ...(invite.iroh ? { iroh: invite.iroh } : {}),
+    });
+    this.emit('access');
     await this.send(invite.nodeId, {
       type: 'pair_request',
       oneTimeToken: invite.oneTimeToken,
@@ -239,6 +373,155 @@ export class NodeEngine extends EventEmitter {
       ownerKind: this.options.ownerKind,
     });
     return invite.nodeId;
+  }
+
+  // ---- linked assistants (T2.13) -----------------------------------------------------------------------------
+
+  links(): AgentLink[] {
+    return this.options.store.links();
+  }
+
+  /**
+   * The user approved, in the app, that this assistant asks the team in their name through this gateway. The grant
+   * repeats what the app showed; the gateway refuses it if that is not the session's own client and return domain.
+   */
+  async linkAssistant(gateway: NodeId, request: LinkRequest): Promise<void> {
+    const { sessionId, clientId, clientName, redirectHost } = request;
+    const others = this.links().filter((link) => !(link.gateway === gateway && link.clientName === clientName));
+    this.options.store.saveLinks([
+      ...others,
+      { gateway, clientName, clientId, redirectHost, linkedAt: new Date(this.now()).toISOString() },
+    ]);
+    await this.send(gateway, { type: 'link_grant', sessionId, clientId, clientName, redirectHost });
+    this.log({ event: 'assistant_linked', peer: gateway });
+    this.changed();
+  }
+
+  unlinkAssistant(gateway: NodeId, clientName: string): boolean {
+    const links = this.links();
+    const kept = links.filter((link) => !(link.gateway === gateway && link.clientName === clientName));
+    this.options.store.saveLinks(kept);
+    this.changed();
+    return kept.length < links.length;
+  }
+
+  private async onAgentCall(from: NodeId, message: MessageOf<'agent_call'>): Promise<void> {
+    const viaGateway = this.links().filter((link) => link.gateway === from);
+    if (viaGateway.length === 0) return;
+    const linked = viaGateway.some((link) => link.clientId === undefined || link.clientId === message.clientId);
+    const handler = this.options.onAgentCall;
+    const reply = !linked
+      ? { text: "Cet assistant n'est plus relié à drop : relie-le de nouveau depuis ses réglages.", isError: true }
+      : handler
+        ? await handler({ tool: message.tool, args: message.args }).catch(() => ({
+            text: 'Erreur du Node.',
+            isError: true,
+          }))
+        : { text: "Ce Node n'accepte pas les assistants reliés.", isError: true };
+    await this.send(from, {
+      type: 'agent_reply',
+      callId: message.callId,
+      text: reply.text.slice(0, 60_000),
+      isError: reply.isError,
+    });
+  }
+
+  // ---- local network (T4.2c, D67) ----------------------------------------------------------------------------
+
+  /** What this node announces now: a tag of its discovery key, and one per live invite. Never its node id. */
+  lanAnnouncement(): LanAnnouncement {
+    const now = this.now();
+    const epoch = lanEpoch(now);
+    const key = decodeLanKey(this.lanKey) ?? new Uint8Array(randomBytes(32));
+    const invites = [...this.invites]
+      .filter(([, expiresAt]) => expiresAt > now)
+      .slice(-MAX_INVITE_TAGS)
+      .map(([token]) => inviteTag(token, epoch));
+    return { tag: lanTag(key, epoch), invites };
+  }
+
+  /** Whether an announcement is that peer's: from the key it shared, or from the invite this node is using. */
+  lanRecognizes(nodeId: string, seen: LanAnnouncement): boolean {
+    const now = this.now();
+    const shared = this.peerLanKeys()[nodeId];
+    const key = shared ? decodeLanKey(shared) : undefined;
+    if (key && carriesTag(seen, key, now)) return true;
+    const pending = this.pairing.get(nodeId);
+    return pending !== undefined && carriesInvite(seen, pending.token, now);
+  }
+
+  /** Secrets a dialer may knock with to reach this node: its own key and the tokens of live invites. */
+  lanKnockSecrets(): string[] {
+    const now = this.now();
+    return [this.lanKey, ...[...this.invites].filter(([, expiresAt]) => expiresAt > now).map(([token]) => token)];
+  }
+
+  /** The secret to knock with toward a peer: its shared key, or the token of the invite this node is using. */
+  lanSecretFor(nodeId: string): string | undefined {
+    return this.peerLanKeys()[nodeId] ?? this.pairing.get(nodeId)?.token;
+  }
+
+  /** Peers' keys, read from the store at most every 2 s: recognition runs for every announcement and every send. */
+  private peerLanKeys(): Record<string, string> {
+    const now = this.now();
+    if (this.lanKeysCache && now - this.lanKeysCache.at < 2000) return this.lanKeysCache.keys;
+    let keys: Record<string, string> = {};
+    try {
+      keys = this.options.store.lanKeys?.() ?? {};
+    } catch {
+      this.log({ event: 'lan_keys_unreadable', code: 'E_SCHEMA' });
+    }
+    this.lanKeysCache = { at: now, keys };
+    return keys;
+  }
+
+  /** Sends this node's discovery key to every peer: at start, so that peers paired before it changed keep up. */
+  async announceLanKey(): Promise<void> {
+    for (const peer of this.peers()) await this.shareDirectPaths(peer.nodeId);
+  }
+
+  /** What a peer needs to reach this node directly: its local-network key and, when it runs, its iroh addresses. */
+  private async shareDirectPaths(nodeId: NodeId): Promise<void> {
+    await this.send(nodeId, { type: 'lan_key', key: this.lanKey });
+    if (this.irohAddress) await this.send(nodeId, { type: 'iroh_addr', ...this.irohAddress });
+  }
+
+  // ---- Internet (T4.2b, D68) ---------------------------------------------------------------------------------
+
+  /** Records this node's iroh addresses; when they change, every peer learns them, queued like any message. */
+  async setIrohAddress(address: IrohAddr | undefined): Promise<void> {
+    if (JSON.stringify(address) === JSON.stringify(this.irohAddress)) return;
+    const had = this.irohAddress !== undefined;
+    this.irohAddress = address;
+    // Off: peers learn there is nothing to dial any more, rather than waiting on a dead address.
+    const announced = address ?? (had ? { direct: [] } : undefined);
+    if (!announced) return;
+    for (const peer of this.peers()) await this.send(peer.nodeId, { type: 'iroh_addr', ...announced });
+  }
+
+  /** Where a peer, or the node an invite is being used for, said it can be reached by iroh. */
+  irohAddressOf(nodeId: string): IrohAddr | undefined {
+    return this.peerIrohAddrs()[nodeId] ?? this.pairing.get(nodeId)?.iroh;
+  }
+
+  /** Who may connect by iroh: paired peers and pairings in progress, and anyone while an invite is live (D60). */
+  irohAccess(): { peers: string[]; open: boolean } {
+    const peers = new Set<string>([...this.peers().map((peer) => peer.nodeId), ...this.pairing.keys()]);
+    peers.delete(this.identity.nodeId);
+    return { peers: [...peers].sort(), open: this.hasLiveInvite() };
+  }
+
+  private peerIrohAddrs(): Record<string, IrohAddr> {
+    const now = this.now();
+    if (this.irohAddrsCache && now - this.irohAddrsCache.at < 2000) return this.irohAddrsCache.addrs;
+    let addrs: Record<string, IrohAddr> = {};
+    try {
+      addrs = this.options.store.irohAddrs?.() ?? {};
+    } catch {
+      this.log({ event: 'iroh_addrs_unreadable', code: 'E_SCHEMA' });
+    }
+    this.irohAddrsCache = { at: now, addrs };
+    return addrs;
   }
 
   // ---- team (T2.9) -------------------------------------------------------------------------------------------
@@ -325,6 +608,7 @@ export class NodeEngine extends EventEmitter {
             via: from,
           });
           introduced.push(member.nodeId);
+          await this.shareDirectPaths(member.nodeId);
         }
       } else if (member.nodeId === from && JSON.stringify(known) !== JSON.stringify(member)) {
         members.set(from, member);
@@ -357,6 +641,7 @@ export class NodeEngine extends EventEmitter {
   }): Promise<OutboundDrop> {
     const entry = this.catalog().find((candidate) => candidate.card.id === request.capabilityId);
     if (!entry) throw new Error(`unknown capability: ${request.capabilityId}`);
+    this.reserveOutboundSlot();
     const dropId = uuidv7(this.now());
     const outbound: OutboundDrop = {
       dropId,
@@ -368,19 +653,67 @@ export class NodeEngine extends EventEmitter {
       createdAt: this.now(),
     };
     this.outbound.set(dropId, outbound);
-    const funding = await this.options.funder?.mint(dropId);
-    await this.send(entry.card.executorNodeId, {
-      type: 'drop_request',
-      dropId,
-      capabilityId: entry.card.id,
-      capabilityVersion: entry.card.version,
-      input: request.input,
-      purpose: request.purpose,
-      requestedBy: { nodeId: this.identity.nodeId, displayName: this.identity.displayName, agent: request.agent },
-      ...(funding ? { funding } : {}),
-    });
+    let funding: Funding | undefined;
+    try {
+      // A fact costs nothing: no capped key is minted for it (T4.4 review).
+      funding = isFactCapabilityId(entry.card.id) ? undefined : await this.options.funder?.mint(dropId);
+    } catch (error) {
+      this.outbound.delete(dropId);
+      throw error;
+    }
+    let outcome: string;
+    try {
+      outcome = await this.send(
+        entry.card.executorNodeId,
+        {
+          type: 'drop_request',
+          dropId,
+          capabilityId: entry.card.id,
+          capabilityVersion: entry.card.version,
+          input: request.input,
+          purpose: request.purpose,
+          requestedBy: { nodeId: this.identity.nodeId, displayName: this.identity.displayName, agent: request.agent },
+          ...(funding ? { funding } : {}),
+        },
+        { queueOffline: false },
+      );
+    } catch (error) {
+      await this.abandonOutbound(dropId, funding);
+      throw error;
+    }
+    if (outcome === 'E_RATE' || outcome === 'E_QUEUE_FULL' || outcome === 'offline') {
+      await this.abandonOutbound(dropId, funding);
+      throw new DropError('E_RATE', 'Le relais a refusé la demande.');
+    }
     this.changed();
     return outbound;
+  }
+
+  private async abandonOutbound(dropId: string, funding: Funding | undefined): Promise<void> {
+    this.outbound.delete(dropId);
+    if (funding && this.options.funder) {
+      try {
+        await this.options.funder.release(dropId);
+      } catch {
+        this.log({ event: 'funding', code: 'E_FUNDING_RELEASE', dropId });
+      }
+    }
+    this.changed();
+  }
+
+  private reserveOutboundSlot(): void {
+    if (this.outbound.size < MAX_OUTBOUND_DROPS) return;
+    for (const [dropId, drop] of this.outbound) {
+      if (
+        drop.result ||
+        drop.error ||
+        ['denied', 'expired', 'not_now', 'failed', 'delivered', 'receipted'].includes(drop.state)
+      ) {
+        this.outbound.delete(dropId);
+        break;
+      }
+    }
+    if (this.outbound.size >= MAX_OUTBOUND_DROPS) throw new DropError('E_RATE', 'Trop de demandes actives.');
   }
 
   // ---- approver ----------------------------------------------------------------------------------------------
@@ -392,6 +725,22 @@ export class NodeEngine extends EventEmitter {
     this.changed();
     const message: Message = { type: 'approval_decision', dropId, decision, decidedAt: this.now() };
     if (item.executor === this.identity.nodeId) await this.onApprovalDecision(this.identity.nodeId, message);
+    else await this.send(item.executor, message);
+    return true;
+  }
+
+  /**
+   * The approver answers by hand (T4.3, D64): this consents to this request only, and replaces running the
+   * capability. The answer is checked here before anything leaves; a refusal throws and leaves the card pending.
+   */
+  async answer(dropId: string, raw: unknown): Promise<boolean> {
+    const item = this.inbox.get(dropId);
+    if (item?.kind !== 'approval') return false;
+    const answer = checkHumanAnswer(raw);
+    this.inbox.delete(dropId);
+    this.changed();
+    const message: Message = { type: 'human_answer', dropId, answer, decidedAt: this.now() };
+    if (item.executor === this.identity.nodeId) await this.onHumanAnswer(this.identity.nodeId, message);
     else await this.send(item.executor, message);
     return true;
   }
@@ -427,29 +776,67 @@ export class NodeEngine extends EventEmitter {
 
   /** Re-sends envelopes that could not leave while the relay was unreachable. */
   async flushOutbox(): Promise<void> {
-    const pending = this.outbox.splice(0);
-    for (const envelope of pending) {
+    if (this.outboxFlush) return this.outboxFlush;
+    const operation = this.drainOutbox();
+    this.outboxFlush = operation;
+    try {
+      await operation;
+    } finally {
+      this.outboxFlush = undefined;
+    }
+  }
+
+  private async drainOutbox(): Promise<void> {
+    // Keep only order numbers: an evicted envelope must not remain retained by this snapshot.
+    const pendingOrders = this.outbox.map((queued) => queued.order);
+    for (const order of pendingOrders) {
+      const index = this.outbox.findIndex((queued) => queued.order === order);
+      if (index < 0) continue;
+      const [queued] = this.outbox.splice(index, 1);
+      if (!queued) continue;
+      const { envelope } = queued;
       if (envelope.exp <= this.now()) continue;
-      const outcome = await this.options.transport.send(envelope);
-      if (outcome === 'offline') this.outbox.push(envelope);
+      this.outboxInFlight = queued;
+      let outcome: string;
+      try {
+        outcome = await this.options.transport.send(envelope);
+      } catch {
+        this.log({ event: 'send_failed', code: 'E_RUNNER', reason: 'transport_exception', peer: envelope.to });
+        outcome = 'offline';
+      } finally {
+        this.outboxInFlight = undefined;
+      }
+      if (outcome === 'offline' || outcome === 'E_RATE' || outcome === 'E_QUEUE_FULL') {
+        if (outcome !== 'offline')
+          this.log({ event: 'send_failed', code: outcome, reason: 'flush_refused', peer: envelope.to });
+        this.queueOutbox(queued);
+      } else if (outcome !== 'delivered' && outcome !== 'queued') {
+        this.log({ event: 'send_failed', code: outcome, reason: 'flush_rejected', peer: envelope.to });
+      }
     }
   }
 
   /** Expires undecided approvals and reviews. Called every second by the daemon, or with a simulated clock in tests. */
   async tick(): Promise<void> {
     const now = this.now();
+    this.pruneCompletedErrors(now);
     for (const [dropId, item] of this.inbox) if (item.expiresAt <= now) this.inbox.delete(dropId);
     for (const drop of this.executing.values()) {
       if (drop.state === 'awaiting_approval' && drop.expiresAt <= now) {
         drop.state = 'expired';
         drop.funding = undefined;
         await this.fail(drop, 'E_EXPIRED', 'La demande a expiré sans décision.', 'expired');
-      } else if (drop.state === 'in_review' && (drop.reviewExpiresAt ?? Infinity) <= now) {
+      } else if (drop.state === 'in_review' && !drop.reviewed && (drop.reviewExpiresAt ?? Infinity) <= now) {
         drop.state = 'failed';
         await this.fail(drop, 'E_EXPIRED', "La relecture a expiré : rien n'a été envoyé.", 'allow_once');
       }
     }
     this.changed();
+    try {
+      await this.options.funder?.retryPending?.();
+    } catch {
+      this.log({ event: 'funding', code: 'E_FUNDING_RELEASE' });
+    }
   }
 
   // ---- internals ---------------------------------------------------------------------------------------------
@@ -462,8 +849,45 @@ export class NodeEngine extends EventEmitter {
         return this.onPairAccept(from, message);
       case 'team_roster':
         return this.onTeamRoster(from, message);
+      case 'agent_call':
+        return this.onAgentCall(from, message);
+      case 'link_grant':
+      case 'agent_reply':
+        // Addressed to a gateway, never to a node.
+        return;
+      case 'lan_key':
+        // Only a known peer, for itself: an unknown sender's key would only let it be recognized, never trusted.
+        if (this.peers().some((peer) => peer.nodeId === from)) {
+          try {
+            this.options.store.saveLanKey?.(from, message.key);
+          } catch {
+            this.log({ event: 'lan_key_not_saved', code: 'E_SCHEMA', peer: from });
+          }
+          this.lanKeysCache = undefined;
+        }
+        return;
+      case 'iroh_addr': {
+        // Only a known peer, for itself, with a relay this node would accept: https, or http on loopback for tests.
+        if (!this.peers().some((peer) => peer.nodeId === from)) return;
+        // The schema keeps the address fields only; the message type is dropped.
+        const address = IrohAddrSchema.safeParse(message);
+        if (!address.success || (address.data.relay !== undefined && !irohRelayAllowed(address.data.relay))) {
+          this.log({ event: 'iroh_addr_refused', code: 'E_SCHEMA', peer: from });
+          return;
+        }
+        try {
+          this.options.store.saveIrohAddr?.(from, address.data);
+        } catch {
+          this.log({ event: 'iroh_addr_not_saved', code: 'E_SCHEMA', peer: from });
+        }
+        this.irohAddrsCache = undefined;
+        return;
+      }
       case 'catalog_request':
-        await this.send(from, { type: 'catalog', cards: await this.ownCards() });
+        await this.send(from, {
+          type: 'catalog',
+          cards: [...(await this.ownCards()), ...(await this.factCards(from))],
+        });
         return;
       case 'catalog':
         return this.onCatalog(from, message);
@@ -475,6 +899,8 @@ export class NodeEngine extends EventEmitter {
       }
       case 'approval_decision':
         return this.onApprovalDecision(from, message);
+      case 'human_answer':
+        return this.onHumanAnswer(from, message);
       case 'review_request': {
         this.onReviewRequest(from, message);
         return;
@@ -482,9 +908,11 @@ export class NodeEngine extends EventEmitter {
       case 'review_decision':
         return this.onReviewDecision(from, message);
       case 'drop_status':
-      case 'drop_result':
       case 'drop_error':
         this.onRequesterUpdate(from, message);
+        return;
+      case 'drop_result':
+        this.onRequesterUpdate(from, await this.screenFactResult(from, message));
         return;
       case 'receipt':
         return this.onReceipt(from, message);
@@ -507,6 +935,7 @@ export class NodeEngine extends EventEmitter {
       ownerKind: this.options.ownerKind,
     });
     this.log({ event: 'paired', peer: from });
+    await this.shareDirectPaths(from);
     const state = this.team();
     if (state && !state.members.some((member) => member.nodeId === from)) {
       const newcomer: TeamMember = {
@@ -533,6 +962,7 @@ export class NodeEngine extends EventEmitter {
       pairedAt: new Date(this.now()).toISOString(),
     });
     this.log({ event: 'paired', peer: from });
+    await this.shareDirectPaths(from);
     if (this.team()) await this.sendRoster(from);
     this.changed();
   }
@@ -545,6 +975,48 @@ export class NodeEngine extends EventEmitter {
   }
 
   private async onDropRequest(from: NodeId, message: MessageOf<'drop_request'>): Promise<void> {
+    this.pruneCompletedErrors(this.now());
+    // Before any other check, freshness included, so a duplicate never fails a drop the owner may have approved.
+    const active = this.executing.get(message.dropId);
+    if (active) {
+      await this.answerDuplicate(from, active);
+      return;
+    }
+    const finished = this.completedErrors.get(message.dropId);
+    if (finished) {
+      await this.send(from, {
+        type: 'drop_error',
+        dropId: message.dropId,
+        ...(finished.requester === from && finished.error ? finished.error : CLAIM_ERRORS.duplicate),
+      });
+      return;
+    }
+    const requestTime = uuidv7Timestamp(message.dropId);
+    const now = this.now();
+    if (requestTime === undefined || requestTime < now - REPLAY_WINDOW_MS || requestTime > now + MAX_CLOCK_SKEW_MS) {
+      this.log({
+        event: 'drop_rejected',
+        code: 'E_EXPIRED',
+        reason: 'request_clock_skew',
+        dropId: message.dropId,
+        peer: from,
+      });
+      await this.send(from, { type: 'drop_error', dropId: message.dropId, ...CLAIM_ERRORS.expired });
+      return;
+    }
+    if (isFactCapabilityId(message.capabilityId)) {
+      await this.serveFact(from, message, now);
+      return;
+    }
+    if (this.options.privateProfile && this.options.payer === 'owner' && message.funding) {
+      await this.send(from, {
+        type: 'drop_error',
+        dropId: message.dropId,
+        code: 'E_DENIED',
+        message: 'Financement non accepté par le propriétaire.',
+      });
+      return;
+    }
     const published = this.options.store.published().find((entry) => entry.capabilityId === message.capabilityId);
     const built = published ? this.cardFor(published) : undefined;
     if (!published || !built || built.card.version !== message.capabilityVersion) {
@@ -556,7 +1028,6 @@ export class NodeEngine extends EventEmitter {
       });
       return;
     }
-    if (this.executing.has(message.dropId)) return;
     const validated = validateInput(built.impl, message.input);
     if (!validated.ok) {
       await this.send(from, {
@@ -567,7 +1038,7 @@ export class NodeEngine extends EventEmitter {
       });
       return;
     }
-    const now = this.now();
+    if (!(await this.admit(from, message.dropId, now))) return;
     const drop: ExecutorDrop = {
       dropId: message.dropId,
       requester: from,
@@ -615,7 +1086,7 @@ export class NodeEngine extends EventEmitter {
   }
 
   private onApprovalRequest(from: NodeId, message: MessageOf<'approval_request'>): void {
-    if (message.expiresAt <= this.now()) return;
+    if (!this.canAcceptInboxCard('approval', from, message.dropId, message.expiresAt, APPROVAL_TTL_MS)) return;
     this.inbox.set(message.dropId, {
       kind: 'approval',
       dropId: message.dropId,
@@ -628,6 +1099,245 @@ export class NodeEngine extends EventEmitter {
     });
     this.emit('approval', this.inbox.get(message.dropId));
     this.changed();
+  }
+
+  /** Anti-replay claim and execution capacity, shared by capabilities and facts; false once a refusal was sent. */
+  private async admit(from: NodeId, dropId: string, now: number): Promise<boolean> {
+    if (this.options.store.claimDrop) {
+      let claim: DropClaim;
+      try {
+        claim = this.options.store.claimDrop(dropId, now);
+      } catch (error) {
+        this.log({
+          event: 'drop_rejected',
+          code: 'E_REPLAY_STATE',
+          reason: replayFailureReason(error),
+          dropId,
+          peer: from,
+        });
+        claim = 'capacity';
+      }
+      if (claim === 'expired') {
+        // The id passed the wall-clock window above, so only a persisted replay clock ahead of it can refuse it.
+        this.log({
+          event: 'drop_rejected',
+          code: 'E_EXPIRED',
+          reason: 'replay_clock_ahead',
+          dropId,
+          peer: from,
+        });
+      }
+      if (claim !== 'claimed') {
+        await this.send(from, { type: 'drop_error', dropId, ...CLAIM_ERRORS[claim] });
+        return false;
+      }
+    }
+    if (this.executing.size >= MAX_ACTIVE_EXECUTING_DROPS) {
+      this.log({
+        event: 'drop_rejected',
+        code: 'E_RATE',
+        reason: 'execution_capacity',
+        dropId,
+        peer: from,
+      });
+      await this.send(from, { type: 'drop_error', dropId, ...CLAIM_ERRORS.capacity });
+      return false;
+    }
+    return true;
+  }
+
+  // ---- published facts (T4.4, D65) ---------------------------------------------------------------------------
+
+  /** What the owner publishes, with how many times each fact was served and whether it can still be served. */
+  facts(): (StoredFact['signed']['fact'] & { served: number; live: boolean })[] {
+    const now = this.now();
+    return this.storedFacts().map(({ signed, served }) => ({ ...signed.fact, served, live: isLive(signed.fact, now) }));
+  }
+
+  async publishFact(raw: unknown): Promise<StoredFact['signed']['fact']> {
+    const fact = draftFact(raw, {
+      factId: uuidv7(this.now()),
+      revision: 1,
+      owner: this.ownerOf(),
+      now: this.now(),
+      peers: this.peers().map((peer) => peer.nodeId),
+    });
+    const signed = await signFact(this.identity, fact);
+    this.updateFacts((facts) => [...facts, { signed, served: 0 }]);
+    this.changed();
+    return signed.fact;
+  }
+
+  /** A new signed revision of an active fact; the previous one is no longer served. */
+  async editFact(factId: string, raw: unknown): Promise<StoredFact['signed']['fact'] | undefined> {
+    const current = this.readFacts().find((entry) => entry.signed.fact.factId === factId)?.signed.fact;
+    if (current?.status !== 'active') return undefined;
+    const fact = draftFact(raw, {
+      factId,
+      revision: current.revision + 1,
+      owner: this.ownerOf(),
+      now: this.now(),
+      peers: this.peers().map((peer) => peer.nodeId),
+    });
+    const signed = await signFact(this.identity, fact);
+    return this.replaceRevision(current, signed) ? signed.fact : undefined;
+  }
+
+  /** Stops serving a fact and keeps it, signed as retired, for the record. */
+  async retireFact(factId: string): Promise<boolean> {
+    const current = this.readFacts().find((entry) => entry.signed.fact.factId === factId)?.signed.fact;
+    if (current?.status !== 'active') return false;
+    const signed = await signFact(this.identity, { ...current, status: 'retired' });
+    return this.replaceRevision(current, signed);
+  }
+
+  /**
+   * Swaps a fact for its new signed version only if nothing changed it meanwhile (same revision, still active):
+   * signing awaits, so a concurrent edit or retire must never be overwritten by a stale copy (T4.4 review).
+   */
+  private replaceRevision(current: StoredFact['signed']['fact'], signed: StoredFact['signed']): boolean {
+    const outcome = { replaced: false };
+    this.updateFacts((facts) =>
+      facts.map((entry) => {
+        const fact = entry.signed.fact;
+        if (fact.factId !== current.factId || fact.revision !== current.revision || fact.status !== 'active')
+          return entry;
+        outcome.replaced = true;
+        return { ...entry, signed };
+      }),
+    );
+    if (outcome.replaced) this.changed();
+    return outcome.replaced;
+  }
+
+  /** Facts as stored; an unreadable store serves no fact and is reported, without taking the catalog down with it. */
+  private storedFacts(): StoredFact[] {
+    try {
+      return this.readFacts();
+    } catch {
+      this.log({ event: 'facts_unreadable', code: 'E_FACT_STORE' });
+      return [];
+    }
+  }
+
+  private readFacts(): StoredFact[] {
+    return this.options.store.facts?.() ?? [];
+  }
+
+  /** Read, change and write with no await in between, so that concurrent actions never undo one another. */
+  private updateFacts(change: (facts: StoredFact[]) => StoredFact[]): void {
+    if (!this.options.store.saveFacts) throw new DropError('E_RUNNER', 'Ce Node ne sait pas garder de faits.');
+    this.options.store.saveFacts(change(this.readFacts()));
+  }
+
+  private ownerOf(): Owner {
+    return { kind: this.options.ownerKind, displayName: this.identity.displayName, nodeId: this.identity.nodeId };
+  }
+
+  /** The facts one peer may see: live ones whose audience includes it. Topics and keywords only, never statements. */
+  private async factCards(nodeId: NodeId): Promise<SignedCapabilityCard[]> {
+    const now = this.now();
+    const peers = this.peers().map((peer) => peer.nodeId);
+    const cards: SignedCapabilityCard[] = [];
+    for (const { signed } of this.storedFacts())
+      if (isLive(signed.fact, now) && inAudience(signed.fact, nodeId, peers))
+        cards.push(await signCard(this.identity, factCard(signed.fact, this.identity.nodeId)));
+    return cards;
+  }
+
+  /** The fact a request names, if this peer may have it now: live, in its audience, at the current revision. */
+  private servableFact(from: NodeId, message: MessageOf<'drop_request'>, now: number): StoredFact | undefined {
+    const peers = this.peers().map((peer) => peer.nodeId);
+    return this.storedFacts().find(({ signed }) => {
+      const card = factCard(signed.fact, this.identity.nodeId);
+      return (
+        card.id === message.capabilityId &&
+        card.version === message.capabilityVersion &&
+        isLive(signed.fact, now) &&
+        inAudience(signed.fact, from, peers)
+      );
+    });
+  }
+
+  /** At most FACT_REQUESTS_PER_MINUTE per peer: served without a decision, facts must not drain the owner's sends. */
+  private factRateExceeded(from: NodeId, now: number): boolean {
+    const recent = (this.factRequests.get(from) ?? []).filter((at) => at > now - 60_000);
+    recent.push(now);
+    this.factRequests.set(from, recent);
+    return recent.length > FACT_REQUESTS_PER_MINUTE;
+  }
+
+  /** Served without a consent card: publishing was the owner's consent (D65). Same refusal whatever the reason. */
+  private async serveFact(from: NodeId, message: MessageOf<'drop_request'>, now: number): Promise<void> {
+    const refuse = async (code: 'E_SCHEMA' | 'E_RATE', text: string): Promise<void> => {
+      await this.send(from, { type: 'drop_error', dropId: message.dropId, code, message: text });
+    };
+    if (!this.servableFact(from, message, now)) return refuse('E_SCHEMA', 'Fait indisponible.');
+    if (!FACT_IMPL.input.safeParse(message.input).success) return refuse('E_SCHEMA', 'Entrée invalide.');
+    if (this.factRateExceeded(from, now))
+      return refuse('E_RATE', 'Trop de demandes de faits : réessaie dans une minute.');
+    if (!(await this.admit(from, message.dropId, now))) return;
+    // Read again after the await: a retire or an edit made meanwhile wins.
+    const entry = this.servableFact(from, message, this.now());
+    if (!entry) return refuse('E_SCHEMA', 'Fait indisponible.');
+    const { fact } = entry.signed;
+    const drop: ExecutorDrop = {
+      dropId: message.dropId,
+      requester: from,
+      card: factCard(fact, this.identity.nodeId),
+      impl: FACT_IMPL,
+      config: {},
+      input: {},
+      purpose: message.purpose,
+      requestedBy: { ...message.requestedBy, nodeId: from },
+      state: 'approved',
+      approver: this.identity.nodeId,
+      expiresAt: now,
+      toolCalls: [],
+      costUsd: 0,
+      reviewed: true,
+      answeredBy: 'fact',
+      timestamps: { requested: now, decided: now, finished: now },
+    };
+    this.executing.set(drop.dropId, drop);
+    await this.deliver(drop, { kind: 'fact', fact, sig: entry.signed.sig }, FACT_OUTPUT_HASH);
+    // The counter is a convenience for the owner: counted by id and revision, and its failure never blocks delivery.
+    try {
+      this.updateFacts((facts) =>
+        facts.map((item) =>
+          item.signed.fact.factId === fact.factId && item.signed.fact.revision === fact.revision
+            ? { ...item, served: item.served + 1 }
+            : item,
+        ),
+      );
+      this.changed();
+    } catch {
+      this.log({ event: 'fact_counter', code: 'E_FACT_STORE', dropId: drop.dropId });
+    }
+  }
+
+  /**
+   * Requester side: a fact that does not hold (signature, card, validity) is refused, never shown (T4.4); so is a
+   * result that claims the fact schema for a capability that is not a fact.
+   */
+  private async screenFactResult(
+    from: NodeId,
+    message: MessageOf<'drop_result'>,
+  ): Promise<MessageOf<'drop_result' | 'drop_error'>> {
+    const drop = this.outbound.get(message.dropId);
+    if (drop?.executor !== from) return message;
+    const isFact = isFactCapabilityId(drop.capabilityId);
+    if (!isFact && message.outputSchemaHash !== FACT_OUTPUT_HASH) return message;
+    const holds =
+      isFact &&
+      (await factResultHolds(message.output, message.outputSchemaHash, {
+        capabilityId: drop.capabilityId,
+        executor: from,
+        now: this.now(),
+      }));
+    if (holds) return message;
+    this.log({ event: 'fact_rejected', code: 'E_OUTPUT_INVALID', dropId: message.dropId, peer: from });
+    return { type: 'drop_error', dropId: message.dropId, code: 'E_OUTPUT_INVALID', message: 'Fait reçu invalide.' };
   }
 
   private async onApprovalDecision(from: NodeId, message: MessageOf<'approval_decision'>): Promise<void> {
@@ -681,7 +1391,39 @@ export class NodeEngine extends EventEmitter {
     await this.deliver(drop, result.output);
   }
 
+  private async onHumanAnswer(from: NodeId, message: MessageOf<'human_answer'>): Promise<void> {
+    const drop = this.executing.get(message.dropId);
+    if (drop?.state !== 'awaiting_approval' || !drop.card.approverNodeIds.includes(from)) return;
+    drop.approver = from;
+    drop.timestamps.decided = this.now();
+    drop.funding = undefined;
+    drop.state = 'approved';
+    let answer: ReturnType<typeof checkHumanAnswer>;
+    try {
+      // Checked again here: the executor never trusts the approver's node to have done it.
+      answer = checkHumanAnswer(message.answer);
+    } catch (error) {
+      drop.state = 'failed';
+      const code = isDropError(error, 'E_SECRET_DETECTED') ? 'E_SECRET_DETECTED' : 'E_OUTPUT_INVALID';
+      this.log({ event: 'human_answer_refused', dropId: drop.dropId, code });
+      // The requester learns that the answer was refused, never what the owner's draft contained.
+      await this.fail(
+        drop,
+        code,
+        'Le propriétaire a répondu, mais sa réponse n’a pas passé les contrôles.',
+        'allow_once',
+      );
+      return;
+    }
+    await this.status(drop);
+    drop.reviewed = true;
+    drop.answeredBy = 'human';
+    drop.timestamps.finished = this.now();
+    await this.deliver(drop, answer, sha256Hex(HUMAN_ANSWER_OUTPUT_SCHEMA));
+  }
+
   private onReviewRequest(from: NodeId, message: MessageOf<'review_request'>): void {
+    if (!this.canAcceptInboxCard('review', from, message.dropId, message.expiresAt, REVIEW_TTL_MS)) return;
     this.inbox.set(message.dropId, {
       kind: 'review',
       dropId: message.dropId,
@@ -696,7 +1438,7 @@ export class NodeEngine extends EventEmitter {
 
   private async onReviewDecision(from: NodeId, message: MessageOf<'review_decision'>): Promise<void> {
     const drop = this.executing.get(message.dropId);
-    if (drop?.state !== 'in_review' || drop.approver !== from || !drop.output) return;
+    if (drop?.state !== 'in_review' || drop.reviewed || drop.approver !== from || !drop.output) return;
     drop.reviewed = true;
     if (message.decision === 'discard') {
       drop.state = 'failed';
@@ -714,9 +1456,20 @@ export class NodeEngine extends EventEmitter {
   private onRequesterUpdate(from: NodeId, message: MessageOf<'drop_status' | 'drop_result' | 'drop_error'>): void {
     const drop = this.outbound.get(message.dropId);
     if (drop?.executor !== from) return;
-    if (message.type === 'drop_status') drop.state = message.state;
-    // The drop is over: delete the capped key minted for it (D27).
-    if (message.type !== 'drop_status' && this.options.funder) {
+    // A result settles the drop for good. A recorded error yields only to a real result: a duplicate refusal may
+    // overtake it. Status updates never claim an outcome; only drop_result, drop_error and receipt do.
+    if (drop.result) return;
+    const settled = drop.error !== undefined;
+    if (message.type === 'drop_status') {
+      if (!settled && UNSETTLED_STATES.includes(message.state)) {
+        drop.state = message.state;
+        this.changed();
+      }
+      return;
+    }
+    if (message.type === 'drop_error' && settled) return;
+    // The drop is over: delete the capped key minted for it (D27), once.
+    if (!settled && this.options.funder) {
       this.options.funder.release(drop.dropId).catch(() => {
         this.log({ event: 'funding', code: 'E_FUNDING_RELEASE', dropId: drop.dropId });
       });
@@ -724,6 +1477,7 @@ export class NodeEngine extends EventEmitter {
     if (message.type === 'drop_result') {
       drop.state = 'delivered';
       drop.result = { output: message.output, outputSchemaHash: message.outputSchemaHash };
+      delete drop.error;
     }
     if (message.type === 'drop_error') {
       drop.state =
@@ -747,19 +1501,29 @@ export class NodeEngine extends EventEmitter {
     this.changed();
   }
 
-  private async deliver(drop: ExecutorDrop, output: Record<string, unknown>): Promise<void> {
-    drop.state = 'delivered';
+  private async deliver(
+    drop: ExecutorDrop,
+    output: Record<string, unknown>,
+    outputSchemaHash = sha256Hex(drop.card.outputSchema),
+  ): Promise<void> {
+    // The state moves only once the result is handed to the transport, so a duplicate answered meanwhile can only
+    // learn the unsettled state, never a refusal that would overtake the result.
     drop.timestamps.delivered = this.now();
-    await this.send(drop.requester, {
-      type: 'drop_result',
-      dropId: drop.dropId,
-      output,
-      outputSchemaHash: sha256Hex(drop.card.outputSchema),
-    });
-    await this.writeReceipt(drop, 'allow_once', sha256Hex(output));
-    drop.state = 'receipted';
-    drop.output = undefined;
-    this.changed();
+    try {
+      await this.send(drop.requester, {
+        type: 'drop_result',
+        dropId: drop.dropId,
+        output,
+        outputSchemaHash,
+      });
+      drop.state = 'delivered';
+      await this.writeReceipt(drop, 'allow_once', sha256Hex(output));
+      drop.state = 'receipted';
+    } finally {
+      drop.output = undefined;
+      this.executing.delete(drop.dropId);
+      this.changed();
+    }
   }
 
   private async fail(
@@ -768,10 +1532,34 @@ export class NodeEngine extends EventEmitter {
     text: string,
     decision: Receipt['decision'],
   ): Promise<void> {
-    await this.send(drop.requester, { type: 'drop_error', dropId: drop.dropId, code, message: text });
-    await this.writeReceipt(drop, decision, undefined, code);
-    drop.output = undefined;
-    this.changed();
+    drop.error = { code, message: text };
+    try {
+      await this.send(drop.requester, { type: 'drop_error', dropId: drop.dropId, ...drop.error });
+      await this.writeReceipt(drop, decision, undefined, code);
+    } finally {
+      drop.output = undefined;
+      this.rememberCompletedError(drop);
+      this.executing.delete(drop.dropId);
+      this.changed();
+    }
+  }
+
+  private rememberCompletedError(drop: ExecutorDrop): void {
+    const timestamp = uuidv7Timestamp(drop.dropId);
+    if (timestamp === undefined || !drop.error) return;
+    const expiresAt = Math.min(timestamp + REPLAY_WINDOW_MS, this.now() + REPLAY_WINDOW_MS);
+    if (expiresAt <= this.now()) return;
+    this.pruneCompletedErrors(this.now());
+    if (this.completedErrors.size >= MAX_COMPLETED_ERRORS) {
+      const oldest = this.completedErrors.keys().next().value;
+      if (oldest !== undefined) this.completedErrors.delete(oldest);
+    }
+    this.completedErrors.set(drop.dropId, { requester: drop.requester, error: drop.error, expiresAt });
+  }
+
+  private pruneCompletedErrors(now: number): void {
+    for (const [dropId, summary] of this.completedErrors)
+      if (summary.expiresAt <= now) this.completedErrors.delete(dropId);
   }
 
   private async writeReceipt(
@@ -790,6 +1578,7 @@ export class NodeEngine extends EventEmitter {
       inputHash: sha256Hex(drop.input),
       decision,
       reviewed: drop.reviewed,
+      ...(drop.answeredBy ? { answeredBy: drop.answeredBy } : {}),
       toolCalls: drop.toolCalls,
       timestamps: drop.timestamps,
       ...(drop.costUsd > 0 ? { costUsd: drop.costUsd } : {}),
@@ -803,16 +1592,73 @@ export class NodeEngine extends EventEmitter {
     for (const nodeId of recipients) await this.send(nodeId, { type: 'receipt', receipt });
   }
 
+  /**
+   * Never leaves a requester waiting in silence. An unsettled drop reports its current state; a refused or failed
+   * one replays the same error; a delivered one gets the duplicate refusal, which its real result overrides
+   * (see onRequesterUpdate). Another peer reusing the id learns nothing about the drop.
+   */
+  private async answerDuplicate(from: NodeId, drop: ExecutorDrop): Promise<void> {
+    if (drop.requester === from && UNSETTLED_STATES.includes(drop.state)) return this.status(drop);
+    const error = drop.requester === from && drop.error ? drop.error : CLAIM_ERRORS.duplicate;
+    await this.send(from, { type: 'drop_error', dropId: drop.dropId, ...error });
+  }
+
   private async status(drop: ExecutorDrop): Promise<void> {
     await this.send(drop.requester, { type: 'drop_status', dropId: drop.dropId, state: drop.state });
   }
 
-  private async send(to: NodeId, message: Message): Promise<void> {
+  private canAcceptInboxCard(
+    kind: InboxItem['kind'],
+    from: NodeId,
+    dropId: string,
+    expiresAt: number,
+    ttlMs: number,
+  ): boolean {
+    if (this.inbox.has(dropId)) {
+      this.log({ event: `${kind}_rejected`, code: 'E_REPLAY', reason: 'inbox_duplicate', dropId, peer: from });
+      return false;
+    }
+    const now = this.now();
+    if (expiresAt <= now || expiresAt > now + ttlMs + MAX_CLOCK_SKEW_MS) {
+      this.log({ event: `${kind}_rejected`, code: 'E_EXPIRED', reason: `${kind}_expiry`, dropId, peer: from });
+      return false;
+    }
+    if (this.inbox.size >= MAX_INBOX_ITEMS) {
+      this.log({ event: `${kind}_rejected`, code: 'E_RATE', reason: 'inbox_capacity', dropId, peer: from });
+      return false;
+    }
+    return true;
+  }
+
+  private queueOutbox(queued: QueuedEnvelope): void {
+    const now = this.now();
+    for (let index = this.outbox.length - 1; index >= 0; index -= 1) {
+      const entry = this.outbox[index];
+      if (entry && entry.envelope.exp <= now) this.outbox.splice(index, 1);
+    }
+    const insertAt = this.outbox.findIndex((entry) => entry.order > queued.order);
+    if (insertAt === -1) this.outbox.push(queued);
+    else this.outbox.splice(insertAt, 0, queued);
+    if (this.outbox.length + (this.outboxInFlight ? 1 : 0) > MAX_OUTBOX_ENVELOPES) {
+      this.outbox.shift();
+      this.log({ event: 'send_failed', code: 'E_RATE', reason: 'outbox_capacity' });
+    }
+  }
+
+  private async send(to: NodeId, message: Message, options: { queueOffline?: boolean } = {}): Promise<string> {
     const envelope = await sealEnvelope(this.identity, to, message, { now: this.now() });
-    const outcome = await this.options.transport.send(envelope);
-    if (outcome === 'offline') this.outbox.push(envelope);
+    const order = this.nextOutboxOrder++;
+    let outcome: string;
+    try {
+      outcome = await this.options.transport.send(envelope);
+    } catch {
+      this.log({ event: 'send_failed', code: 'E_RUNNER', reason: 'transport_exception', peer: to });
+      outcome = 'offline';
+    }
+    if (outcome === 'offline' && options.queueOffline !== false) this.queueOutbox({ envelope, order });
     else if (outcome !== 'delivered' && outcome !== 'queued')
       this.log({ event: 'send_failed', code: outcome, peer: to });
+    return outcome;
   }
 
   private cardFor(published: Published): { card: CapabilityCard; impl: CapabilityImpl } | undefined {
@@ -836,9 +1682,25 @@ export class NodeEngine extends EventEmitter {
     return [this.identity.nodeId, ...this.peers().map((peer) => peer.nodeId)];
   }
 
+  /** Local network (T4.2, D60): a direct session may only be opened toward a paired peer or the inviter being joined. */
+  canReachDirectly(nodeId: string): boolean {
+    return (
+      nodeId !== this.identity.nodeId &&
+      (this.pairing.has(nodeId) || this.peers().some((peer) => peer.nodeId === nodeId))
+    );
+  }
+
+  /** Local network (T4.2, D60): a direct session may only come from a paired peer, a pairing in progress, or anyone while an invite is live. */
+  canAcceptDirectly(nodeId: string): boolean {
+    return nodeId !== this.identity.nodeId && (this.canReachDirectly(nodeId) || this.hasLiveInvite());
+  }
+
   private isKnown(nodeId: NodeId): boolean {
     return (
-      nodeId === this.identity.nodeId || this.pairing.has(nodeId) || this.peers().some((peer) => peer.nodeId === nodeId)
+      nodeId === this.identity.nodeId ||
+      this.pairing.has(nodeId) ||
+      this.peers().some((peer) => peer.nodeId === nodeId) ||
+      this.links().some((link) => link.gateway === nodeId)
     );
   }
 

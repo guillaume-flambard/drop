@@ -7,8 +7,14 @@ export * from './envelope.ts';
 export * from './errors.ts';
 export * from './identity.ts';
 export * from './invite.ts';
+export * from './iroh.ts';
 export * from './lifecycle.ts';
 export * from './messages.ts';
 export * from './receipt.ts';
 export * from './schemas.ts';
 export * from './team.ts';
+export * from './human-answer.ts';
+export * from './fact.ts';
+export * from './text-guards.ts';
+
+export * from './private-network.ts';

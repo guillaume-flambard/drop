@@ -1,0 +1,6 @@
+{
+  "evidence": [],
+  "limits": [
+    "Exploration checkpoints 001-005 predate the exact-output checkpoint sequence and are excluded as evidence; checkpoints 006-007 are the valid chain for the successful page and link inspection. The final Hermes download response is recorded by the last probe; expected private-route 404 was observed earlier, but that negative probe is not part of the valid checkpoint chain."
+  ]
+}

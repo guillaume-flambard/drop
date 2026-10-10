@@ -24,14 +24,12 @@ La config propriétaire MUST déclarer `repoPath: string`, `allow: string[]` (gl
 - **THEN** `allow` vaut `["src/**", "tests/**", "docs/**", "package.json", "README.md"]`, `maxSnapshotBytes` vaut 20 Mo et `allowSourceExcerpts` vaut `false`
 
 ### Requirement: Config propriétaire du fournisseur de modèle
-La config MUST désigner le modèle par un fournisseur compatible OpenAI (`provider.baseUrl`, `provider.model`), quel qu'il
-soit : Ollama local, OpenRouter, Groq, Gemini, Mistral, OpenAI ou Anthropic. Par défaut : OpenRouter et
-`nvidia/nemotron-3-super-120b-a12b:free` (gratuit), clé dans `OPENROUTER_API_KEY`. `maxTurns` 15, `maxUsd` 0,50.
+La config MUST désigner explicitement un modèle compatible OpenAI. Sans fournisseur, l’URL proposée est `http://127.0.0.1:11434/v1`, sans clé. Aucun modèle n’est choisi ou téléchargé implicitement ; un modèle absent MUST échouer avant l’appel modèle. `maxTurns` vaut 15 et `maxUsd` 0,50 par défaut. La politique privée s’applique à tout fournisseur.
 
 #### Scenario: Valeurs par défaut du modèle
-<!-- openspec-guard:non-testable reason="Couvert par le schéma de config ; vérifié par le test de bout en bout de la capacité" -->
+<!-- openspec-guard:test="private adapters > refuses incompatible funding before contacting MCP and requires an explicit model" -->
 - **WHEN** la config ne précise ni fournisseur ni limites
-- **THEN** la capacité appelle OpenRouter avec ce modèle gratuit, `maxTurns` 15 et `maxUsd` 0,50
+- **THEN** l’endpoint proposé est local, aucun appel modèle n’a lieu sans choix explicite, `maxTurns` vaut 15 et `maxUsd` 0,50
 
 ### Requirement: Schéma d'entrée
 

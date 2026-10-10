@@ -1,0 +1,24 @@
+name: Signaler un bug
+description: Un comportement reproductible, sans donnée sensible.
+body:
+  - type: markdown
+    attributes:
+      value: 'Pour une faille de sécurité, suivre SECURITY.md. Ne joindre aucune clé, configuration réelle ou donnée de client.'
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Comportement observé et attendu
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction avec données synthétiques
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Version ou commit, OS, agent et version
+    validations:
+      required: true

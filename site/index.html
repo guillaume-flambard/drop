@@ -5,10 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       name="description"
-      content="Une question précise, l'accord du propriétaire, une réponse autorisée. Découvrez drop, le prototype qui fait avancer les agents sans partager les accès."
+      content="La réponse, pas l’accès. drop est un prototype de couche de consentement au-dessus d’A2A et MCP : le propriétaire décide, seule la réponse validée revient."
     />
     <meta name="theme-color" content="#2548ed" />
-    <title>drop · La réponse fait avancer votre agent</title>
+    <title>drop · La réponse, pas l’accès</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg" />
     <link rel="stylesheet" href="styles.css" />
   </head>
@@ -20,26 +20,32 @@
           ><img src="favicon.svg" width="34" height="34" alt="" />drop</a
         >
         <nav class="nav" aria-label="Navigation principale">
-          <a class="desktop-link" href="#principe">Le principe</a><a href="guide.html">Le guide</a
-          ><a href="avancement.html">Avancement</a>
-          <span class="header-note">Un projet Memo Labs</span>
+          <a href="demarrer.html">Démarrer</a><a class="desktop-link" href="cas.html">Cas d'usage</a
+          ><a class="desktop-link" href="securite.html">Sécurité</a><a href="guide.html">Le guide</a
+          ><a href="avancement.html">Avancement</a><span class="header-note">Un projet Memo Labs</span>
         </nav>
       </div>
     </header>
     <main id="contenu">
       <section class="hero wrap" aria-labelledby="hero-title">
         <div>
-          <span class="pill">Prototype en construction</span>
-          <h1 id="hero-title">La bonne réponse.<br />De la bonne<br />personne.</h1>
+          <span class="pill">Prototype · Apache-2.0, dépôt encore privé</span>
+          <h1 id="hero-title">La réponse.<br />Pas l’accès.</h1>
           <p class="intro">
-            Votre agent avance. Il lui manque une information chez un collègue. Avec drop, il pose la question, le
-            collègue autorise, la réponse revient.
+            Votre agent a besoin d’une information qui vit dans les outils d’un collègue. Il pose une question bornée.
+            Le collègue voit ce qui partira, puis décide. Seule la réponse validée revient ; les accès restent chez lui.
+          </p>
+          <p class="hero-promise">
+            Une couche de consentement au-dessus d’A2A et MCP, sans compte Memo Labs ni relais tiers obligatoire.
           </p>
           <div class="actions">
-            <a class="button" href="#echange">Explorer un échange</a
-            ><a class="text-link" href="guide.html">Comprendre drop</a>
+            <a class="button" href="#connexion">Raccorder ses agents</a
+            ><a class="text-link" href="#echange">Explorer un échange</a>
           </div>
-          <p class="hero-foot">Les accès restent chez leur propriétaire.</p>
+          <p class="hero-foot">
+            App Mac en barre de menus d’abord, puis Windows (T3.7) et Linux (T3.8). Rien n’a encore été validé avec de
+            vrais utilisateurs.
+          </p>
         </div>
         <div class="exchange" id="echange">
           <svg class="route-art" viewBox="0 0 530 470" aria-hidden="true">
@@ -105,7 +111,7 @@
                   <span aria-hidden="true">↳</span
                   ><span>Sources : <code>src/theme.ts</code>, <code>docs/theme.md</code></span>
                 </div>
-                <div class="status-band">Julie peut retirer des champs ou arrêter l'envoi.</div>
+                <div class="status-band">Julie envoie la réponse ou arrête l'envoi.</div>
               </section>
               <section class="demo-panel panel-result" id="panel-result" aria-label="La réponse reçue par Guillaume">
                 <div class="panel-top"><span class="mini-logo">drop</span><span>Retour chez Guillaume</span></div>
@@ -129,16 +135,18 @@
       </section>
       <div class="principle-strip">
         <div class="wrap strip-inner">
-          <p><strong>Get the answer, not the access.</strong></p>
-          <p class="muted">Une capacité définie. Un accord humain. Un résultat borné.</p>
+          <p><strong>La réponse, pas l’accès.</strong></p>
+          <p class="muted">Un accord humain. Une réponse bornée. Aucun accès permanent transmis.</p>
         </div>
       </div>
       <section class="section white-section" id="principe">
         <div class="wrap">
           <div class="section-head">
-            <h2>Quand la suite du travail<br />se trouve chez quelqu'un d'autre.</h2>
+            <h2>Le contexte est chez un collègue.<br />La réponse revient à votre agent.</h2>
             <p>
-              Un collègue a le contexte. Son agent a les outils. drop organise le passage de la question à la réponse.
+              Premiers essais prévus avec deux amis techniques (T4.6). Conçu pour rester acceptable par l’informatique
+              d’une entreprise souveraine ; adoption visée par les petites équipes. Le propriétaire de la donnée peut ne
+              pas être technique.
             </p>
           </div>
           <div class="sequence">
@@ -146,111 +154,304 @@
               <span class="step-number">01 / La demande</span>
               <h3>Poser une question précise.</h3>
               <p>
-                L'agent choisit une action dans un catalogue : résumer des erreurs, interroger un dépôt ou une source
-                déjà connectée.
+                L’agent choisit une capacité publiée : comprendre des erreurs, interroger un dépôt ou une source déjà
+                connectée.
               </p>
             </div>
             <div class="sequence-item">
               <span class="step-number">02 / La décision</span>
-              <h3>Voir ce que l'on autorise.</h3>
+              <h3>Voir ce que l’on autorise.</h3>
               <p>
-                Le propriétaire lit la raison, les informations attendues et le coût annoncé. Il décide pour cette
-                demande.
+                Le propriétaire voit la raison et les informations attendues. Il décide pour cette demande. Les outils
+                utilisables sont fixés à l’avance.
               </p>
             </div>
             <div class="sequence-item">
               <span class="step-number">03 / Le retour</span>
               <h3>Continuer avec la réponse.</h3>
               <p>
-                La sortie est contrôlée. Pour les capacités sensibles, elle est aussi relue avant d'arriver chez le
-                demandeur.
+                La sortie est contrôlée. Pour une capacité sensible, le propriétaire la relit avant son envoi. Aucun
+                accès permanent n’est transmis.
               </p>
             </div>
           </div>
+          <p class="source-link">
+            Aujourd’hui, seul l’échange par capacité existe. Les faits publiés (T4.4), les petites questions (T4.9) et
+            les tâches déléguées (T4.11) sont visés ; la conversation libre entre agents est exclue.
+            <a href="guide.html#echelle">Voir l’échelle des échanges</a>.
+          </p>
           <a class="source-link" href="guide.html#parcours">Voir le parcours complet et ses limites</a>
         </div>
       </section>
-      <section class="section wrap" id="capacites">
+      <section class="section wrap" id="connexion">
         <div class="section-head">
-          <h2>Trois façons de<br />débloquer une question.</h2>
+          <h2>Deux confirmations.<br />Puis drop reste à portée de main.</h2>
           <p>
-            Ces familles de capacités existent dans le prototype. Chacune définit les outils utilisables et la forme de
-            la réponse.
+            Ce raccordement existe dans le panneau local (T3.3) et passe ses tests sur fixtures. La recette humaine sur
+            un Mac reste à faire. Aucun modèle ne fouille votre machine.
           </p>
         </div>
-        <div class="capability-row">
-          <span class="capability-symbol" aria-hidden="true">≋</span>
-          <div>
-            <h3>Comprendre la production</h3>
-            <code>production.error_summary</code>
-          </div>
+        <div class="setup-layout">
+          <ol class="setup-steps">
+            <li>
+              <h3>Analyser ce Mac</h3>
+              <p>
+                drop cherche les configurations des agents compatibles et vous montre ce qui sera raccordé. Aucun outil
+                découvert n’est lancé.
+              </p>
+            </li>
+            <li>
+              <h3>Connecter les agents sélectionnés</h3>
+              <p>
+                Vous validez la sélection et les modifications prévues. La connexion ajoute les outils drop à vos
+                agents. Publier une capacité reste une action séparée.
+              </p>
+            </li>
+          </ol>
+          <figure class="laptop-preview">
+            <div class="mac-menubar" aria-hidden="true">
+              <span>Votre Mac</span
+              ><span class="menu-drop"><img src="favicon.svg" width="18" height="18" alt="" /> drop</span>
+            </div>
+            <div class="menu-preview">
+              <div class="panel-top"><span class="mini-logo">drop</span><span>Maquette</span></div>
+              <h3>Vos agents sur ce Mac</h3>
+              <ul class="agent-list">
+                <li>
+                  <span>Claude Code<small>Sélectionné</small></span
+                  ><span class="tag yes">Compatible</span>
+                </li>
+                <li>
+                  <span>Codex<small>Sélectionné</small></span
+                  ><span class="tag yes">Compatible</span>
+                </li>
+                <li>
+                  <span>Cursor<small>Configuration illisible</small></span
+                  ><span class="tag">À vérifier</span>
+                </li>
+                <li>
+                  <span>Claude Desktop<small>Aucune configuration trouvée</small></span
+                  ><span class="tag">Absent</span>
+                </li>
+              </ul>
+              <p class="preview-action">Étape suivante : connecter la sélection</p>
+              <p class="preview-note">Pour un autre agent : une configuration à copier.</p>
+            </div>
+            <figcaption>
+              Maquette inspirée du panneau. Cette page n’analyse pas votre Mac et ne modifie aucune configuration.
+            </figcaption>
+          </figure>
+        </div>
+        <div class="setup-foot">
           <p>
-            Un résumé des erreurs, des compteurs et un état du service. Le traitement est déterministe, sans modèle.
+            Quatre adaptateurs existent : Claude Code, Codex, Cursor et Claude Desktop, avec un aperçu sans secret, un
+            résultat par agent et une voie manuelle. Neuf autres clients MCP sont visés (T4.5). ChatGPT n’accepte qu’un
+            serveur distant : il passera par une passerelle publique facultative (T2.13, non livrée), qu’une entreprise
+            pourra interdire (T4.10).
+          </p>
+          <a class="text-link" href="guide.html#connexion">Prérequis, restauration et étapes séparées</a>
+        </div>
+      </section>
+      <section class="section white-section" id="demo">
+        <div class="wrap">
+          <div class="section-head">
+            <h2>La démo réelle,<br />en trois écrans.</h2>
+            <p>
+              Claude Code chez Guillaume, un relais public, et les Nodes de Julie et du serveur de production. Ces
+              écrans sont ceux qu'ils ont vus, le 8 octobre 2026.
+            </p>
+          </div>
+          <div class="capture-row">
+            <figure>
+              <img
+                src="demo/consent-traefik.jpg"
+                alt="Carte de consentement : Guillaume demande, via Claude Code, un résumé des erreurs du service traefik sur la dernière heure. Il recevra l'état du service, le nombre d'erreurs et les 5 types les plus fréquents, jamais les lignes de log ni les accès au serveur. Boutons Pas maintenant, Refuser, Autoriser une fois."
+              />
+              <figcaption>
+                <strong>1. L'accord.</strong> Ce qui part, ce qui ne partira jamais, avant de décider.
+              </figcaption>
+            </figure>
+            <figure>
+              <img
+                src="demo/consent-julie.jpg"
+                alt="Carte de consentement chez Julie : Guillaume demande si son implémentation gère déjà le mode sombre. Il recevra une réponse courte, oui, non ou partiel, et des noms de fichiers, jamais le contenu des fichiers ni l'accès au dépôt. Sensibilité haute : Julie relira le résultat avant envoi."
+              />
+              <figcaption>
+                <strong>2. Une question sur un dépôt.</strong> Sensible : Julie relira avant l'envoi.
+              </figcaption>
+            </figure>
+            <figure>
+              <img
+                src="demo/review-julie.jpg"
+                alt="Écran de relecture chez Julie : la réponse générée explique que le mode sombre est géré dans src/theme.ts, avec le verdict yes et la liste des fichiers cités. Chaque champ peut être retiré. Boutons Ne pas envoyer et Envoyer."
+              />
+              <figcaption><strong>3. La relecture.</strong> Julie peut retirer un champ ou ne rien envoyer.</figcaption>
+            </figure>
+          </div>
+          <p class="source-link">
+            La vidéo de démonstration sera tournée pendant les premiers essais chez nos testeurs.
+            <a href="guide.html#parcours">Le parcours en détail</a>
           </p>
         </div>
-        <div class="capability-row">
-          <span class="capability-symbol" aria-hidden="true">{ }</span>
-          <div>
-            <h3>Interroger un dépôt</h3>
-            <code>repo.answer</code>
-          </div>
-          <p>Une réponse à partir de fichiers autorisés. Le propriétaire relit le résultat avant de le transmettre.</p>
-        </div>
-        <div class="capability-row">
-          <span class="capability-symbol" aria-hidden="true">⌘</span>
-          <div>
-            <h3>Retrouver le contexte d'un outil</h3>
-            <code>mcp.answer</code>
-          </div>
-          <p>
-            Une question sur une source déjà connectée : maquettes, tickets ou documentation. Les outils sont choisis
-            par le propriétaire.
-          </p>
-        </div>
-        <p class="source-link">
-          Les intégrations réelles chez les testeurs restent à valider.
-          <a href="avancement.html#preuves">Lire les preuves disponibles</a>.
-        </p>
       </section>
       <section class="section privacy" id="confiance">
         <div class="wrap split">
           <div>
-            <h2>Partager une réponse reste une décision.</h2>
-            <p>Le cadre de l'échange est fixé avant l'exécution. Le modèle travaille à l'intérieur de ce cadre.</p>
+            <h2>Une promesse, avec sa limite.</h2>
+            <p>
+              « Vos données restent sur votre machine. Seule une réponse que vous avez approuvée en sort, chiffrée, vers
+              la personne qui l’a demandée. Aucun index central, aucun serveur qui lit, code ouvert et journal local de
+              tout ce qui est sorti. »
+            </p>
+            <p>
+              <strong>Sa limite.</strong> drop contrôle ce qui passe par drop. Un connecteur MCP, un modèle ou un agent
+              A2A choisi par le propriétaire peut avoir ses propres flux, que drop ne voit pas.
+            </p>
+            <p>
+              Aujourd’hui, le journal local garde des reçus signés (empreintes et métadonnées), pas une copie du
+              contenu. Le code sera ouvert après les contrôles de publication (T3.6).
+            </p>
             <a class="text-link" href="guide.html#confidentialite">Comprendre les frontières de confidentialité</a>
           </div>
           <div class="privacy-points">
-            <h3>Le relais transporte du contenu chiffré.</h3>
+            <h3>Sans serveur, quand c’est possible.</h3>
             <p>
-              Il route les enveloppes entre les Nodes sans lire leur contenu. Les métadonnées de routage restent
-              visibles.
+              Visé (T4.2) : découverte sur le réseau local et connexion directe par Internet. Par défaut, aucun relais
+              de secours : si la connexion directe échoue, l’app l’explique et vous laisse en choisir un.
             </p>
-            <h3>Les outils sont choisis à l'avance.</h3>
-            <p>La question du demandeur ne peut pas ajouter un outil à la liste autorisée.</p>
-            <h3>Le choix du modèle compte.</h3>
+            <h3>Un relais exploité chez vous.</h3>
             <p>
-              Un modèle distant reçoit le contexte nécessaire à ses appels. Exécution chez le propriétaire ne signifie
-              pas traitement entièrement local.
+              Existant : le relais transmet les enveloppes chiffrées et voit seulement les métadonnées de routage et
+              d’admission (identités, parrain, horodatages, adresses de connexion). Visé (T4.10) : paquet entreprise du
+              relais (binaire, Docker, Helm) avec une politique signée par l’informatique. Une image Docker de
+              laboratoire existe déjà.
+            </p>
+            <h3>Une frontière que l’on doit prouver.</h3>
+            <p>
+              Le profil privé refuse les destinations hors politique et fonctionne avec Internet bloqué dans notre
+              recette à deux Nodes et sources simulées (T3.1). Les modèles et agents réels restent à qualifier (T3.2).
             </p>
           </div>
+        </div>
+      </section>
+      <section class="section wrap" id="installer">
+        <!-- if:beta -->
+        <div class="section-head">
+          <h2>Une bêta privée,<br />en petites équipes.</h2>
+          <p>
+            drop s'installe pour l'instant avec nous, équipe par équipe : l'app Mac attend sa signature Apple et le
+            paquet public son nom définitif.
+          </p>
+        </div>
+        <div class="install-grid">
+          <div class="install-card">
+            <h3>Accès sur invitation</h3>
+            <!-- if:contact -->
+            <p>Dites-nous qui est dans votre équipe et quels outils vous voulez partager.</p>
+            <a class="button" href="mailto:{{contact}}?subject=B%C3%AAta%20drop">Demander un accès</a>
+            <!-- /if:contact -->
+            <!-- if:no-contact -->
+            <p>Demandez une invitation à la personne qui vous a parlé de drop : elle vous enverra un lien.</p>
+            <!-- /if:no-contact -->
+          </div>
+          <div class="install-card">
+            <h3>Ce qui arrive</h3>
+            <ul class="milestone-list">
+              <li><span>App Mac, dans la barre de menus</span><span class="tag">Bientôt</span></li>
+              <li><span>Claude Code, Codex, Cursor</span><span class="tag">Bientôt</span></li>
+              <li><span>Claude Desktop</span><span class="tag">Bientôt</span></li>
+              <li><span>Claude et ChatGPT, par un connecteur</span><span class="tag">Bientôt</span></li>
+            </ul>
+            <a class="text-link" href="demarrer.html">Voir comment ça se passera</a>
+          </div>
+        </div>
+        <!-- /if:beta -->
+        <!-- if:open -->
+        <div class="section-head">
+          <h2>Installer drop.</h2>
+          <p>
+            Pour répondre, l'app Mac. Pour demander, votre agent ou votre assistant habituel. Le pas à pas tient en cinq
+            minutes.
+          </p>
+        </div>
+        <div class="install-grid">
+          <div class="install-card">
+            <h3>Pour répondre</h3>
+            <p>L'app de la barre de menus détecte vos outils et vous montre chaque demande.</p>
+            <a class="button" href="downloads/drop.dmg">Télécharger l'app Mac</a>
+          </div>
+          <div class="install-card">
+            <h3>Pour demander</h3>
+            <p>Depuis Claude Desktop, Claude Code, Codex, Cursor, Claude ou ChatGPT.</p>
+            <a class="button" href="downloads/drop.mcpb">Claude Desktop</a>
+            <a class="text-link" href="demarrer.html#agents">Les autres agents et assistants</a>
+          </div>
+        </div>
+        <!-- /if:open -->
+      </section>
+      <section class="section white-section" id="offre">
+        <div class="wrap">
+          <div class="section-head">
+            <h2>Le socle est gratuit.<br />Rien n’est payant aujourd’hui.</h2>
+            <p>
+              Rien de payant avant d’avoir des utilisateurs. La sécurité n’est jamais une option payante. Aucun tarif
+              n’est fixé.
+            </p>
+          </div>
+          <div class="offer-grid">
+            <div>
+              <span class="offer-label">Socle · Apache-2.0</span>
+              <h3>Exploiter drop vous-même.</h3>
+              <p>
+                Consentement, contrôles de sortie, reçus, relais auto-hébergé, A2A et MCP. Le code est sous licence
+                Apache-2.0 ; aucun compte Memo Labs n’est requis.
+              </p>
+            </div>
+            <div>
+              <span class="offer-label">Installation et support · Hypothèse</span>
+              <h3>Être aidé à l’installer.</h3>
+              <p>
+                Des contrats d’installation et de support pourraient financer le projet. Rien n’est proposé aujourd’hui.
+              </p>
+            </div>
+            <div>
+              <span class="offer-label">Pack entreprise · Hypothèse</span>
+              <h3>Administrer plusieurs équipes.</h3>
+              <p>
+                Console de politiques, SSO, export d’audit, versions maintenues : à construire seulement si un grand
+                compte le demande par écrit.
+              </p>
+            </div>
+          </div>
+          <p class="source-link">
+            Le dépôt reste privé et aucun installateur public n’est proposé.
+            <a href="guide.html#open-source">Voir les étapes avant ouverture</a>.
+          </p>
         </div>
       </section>
       <section class="section wrap">
         <div class="progress-callout">
           <div>
-            <span class="pill">État au 8 octobre 2026</span>
-            <h2>Un circuit démontré.<br />Un produit qui se construit.</h2>
+            <span class="pill">État au 10 octobre 2026</span>
+            <h2>Un socle vérifié.<br />Aucun essai réel encore.</h2>
             <p>
-              Le prototype fonctionne entre agents. L’annuaire et l’installation locale existent. La prochaine étape est
-              l’app Mac et une distribution accessible aux testeurs.
+              Protocole, consentement, capacités, ponts A2A, profil privé et raccordement de quatre agents existent dans
+              le prototype. Une entreprise fictive de 50 nœuds a tourné sur un Mac : 124 demandes livrées, aucune fuite,
+              et une limite de débit du relais qui bloque un propriétaire très sollicité, à corriger avant tout essai.
+              Toutes les démonstrations ont tourné sur les machines de Guillaume.
             </p>
-            <a class="button" href="avancement.html">Voir l'avancement réel</a>
+            <a class="button" href="avancement.html">Voir l’avancement réel</a>
           </div>
           <ul class="milestone-list">
-            <li><span>Protocole, relais et consentement</span><span class="tag yes">Implémentés</span></li>
-            <li><span>Démo avec Claude Code et Codex</span><span class="tag yes">Documentée</span></li>
-            <li><span>App Mac et distribution publique</span><span class="tag">À construire</span></li>
-            <li><span>Validation du besoin en équipe</span><span class="tag">À établir</span></li>
+            <li><span>Protocole, consentement et A2A</span><span class="tag yes">Dans le prototype</span></li>
+            <li><span>Profil privé sans repli cloud</span><span class="tag yes">Recette vérifiée</span></li>
+            <li><span>Raccordement en deux confirmations</span><span class="tag yes">Sur fixtures</span></li>
+            <li><span>Simulation de 50 nœuds</span><span class="tag yes">Mesurée (T4.1)</span></li>
+            <li><span>Notifications à l’icône de l’app</span><span class="tag yes">Recette faite (T4.14)</span></li>
+            <li><span>Invitation confirmée avant de rejoindre</span><span class="tag yes">Sur test (T4.14)</span></li>
+            <li><span>App Mac signée et notarisée</span><span class="tag">Recette humaine à finir (T3.4)</span></li>
+            <li><span>Limite de débit du relais sous charge</span><span class="tag">À corriger (T3.1d)</span></li>
+            <li><span>Essai avec deux amis</span><span class="tag">Visé (T4.6)</span></li>
           </ul>
         </div>
       </section>
@@ -260,7 +461,7 @@
         <a class="logo" href="index.html">drop</a>
         <div class="footer-links">
           <a href="guide.html">Documentation</a><a href="avancement.html">État du projet</a
-          ><a href="guide.html#essayer">Essayer le prototype</a>
+          ><a href="guide.html#open-source">Open source</a>
         </div>
         <span>Nom de code, par Memo Labs.</span>
       </div>

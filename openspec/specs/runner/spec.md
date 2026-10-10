@@ -10,12 +10,14 @@ Le runner (`packages/runner`) exécute une capacité approuvée dans un cadre fi
 Chaque capacité MUST implémenter `CapabilityImpl<I, O>` avec exactement ces membres : `card: Omit<CapabilityCard, 'owner' | 'executorNodeId' | 'approverNodeIds'>` (complétée à la publication) ; `input: z.ZodType<I>` ; `output: z.ZodType<O>` ; `preview(input: I): string` (rendu lisible pour la carte de consentement) ; `execute(input: I, ctx: RunContext): Promise<O>`.
 
 #### Scenario: Carte complétée à la publication
+<!-- openspec-guard:test="buildCard > completes the card with publication fields and JSON schemas" -->
 
 - **WHEN** une capacité est publiée par un Node
 - **THEN** les champs `owner`, `executorNodeId` et `approverNodeIds` de sa `CapabilityCard` sont complétés à la publication
 - **AND** l'implémentation ne fournit que `card` sans ces trois champs
 
 #### Scenario: Aperçu pour la carte de consentement
+<!-- openspec-guard:test="end to end, in memory: relay and three nodes > allow once: the requester gets the filtered result and every side keeps a signed receipt" -->
 
 - **WHEN** la carte de consentement d'un Drop est affichée à l'approbateur
 - **THEN** le rendu lisible de l'entrée provient de `preview(input)`
@@ -35,17 +37,20 @@ publiée (T2.2). Un id exact a priorité sur une famille.
 `execute()` MUST ne recevoir QUE ce que le cadre lui donne, à savoir l'entrée validée et un `RunContext` composé de : `config: unknown` (config propriétaire de la capacité, validée par son propre schéma zod) ; `workdir: string` (répertoire temporaire créé et supprimé par le runner) ; `signal: AbortSignal` (déclenché à `budget.maxSeconds`) ; `recordToolCall(name: string): void`.
 
 #### Scenario: Config propriétaire validée par son schéma
+<!-- openspec-guard:test="runCapability: nominal path > passes the validated input and the parsed config (defaults applied)" -->
 
 - **WHEN** le runner appelle `execute(input, ctx)`
 - **THEN** `ctx.config` a été validée par le schéma zod propre à la capacité
 - **AND** la capacité ne reçoit aucune autre ressource que `input` et `ctx`
 
 #### Scenario: Signal déclenché au budget de temps
+<!-- openspec-guard:test="runCapability: budget > aborts ctx.signal at maxSeconds and fails with E_BUDGET" -->
 
 - **WHEN** la durée d'exécution atteint `budget.maxSeconds` de la carte
 - **THEN** `ctx.signal` est déclenché
 
 #### Scenario: Enregistrement des appels d'outils
+<!-- openspec-guard:test="runCapability: nominal path > returns the validated output, its hash, tool calls and duration" -->
 
 - **WHEN** une capacité appelle un outil pendant `execute()`
 - **THEN** elle le signale au cadre via `ctx.recordToolCall(name)`
@@ -55,6 +60,7 @@ publiée (T2.2). Un id exact a priorité sur une famille.
 Pour chaque Drop approuvé, le runner MUST appliquer le pipeline imposé dans cet ordre exact : 1. validation de `input` ; 2. création de `workdir` et armement du timeout ; 3. `execute()` ; 4. validation `output.strict()` ; 5. contrôle de taille (`card.maxOutputChars`) ; 6. scanner de secrets ; 7. relecture si `sensitivity: 'high'` ; 8. suppression de `workdir`, écriture du reçu, envoi du résultat.
 
 #### Scenario: Ordre des étapes respecté
+<!-- openspec-guard:test="runCapability: step 4, strict output > validates the schema before scanning for secrets" -->
 
 - **WHEN** un Drop approuvé est exécuté par le runner
 - **THEN** les étapes 1 à 8 s'enchaînent dans cet ordre
@@ -65,6 +71,7 @@ Pour chaque Drop approuvé, le runner MUST appliquer le pipeline imposé dans ce
 Le runner MUST valider `input` avec le schéma zod de la capacité avant toute exécution. Une entrée invalide MUST produire `E_SCHEMA` et la capacité n'est jamais exécutée.
 
 #### Scenario: Entrée invalide rejetée
+<!-- openspec-guard:test="runCapability: step 1, input > fails with E_SCHEMA, never executes and creates no workdir" -->
 
 - **WHEN** l'entrée d'un Drop approuvé ne respecte pas le schéma `input` de la capacité
 - **THEN** le runner échoue avec `E_SCHEMA`
@@ -75,6 +82,7 @@ Le runner MUST valider `input` avec le schéma zod de la capacité avant toute e
 Après validation de l'entrée, le runner MUST créer `workdir` avec `fs.mkdtemp` et armer le timeout avant d'appeler `execute()`. Le timeout MUST déclencher `ctx.signal` à `budget.maxSeconds`.
 
 #### Scenario: Répertoire de travail créé par le runner
+<!-- openspec-guard:test="runCapability: nominal path > creates the workdir before execute and removes it afterwards, files included" -->
 
 - **WHEN** l'entrée est valide
 - **THEN** le runner crée un répertoire temporaire via `fs.mkdtemp` et le passe dans `ctx.workdir`
@@ -85,6 +93,7 @@ Après validation de l'entrée, le runner MUST créer `workdir` avec `fs.mkdtemp
 Le runner MUST appeler `execute(input, ctx)` uniquement après les étapes 1 et 2, avec l'entrée validée et le `RunContext` construit par le cadre.
 
 #### Scenario: Exécution après préparation
+<!-- openspec-guard:test="runCapability: nominal path > passes the validated input and the parsed config (defaults applied)" -->
 
 - **WHEN** l'entrée est validée et `workdir` créé
 - **THEN** le runner appelle `execute(input, ctx)` une fois avec ces valeurs
@@ -94,11 +103,13 @@ Le runner MUST appeler `execute(input, ctx)` uniquement après les étapes 1 et 
 Le runner MUST valider la sortie de `execute()` avec `output.strict()`. Une sortie invalide MUST produire `E_OUTPUT_INVALID` et MUST être rejetée, jamais réparée.
 
 #### Scenario: Champ inattendu dans la sortie
+<!-- openspec-guard:test="runCapability: step 4, strict output > rejects an unexpected top-level field with E_OUTPUT_INVALID" -->
 
 - **WHEN** `execute()` renvoie un objet contenant un champ absent du schéma `output`
 - **THEN** le runner échoue avec `E_OUTPUT_INVALID`
 
 #### Scenario: Pas de réparation de sortie
+<!-- openspec-guard:test="end to end, in memory: relay and three nodes > invalid output: rejected with E_OUTPUT_INVALID, never repaired" -->
 
 - **WHEN** la sortie de `execute()` ne respecte pas `output.strict()`
 - **THEN** le runner ne tente ni correction, ni troncature, ni complétion de la sortie
@@ -109,6 +120,7 @@ Le runner MUST valider la sortie de `execute()` avec `output.strict()`. Une sort
 Le runner MUST vérifier que la sortie sérialisée ne dépasse pas `card.maxOutputChars`. Une sortie trop longue MUST produire `E_OUTPUT_INVALID`.
 
 #### Scenario: Sortie sérialisée trop longue
+<!-- openspec-guard:test="runCapability: step 5, size > rejects an output longer than maxOutputChars with E_OUTPUT_INVALID" -->
 
 - **WHEN** la sortie validée, une fois sérialisée, dépasse `card.maxOutputChars` caractères
 - **THEN** le runner échoue avec `E_OUTPUT_INVALID`
@@ -118,6 +130,7 @@ Le runner MUST vérifier que la sortie sérialisée ne dépasse pas `card.maxOut
 Le runner MUST passer toutes les chaînes de la sortie validée au scanner de secrets. Une détection MUST produire `E_SECRET_DETECTED` : le Drop échoue et rien ne sort.
 
 #### Scenario: Secret dans une chaîne imbriquée
+<!-- openspec-guard:test="runCapability: step 6, secrets > fails with E_SECRET_DETECTED for a secret in a nested array and returns no output" -->
 
 - **WHEN** une chaîne d'un tableau ou d'un objet imbriqué de la sortie correspond à un motif du scanner
 - **THEN** le Drop échoue avec `E_SECRET_DETECTED`
@@ -128,12 +141,14 @@ Le runner MUST passer toutes les chaînes de la sortie validée au scanner de se
 Si la carte déclare `sensitivity: 'high'`, le runner MUST envoyer `review_request` à l'approbateur, attendre `review_decision` et appliquer ses `redactions` avant l'envoi du résultat.
 
 #### Scenario: Capacité à haute sensibilité
+<!-- openspec-guard:test="end to end, in memory: relay and three nodes > high sensitivity: the approver reviews the output and can withhold a field" -->
 
 - **WHEN** la sortie d'une capacité `sensitivity: 'high'` a passé les étapes 4 à 6
 - **THEN** le runner envoie `review_request` à l'approbateur et attend `review_decision`
 - **AND** les `redactions` de la décision sont appliquées avant l'étape 8
 
 #### Scenario: Capacité à faible sensibilité
+<!-- openspec-guard:test="end to end, in memory: relay and three nodes > allow once: the requester gets the filtered result and every side keeps a signed receipt" -->
 
 - **WHEN** la carte déclare `sensitivity: 'low'`
 - **THEN** l'étape 7 n'envoie pas de `review_request`
@@ -143,6 +158,7 @@ Si la carte déclare `sensitivity: 'high'`, le runner MUST envoyer `review_reque
 En fin de pipeline, le runner MUST supprimer `workdir`, écrire le reçu, puis envoyer le résultat.
 
 #### Scenario: Fin de pipeline nominale
+<!-- openspec-guard:test="end to end, in memory: relay and three nodes > allow once: the requester gets the filtered result and every side keeps a signed receipt" -->
 
 - **WHEN** la sortie a passé les étapes 4 à 7
 - **THEN** `workdir` est supprimé, le reçu est écrit et le résultat est envoyé au demandeur
@@ -152,6 +168,7 @@ En fin de pipeline, le runner MUST supprimer `workdir`, écrire le reçu, puis e
 Le scanner de secrets MUST vivre dans le module `secrets.ts` et reposer sur une liste de motifs couverte par des tests.
 
 #### Scenario: Motifs testés
+<!-- openspec-guard:test="scanSecrets: each pattern detects > covers every pattern of secrets.ts with at least one case" -->
 
 - **WHEN** la suite de tests du runner s'exécute
 - **THEN** chaque motif de `secrets.ts` est couvert par au moins un test de détection
@@ -161,21 +178,25 @@ Le scanner de secrets MUST vivre dans le module `secrets.ts` et reposer sur une 
 Le scanner MUST détecter : les en-têtes de clé privée PEM ; `AKIA[0-9A-Z]{16}` ; `sk-[A-Za-z0-9_-]{20,}` ; `sk-ant-[A-Za-z0-9_-]{20,}` ; `gh[pousr]_[A-Za-z0-9]{36}` ; `xox[baprs]-` ; les JWT (`eyJ…\.eyJ…\.`).
 
 #### Scenario: En-tête de clé privée PEM
+<!-- openspec-guard:test="scanSecrets: the patterns named in the spec > flags a PEM private key header" -->
 
 - **WHEN** une chaîne de la sortie contient `-----BEGIN PRIVATE KEY-----`
 - **THEN** le scanner signale un secret
 
 #### Scenario: Clé Anthropic
+<!-- openspec-guard:test="scanSecrets: the patterns named in the spec > flags an Anthropic key" -->
 
 - **WHEN** une chaîne de la sortie contient une valeur qui correspond à `sk-ant-[A-Za-z0-9_-]{20,}`
 - **THEN** le scanner signale un secret
 
 #### Scenario: Jetons GitHub, Slack et AWS
+<!-- openspec-guard:test="scanSecrets: the patterns named in the spec > flags GitHub, Slack and AWS tokens" -->
 
 - **WHEN** une chaîne de la sortie correspond à `gh[pousr]_[A-Za-z0-9]{36}`, `xox[baprs]-` ou `AKIA[0-9A-Z]{16}`
 - **THEN** le scanner signale un secret
 
 #### Scenario: JWT
+<!-- openspec-guard:test="scanSecrets: the patterns named in the spec > flags a JWT" -->
 
 - **WHEN** une chaîne de la sortie correspond au motif JWT `eyJ…\.eyJ…\.`
 - **THEN** le scanner signale un secret
@@ -185,11 +206,13 @@ Le scanner MUST détecter : les en-têtes de clé privée PEM ; `AKIA[0-9A-Z]{16
 Le scanner MUST aussi détecter les chaînes `KEY=`, `SECRET=`, `TOKEN=` ou `PASSWORD=` suivies d'une valeur, et les chaînes de plus de 32 caractères dont l'entropie de Shannon est > 4,5.
 
 #### Scenario: Affectation d'un mot de passe
+<!-- openspec-guard:test="scanSecrets: the patterns named in the spec > flags a PASSWORD= assignment" -->
 
 - **WHEN** une chaîne de la sortie contient `PASSWORD=` suivi d'une valeur
 - **THEN** le scanner signale un secret
 
 #### Scenario: Chaîne longue à forte entropie
+<!-- openspec-guard:test="scanSecrets: the patterns named in the spec > flags a string of more than 32 characters with an entropy above 4.5" -->
 
 - **WHEN** une chaîne de la sortie contient une séquence de plus de 32 caractères d'entropie de Shannon > 4,5
 - **THEN** le scanner signale un secret
@@ -199,6 +222,7 @@ Le scanner MUST aussi détecter les chaînes `KEY=`, `SECRET=`, `TOKEN=` ou `PAS
 Le scanner MUST privilégier le refus : un faux positif est accepté, car mieux vaut un Drop refusé qu'un secret sorti.
 
 #### Scenario: Valeur bénigne qui ressemble à un secret
+<!-- openspec-guard:test="runCapability: step 6, secrets > refuses a benign value that looks like a secret" -->
 
 - **WHEN** une chaîne bénigne de la sortie correspond à l'un des motifs du scanner
 - **THEN** le Drop échoue avec `E_SECRET_DETECTED`
@@ -209,6 +233,7 @@ Le scanner MUST privilégier le refus : un faux positif est accepté, car mieux 
 Toute requête reçue d'un pair MUST être traitée comme une donnée non fiable : validée par zod, puis passée comme donnée encadrée, et jamais concaténée dans un prompt comme instruction.
 
 #### Scenario: Requête contenant une instruction
+<!-- openspec-guard:test="repo.answer > frames the question as escaped data" -->
 
 - **WHEN** une entrée de Drop contient un texte formulé comme une instruction au modèle
 - **THEN** ce texte n'est transmis au modèle que comme donnée encadrée, après validation zod
@@ -219,6 +244,7 @@ Toute requête reçue d'un pair MUST être traitée comme une donnée non fiable
 Le LLM MUST NOT décider de la frontière d'autorisation : les outils accessibles au runner MUST être fixés par la capacité avant l'appel au modèle, et le code MUST NOT ajouter d'outil en fonction du contenu de la requête.
 
 #### Scenario: Requête qui demande un outil supplémentaire
+<!-- openspec-guard:test="mcp.answer (T2.2) > answers from the owner MCP server, calling only the tools the owner chose" -->
 
 - **WHEN** une requête demande l'usage d'un outil absent de la liste fixée par la capacité
 - **THEN** la liste d'outils passée au modèle reste celle fixée par la capacité avant l'appel
@@ -228,6 +254,7 @@ Le LLM MUST NOT décider de la frontière d'autorisation : les outils accessible
 Toute lecture de fichiers par une capacité MUST se faire en allowlist uniquement, dans une copie temporaire. Une blacklist seule MUST NOT servir de contrôle d'accès.
 
 #### Scenario: Fichier hors allowlist
+<!-- openspec-guard:test="repo.answer > a .env file and a symlink to /etc never reach the snapshot" -->
 
 - **WHEN** un fichier du répertoire source ne correspond à aucune entrée de l'allowlist
 - **THEN** il n'est pas copié dans la copie temporaire et reste illisible pour la capacité
@@ -237,6 +264,7 @@ Toute lecture de fichiers par une capacité MUST se faire en allowlist uniquemen
 Le runner MUST NOT écrire de secret dans les logs, les reçus ou la télémétrie : il y stocke des hash et des métadonnées.
 
 #### Scenario: Reçu d'un Drop
+<!-- openspec-guard:test="end to end, in memory: relay and three nodes > allow once: the requester gets the filtered result and every side keeps a signed receipt" -->
 
 - **WHEN** le runner écrit le reçu d'un Drop à l'étape 8
 - **THEN** le reçu contient des hash et des métadonnées, sans contenu brut de l'entrée ni de la sortie susceptible de porter un secret
@@ -246,7 +274,24 @@ Le runner MUST NOT écrire de secret dans les logs, les reçus ou la télémétr
 Le runner MUST n'écouter sur aucun port : il se connecte en sortie au relais.
 
 #### Scenario: Démarrage du runner
+<!-- openspec-guard:test="runner: no listening port > imports no server module and never listens: it only runs capabilities in process" -->
 
 - **WHEN** le runner démarre
 - **THEN** il n'ouvre aucun port en écoute
 - **AND** il établit une connexion sortante vers le relais
+
+### Requirement: Destinations du profil privé
+Le profil privé MUST autoriser explicitement chaque origine réseau, refuser les redirections et les destinations hors politique avant tout envoi. Les processus tiers nécessitent une isolation réseau externe ; sans cette isolation le profil privé MUST refuser leur lancement.
+
+#### Scenario: AC: destinations et résolution refusées
+<!-- openspec-guard:test="private network > rejects public addresses, DNS names, credentials and unlisted origins before transmission" -->
+- **WHEN** un modèle, serveur MCP ou agent A2A désigne une destination non autorisée, un nom DNS non pris en charge ou une redirection
+- **THEN** aucune question ni clé ne parvient à cette destination ; les limitations de résolution et la politique de l’hôte sont documentées.
+
+### Requirement: Panne sans repli
+Une panne du relais ou du modèle MUST rester visible et MUST NOT déclencher un repli vers un fournisseur externe. Une reprise MUST NOT réutiliser un consentement pour exécuter deux fois la même demande.
+
+#### Scenario: AC: indisponibilité et reprise
+<!-- openspec-guard:test="private system > runs two private nodes with internal MCP and model through consent failure and restart" -->
+- **WHEN** le modèle ou le relais devient indisponible puis redémarre
+- **THEN** aucun fournisseur alternatif n’est contacté, l’échec ou l’état déconnecté est visible et aucune demande déjà exécutée ne se répète.

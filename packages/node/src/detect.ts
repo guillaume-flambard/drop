@@ -1,12 +1,21 @@
-import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { delimiter, join } from 'node:path';
-import { agentConfigPath, agentServers, AGENTS, type AgentKind, type AgentServer } from '@drop/capabilities';
+import {
+  agentConfigPath,
+  agentServers,
+  AGENTS,
+  CLIENT_SPECS,
+  clientInstalled,
+  defaultProbe,
+  type AgentKind,
+  type AgentServer,
+  type InstallProbe,
+} from '@drop/capabilities';
 
 /**
  * What `drop detect` (and the app, T2.4) shows in one glance (T2.8, D28): the coding agents on this machine, whether
  * drop is installed in each, and the MCP servers they use, with a guess of what each one is. Never a secret: only
- * names, the command's basename, the URL's host, and the names of environment variables and headers.
+ * names, the command's basename, the URL's host, and the names of environment variables and headers. Existing
+ * command arguments are never displayed: they can contain inline credentials even when `env` is empty.
  */
 export interface DetectedServer {
   agent: AgentKind;
@@ -27,15 +36,15 @@ export interface DetectedAgent {
   installed: boolean;
   configPath: string;
   dropInstalled: boolean;
+  /** cli or file: drop can connect it after two confirmations; manual: a copyable configuration only (D66). */
+  connect: 'cli' | 'file' | 'manual';
   servers: DetectedServer[];
 }
 
-export const AGENT_LABELS: Record<AgentKind, string> = {
-  claude_code: 'Claude Code',
-  claude_desktop: 'Claude Desktop',
-  cursor: 'Cursor',
-  codex: 'Codex',
-};
+export const AGENT_LABELS = Object.fromEntries(AGENTS.map((agent) => [agent, CLIENT_SPECS[agent].label])) as Record<
+  AgentKind,
+  string
+>;
 
 const KINDS: [string, RegExp][] = [
   ['figma', /figma|:3845\b/i],
@@ -52,26 +61,8 @@ const KINDS: [string, RegExp][] = [
   ['datadog', /datadog/i],
 ];
 
+const PLACEHOLDER = /\$\{[^}]*\}|\{(?:env|file):[^}]*\}/;
 const DROP_OWN = /requester-mcp|blocked-observer|(^|[/\\])drop(-mcp)?$/i;
-
-function binaryOnPath(names: string[]): boolean {
-  const dirs = (process.env.PATH ?? '').split(delimiter);
-  return names.some((name) => dirs.some((dir) => dir !== '' && existsSync(join(dir, name))));
-}
-
-function installed(agent: AgentKind, home: string): boolean {
-  if (existsSync(agentConfigPath(agent, home))) return true;
-  switch (agent) {
-    case 'claude_code':
-      return binaryOnPath(['claude']);
-    case 'codex':
-      return binaryOnPath(['codex']);
-    case 'cursor':
-      return existsSync('/Applications/Cursor.app') || binaryOnPath(['cursor']);
-    case 'claude_desktop':
-      return existsSync('/Applications/Claude.app');
-  }
-}
 
 function describe(server: AgentServer): string {
   if (server.transport === 'http') {
@@ -81,34 +72,38 @@ function describe(server: AgentServer): string {
       return 'http';
     }
   }
-  const command = (server.command ?? '').split('/').pop() ?? '';
-  const target = (server.args ?? []).find((arg) => !arg.startsWith('-')) ?? '';
-  // A file path shows its last part; a package name (@scope/name) stays whole.
-  const shown = /^[./~]/.test(target) ? target.split('/').pop() : target;
-  return [command, shown].filter(Boolean).join(' ');
+  // The executable only: a one-string command may carry flags or tokens after it.
+  const executable = (server.command ?? '').trim().split(/\s+/)[0] ?? '';
+  return executable.split('/').pop() ?? '';
 }
 
-export function detectAgents(home: string = homedir()): DetectedAgent[] {
+/** Reads each client's documented global files; installation comes from its app, binary or extension (D66). */
+/** One server as the panel may show it: names, the command's basename or the URL's host, never a value. */
+export function presentServer(agent: AgentKind, server: AgentServer): DetectedServer {
+  const haystack = [server.name, server.command, ...(server.args ?? []), server.url].join(' ');
+  const own = DROP_OWN.test(server.name) || (server.args ?? []).some((arg) => DROP_OWN.test(arg));
+  return {
+    agent,
+    name: server.name,
+    transport: server.transport,
+    kind: KINDS.find(([, pattern]) => pattern.test(haystack))?.[0],
+    where: describe(server),
+    envNames: Object.keys(server.env).sort(),
+    headerNames: Object.keys(server.headers).sort(),
+    // A client's own placeholder syntax (\${input:…}, {env:…}, \${env:…}) means drop cannot start it as written.
+    shareable: !own && !PLACEHOLDER.test(JSON.stringify(server)),
+  };
+}
+
+export function detectAgents(home: string = homedir(), probe: InstallProbe = defaultProbe(home)): DetectedAgent[] {
   return AGENTS.map((agent) => {
-    const servers = agentServers(agent, home).map((server): DetectedServer => {
-      const haystack = [server.name, server.command, ...(server.args ?? []), server.url].join(' ');
-      const own = DROP_OWN.test(server.name) || (server.args ?? []).some((arg) => DROP_OWN.test(arg));
-      return {
-        agent,
-        name: server.name,
-        transport: server.transport,
-        kind: KINDS.find(([, pattern]) => pattern.test(haystack))?.[0],
-        where: describe(server),
-        envNames: Object.keys(server.env).sort(),
-        headerNames: Object.keys(server.headers).sort(),
-        shareable: !own,
-      };
-    });
+    const servers = agentServers(agent, home).map((server) => presentServer(agent, server));
     return {
       agent,
       label: AGENT_LABELS[agent],
-      installed: installed(agent, home),
+      installed: clientInstalled(agent, probe),
       configPath: agentConfigPath(agent, home),
+      connect: CLIENT_SPECS[agent].connect,
       dropInstalled: servers.some((server) => server.name === 'drop' || /requester-mcp/.test(server.where)),
       servers,
     };

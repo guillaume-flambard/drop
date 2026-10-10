@@ -185,7 +185,9 @@ describe('repo.answer', () => {
         provider: { model: 'paid/model', inputUsdPerMTok: 1, outputUsdPerMTok: 2 },
       }),
     ).toEqual({ kind: 'capped', maxUsd: 0.2 });
-    expect(impl.cost?.({ repoPath: repo, provider: { model: 'paid/model' } })).toEqual({ kind: 'unmeasured' });
+    expect(
+      impl.cost?.({ repoPath: repo, provider: { baseUrl: 'https://provider.example/v1', model: 'paid/model' } }),
+    ).toEqual({ kind: 'unmeasured' });
   });
 
   it('matches allow globs on relative paths', () => {

@@ -1,6 +1,9 @@
+import type { PrivateNetwork } from '@drop/protocol';
+import { privateFetch } from './private-network.ts';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { getDefaultEnvironment, StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import { UnauthorizedError, type OAuthClientProvider } from '@modelcontextprotocol/sdk/client/auth.js';
+import { StreamableHTTPClientTransport, StreamableHTTPError } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import { z } from 'zod';
 import { DropError, type ConsentCost } from '@drop/protocol';
@@ -102,7 +105,75 @@ export function parseMcpFinal(content: string): McpAnswerOutput | undefined {
 /** The part of an MCP client this capability uses; tests pass an in-memory one. */
 export type McpClient = Pick<Client, 'listTools' | 'callTool' | 'close'>;
 
-export async function connectMcp(server: McpServerConfig, env: NodeJS.ProcessEnv = process.env): Promise<McpClient> {
+/**
+ * Why an MCP server could not be reached (T2.16, D73), so that sharing can say what to do: `oauth` when an HTTP server
+ * answers 401 or 403 to a request without an Authorization header (drop cannot sign in with OAuth yet, T2.17),
+ * `token_refused` when it refuses the token it was given, `unreachable` for anything else.
+ */
+export class McpConnectError extends DropError {
+  readonly reason: 'oauth' | 'token_refused' | 'unreachable';
+  constructor(reason: 'oauth' | 'token_refused' | 'unreachable', message: string) {
+    super('E_RUNNER', message);
+    this.reason = reason;
+  }
+}
+
+/** How connectMcp finds drop's own OAuth tokens for a remote server (T2.17): the node passes its store. */
+export interface ConnectOptions {
+  oauth?: (serverUrl: string) => OAuthClientProvider | undefined;
+  /** Private profile (T3.1): HTTP only toward allowed origins, and no unisolated local process. */
+  network?: PrivateNetwork | undefined;
+}
+
+async function connectHttp(
+  client: Client,
+  url: string,
+  headers: Record<string, string>,
+  options: ConnectOptions,
+): Promise<void> {
+  const tokened = Object.keys(headers).some((name) => name.toLowerCase() === 'authorization');
+  // A token the owner configured wins; otherwise drop's own sign-in, if there is one for this server.
+  const authProvider = tokened ? undefined : options.oauth?.(url);
+  // The SDK's transport types predate exactOptionalPropertyTypes (sessionId?: string vs string | undefined).
+  const transport = new StreamableHTTPClientTransport(new URL(url), {
+    requestInit: { headers },
+    ...(authProvider ? { authProvider } : {}),
+    ...(options.network ? { fetch: privateFetch(options.network, url) } : {}),
+  }) as Transport;
+  try {
+    await client.connect(transport);
+  } catch (error) {
+    const host = new URL(url).host;
+    const status =
+      error instanceof StreamableHTTPError ? error.code : error instanceof UnauthorizedError ? 401 : undefined;
+    if (status === 401 || status === 403) {
+      throw tokened
+        ? new McpConnectError('token_refused', `the MCP server ${host} refused its token (HTTP ${String(status)})`)
+        : new McpConnectError('oauth', `the MCP server ${host} requires an OAuth sign-in, which drop cannot do yet`);
+    }
+    throw new McpConnectError(
+      'unreachable',
+      `the MCP server ${host} did not answer: ${error instanceof Error ? error.message : 'connection failed'}`,
+    );
+  }
+}
+
+async function connectStdio(client: Client, command: string, transport: StdioClientTransport): Promise<void> {
+  try {
+    await client.connect(transport);
+  } catch (error) {
+    throw new McpConnectError(
+      'unreachable',
+      `the MCP server ${command} did not start: ${error instanceof Error ? error.message : 'failed'}`,
+    );
+  }
+}
+
+export async function connectMcp(
+  server: McpServerConfig,
+  env: NodeJS.ProcessEnv = process.env,
+  options: ConnectOptions = {},
+): Promise<McpClient> {
   const read = (name: string): string => {
     const value = env[name];
     if (value === undefined) throw new DropError('E_RUNNER', `environment variable ${name} is not set`);
@@ -113,7 +184,10 @@ export async function connectMcp(server: McpServerConfig, env: NodeJS.ProcessEnv
     const declared = findAgentServer(server.agent, server.name);
     if (!declared) throw new DropError('E_RUNNER', `${server.agent} no longer declares the MCP server ${server.name}`);
     if (declared.transport === 'stdio') {
-      await client.connect(
+      if (options.network) throw new DropError('E_DENIED', 'E_DENIED unisolated MCP process');
+      await connectStdio(
+        client,
+        declared.command ?? '',
         new StdioClientTransport({
           command: declared.command ?? '',
           args: declared.args ?? [],
@@ -122,16 +196,16 @@ export async function connectMcp(server: McpServerConfig, env: NodeJS.ProcessEnv
         }),
       );
     } else {
-      const transport = new StreamableHTTPClientTransport(new URL(declared.url ?? ''), {
-        requestInit: { headers: declared.headers },
-      }) as Transport;
-      await client.connect(transport);
+      await connectHttp(client, declared.url ?? '', declared.headers, options);
     }
     return client;
   }
   if (server.transport === 'stdio') {
+    if (options.network) throw new DropError('E_DENIED', 'E_DENIED unisolated MCP process');
     const forwarded = Object.fromEntries(server.env.map((name) => [name, read(name)]));
-    await client.connect(
+    await connectStdio(
+      client,
+      server.command,
       new StdioClientTransport({
         command: server.command,
         args: server.args,
@@ -143,9 +217,7 @@ export async function connectMcp(server: McpServerConfig, env: NodeJS.ProcessEnv
     const headers = Object.fromEntries(
       Object.entries(server.headersFromEnv).map(([header, name]) => [header, read(name)]),
     );
-    // The SDK's transport types predate exactOptionalPropertyTypes (sessionId?: string vs string | undefined).
-    const transport = new StreamableHTTPClientTransport(new URL(server.url), { requestInit: { headers } }) as Transport;
-    await client.connect(transport);
+    await connectHttp(client, server.url, headers, options);
   }
   return client;
 }
@@ -165,6 +237,7 @@ export function toolResultText(result: unknown): string {
 }
 
 export interface McpAnswerDeps {
+  network?: PrivateNetwork;
   provider?: (config: ProviderConfig) => ChatProvider;
   connect?: (server: McpServerConfig) => Promise<McpClient>;
 }
@@ -208,7 +281,13 @@ export function createMcpAnswer(deps: McpAnswerDeps = {}): CapabilityImpl<McpAns
     },
     async execute(input: McpAnswerInput, ctx: RunContext): Promise<McpAnswerOutput> {
       const config = McpAnswerConfigSchema.parse(ctx.config);
-      const client = await (deps.connect ?? connectMcp)(config.server);
+      const run = providerFor(config.provider, config.maxUsd, ctx.funding);
+      const provider = deps.provider
+        ? deps.provider(run.config)
+        : openAiCompatible(run.config, run.env, deps.network ? privateFetch(deps.network, run.config.baseUrl) : fetch);
+      const client = await (deps.connect
+        ? deps.connect(config.server)
+        : connectMcp(config.server, process.env, { network: deps.network }));
       try {
         // Only the owner's tools that the server really offers, minus any the server itself marks destructive.
         const listed = (await client.listTools()).tools.filter(
@@ -221,8 +300,6 @@ export function createMcpAnswer(deps: McpAnswerDeps = {}): CapabilityImpl<McpAns
           description: (tool.description ?? tool.name).slice(0, 1000),
           parameters: tool.inputSchema,
         }));
-        const run = providerFor(config.provider, config.maxUsd, ctx.funding);
-        const provider = deps.provider ? deps.provider(run.config) : openAiCompatible(run.config, run.env);
         const messages: ChatMessage[] = [
           { role: 'system', content: mcpSystemPrompt(config.label, [...allowed]) },
           { role: 'user', content: frameQuestion(input.question) },

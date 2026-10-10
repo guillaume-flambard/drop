@@ -172,15 +172,15 @@ describe('mcp.answer (T2.2)', () => {
   });
 
   it('runs on the requester capped key when the requester pays (D27)', async () => {
-    const owner = ProviderConfigSchema.parse({ model: 'owner/model' });
+    const owner = ProviderConfigSchema.parse({ baseUrl: 'https://openrouter.ai/api/v1', model: 'owner/model' });
     const funded = providerFor(owner, 0.5, {
       kind: 'capped_key',
       baseUrl: 'https://openrouter.ai/api/v1',
       apiKey: 'sk-or-v1-capped-0123456789',
       maxUsd: 0.1,
-      model: 'requester/model',
+      model: 'owner/model',
     });
-    expect(funded.config).toMatchObject({ model: 'requester/model', apiKeyEnv: 'DROP_REQUESTER_FUNDED_KEY' });
+    expect(funded.config).toMatchObject({ model: 'owner/model', apiKeyEnv: 'DROP_REQUESTER_FUNDED_KEY' });
     expect(funded.env).toEqual({ DROP_REQUESTER_FUNDED_KEY: 'sk-or-v1-capped-0123456789' });
     expect(funded.maxUsd).toBe(0.1);
     expect(providerFor(owner, 0.5)).toMatchObject({ config: owner, maxUsd: 0.5 });
@@ -195,16 +195,16 @@ describe('mcp.answer (T2.2)', () => {
       connect: () => inMemory([]),
     });
     const result = await runCapability(impl, QUESTION, {
-      config,
+      config: { ...config, provider: owner },
       funding: {
         kind: 'capped_key',
         baseUrl: 'https://openrouter.ai/api/v1',
         apiKey: 'sk-or-v1-capped-0123456789',
         maxUsd: 0.1,
-        model: 'requester/model',
+        model: 'owner/model',
       },
     });
     expect(result.ok).toBe(true);
-    expect(used).toEqual(['requester/model']);
+    expect(used).toEqual(['owner/model']);
   });
 });

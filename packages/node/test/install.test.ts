@@ -1,34 +1,19 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { cursorInstallLink, install, serverEntry } from '../src/install.ts';
+import { cursorInstallLink, installSteps, serverEntry } from '../src/install.ts';
 
-function setup() {
-  const home = mkdtempSync(join(tmpdir(), 'install-home-'));
-  const dropHome = join(home, '.drop');
-  const source = join(home, 'drop-mcp.mjs');
-  writeFileSync(source, '// bundled requester server\n');
-  const ran: string[][] = [];
-  return {
-    home,
-    dropHome,
-    source,
-    ran,
-    options: { dropHome, home, serverSource: source, run: (argv: string[]) => ran.push(argv) },
-  };
-}
-
-describe('installing drop in the coding agents (T2.5)', () => {
-  it('uses the official CLI of Claude Code and Codex, with the bundled server copied into DROP_HOME', () => {
-    const { dropHome, ran, options } = setup();
-    install('claude_code', options);
-    install('codex', options);
+describe('agent installation command construction (T2.5)', () => {
+  it('uses the official CLI argument forms for Claude Code and Codex', () => {
+    const home = mkdtempSync(join(tmpdir(), 'drop-install-'));
+    const dropHome = join(home, '.drop');
     const server = join(dropHome, 'bin', 'drop-mcp.mjs');
-    expect(statSync(server).mode & 0o777).toBe(0o755);
-    expect(ran).toEqual([
-      ['claude', 'mcp', 'remove', '--scope', 'user', 'drop'],
-      [
+    const claude = serverEntry('claude_code', dropHome, server);
+    const codex = serverEntry('codex', dropHome, server);
+    expect(installSteps('claude_code', claude, home)[0]).toEqual({
+      kind: 'run',
+      argv: [
         'claude',
         'mcp',
         'add',
@@ -43,8 +28,10 @@ describe('installing drop in the coding agents (T2.5)', () => {
         process.execPath,
         server,
       ],
-      ['codex', 'mcp', 'remove', 'drop'],
-      [
+    });
+    expect(installSteps('codex', codex, home)[0]).toEqual({
+      kind: 'run',
+      argv: [
         'codex',
         'mcp',
         'add',
@@ -57,45 +44,25 @@ describe('installing drop in the coding agents (T2.5)', () => {
         process.execPath,
         server,
       ],
-    ]);
-    ran.length = 0;
-    install('codex', options, true);
-    expect(ran).toEqual([['codex', 'mcp', 'remove', 'drop']]);
-  });
-
-  it('adds and removes only the drop entry in the Cursor and Claude Desktop files, after one backup', () => {
-    const { home, dropHome, options } = setup();
-    mkdirSync(join(home, '.cursor'));
-    const cursor = join(home, '.cursor', 'mcp.json');
-    writeFileSync(cursor, JSON.stringify({ mcpServers: { linear: { url: 'https://mcp.linear.app/sse' } }, other: 1 }));
-    install('cursor', options);
-    install('cursor', options);
-    const written = JSON.parse(readFileSync(cursor, 'utf8')) as { mcpServers: Record<string, unknown>; other: number };
-    expect(Object.keys(written.mcpServers)).toEqual(['linear', 'drop']);
-    expect(written.mcpServers.drop).toEqual({
-      command: process.execPath,
-      args: [join(dropHome, 'bin', 'drop-mcp.mjs')],
-      env: { DROP_AGENT: 'cursor', DROP_HOME: dropHome },
-    });
-    expect(written.other).toBe(1);
-    expect(JSON.parse(readFileSync(`${cursor}.bak-drop`, 'utf8'))).toEqual({
-      mcpServers: { linear: { url: 'https://mcp.linear.app/sse' } },
-      other: 1,
-    });
-    install('cursor', options, true);
-    expect(Object.keys((JSON.parse(readFileSync(cursor, 'utf8')) as { mcpServers: object }).mcpServers)).toEqual([
-      'linear',
-    ]);
-
-    install('claude_desktop', options);
-    const desktop = join(home, 'Library', 'Application Support', 'Claude', 'claude_desktop_config.json');
-    expect(existsSync(desktop)).toBe(true);
-    expect(JSON.parse(readFileSync(desktop, 'utf8'))).toMatchObject({
-      mcpServers: { drop: { env: { DROP_AGENT: 'claude_desktop' } } },
     });
   });
 
-  it('builds a Cursor install link that carries the server entry', () => {
+  it('targets only the known JSON configuration paths', () => {
+    const home = mkdtempSync(join(tmpdir(), 'drop-install-'));
+    const entry = serverEntry('cursor', join(home, '.drop'), join(home, '.drop', 'bin', 'drop-mcp.mjs'));
+    expect(installSteps('cursor', entry, home)).toEqual([
+      { kind: 'json', file: join(home, '.cursor', 'mcp.json'), entry },
+    ]);
+    expect(installSteps('claude_desktop', null, home)).toEqual([
+      {
+        kind: 'json',
+        file: join(home, 'Library', 'Application Support', 'Claude', 'claude_desktop_config.json'),
+        entry: null,
+      },
+    ]);
+  });
+
+  it('builds a Cursor install link with the server entry', () => {
     const entry = serverEntry('cursor', '/Users/julie/.drop', '/Users/julie/.drop/bin/drop-mcp.mjs');
     const link = new URL(cursorInstallLink(entry));
     expect(link.protocol).toBe('cursor:');

@@ -1,0 +1,68 @@
+{
+  "change": "t3-3-local-agent-onboarding",
+  "phase": "CLOSE",
+  "status": "READY_FOR_MANUAL_ACCEPTANCE",
+  "requirements": [
+    "REQ-1 bounded four-adapter analysis without MCP execution or secret values",
+    "REQ-2 explicit preview and selected connector-only application",
+    "REQ-3 idempotence and visible conflict",
+    "REQ-4 independent error per agent",
+    "REQ-5 freshness checks, private bounded backups and atomic JSON replacement",
+    "REQ-6 selective disconnection",
+    "REQ-7 separate configuration, restart and team states",
+    "REQ-8 actionable manual stdio configuration",
+    "REQ-9 legacy requester-mcp install contract updated for safe onboarding"
+  ],
+  "acceptance": {
+    "AC-CONNECT-01": "passed_four_adapter_fixture_and_static_network_review",
+    "AC-CONNECT-02": "targeted_test_passed",
+    "AC-CONNECT-03": "targeted_test_passed",
+    "AC-CONNECT-04": "passed_invalid_config_missing_cli_symlink_and_api_validation",
+    "AC-CONNECT-05": "passed_stale_preview_and_competing_write_simulation_with_documented_final_race_window",
+    "AC-CONNECT-06": "targeted_test_passed",
+    "AC-CONNECT-07": "passed_restart_result_and_offline_ui_state_manual_acceptance_pending",
+    "AC-CONNECT-08": "passed_manual_stdio_entry_and_empty_ui_state_manual_acceptance_pending"
+  },
+  "workGraph": {
+    "1.1": "DONE",
+    "1.2": "DONE",
+    "2.1": "DONE",
+    "2.2": "DONE",
+    "2.3": "DONE",
+    "2.4": "DONE",
+    "3.1": "DONE",
+    "3.2": "DONE",
+    "3.3": "DONE",
+    "4.1": "DONE",
+    "4.2": "DONE"
+  },
+  "risks": [
+    {
+      "id": "R-1",
+      "severity": "medium",
+      "status": "open",
+      "description": "External writers do not honor Drop's freshness check; an edit in the narrow interval after final read and before rename could be replaced. Final review must assess this limitation."
+    },
+    {
+      "id": "R-2",
+      "severity": "medium",
+      "status": "open",
+      "description": "Official agent CLIs have no transaction. A partial CLI change is reported as E_CLI_UNVERIFIED and backed up, but needs manual recovery."
+    }
+  ],
+  "verification": {
+    "targetedTests": "passed_16_onboarding_and_2_panel_plus_legacy_install_and_detection",
+    "lint": "passed_recursive_2026-10-09_17:22",
+    "typecheck": "passed_recursive_2026-10-09_17:22",
+    "fullTests": "passed_338_of_338_35_files_2026-10-09_17:22",
+    "openspecValidate": "passed_strict_change",
+    "guard": "passed_11_of_11_change_selectors;_canonical_423_criteria_146_linked_258_frozen_19_excluded;_baseline_plus0_minus0",
+    "review": "codex_functional_diff_review_completed_no_open_P0_P1",
+    "securityReview": "codex_security_diff_review_completed_three_findings_fixed_no_open_P0_P1",
+    "manualUi": "pending_human_acceptance"
+  },
+  "remaining": [
+    "Human manual acceptance of a test-profile Mac installation, including agent restart and offline team display",
+    "T3.4 distributes and validates the Mac app; T3.5 later proves the private system end to end"
+  ]
+}

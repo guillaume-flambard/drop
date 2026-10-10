@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { ADMISSION_TTL_MS, AdmissionSchema, type Admission } from './admission.ts';
 import { DropError } from './errors.ts';
 import { NodeIdSchema, type Identity } from './identity.ts';
+import { IrohAddrSchema, type IrohAddr } from './iroh.ts';
 import { TeamSchema, type Team } from './team.ts';
 
 /** A day: an invite is a link sent by message, opened later (D26). It used to be 15 minutes. */
@@ -18,6 +19,8 @@ export const InviteSchema = z.object({
   admission: AdmissionSchema.optional(),
   /** The inviter's team, joined on pairing (T2.9). */
   team: TeamSchema.optional(),
+  /** The inviter's iroh addresses, so that pairing works without a drop relay (T4.2b). */
+  iroh: IrohAddrSchema.optional(),
 });
 export type Invite = z.infer<typeof InviteSchema>;
 
@@ -27,6 +30,7 @@ export function createInvite(
   now: number = Date.now(),
   admission?: Admission,
   team?: Team,
+  iroh?: IrohAddr,
 ): Invite {
   return {
     relayUrl,
@@ -36,6 +40,7 @@ export function createInvite(
     expiresAt: now + INVITE_TTL_MS,
     ...(admission ? { admission } : {}),
     ...(team ? { team } : {}),
+    ...(iroh ? { iroh } : {}),
   };
 }
 

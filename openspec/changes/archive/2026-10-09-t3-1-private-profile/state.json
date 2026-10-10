@@ -1,0 +1,49 @@
+{
+  "task": "T3.1",
+  "status": "READY_FOR_MANUAL_ACCEPTANCE",
+  "requirements": {
+    "total": 8,
+    "covered": 8
+  },
+  "todos": {
+    "p0_open": 0,
+    "p1_open": 0
+  },
+  "acceptanceCriteria": {
+    "AC-PRIVATE-01": "verified",
+    "AC-PRIVATE-02": "verified",
+    "AC-PRIVATE-03": "verified",
+    "AC-PRIVATE-04": "verified",
+    "AC-PRIVATE-05": "verified",
+    "AC-PRIVATE-06": "verified",
+    "AC-PRIVATE-07": "verified",
+    "AC-PRIVATE-08": "verified"
+  },
+  "acceptance": {
+    "total": 8,
+    "verified": 8,
+    "failed": 0,
+    "pending": 0
+  },
+  "risks": {
+    "critical_open": 0,
+    "high_open": 0,
+    "limitations": [
+      "Sources tierces à isoler et qualifier par le client",
+      "DNS et MCP source stdio refusés",
+      "CSO automatique partiel ; finding historique non clos par cet outil"
+    ]
+  },
+  "verification": {
+    "automated": "PASS",
+    "tests": 262,
+    "testFiles": 33,
+    "nativeIndependentReview": "NO FINDINGS",
+    "cso": "partial; native corrective evidence recorded",
+    "evidence": "evidence.md"
+  },
+  "ready_for_manual_acceptance": true,
+  "humanAcceptance": "pending",
+  "humanAuthorization": "ok et bien attaques les chantiers",
+  "remainingProjectWork": "docs/TASKS.md : T3.1a puis T3.2 à T3.8 ; T3.1 seule clôturée techniquement"
+}

@@ -9,8 +9,8 @@ context: |
   propriétaire ; le propriétaire autorise une fois ; seul un résultat typé et filtré revient.
   Principe : « Get the answer, not the access ».
 
-  Avant chaque change, lire openspec/project/vision.md et openspec/project/architecture.md,
-  puis seulement les specs des capacités touchées (openspec/specs/<capacité>/spec.md).
+  Avant chaque change, lire openspec/project/vision.md et openspec/project/architecture.md
+  (résumés de docs/product/PRD.md et docs/product/TRD.md, la référence descriptive), puis seulement les specs des capacités touchées (openspec/specs/<capacité>/spec.md).
   L'ordre des tâches et leurs dépendances vivent dans docs/TASKS.md ; les décisions dans
   docs/DECISIONS.md. Une change = une tâche T* de l'index.
 

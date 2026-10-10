@@ -1,15 +1,52 @@
+import type { StoredFact } from '../src/facts.ts';
 import { z } from 'zod';
-import { generateIdentity, verifyReceipt, type Identity, type Receipt } from '@drop/protocol';
+import { generateIdentity, verifyReceipt, type Identity, type IrohAddr, type Receipt } from '@drop/protocol';
 import { RelayClient, startRelay, type RelayHandle } from '@drop/relay';
 import type { CapabilityImpl } from '@drop/runner';
-import { NodeEngine, type EngineOptions, type NodeStore } from '../src/engine.ts';
-import type { Peer, Published, TeamState } from '../src/home.ts';
+import { NodeEngine, type EngineOptions, type NodeStore, type Transport } from '../src/engine.ts';
+import type { AgentLink, Peer, Published, TeamState } from '../src/home.ts';
 
 export class MemoryStore implements NodeStore {
   readonly peerList: Peer[] = [];
   readonly publishedList: Published[] = [];
   readonly receiptList: Receipt[] = [];
   teamState: TeamState | undefined;
+  linkList: AgentLink[] = [];
+  factList: StoredFact[] = [];
+  lanKeyMap: Record<string, string> = {};
+  irohAddrMap: Record<string, IrohAddr> = {};
+
+  irohAddrs(): Record<string, IrohAddr> {
+    return this.irohAddrMap;
+  }
+
+  saveIrohAddr(nodeId: string, address: IrohAddr): void {
+    this.irohAddrMap = { ...this.irohAddrMap, [nodeId]: address };
+  }
+
+  lanKeys(): Record<string, string> {
+    return this.lanKeyMap;
+  }
+
+  saveLanKey(nodeId: string, key: string): void {
+    this.lanKeyMap = { ...this.lanKeyMap, [nodeId]: key };
+  }
+
+  facts(): StoredFact[] {
+    return this.factList;
+  }
+
+  saveFacts(facts: StoredFact[]): void {
+    this.factList = structuredClone(facts);
+  }
+
+  links(): AgentLink[] {
+    return this.linkList;
+  }
+
+  saveLinks(links: AgentLink[]): void {
+    this.linkList = [...links];
+  }
 
   team(): TeamState | undefined {
     return this.teamState;
@@ -70,6 +107,7 @@ export interface TestNode {
   engine: NodeEngine;
   store: MemoryStore;
   client: RelayClient;
+  transport: Transport;
 }
 
 export interface Mesh {
@@ -92,7 +130,11 @@ export async function until(check: () => boolean, timeoutMs = 4000): Promise<voi
 /** Relay + three nodes: Guillaume requests, the VPS executes, Julie approves. Everyone is paired with everyone. */
 export async function startMesh(
   capabilities: CapabilityImpl[],
-  extra: { requester?: Partial<EngineOptions>; executor?: Partial<EngineOptions> } = {},
+  extra: {
+    requester?: Partial<EngineOptions>;
+    executor?: Partial<EngineOptions>;
+    approver?: Partial<EngineOptions>;
+  } = {},
 ): Promise<Mesh> {
   const clock = { now: Date.now() };
   const ids = {
@@ -111,13 +153,16 @@ export async function startMesh(
   ): Promise<TestNode> => {
     const store = new MemoryStore();
     const link: { client?: RelayClient } = {};
+    const transport: Transport = {
+      send: (envelope) => (link.client ? link.client.send(envelope) : Promise.resolve('offline')),
+    };
     const engine = new NodeEngine({
       identity,
       ownerKind,
       store,
       capabilities,
       now: () => clock.now,
-      transport: { send: (envelope) => (link.client ? link.client.send(envelope) : Promise.resolve('offline')) },
+      transport,
       ...options,
     });
     const client = new RelayClient({
@@ -130,11 +175,11 @@ export async function startMesh(
     link.client = client;
     client.start();
     await client.waitReady();
-    return { identity, engine, store, client };
+    return { identity, engine, store, client, transport };
   };
   const requester = await make(ids.requester, 'human', extra.requester);
   const executor = await make(ids.executor, 'machine', extra.executor);
-  const approver = await make(ids.approver, 'human');
+  const approver = await make(ids.approver, 'human', extra.approver);
 
   // Pairing through real invites: requester ↔ executor, approver ↔ executor.
   for (const node of [requester, approver]) {

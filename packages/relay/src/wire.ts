@@ -3,7 +3,8 @@ import { EnvelopeSchema, NodeIdSchema } from '@drop/protocol';
 
 /** Frames exchanged on the relay socket. Envelopes stay opaque: the relay never sees a message type. */
 export const ServerFrameSchema = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('challenge'), challenge: z.string() }),
+  // Exactly 32 random bytes: a node never signs anything else for a relay (no LAN proof, ticket or receipt, D63).
+  z.object({ type: z.literal('challenge'), challenge: z.string().regex(/^[A-Za-z0-9_-]{43}$/) }),
   z.object({ type: z.literal('ready'), nodeId: NodeIdSchema }),
   z.object({ type: z.literal('envelope'), envelope: EnvelopeSchema }),
   z.object({ type: z.literal('ack'), id: z.string(), status: z.enum(['delivered', 'queued']) }),

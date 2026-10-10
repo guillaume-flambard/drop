@@ -15,14 +15,19 @@ export const DropStateSchema = z.enum([
 ]);
 export type DropState = z.infer<typeof DropStateSchema>;
 
-/** Allowed transitions. `running → delivered` is the low-sensitivity path; `in_review` exists only for `high` (D17). */
+/**
+ * Allowed transitions. `running → delivered` is the low-sensitivity path; `in_review` exists only for `high` (D17);
+ * `approved → delivered` is a hand-written answer, reviewed in the panel before it leaves, and `approved → failed`
+ * one the executor refuses on its own checks (T4.3); `proposed → approved` is a published fact, whose publication is the
+ * owner's consent (T4.4).
+ */
 const TRANSITIONS: Record<DropState, readonly DropState[]> = {
-  proposed: ['awaiting_approval'],
+  proposed: ['awaiting_approval', 'approved'],
   awaiting_approval: ['denied', 'expired', 'not_now', 'approved'],
   denied: [],
   expired: [],
   not_now: [],
-  approved: ['running'],
+  approved: ['running', 'delivered', 'failed'],
   running: ['failed', 'in_review', 'delivered'],
   failed: [],
   in_review: ['delivered', 'failed'],

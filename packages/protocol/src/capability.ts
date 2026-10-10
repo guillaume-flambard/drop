@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { NodeIdSchema, OwnerKindSchema } from './identity.ts';
+import { isUnsafeLabel } from './text-guards.ts';
 
 export const CapabilityIdSchema = z
   .string()
@@ -27,7 +28,19 @@ export const CapabilityCardSchema = z.object({
   outputSchema: JsonSchemaSchema,
   receives: z.array(z.string().min(1)).min(1),
   neverReceives: z.array(z.string().min(1)).min(1),
-  approval: z.enum(['always', 'auto_low']),
+  // v1 asks every time unless the card says otherwise.
+  approval: z.enum(['always', 'auto_low']).default('always'),
+  /** Words that route a question to this card without a model (T4.4); facts only so far. */
+  keywords: z
+    .array(
+      z
+        .string()
+        .min(1)
+        .max(40)
+        .refine((keyword) => !isUnsafeLabel(keyword), 'control or bidi character'),
+    )
+    .max(8)
+    .optional(),
   maxOutputChars: z.number().int().positive(),
   budget: z.object({
     maxSeconds: z.number().positive(),
