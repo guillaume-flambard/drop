@@ -8,7 +8,7 @@ import {
   LIST_DESCRIPTION,
   RESULTS_DESCRIPTION,
 } from '@drop/requester-mcp';
-import { OAuthError, type OAuthServer } from './oauth.ts';
+import { OAuthError, redirectHost, type OAuthServer, type Session } from './oauth.ts';
 
 /**
  * The consumer connector's HTTP surface (T2.13, D31), behind Traefik on https://drop.memolabs.dev:
@@ -18,7 +18,7 @@ import { OAuthError, type OAuthServer } from './oauth.ts';
  */
 export interface Caller {
   call(
-    nodeId: string,
+    link: { nodeId: string; clientId: string },
     tool: 'ask_team' | 'get_drop_results' | 'list_capabilities',
     args: Record<string, unknown>,
   ): Promise<{ text: string; isError: boolean }>;
@@ -57,13 +57,24 @@ function escapeHtml(text: string): string {
   return text.replace(/[&<>"']/g, (char) => `&#${String(char.charCodeAt(0))};`);
 }
 
-/** The page the assistant opens: one button that hands the decision to the user's drop app. */
-export function linkPage(options: { sessionId: string; gatewayNodeId: string; clientName: string }): string {
+/** A JSON string literal safe inside <script>: a client name such as `</script><script>…` cannot close it. */
+function scriptString(text: string): string {
+  return JSON.stringify(text).replace(/</g, '\\u003c');
+}
+
+/**
+ * The page the assistant opens: one button that hands the decision to the user's drop app. The link carries the
+ * client and the domain the answer returns to, which the app shows and the node's link_grant must repeat (D71).
+ */
+export function linkPage(options: { session: Session; gatewayNodeId: string; clientName: string }): string {
+  const host = redirectHost(options.session.redirectUri);
   const link = new URL('drop://link');
-  link.searchParams.set('session', options.sessionId);
+  link.searchParams.set('session', options.session.id);
   link.searchParams.set('gateway', options.gatewayNodeId);
   link.searchParams.set('client', options.clientName);
-  const client = escapeHtml(options.clientName);
+  link.searchParams.set('client_id', options.session.clientId);
+  link.searchParams.set('redirect', host);
+  const client = `${escapeHtml(options.clientName)} (${escapeHtml(host)})`;
   return `<!doctype html>
 <html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Relier ${client} à drop</title>
@@ -84,11 +95,11 @@ a.button{display:block;text-align:center;background:#0E5F58;color:#fff;text-deco
 </main>
 <script>
 (function () {
-  var id = ${JSON.stringify(options.sessionId)};
+  var id = ${scriptString(options.session.id)};
   function poll() {
     fetch('/oauth/session/' + encodeURIComponent(id)).then(function (r) { return r.json(); }).then(function (s) {
       if (s.approved) { location.href = '/oauth/complete?session=' + encodeURIComponent(id); return; }
-      if (s.expired) { document.getElementById('wait').textContent = 'Cette demande a expiré. Recommence depuis ' + ${JSON.stringify(options.clientName)} + '.'; return; }
+      if (s.expired) { document.getElementById('wait').textContent = 'Cette demande a expiré. Recommence depuis ' + ${scriptString(options.clientName)} + '.'; return; }
       setTimeout(poll, 1500);
     }, function () { setTimeout(poll, 3000); });
   }
@@ -98,7 +109,7 @@ a.button{display:block;text-align:center;background:#0E5F58;color:#fff;text-deco
 </body></html>`;
 }
 
-function mcpServer(caller: Caller, nodeId: string): McpServer {
+function mcpServer(caller: Caller, link: { nodeId: string; clientId: string }): McpServer {
   const server = new McpServer({ name: 'drop', version: '0.1.0' });
   const reply = (result: { text: string; isError: boolean }) => ({
     content: [{ type: 'text' as const, text: result.text }],
@@ -111,18 +122,18 @@ function mcpServer(caller: Caller, nodeId: string): McpServer {
       inputSchema: AskTeamInput,
       annotations: { readOnlyHint: false, openWorldHint: true },
     },
-    async (args) => reply(await caller.call(nodeId, 'ask_team', args)),
+    async (args) => reply(await caller.call(link, 'ask_team', args)),
   );
   server.registerTool(
     'get_drop_results',
     { description: RESULTS_DESCRIPTION, inputSchema: GetResultsInput, annotations: { readOnlyHint: true } },
     async (args) =>
-      reply(await caller.call(nodeId, 'get_drop_results', { ...args, wait_seconds: Math.min(args.wait_seconds, 40) })),
+      reply(await caller.call(link, 'get_drop_results', { ...args, wait_seconds: Math.min(args.wait_seconds, 40) })),
   );
   server.registerTool(
     'list_capabilities',
     { description: LIST_DESCRIPTION, annotations: { readOnlyHint: true } },
-    async () => reply(await caller.call(nodeId, 'list_capabilities', {})),
+    async () => reply(await caller.call(link, 'list_capabilities', {})),
   );
   return server;
 }
@@ -178,7 +189,7 @@ export function startGatewayHttp(
       });
       res.end(
         linkPage({
-          sessionId: session.id,
+          session,
           gatewayNodeId: options.gatewayNodeId,
           clientName: oauth.client(session.clientId)?.clientName ?? 'Un assistant',
         }),
@@ -217,7 +228,7 @@ export function startGatewayHttp(
       }
       const body: unknown = method === 'POST' ? JSON.parse((await readBody(req)) || 'null') : undefined;
       const transport = new StreamableHTTPServerTransport({ enableJsonResponse: true });
-      const server = mcpServer(options.caller, record.nodeId);
+      const server = mcpServer(options.caller, { nodeId: record.nodeId, clientId: record.clientId });
       res.on('close', () => {
         transport.close().catch(() => undefined);
         server.close().catch(() => undefined);
