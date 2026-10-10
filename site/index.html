@@ -20,9 +20,9 @@
           ><img src="favicon.svg" width="34" height="34" alt="" />drop</a
         >
         <nav class="nav" aria-label="Navigation principale">
-          <a class="desktop-link" href="#principe">Le principe</a><a href="guide.html">Le guide</a
-          ><a href="avancement.html">Avancement</a>
-          <span class="header-note">Un projet Memo Labs</span>
+          <a href="demarrer.html">Démarrer</a><a class="desktop-link" href="cas.html">Cas d'usage</a
+          ><a class="desktop-link" href="securite.html">Sécurité</a><a href="guide.html">Le guide</a
+          ><a href="avancement.html">Avancement</a><span class="header-note">Un projet Memo Labs</span>
         </nav>
       </div>
     </header>
@@ -252,6 +252,48 @@
           <a class="text-link" href="guide.html#connexion">Prérequis, restauration et étapes séparées</a>
         </div>
       </section>
+      <section class="section white-section" id="demo">
+        <div class="wrap">
+          <div class="section-head">
+            <h2>La démo réelle,<br />en trois écrans.</h2>
+            <p>
+              Claude Code chez Guillaume, un relais public, et les Nodes de Julie et du serveur de production. Ces
+              écrans sont ceux qu'ils ont vus, le 8 octobre 2026.
+            </p>
+          </div>
+          <div class="capture-row">
+            <figure>
+              <img
+                src="demo/consent-traefik.jpg"
+                alt="Carte de consentement : Guillaume demande, via Claude Code, un résumé des erreurs du service traefik sur la dernière heure. Il recevra l'état du service, le nombre d'erreurs et les 5 types les plus fréquents, jamais les lignes de log ni les accès au serveur. Boutons Pas maintenant, Refuser, Autoriser une fois."
+              />
+              <figcaption>
+                <strong>1. L'accord.</strong> Ce qui part, ce qui ne partira jamais, avant de décider.
+              </figcaption>
+            </figure>
+            <figure>
+              <img
+                src="demo/consent-julie.jpg"
+                alt="Carte de consentement chez Julie : Guillaume demande si son implémentation gère déjà le mode sombre. Il recevra une réponse courte, oui, non ou partiel, et des noms de fichiers, jamais le contenu des fichiers ni l'accès au dépôt. Sensibilité haute : Julie relira le résultat avant envoi."
+              />
+              <figcaption>
+                <strong>2. Une question sur un dépôt.</strong> Sensible : Julie relira avant l'envoi.
+              </figcaption>
+            </figure>
+            <figure>
+              <img
+                src="demo/review-julie.jpg"
+                alt="Écran de relecture chez Julie : la réponse générée explique que le mode sombre est géré dans src/theme.ts, avec le verdict yes et la liste des fichiers cités. Chaque champ peut être retiré. Boutons Ne pas envoyer et Envoyer."
+              />
+              <figcaption><strong>3. La relecture.</strong> Julie peut retirer un champ ou ne rien envoyer.</figcaption>
+            </figure>
+          </div>
+          <p class="source-link">
+            La vidéo de démonstration sera tournée pendant les premiers essais chez nos testeurs.
+            <a href="guide.html#parcours">Le parcours en détail</a>
+          </p>
+        </div>
+      </section>
       <section class="section privacy" id="confiance">
         <div class="wrap split">
           <div>
@@ -291,6 +333,61 @@
             </p>
           </div>
         </div>
+      </section>
+      <section class="section wrap" id="installer">
+        <!-- if:beta -->
+        <div class="section-head">
+          <h2>Une bêta privée,<br />en petites équipes.</h2>
+          <p>
+            drop s'installe pour l'instant avec nous, équipe par équipe : l'app Mac attend sa signature Apple et le
+            paquet public son nom définitif.
+          </p>
+        </div>
+        <div class="install-grid">
+          <div class="install-card">
+            <h3>Accès sur invitation</h3>
+            <!-- if:contact -->
+            <p>Dites-nous qui est dans votre équipe et quels outils vous voulez partager.</p>
+            <a class="button" href="mailto:{{contact}}?subject=B%C3%AAta%20drop">Demander un accès</a>
+            <!-- /if:contact -->
+            <!-- if:no-contact -->
+            <p>Demandez une invitation à la personne qui vous a parlé de drop : elle vous enverra un lien.</p>
+            <!-- /if:no-contact -->
+          </div>
+          <div class="install-card">
+            <h3>Ce qui arrive</h3>
+            <ul class="milestone-list">
+              <li><span>App Mac, dans la barre de menus</span><span class="tag">Bientôt</span></li>
+              <li><span>Claude Code, Codex, Cursor</span><span class="tag">Bientôt</span></li>
+              <li><span>Claude Desktop</span><span class="tag">Bientôt</span></li>
+              <li><span>Claude et ChatGPT, par un connecteur</span><span class="tag">Bientôt</span></li>
+            </ul>
+            <a class="text-link" href="demarrer.html">Voir comment ça se passera</a>
+          </div>
+        </div>
+        <!-- /if:beta -->
+        <!-- if:open -->
+        <div class="section-head">
+          <h2>Installer drop.</h2>
+          <p>
+            Pour répondre, l'app Mac. Pour demander, votre agent ou votre assistant habituel. Le pas à pas tient en cinq
+            minutes.
+          </p>
+        </div>
+        <div class="install-grid">
+          <div class="install-card">
+            <h3>Pour répondre</h3>
+            <p>L'app de la barre de menus détecte vos outils et vous montre chaque demande.</p>
+            <a class="button" href="downloads/drop.dmg">Télécharger l'app Mac</a>
+          </div>
+          <div class="install-card">
+            <h3>Pour demander</h3>
+            <p>Depuis Claude Desktop, Claude Code, Codex, Cursor, Claude ou ChatGPT.</p>
+            <a class="button" href="downloads/drop.mcpb">Claude Desktop</a>
+            <a class="text-link" href="demarrer.html#agents">Les autres agents et assistants</a>
+          </div>
+        </div>
+        <!-- /if:open -->
       </section>
       <section class="section white-section" id="offre">
         <div class="wrap">
