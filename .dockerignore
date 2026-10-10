@@ -6,7 +6,14 @@ node_modules
 **/test
 coverage
 openspec
-docs
+# docs stays out except what the public site shows (scripts/site.ts, T2.6): later lines win.
+docs/*
+!docs/GUIDE.md
+!docs/AVANCEMENT.md
+!docs/diagrams
+!docs/demo
+docs/demo/*
+!docs/demo/cc-0*.jpg
 .claude
 .agents
 .worktrees
