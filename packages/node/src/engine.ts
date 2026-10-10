@@ -7,6 +7,7 @@ import {
   decodeInvite,
   encodeInvite,
   isDropError,
+  HUMAN_ANSWER_OUTPUT_SCHEMA,
   openEnvelope,
   ReplayCache,
   REPLAY_WINDOW_MS,
@@ -37,6 +38,7 @@ import {
   type UnsignedReceipt,
 } from '@drop/protocol';
 import type { Funder } from './funding.ts';
+import { checkHumanAnswer } from './human-answer.ts';
 import { applyRedactions, buildCard, implFor, runCapability, validateInput, type CapabilityImpl } from '@drop/runner';
 import type { AgentLink, Peer, Published, TeamState } from './home.ts';
 
@@ -154,6 +156,8 @@ interface ExecutorDrop {
   toolCalls: { name: string; count: number }[];
   costUsd: number;
   reviewed: boolean;
+  /** Set when the approver answered by hand instead of running the capability (T4.3). */
+  answeredBy?: 'human';
   timestamps: { requested: number; decided?: number; started?: number; finished?: number; delivered?: number };
   /** The requester's capped key, kept in memory until the run ends, then dropped. */
   funding?: Funding | undefined;
@@ -556,6 +560,22 @@ export class NodeEngine extends EventEmitter {
     return true;
   }
 
+  /**
+   * The approver answers by hand (T4.3, D64): this consents to this request only, and replaces running the
+   * capability. The answer is checked here before anything leaves; a refusal throws and leaves the card pending.
+   */
+  async answer(dropId: string, raw: unknown): Promise<boolean> {
+    const item = this.inbox.get(dropId);
+    if (item?.kind !== 'approval') return false;
+    const answer = checkHumanAnswer(raw);
+    this.inbox.delete(dropId);
+    this.changed();
+    const message: Message = { type: 'human_answer', dropId, answer, decidedAt: this.now() };
+    if (item.executor === this.identity.nodeId) await this.onHumanAnswer(this.identity.nodeId, message);
+    else await this.send(item.executor, message);
+    return true;
+  }
+
   async review(dropId: string, decision: 'send' | 'discard', redactions: string[] = []): Promise<boolean> {
     const item = this.inbox.get(dropId);
     if (item?.kind !== 'review') return false;
@@ -679,6 +699,8 @@ export class NodeEngine extends EventEmitter {
       }
       case 'approval_decision':
         return this.onApprovalDecision(from, message);
+      case 'human_answer':
+        return this.onHumanAnswer(from, message);
       case 'review_request': {
         this.onReviewRequest(from, message);
         return;
@@ -961,6 +983,37 @@ export class NodeEngine extends EventEmitter {
     await this.deliver(drop, result.output);
   }
 
+  private async onHumanAnswer(from: NodeId, message: MessageOf<'human_answer'>): Promise<void> {
+    const drop = this.executing.get(message.dropId);
+    if (drop?.state !== 'awaiting_approval' || !drop.card.approverNodeIds.includes(from)) return;
+    drop.approver = from;
+    drop.timestamps.decided = this.now();
+    drop.funding = undefined;
+    drop.state = 'approved';
+    let answer: ReturnType<typeof checkHumanAnswer>;
+    try {
+      // Checked again here: the executor never trusts the approver's node to have done it.
+      answer = checkHumanAnswer(message.answer);
+    } catch (error) {
+      drop.state = 'failed';
+      const code = isDropError(error, 'E_SECRET_DETECTED') ? 'E_SECRET_DETECTED' : 'E_OUTPUT_INVALID';
+      this.log({ event: 'human_answer_refused', dropId: drop.dropId, code });
+      // The requester learns that the answer was refused, never what the owner's draft contained.
+      await this.fail(
+        drop,
+        code,
+        'Le propriétaire a répondu, mais sa réponse n’a pas passé les contrôles.',
+        'allow_once',
+      );
+      return;
+    }
+    await this.status(drop);
+    drop.reviewed = true;
+    drop.answeredBy = 'human';
+    drop.timestamps.finished = this.now();
+    await this.deliver(drop, answer, sha256Hex(HUMAN_ANSWER_OUTPUT_SCHEMA));
+  }
+
   private onReviewRequest(from: NodeId, message: MessageOf<'review_request'>): void {
     if (!this.canAcceptInboxCard('review', from, message.dropId, message.expiresAt, REVIEW_TTL_MS)) return;
     this.inbox.set(message.dropId, {
@@ -1040,7 +1093,11 @@ export class NodeEngine extends EventEmitter {
     this.changed();
   }
 
-  private async deliver(drop: ExecutorDrop, output: Record<string, unknown>): Promise<void> {
+  private async deliver(
+    drop: ExecutorDrop,
+    output: Record<string, unknown>,
+    outputSchemaHash = sha256Hex(drop.card.outputSchema),
+  ): Promise<void> {
     // The state moves only once the result is handed to the transport, so a duplicate answered meanwhile can only
     // learn the unsettled state, never a refusal that would overtake the result.
     drop.timestamps.delivered = this.now();
@@ -1049,7 +1106,7 @@ export class NodeEngine extends EventEmitter {
         type: 'drop_result',
         dropId: drop.dropId,
         output,
-        outputSchemaHash: sha256Hex(drop.card.outputSchema),
+        outputSchemaHash,
       });
       drop.state = 'delivered';
       await this.writeReceipt(drop, 'allow_once', sha256Hex(output));
@@ -1113,6 +1170,7 @@ export class NodeEngine extends EventEmitter {
       inputHash: sha256Hex(drop.input),
       decision,
       reviewed: drop.reviewed,
+      ...(drop.answeredBy ? { answeredBy: drop.answeredBy } : {}),
       toolCalls: drop.toolCalls,
       timestamps: drop.timestamps,
       ...(drop.costUsd > 0 ? { costUsd: drop.costUsd } : {}),
