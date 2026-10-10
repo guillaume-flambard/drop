@@ -133,6 +133,8 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
           .flushOutbox()
           .then(() => engine.announceTeam())
           .then(() => engine.refreshCatalogs())
+          // Direct paths may have changed while away; coalesced in the outbox, so a flapping relay costs nothing.
+          .then(() => (lanEnabled || link.iroh?.state() === 'on' ? engine.announceLanKey() : undefined))
           .catch(() => {
             log('E_RUNNER flush failed');
           });

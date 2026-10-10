@@ -1,0 +1,10 @@
+{
+  "phase": "READY_FOR_MANUAL_ACCEPTANCE",
+  "scope": "T4.2e : messages d'état fusionnés par pair dans la file d'envoi, jamais un ancien après un plus récent",
+  "requirements": { "total": 1, "covered": 1 },
+  "acceptance": { "total": 4, "verified": 4, "pending": 0, "failed": 0 },
+  "todos": { "p0_open": 0, "p1_open": 0 },
+  "risks": { "critical_open": 0, "high_open": 0 },
+  "verification": { "status": "PASS", "evidence": "evidence.md", "cso": "partial (binary assets unread), coverage recorded, no finding" },
+  "ready_for_manual_acceptance": true
+}
