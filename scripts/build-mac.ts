@@ -1,5 +1,5 @@
 // Build the macOS menu bar app with its own Node runtime. A distributable release is explicit.
-// Usage: node scripts/build-mac.ts [--debug | --release] [--sign "Developer ID Application: …"]
+// Usage: node scripts/build-mac.ts [--debug | --release] [--sign "Developer ID Application: …"] [--notary-profile <name>]
 // With --updates, the build is signed with drop's update key (TAURI_SIGNING_PRIVATE_KEY, never in the repo) and writes
 // dist/updates/: latest.json and the archive to publish under https://drop.memolabs.dev/updates/ (D70). Without it the
 // app carries no updater configuration and never looks for an update (D46, D76).
@@ -23,8 +23,20 @@ const hasApiCredentials = Boolean(
   process.env.APPLE_API_ISSUER && process.env.APPLE_API_KEY && process.env.APPLE_API_KEY_PATH,
 );
 const hasAppleCredentials = Boolean(process.env.APPLE_ID && process.env.APPLE_PASSWORD && process.env.APPLE_TEAM_ID);
-if (release && (!identity?.startsWith('Developer ID Application: ') || (!hasApiCredentials && !hasAppleCredentials))) {
-  throw new Error('release requires Developer ID Application and Apple notarization credentials in the environment');
+// A notarytool keychain profile (xcrun notarytool store-credentials) keeps the password out of the environment.
+// Tauri cannot read it, so this script submits the DMG itself when the profile is the only credential.
+const profileIndex = args.indexOf('--notary-profile');
+const notaryProfile = profileIndex >= 0 ? args[profileIndex + 1] : process.env.APPLE_NOTARY_PROFILE;
+if (profileIndex >= 0 && !notaryProfile) throw new Error('--notary-profile needs a notarytool keychain profile name');
+const notarizeWithProfile = Boolean(notaryProfile) && !hasApiCredentials && !hasAppleCredentials;
+if (
+  release &&
+  (!identity?.startsWith('Developer ID Application: ') ||
+    (!hasApiCredentials && !hasAppleCredentials && !notaryProfile))
+) {
+  throw new Error(
+    'release requires Developer ID Application and Apple notarization credentials or a notarytool profile',
+  );
 }
 
 const hostArch = execFileSync('uname', ['-m'], { encoding: 'utf8' }).trim();
@@ -48,6 +60,24 @@ execFileSync(process.execPath, [join(root, 'scripts', 'bundle.ts')], { stdio: 'i
 mkdirSync(resources, { recursive: true });
 copyFileSync(process.execPath, join(resources, 'node'));
 chmodSync(join(resources, 'node'), 0o755);
+if (identity) {
+  // The official Node binary carries get-task-allow, which notarization rejects; re-sign it for the hardened runtime.
+  execFileSync(
+    'codesign',
+    [
+      '--force',
+      '--options',
+      'runtime',
+      '--timestamp',
+      '--entitlements',
+      join(tauriDir, 'node.entitlements'),
+      '--sign',
+      identity,
+      join(resources, 'node'),
+    ],
+    { stdio: 'inherit' },
+  );
+}
 copyFileSync(join(root, 'dist', 'drop.mjs'), join(resources, 'drop.mjs'));
 copyFileSync(join(root, 'dist', 'drop-mcp.mjs'), join(resources, 'drop-mcp.mjs'));
 
@@ -66,6 +96,23 @@ const dmgDir = join(bundleRoot, 'dmg');
 const dmg = readdirSync(dmgDir).find((name) => name.endsWith('.dmg'));
 if (!dmg) throw new Error('Tauri did not produce a DMG');
 const dmgPath = join(dmgDir, dmg);
+
+if (release && notarizeWithProfile && notaryProfile) {
+  const submitted = execFileSync(
+    'xcrun',
+    ['notarytool', 'submit', dmgPath, '--keychain-profile', notaryProfile, '--wait', '--output-format', 'json'],
+    { encoding: 'utf8' },
+  );
+  const result = JSON.parse(submitted) as { id?: string; status?: string };
+  if (result.status !== 'Accepted') {
+    throw new Error(
+      `notarization ${result.status ?? 'unknown'}: xcrun notarytool log ${result.id ?? '?'} --keychain-profile ${notaryProfile}`,
+    );
+  }
+  execFileSync('xcrun', ['stapler', 'staple', dmgPath], { stdio: 'inherit' });
+  execFileSync('xcrun', ['stapler', 'staple', appPath], { stdio: 'inherit' });
+  execFileSync('xcrun', ['stapler', 'validate', dmgPath], { stdio: 'inherit' });
+}
 
 if (release) {
   execFileSync('codesign', ['--verify', '--deep', '--strict', '--verbose=2', appPath], { stdio: 'inherit' });

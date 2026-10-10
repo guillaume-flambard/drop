@@ -16,6 +16,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tauri::image::Image;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+use tauri::window::{Effect, EffectState, EffectsBuilder};
 use tauri::{
     ActivationPolicy, AppHandle, Manager, PhysicalPosition, RunEvent, WebviewUrl,
     WebviewWindowBuilder, WindowEvent,
@@ -32,6 +33,7 @@ fn bootstrap_relay(configured: Option<String>) -> String {
 }
 const PANEL_WIDTH: f64 = 380.0;
 const PANEL_HEIGHT: f64 = 620.0;
+const PANEL_RADIUS: f64 = 12.0;
 const TRAY: &str = "drop";
 /// The app looks for an update at launch, then this often (D70).
 const UPDATE_CHECK_EVERY: Duration = Duration::from_secs(6 * 60 * 60);
@@ -556,6 +558,16 @@ fn main() {
                     .decorations(false)
                     .always_on_top(true)
                     .skip_taskbar(true)
+                    // A popover material with rounded corners, like the system menu bar extras.
+                    .transparent(true)
+                    .shadow(true)
+                    .effects(
+                        EffectsBuilder::new()
+                            .effect(Effect::Popover)
+                            .state(EffectState::Active)
+                            .radius(PANEL_RADIUS)
+                            .build(),
+                    )
                     .visible(false)
                     .build()?;
             *handle
