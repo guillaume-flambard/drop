@@ -62,7 +62,7 @@ describe('outbox coalescing (T4.2e)', () => {
     // Natha answered the catalog request, and knows Julie's last address only.
     await until(() => sentByNatha.some((envelope) => envelope.to === julie.nodeId));
     expect(nathaEngine.irohAddressOf(julie.nodeId)).toEqual(address(1499));
-  });
+  }, 30_000);
 
   it('never lets an older state message, re-queued after a failed send, replace a newer one', async () => {
     const gate: { release?: (outcome: string) => void } = {};

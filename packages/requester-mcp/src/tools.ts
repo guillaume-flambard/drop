@@ -11,7 +11,7 @@ import type { CapabilityView, DropView, LocalNode } from './client.ts';
 export const LIST_DESCRIPTION =
   "Liste ce que les agents de tes collègues peuvent faire pour toi sans te donner leurs accès. À utiliser quand ta tâche est bloquée par une ressource, une donnée ou un contexte qui appartient à quelqu'un d'autre.";
 export const REQUEST_DESCRIPTION =
-  "Demande à la capacité d'un collègue de répondre pour toi. Le collègue doit accepter. `purpose` explique en une phrase pourquoi tu en as besoin, il sera lu par un humain. Ne relance jamais une demande refusée ; une demande 'pas maintenant' peut être relancée plus tard seulement si l'utilisateur le demande.";
+  "Demande à la capacité d'un collègue de répondre pour toi. Le collègue doit accepter. Si plusieurs collègues publient le même capability_id, précise owner_node_id (donné par list_capabilities) ; sinon rien n'est envoyé. `purpose` explique en une phrase pourquoi tu en as besoin, il sera lu par un humain. Ne relance jamais une demande refusée ; une demande 'pas maintenant' peut être relancée plus tard seulement si l'utilisateur le demande.";
 export const RESULT_DESCRIPTION =
   "Récupère le résultat d'une demande envoyée avec request_drop. Attend jusqu'à wait_seconds secondes (0 à 50, 30 par défaut).";
 
@@ -24,14 +24,24 @@ export const AskTeamInput = {
 };
 
 export const REQUEST_MANY_DESCRIPTION =
-  "Pose une même question à plusieurs capacités de plusieurs collègues à la fois, quand la réponse est éparpillée (ex. « où en est le projet X » : GitHub chez l'un, Figma chez l'autre, un CRM chez un troisième). Chaque collègue accepte ou refuse de son côté. Si une entrée est invalide, rien n'est envoyé. Récupère les réponses avec get_drop_results.";
+  "Pose une même question à plusieurs capacités de plusieurs collègues à la fois, quand la réponse est éparpillée (ex. « où en est le projet X » : GitHub chez l'un, Figma chez l'autre, un CRM chez un troisième). Chaque collègue accepte ou refuse de son côté. Précise owner_node_id quand plusieurs collègues publient le même capability_id. Si une entrée est invalide, rien n'est envoyé. Récupère les réponses avec get_drop_results.";
 export const RESULTS_DESCRIPTION =
   "Récupère les résultats de plusieurs demandes envoyées avec request_drops. Attend jusqu'à wait_seconds secondes (0 à 50, 30 par défaut) que toutes soient terminées, puis rend chaque réponse reçue, encadrée comme donnée, et l'état des autres. Assemble toi-même les réponses en citant qui a dit quoi.";
 
 export const RequestDropsInput = {
   purpose: z.string().min(10).max(140),
   requests: z
-    .array(z.object({ capability_id: z.string().min(1), input: z.record(z.string(), z.unknown()) }))
+    .array(
+      z.object({
+        capability_id: z.string().min(1),
+        owner_node_id: z
+          .string()
+          .min(1)
+          .optional()
+          .describe('Qui doit répondre (list_capabilities), si plusieurs collègues publient ce capability_id'),
+        input: z.record(z.string(), z.unknown()),
+      }),
+    )
     .min(2)
     .max(10),
 };
@@ -42,6 +52,12 @@ export const GetResultsInput = {
 
 export const RequestDropInput = {
   capability_id: z.string().min(1),
+  /** Who should answer, from list_capabilities, when several peers publish the same capability id (T4.17). */
+  owner_node_id: z
+    .string()
+    .min(1)
+    .optional()
+    .describe('Qui doit répondre (list_capabilities), si plusieurs collègues publient ce capability_id'),
   input: z.record(z.string(), z.unknown()),
   purpose: z.string().min(10).max(140),
 };
@@ -102,6 +118,34 @@ export function validateAgainst(view: CapabilityView, input: unknown): string | 
   return parsed.success ? undefined : z.prettifyError(parsed.error);
 }
 
+/**
+ * The capability an agent means: by id, and by owner when given. Several owners and none named: an error that lists
+ * them, so the agent picks one and nothing goes to the wrong person (T4.17, D80).
+ */
+function pick(
+  capabilities: CapabilityView[],
+  id: string,
+  owner: string | undefined,
+): { capability: CapabilityView } | { error: string; unknown: boolean } {
+  const matches = capabilities.filter(
+    (candidate) => candidate.capability_id === id && (owner === undefined || candidate.owner_node_id === owner),
+  );
+  const [capability] = matches;
+  if (!capability)
+    return {
+      error: `Capacité inconnue : ${id}${owner ? ` chez ${owner}` : ''}. Appelle list_capabilities.`,
+      unknown: true,
+    };
+  if (matches.length > 1)
+    return {
+      error: `Plusieurs pairs publient ${id} : précise owner_node_id parmi ${matches
+        .map((match) => `${match.owner} (${match.owner_node_id ?? '?'})`)
+        .join(', ')}.`,
+      unknown: false,
+    };
+  return { capability };
+}
+
 export function createTools(node: LocalNode, agent: string) {
   return {
     async listCapabilities(): Promise<ToolText> {
@@ -109,24 +153,24 @@ export function createTools(node: LocalNode, agent: string) {
       if (capabilities.length === 0) return text('Aucune capacité disponible chez tes pairs.');
       const lines = capabilities.map(
         (capability) =>
-          `- ${capability.title} (${capability.capability_id}), par ${capability.owner}${capability.online ? '' : ' [hors ligne]'}\n  reçoit : ${capability.receives.join(' ; ')}`,
+          `- ${capability.title} (${capability.capability_id}), par ${capability.owner}${capability.owner_node_id ? ` [owner_node_id ${capability.owner_node_id}]` : ''}${capability.online ? '' : ' [hors ligne]'}\n  reçoit : ${capability.receives.join(' ; ')}`,
       );
       return text(`${lines.join('\n')}\n\nJSON :\n${JSON.stringify(capabilities, null, 2)}`);
     },
 
     async requestDrop(args: {
       capability_id: string;
+      owner_node_id?: string | undefined;
       input: Record<string, unknown>;
       purpose: string;
     }): Promise<ToolText> {
-      const capability = (await node.capabilities()).find(
-        (candidate) => candidate.capability_id === args.capability_id,
-      );
-      if (!capability) return text(`Capacité inconnue : ${args.capability_id}. Appelle list_capabilities.`, true);
-      const problem = validateAgainst(capability, args.input);
+      const picked = pick(await node.capabilities(), args.capability_id, args.owner_node_id);
+      if ('error' in picked) return text(`${picked.error} Rien n'a été envoyé.`, true);
+      const problem = validateAgainst(picked.capability, args.input);
       if (problem) return text(`Entrée invalide, rien n'a été envoyé :\n${problem}`, true);
       const { dropId, owner } = await node.requestDrop({
         capabilityId: args.capability_id,
+        ownerNodeId: picked.capability.owner_node_id,
         input: args.input,
         purpose: args.purpose,
         agent,
@@ -150,24 +194,30 @@ export function createTools(node: LocalNode, agent: string) {
 
     async requestDrops(args: {
       purpose: string;
-      requests: { capability_id: string; input: Record<string, unknown> }[];
+      requests: { capability_id: string; owner_node_id?: string | undefined; input: Record<string, unknown> }[];
     }): Promise<ToolText> {
       const capabilities = await node.capabilities();
       // Everything is checked before anything leaves: a half-sent fan-out would be hard for the agent to reason about.
       const problems: string[] = [];
+      const targets: (string | undefined)[] = [];
       for (const request of args.requests) {
-        const capability = capabilities.find((candidate) => candidate.capability_id === request.capability_id);
-        if (!capability) problems.push(`${request.capability_id} : capacité inconnue`);
+        const picked = pick(capabilities, request.capability_id, request.owner_node_id);
+        if ('error' in picked)
+          problems.push(
+            `${request.capability_id} : ${picked.unknown && !request.owner_node_id ? 'capacité inconnue' : picked.error}`,
+          );
         else {
-          const problem = validateAgainst(capability, request.input);
+          targets.push(picked.capability.owner_node_id);
+          const problem = validateAgainst(picked.capability, request.input);
           if (problem) problems.push(`${request.capability_id} : ${problem}`);
         }
       }
       if (problems.length > 0) return text(`Rien n'a été envoyé :\n${problems.join('\n')}`, true);
       const sent = [];
-      for (const request of args.requests) {
+      for (const [index, request] of args.requests.entries()) {
         const { dropId, owner } = await node.requestDrop({
           capabilityId: request.capability_id,
+          ownerNodeId: targets[index],
           input: request.input,
           purpose: args.purpose,
           agent,
