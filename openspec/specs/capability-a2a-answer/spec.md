@@ -29,3 +29,11 @@ Un refus, une demande de précision ou d'authentification, ou un échec MUST fin
 <!-- openspec-guard:test="a2a.answer (T2.15) > ends a refusal, a question back or a failure as E_RUNNER, never with the agent own words" -->
 - **WHEN** l'agent refuse ou demande une précision avec un texte qui contient une donnée
 - **THEN** la demande finit en `E_RUNNER` et la donnée n'apparaît nulle part
+
+### Requirement: Destinations A2A privées
+En profil privé, la carte, les interfaces annoncées et le polling A2A MUST respecter la politique réseau et rester sur l’origine configurée. Les identifiants MUST NOT être transmis à une autre origine.
+
+#### Scenario: AC: interface secondaire refusée
+<!-- openspec-guard:test="private adapters > blocks A2A secondary interfaces even when their origin is in the general allowlist" -->
+- **WHEN** une carte interne annonce une interface sur une autre origine
+- **THEN** la question et les identifiants ne sont pas envoyés à cette interface.

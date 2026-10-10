@@ -1,82 +1,70 @@
 # Où en est drop ?
 
-**Bilan du 9 octobre 2026.** Référence analysée : commit `00fe39a` sur `main`. Ce document décrit les preuves du dépôt ; il ne certifie pas l'état actuel du serveur distant.
+**Bilan du 9 octobre 2026.** T3.1 implémente le profil privé sur la base de T3.0/T3.0a. Ce bilan ne certifie ni un serveur distant ni une distribution publique.
 
-**Le cœur fonctionne et a été démontré ; l'étape 2 est construite, pas encore essayée.** L'app Mac, ses mises à jour signées, la passerelle pour Claude et ChatGPT, la connexion OAuth aux outils en ligne et le site existent dans le code et passent leurs tests. Aucune tâche n'est à faire sans un geste humain : signer l'app, déployer dans `lab-infra`, essayer chez Julie et Natha. La mesure qui doit justifier un pilote n'est pas encore démontrée comme concluante.
+**Le runtime privé est implémenté et son cycle fonctionne sans Internet avec des fixtures internes.** Le raccordement en deux confirmations est vérifié dans le panneau local sur fixtures et attend une recette humaine sur Mac ; son usage dans une app distribuée reste à valider. La qualification d’un vrai modèle et la distribution Mac restent à livrer. Tauri existe déjà sur Mac ; son bootstrap choisit désormais un relais privé. T3.4a refuse le jeton local absent ou vide avant toute écoute ; tests, essai du binaire et relectures ciblées passent. Le chantier Mac T3.4 reste bloqué par la distribution signée/notarisée et la recette VoiceOver réelle.
 
-![Avancement : mesure outillée, prototype démontré, étape 2 construite, essais à faire](diagrams/roadmap.svg)
+![Chantiers : fondation, profil privé, modèles, connexion, Mac et preuves, puis publication et ports](diagrams/roadmap.svg)
 
-## Les chiffres, avec leur sens
+## Ce qui existe dans le code
 
-| Mesure | Résultat | Ce que cela prouve |
-| --- | --- | --- |
-| Tâches produit de l'index | 33 `done`, 6 `doing`, 2 `blocked`, aucune `todo`, sur 41 | État déclaré de la feuille de route, pas pourcentage d'effort |
-| Tests exécutés | 264 réussis dans 29 fichiers | Les cas automatisés passent sur ce poste et en CI |
-| Lint et types | Réussite | Les contrôles statiques du dépôt passent |
-| Critères OpenSpec | 370, dont 354 testables | Taille du contrat suivi par le garde |
-| Critères reliés à un test | 96 sur 354, soit 27,1 % | Traçabilité explicite des specs, pas couverture du code |
-| Critères gelés dans la baseline | 258 | Dette connue non bloquante pour le garde, pas preuve de conformité |
+| Partie                                           | Preuve inspectable                                                                           | Limite                                                                              |
+| ------------------------------------------------ | -------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| Identité, enveloppes, anti-rejeu                 | [Protocole et tests](../packages/protocol/)                                                  | Ne prouve pas toute la confidentialité applicative                                  |
+| Relais, admission, équipes                       | [Relais](../packages/relay/), [tests Node](../packages/node/test/)                           | Admission, révocation et restauration revérifiées dans T3.1                                       |
+| Consentement, relecture, budgets, sorties        | [Node](../packages/node/), [runner](../packages/runner/)                                     | Pas de garantie absolue de non-divulgation                                          |
+| Résumé d'erreurs, dépôt, MCP et A2A sortant      | [Capacités](../packages/capabilities/)                                                       | Connecteurs et modèles réels à qualifier par environnement                          |
+| A2A entrant                                      | [Adaptateur](../packages/a2a/), commit `0e9caa8`                                             | SDK 1.3.0 ciblant A2A 1.0 ; pas une certification de tout le standard               |
+| Questions d'équipe et demandes multiples         | [Connecteur MCP](../packages/requester-mcp/)                                                 | Routage borné, pas un orchestrateur général                                         |
+| Détection et installation individuelles          | [Détection](../packages/node/src/detect.ts), [installation](../packages/node/src/install.ts) | Quatre adaptateurs ; transaction groupée réversible à construire                    |
+| Shell Mac de barre de menus                      | [Tauri](../apps/mac/)                                                                        | T3.4 en cours : reprise bornée, erreur actionnable et clavier améliorés ; distribution signée et recette VoiceOver non qualifiées |
+| Financement demandeur et passerelle grand public | [Financement](../packages/node/src/funding.ts), [gateway](../packages/gateway/)              | Financement sans substitution ; passerelle exclue du profil privé |
+| Mesure du besoin                                 | [Observer](../packages/blocked-observer/)                                                    | D24 attend toujours un agrégat qualifié concluant                                   |
 
-Sources : [index](TASKS.md), [tests](../packages/), [baseline](../.openspec-guard-baseline.json). `openspec-guard` trouve 232 titres statiques ; Vitest exécute davantage de cas.
+L’URL LLM proposée est Ollama local, sans choix implicite de modèle. Le propriétaire choisit son modèle et ses destinations, sans repli cloud. Aucun poids réel n’a encore été qualifié.
 
-## Ce qui existe
+## Preuve T3.1
 
-| Partie | État observé | Preuves dans le dépôt |
-| --- | --- | --- |
-| Mesure des blocages | MCP, hook Claude Code, import Codex, classification, export et agrégation | [Guide observer](../packages/blocked-observer/README.md), [tests](../packages/blocked-observer/test/) |
-| Protocole | Identités, signature, chiffrement, schémas, rejeu, tickets d'admission bornés à 24 h | [Sources](../packages/protocol/src/), [tests](../packages/protocol/test/protocol.test.ts) |
-| Relais | Routage, admission par invitation, révocation sans redémarrage, plafonds d'admission | [Relais](../packages/relay/src/), [tests](../packages/relay/test/relay.test.ts) |
-| Node et consentement | CLI, API locale, notification, autorisation et relecture | [Node](../packages/node/src/), [test complet](../packages/node/test/e2e.test.ts) |
-| Exécution et filtres | Validation, budget, répertoire temporaire et scanner de secrets | [Runner](../packages/runner/src/), [tests](../packages/runner/test/) |
-| Capacités | Résumé d'erreurs, dépôt, serveur MCP, agent A2A | [Registre](../packages/capabilities/src/index.ts), [tests](../packages/capabilities/test/) |
-| Outils en ligne | Partage vérifié ; connexion OAuth de drop, jetons gardés sur le poste | [Partage](../packages/node/src/share.ts), [OAuth](../packages/capabilities/src/mcp-oauth.ts), [tests](../packages/node/test/oauth.test.ts) |
-| Équipe et demandes | Annuaire, demandes multiples, « demander à mon équipe » | [Tests d'équipe](../packages/node/test/team.test.ts), [outils](../packages/requester-mcp/src/) |
-| Installation | `drop install`, fichiers assemblés vérifiés, `.mcpb` | [Installation](../packages/node/src/install.ts), [test du bundle](../test/bundle.test.ts) |
-| App Mac | Barre de menus, panneau, liens `drop://`, mises à jour signées proposées dans le menu | [App](../apps/mac/), [manifeste](../scripts/mac-updates.ts) |
-| Claude et ChatGPT | Passerelle OAuth, liaison confirmée dans l'app, durcie contre l'hameçonnage | [Passerelle](../packages/gateway/src/), [tests](../packages/gateway/test/gateway.test.ts) |
-| Site | Accueil, démarrage, cas d'usage, sécurité ; mode bêta ; service public testé | [Site](../site/), [tests](../test/site.test.ts) |
+La recette Docker `--network none` exécute sept scénarios : installation neuve et invitation, accord/relecture/réponse via MCP et modèle, refus, panne du modèle, reprise du relais, reprise des Nodes, révocation et restauration. Capture sur toutes les interfaces du conteneur : **510 paquets, tous sur loopback, aucun paquet perdu par la capture**, aucune route externe ; la sonde extérieure échoue en `ENETUNREACH`. Les clés et contenus ne sont pas conservés dans la capture.
 
-Le code Rust de l'app compile pour macOS arm64 sans être lancé ici. Les intégrations en ligne (Notion, Linear, GitHub) sont testées contre des serveurs factices conformes, pas contre les vrais services.
+La [recette du profil privé](PRIVATE_PROFILE.md) explique installation, migration, retour arrière et exploitation. Limites explicites : IP privées littérales seulement, sans DNS ni redirection ; sources MCP stdio non isolées refusées ; les services autorisés doivent eux-mêmes être isolés par le client. Cette preuve utilise des fixtures, pas un vrai modèle ni un agent personnel. Les sorties restent soumises aux schémas et au scanner ; aucune promesse universelle de non-divulgation.
 
-## Ce qui a été montré en conditions réelles
+La revue indépendante de T3.1 n’avait pas trouvé de défaut P1/P2 résiduel dans les chemins examinés. La revue gstack de T3.1a a depuis classé **CRITICAL** une persistance non bornée des identifiants reçus, introduite dans T3.1. [T3.1b](TASKS.md) corrige ce défaut : UUIDv7 horodatés, stockage anti-rejeu plafonné et quota par identité après reconnexion. Les revues suivantes ont corrigé la reprise dangereuse d'un verrou étranger, la perte du fichier d'horloge, les trames rejetées par `ws` avant le quota et la double livraison d'une relecture concurrente, l'envoi laissé en attente par un refus de quota non corrélable et l'accumulation de fichiers temporaires après panne disque. Ces derniers défauts ont des tests rouges puis verts ; **350 tests / 37 fichiers**, lint, types, OpenSpec strict et 158 critères liés passent. Les passes gstack isolées ont aidé à trouver la double livraison mais sont incomplètes ; une passe formelle complète du diff stabilisé reste nécessaire avant archive. Le dernier CSO était partiel et confirmait un risque HIGH de croissance de `executing`. [T3.1c](TASKS.md) borne maintenant `executing`, `outbound`, `inbox`, `outbox` et le cache de rejeu, avec nettoyage sur refus du relais ou panne. Les créations de clés et vidages de file concurrents sont également bornés. Un CSO frais du diff entier n'a pas trouvé de nouveau constat étayé, mais reste partiel et ne clôt pas formellement le HIGH initial. La revue `/review` reste requise avant la preuve pilote T3.5. Les [preuves T3.1](../openspec/changes/archive/2026-10-09-t3-1-private-profile/evidence.md) conservent les résultats obtenus alors : 262 tests / 33 fichiers, lint/types, OpenSpec strict, bundles et compilation Rust. Le guard gèle toujours 256 critères historiques et en déclare 19 non testables.
 
-La [démo conservée dans le dépôt](demo/README.md) rapporte deux passages, avec Claude Code puis Codex, via le relais du lab : une question sur les erreurs de Traefik exécutée sur le VPS, une question sur le dépôt de démonstration de Julie avec relecture avant envoi, et les reçus des deux côtés. Le Node nommé Julie tournait sur le Mac de Guillaume : ce n'est pas un déploiement chez Julie. Rien de l'étape 2 n'a encore été essayé en conditions réelles.
+## Ce que T3.0 prépare
 
-## Ce qui reste à livrer
+- Vision et architecture privées, décisions D34 à D38, [critères d'exécution futurs](ACCEPTANCE.md).
+- [Parcours deux confirmations](ONBOARDING.md), [modèles candidats](MODELS.md), index réordonné avec reprise des anciens restes.
+- Licence Apache-2.0, contribution, signalement de sécurité et modèles GitHub.
+- Landing et guide en prévisualisation locale, avec échanges simulés et limites explicites.
 
-| Tâche | Ce qu'il manque | Qui |
-| --- | --- | --- |
-| T1.14 | Test de compréhension en 30 secondes | Une personne extérieure |
-| T2.4 | Signature, notarisation, clé de mise à jour, dessin du panneau de suivi | Guillaume (compte Apple) |
-| T2.13 | Déploiement de la passerelle, premier lien avec Claude et ChatGPT | Guillaume, `lab-infra` (`docs/deploiement-lab.md`) |
-| T2.6 | Mise en ligne, adresse de contact, vidéo | Guillaume (accord de publication) |
-| T2.17 | Premier essai avec un vrai compte Notion | Guillaume |
-| T2.7 | Essais chez Julie et Natha | Julie, Natha, [protocole](essais/README.md) |
-| T2.11, T2.20 | Publication npm ; passerelle de confiance par défaut | `blocked` : nom du produit ; identifiant de la passerelle |
+Vérification T3.0 : **245 tests réussis dans 26 fichiers**, lint/types et validation OpenSpec stricte verts. Le guard compte 355 critères : 75 liés à un test, 259 hérités gelés, 21 non testables (dont les six critères éditoriaux de T3.0). Baseline inchangée. Les [preuves et la revue](../openspec/changes/archive/2026-10-09-t3-0-sovereign-oss-foundation/evidence.md) sont conservées dans l’archive. Les critères documentaires ne comptent pas comme des tests du futur runtime. Un garde vert avec baseline signifie absence de nouvelle dette de traçabilité ; il ne signifie pas que chaque scénario hérité est couvert.
 
-## Les quatre points à garder visibles
+## Preuves historiques
 
-**1. Le besoin n'est pas encore validé.** D24 exige au moins trois développeurs et dix jours actifs chacun. Le GO demande au moins 0,5 blocage qualifié par développeur-jour et une médiane d'au moins dix minutes perdues. Le dépôt ne fournit pas d'agrégat qualifié satisfaisant ces conditions.
+La [démo conservée](demo/README.md) rapporte des passages Claude Code et Codex via le lab : résumé de logs du VPS et question sur un dépôt avec relecture. Le Node nommé Julie était sur le Mac de Guillaume, pas chez Julie. Le test humain de compréhension n'est pas prouvé. Ces captures ne démontrent pas le nouveau parcours privé.
 
-**2. Les tests ne couvrent pas formellement tout le contrat.** Les 258 critères gelés doivent être reliés à une preuve, ou corrigés si le contrat est devenu obsolète. Un garde vert avec baseline signifie absence de régression par rapport à cette baseline.
+L'ancien bilan `cacf1cc` est conservé dans l'historique Git. Ses chiffres de tests et tâches ne sont pas repris comme mesure actuelle.
 
-**3. Une partie des specs décrit encore le plan d'origine.** L'architecture est à jour depuis le 9 octobre, mais la spec `deploy-mac-vps` décrit Caddy et des unités systemd, quand le lab tourne avec Traefik et Docker (D22). Les décisions D26 à D40 étendent le périmètre initial (app Mac, outils MCP, assistants grand public).
+## Ce qui reste
 
-**4. La confidentialité doit être formulée précisément.** Le demandeur reçoit une sortie bornée et les accès du propriétaire ne lui sont pas transmis. Mais un modèle distant reçoit les résultats des outils qu'il appelle, et la passerelle voit en clair les questions et réponses des utilisateurs de Claude et ChatGPT. Le scanner de secrets est un filtre, pas une preuve. Voir la [page Sécurité](../site/securite.html) et le [guide](GUIDE.md#ce-qui-circule-et-ce-qui-reste-chez-soi).
+L'ordre unique est [TASKS](TASKS.md). Les corrections T3.1b et T3.1c sont implémentées et vérifiées par tests ; leurs revues formelles restent à terminer avant T3.1a et la preuve pilote. Suivent qualification de modèle et connexion, finition Mac, preuve d'ensemble, préparation de publication, Windows et Linux. Les anciennes tâches en cours ont été remises à `todo` avec leur reprise explicite ; elles ne sont pas déclarées terminées.
 
-## Le prochain chemin utile
+**T3.1a** : le client MCP Hermes amont a passé les scénarios accord/refus/expiration dans un conteneur jetable sans Internet. Sa boucle d’agent appelle réellement le catalogue Drop avec un fournisseur local simulé ; une panne HTTP 503 remonte sans connexion externe observée. Décision : [recette manuelle facultative](HERMES.md), pas de nouvel adaptateur automatique ni de dépendance Hermes dans Drop. Modèles réels non qualifiés ; diagnostics de requête locaux Hermes à maîtriser avant usage sensible. **T3.2a**, adaptateurs AI SDK directs / passerelle LiteLLM privée, reste à réaliser. Le client Drop actuel est conservé. T3.1a reste en VERIFYING tant que le finding critique T3.1b laisse la revue de branche non clean.
 
-Tout ce qui reste passe par un geste humain : signer l'app et déployer dans `lab-infra` (liste complète dans `docs/deploiement-lab.md`), puis les essais chez Julie et Natha selon le [protocole](essais/README.md). La mesure du besoin peut continuer pendant ce temps, sans présumer le GO.
+D24 exige au moins trois développeurs et dix jours actifs chacun. Le GO exige au moins 0,5 blocage YES par développeur-jour et une médiane de dix minutes perdues. Aucun agrégat qualifié concluant n'est apporté par cette documentation.
 
-## Reproduire le bilan
+Le dépôt demeure privé. Avant ouverture : audit de l'historique et des artefacts, attributions tierces, séparation de la CI du lab, signalement privé opérationnel, paquets vérifiés et accord du propriétaire. Voir [OPEN_SOURCE](OPEN_SOURCE.md).
 
-Depuis la racine du dépôt, avec les dépendances installées :
+## Reproduire la vérification
 
 ```bash
 pnpm -r lint
 pnpm -r typecheck
 pnpm -r test
+openspec validate --all --strict
 npx --yes openspec-guard@0.3.0 check --require-selector --baseline .openspec-guard-baseline.json --fail-on fail
+pnpm site:build
 ```
 
-Puis comparer l'index, les derniers commits et les preuves de démonstration. Ce bilan est une photographie datée ; il n'est pas recalculé à chaque ouverture du site.
+Ces tests ne requièrent ni clé modèle ni accès au lab. Le site est une présentation statique ; sa simulation ne connecte aucun agent et n'envoie aucune demande réelle.

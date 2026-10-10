@@ -1,6 +1,6 @@
 # Déploiement sur le VPS lab : ce qui reste à faire dans `lab-infra`
 
-Tout ce que les tâches de l'étape 2 demandent à `lab-infra/stacks/drop`, rassemblé (D22, D34 à D40). Ce dépôt ne
+Tout ce que les tâches de l'étape 2 demandent à `lab-infra/stacks/drop`, rassemblé (D22, D69 à D75). Ce dépôt ne
 touche pas à `lab-infra` : chaque point ci-dessous est à reporter là-bas, par PR, selon les conventions du lab. Les
 règles Traefik sont écrites en syntaxe v3 ; les adapter aux labels et aux noms que la stack utilise déjà.
 
@@ -14,7 +14,7 @@ règles Traefik sont écrites en syntaxe v3 ; les adapter aux labels et aux noms
 
 Le rsync écrase `relay.config.json` : tout état que le relais écrit doit vivre sur un volume à part.
 
-## 1. Relais : admissions gardées et révocation (D34, D40)
+## 1. Relais : admissions gardées et révocation (D69, D75)
 
 Un volume d'état, par exemple `/opt/drop/relay-state` monté sur `/state` (uid 1000, mode 0700), et dans
 `relay.config.json` :
@@ -36,7 +36,7 @@ docker compose -f /opt/stacks/drop/compose.yml exec drop-relay \
   node packages/relay/src/cli.ts revoke <nodeId> [--with-invited] --config=/config/relay.config.json
 ```
 
-## 2. Passerelle pour Claude et ChatGPT (T2.13, D31, D36)
+## 2. Passerelle pour Claude et ChatGPT (T2.13, D31, D71)
 
 Service `drop-gateway`, même image :
 
@@ -54,7 +54,7 @@ Au premier démarrage, la passerelle écrit son `nodeId` dans ses journaux. Il f
 2. le donner aux Nodes comme passerelle de confiance : aujourd'hui `gateways` dans leur `config.json`, demain la valeur
    par défaut (T2.20), sinon l'app avertit à chaque liaison.
 
-## 3. Site et mises à jour de l'app (T2.6, T2.4, D35, D37)
+## 3. Site et mises à jour de l'app (T2.6, T2.4, D70, D72)
 
 Service `drop-site`, même image :
 
@@ -66,7 +66,7 @@ Service `drop-site`, même image :
   (`/v1`, `/health`) ni la passerelle ne prennent.
 
 La mise en ligne du site reste soumise à l'accord de Guillaume (point d'arrêt de T2.6). Avant : choisir l'adresse de
-contact (`site/site.json`) et rendre les exports Markdown lisibles hors du dépôt privé (D37).
+contact (`site/site.json`) et rendre les exports Markdown lisibles hors du dépôt privé (D72).
 
 Publier une version de l'app : copier dans `/opt/drop/releases` l'archive `drop-<version>-darwin-aarch64.app.tar.gz`
 d'abord, `latest.json` ensuite (produits par `node scripts/build-mac.ts --updates`) ; `drop.dmg` et `drop.mcpb` vont

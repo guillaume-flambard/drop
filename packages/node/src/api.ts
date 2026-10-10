@@ -1,6 +1,7 @@
 import { timingSafeEqual } from 'node:crypto';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { z } from 'zod';
+import { isDropError } from '@drop/protocol';
 import type { NodeEngine } from './engine.ts';
 import { LinkRequestSchema, type LinkRequest } from './home.ts';
 import { renderPanel } from './panel.ts';
@@ -15,6 +16,8 @@ export interface LocalApiOptions {
   /** Fetches fresh catalogs when the cache is older than 60 s; resolves when answers arrived or timed out. */
   refreshCatalogs: () => Promise<void>;
   relayUrl: string;
+  /** Opaque process instance marker used only by the Mac shell to recognize its own child. */
+  shellInstance?: string;
   now?: () => number;
   /** Owner actions of the app's panel (T2.4), wired by the daemon; absent in tests of the drop routes. */
   admin?: AdminHooks;
@@ -53,6 +56,14 @@ export interface AdminHooks {
   }): Promise<unknown>;
   unshare(capabilityId: string): boolean;
   install(agent: string, remove: boolean): unknown;
+  onboardingPreview?(): unknown;
+  onboardingApply?(
+    selections: {
+      agent: 'claude_code' | 'claude_desktop' | 'cursor' | 'codex';
+      fingerprint: string;
+      action: 'connect' | 'disconnect';
+    }[],
+  ): unknown;
   createTeam(name: string): unknown;
   link(gateway: string, request: LinkRequest): Promise<unknown>;
   /** Starts drop's OAuth sign-in to a detected remote MCP server (T2.17): the URL to open, or `connected`. */
@@ -65,6 +76,19 @@ const ShareBody = z.object({
   server: z.string().min(1),
   label: z.string().min(2).max(60).optional(),
   tools: z.array(z.string().min(1)).max(30).optional(),
+});
+
+const OnboardingBody = z.object({
+  selections: z
+    .array(
+      z.object({
+        agent: z.enum(['claude_code', 'claude_desktop', 'cursor', 'codex']),
+        fingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+        action: z.enum(['connect', 'disconnect']),
+      }),
+    )
+    .min(1)
+    .max(4),
 });
 
 export interface LocalApi {
@@ -89,11 +113,17 @@ const AskBody = z.object({
 const MAX_BODY_BYTES = 128 * 1024;
 
 function json(res: ServerResponse, status: number, body: unknown): void {
-  res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
-  res.end(JSON.stringify(body));
+  const payload = JSON.stringify(body);
+  res.writeHead(status, {
+    'Content-Type': 'application/json; charset=utf-8',
+    'Cache-Control': 'no-store',
+    'Content-Length': Buffer.byteLength(payload),
+  });
+  res.end(payload);
 }
 
 function sameToken(given: string, expected: string): boolean {
+  if (!given.trim() || !expected.trim()) return false;
   const a = Buffer.from(given);
   const b = Buffer.from(expected);
   return a.length === b.length && timingSafeEqual(a, b);
@@ -121,6 +151,7 @@ function parseForm(body: string): URLSearchParams {
  * which blocks DNS rebinding.
  */
 export function startLocalApi(options: LocalApiOptions): Promise<LocalApi> {
+  if (!options.token.trim()) return Promise.reject(new Error('E_TOKEN local token empty'));
   const { engine } = options;
   const now = options.now ?? Date.now;
   let boundPort = options.port;
@@ -144,6 +175,15 @@ export function startLocalApi(options: LocalApiOptions): Promise<LocalApi> {
     // The A2A agent card (T2.14) is public to local clients, as A2A expects: it names the token the calls need.
     if ((req.method ?? 'GET') === 'GET' && url.pathname === '/.well-known/agent-card.json' && localHost(req)) {
       json(res, 200, team.cardJson(`http://127.0.0.1:${String(boundPort)}/a2a`));
+      return;
+    }
+    if (
+      (req.method ?? 'GET') === 'GET' &&
+      url.pathname === '/_shell/health' &&
+      options.shellInstance &&
+      localHost(req)
+    ) {
+      json(res, 200, { instance: options.shellInstance });
       return;
     }
     if ((req.method ?? 'GET') === 'GET' && url.pathname === '/oauth/callback' && localHost(req)) {
@@ -201,7 +241,15 @@ export function startLocalApi(options: LocalApiOptions): Promise<LocalApi> {
       try {
         const drop = await engine.requestDrop(parsed.data);
         json(res, 201, { dropId: drop.dropId, owner: drop.ownerName, title: drop.title });
-      } catch {
+      } catch (error) {
+        if (isDropError(error, 'E_RATE')) {
+          json(res, 429, { error: 'E_RATE', message: 'Trop de demandes actives.' });
+          return;
+        }
+        if (isDropError(error, 'E_TOO_LARGE')) {
+          json(res, 413, { error: 'E_TOO_LARGE', message: 'Enveloppe trop grande.' });
+          return;
+        }
         json(res, 404, { error: 'E_UNKNOWN_CAPABILITY', message: 'no such capability among paired peers' });
       }
       return;
@@ -222,13 +270,25 @@ export function startLocalApi(options: LocalApiOptions): Promise<LocalApi> {
       const routes = routeQuestion(catalog, parsed.data.question);
       const asked = [];
       for (const route of routes) {
-        const drop = await engine.requestDrop({
-          capabilityId: route.capabilityId,
-          input: { question: parsed.data.question },
-          purpose: parsed.data.purpose ?? 'Pas de raison précisée.',
-          agent: parsed.data.agent,
-        });
-        asked.push({ dropId: drop.dropId, ...route });
+        try {
+          const drop = await engine.requestDrop({
+            capabilityId: route.capabilityId,
+            input: { question: parsed.data.question },
+            purpose: parsed.data.purpose ?? 'Pas de raison précisée.',
+            agent: parsed.data.agent,
+          });
+          asked.push({ dropId: drop.dropId, ...route });
+        } catch (error) {
+          if (isDropError(error, 'E_RATE')) {
+            json(res, 429, { error: 'E_RATE', message: 'Trop de demandes actives.', asked });
+            return;
+          }
+          if (isDropError(error, 'E_TOO_LARGE')) {
+            json(res, 413, { error: 'E_TOO_LARGE', message: 'Enveloppe trop grande.', asked });
+            return;
+          }
+          throw error;
+        }
       }
       const helpers = catalog
         .filter(takesQuestion)
@@ -319,7 +379,28 @@ export function startLocalApi(options: LocalApiOptions): Promise<LocalApi> {
           json(res, 200, admin.tools());
           return;
         }
+        if (method === 'GET' && path === '/ui/admin/onboarding') {
+          if (!admin.onboardingPreview) {
+            json(res, 404, { error: 'not_found' });
+            return;
+          }
+          json(res, 200, admin.onboardingPreview());
+          return;
+        }
         const body: unknown = method === 'POST' ? JSON.parse((await readBody(req)) || '{}') : {};
+        if (method === 'POST' && path === '/ui/admin/onboarding') {
+          if (!admin.onboardingApply) {
+            json(res, 404, { error: 'not_found' });
+            return;
+          }
+          const parsed = OnboardingBody.safeParse(body);
+          if (!parsed.success) {
+            json(res, 400, { error: 'E_SCHEMA' });
+            return;
+          }
+          json(res, 200, { results: admin.onboardingApply(parsed.data.selections) });
+          return;
+        }
         if (method === 'POST' && path === '/ui/admin/share') {
           const parsed = ShareBody.safeParse(body);
           if (!parsed.success) {
@@ -338,6 +419,10 @@ export function startLocalApi(options: LocalApiOptions): Promise<LocalApi> {
           return;
         }
         if (method === 'POST' && path === '/ui/admin/install') {
+          if (admin.onboardingApply) {
+            json(res, 409, { error: 'E_PREVIEW_REQUIRED' });
+            return;
+          }
           json(res, 200, admin.install(field('agent'), (body as { remove?: unknown }).remove === true));
           return;
         }

@@ -214,15 +214,32 @@ L'API locale SHALL être servie en HTTP sur `127.0.0.1:<port>` uniquement, port 
 - **THEN** l'API locale écoute sur `127.0.0.1:7781` et sur aucune autre interface
 
 ### Requirement: Jeton de l'API locale
-L'API locale MUST exiger un jeton aléatoire, écrit dans `DROP_HOME/local-token` en mode `0600` et présenté dans l'en-tête `Authorization: Bearer`. Toute requête sans jeton valide MUST être refusée.
+L'API locale MUST exiger un jeton aléatoire non vide, écrit dans `DROP_HOME/local-token` en mode `0600` et présenté dans l'en-tête `Authorization: Bearer`, ou dans `?token=` pour l'UI et son flux SSE. Toute requête sans jeton valide MUST être refusée. `drop serve` MUST refuser de démarrer l'API locale si ce fichier est absent, vide ou réduit à des espaces ; il MUST signaler une erreur stable sans journaliser le jeton.
 
 #### Scenario: AC: requête sans jeton refusée
+<!-- openspec-guard:test="refuses a request without the token" -->
 - **WHEN** une requête arrive sur l'API locale sans en-tête `Authorization: Bearer <jeton>` valide
 - **THEN** elle est refusée (test)
 
 #### Scenario: Fichier du jeton
+<!-- openspec-guard:test="creates a local token with owner-only permissions" -->
 - **WHEN** `drop serve` crée le jeton
 - **THEN** `DROP_HOME/local-token` existe en mode `0600`
+
+#### Scenario: AC: jeton local absent ou vide au démarrage
+<!-- openspec-guard:test="refuses to start with a missing or empty local token" -->
+- **WHEN** `drop serve` trouve `DROP_HOME/local-token` absent, vide ou composé uniquement d'espaces
+- **THEN** il échoue avec `E_TOKEN` avant de lancer le relais ou d'ouvrir l'API locale, sans imprimer le contenu du fichier
+
+#### Scenario: AC: présentation vide refusée
+<!-- openspec-guard:test="rejects missing and empty presented tokens" -->
+- **WHEN** un client appelle l'API, l'UI ou le flux SSE sans jeton, avec un `Bearer` vide ou avec `?token=` vide
+- **THEN** la requête est refusée, même si la configuration du serveur est invalide ou vide
+
+#### Scenario: AC: jeton valide préservé
+<!-- openspec-guard:test="preserves authenticated local API and panel access" -->
+- **WHEN** `drop serve` possède un jeton non vide et le client présente cette valeur
+- **THEN** l'API et le panneau local restent accessibles selon leurs règles existantes
 
 ### Requirement: Contrôle de l'en-tête Host
 L'API locale MUST refuser toute requête dont l'en-tête `Host` n'est pas `127.0.0.1:<port>` ou `localhost:<port>`, pour se protéger du DNS rebinding.
@@ -431,13 +448,327 @@ L'écran de relecture MUST afficher le texte long tel quel, échappé.
 - **WHEN** un champ de sortie contient du HTML
 - **THEN** il est affiché littéralement, sans interprétation ni troncature
 
+### Requirement: Profil privé explicite
+Le Node SHALL proposer un profil privé sans compte externe, passerelle cloud, financement distant automatique, télémétrie, activation de licence ni téléchargement au démarrage. Le relais et les destinations sont choisis localement.
+
+#### Scenario: AC: installation et cycle sans Internet
+<!-- openspec-guard:test="private system > runs two private nodes with internal MCP and model through consent failure and restart" -->
+- **WHEN** deux Nodes privés utilisent leur relais et leur modèle internes, Internet bloqué
+- **THEN** le consentement et la réponse fonctionnent après arrêt et relance, sans connexion externe ; la recette conserve les observations réseau.
+
+### Requirement: Migration privée réversible
+La migration SHALL être explicite, sauvegarder la configuration en mode privé, préserver identité, jeton, pairs et publications, et proposer un retour arrière sans écraser une modification concurrente.
+
+#### Scenario: AC: migration et restauration
+<!-- openspec-guard:test="private configuration > backs up migrates and restores configuration without changing identity or publications" -->
+- **WHEN** une configuration historique est migrée puis restaurée
+- **THEN** les autres fichiers restent identiques et une modification concurrente empêche la restauration.
+
+### Requirement: Demandes reçues persistantes
+Le Node MUST conserver au plus 16 384 identifiants reçus, sans contenu, pendant 30 minutes. Une horloge et une empreinte des marqueurs durables MUST empêcher leur rejeu après redémarrage, recul d'horloge ou perte partielle. Le Node MUST refuser avant accord les UUIDv7 vieux (>30 min) ou futurs (>5 min), les doublons et les admissions dont le stockage est saturé, verrouillé, illisible, incomplet ou non durable. Une demande interrompue exige un nouvel identifiant et un nouvel accord.
+
+#### Scenario: AC: ancien consentement après redémarrage
+<!-- openspec-guard:test="private restart > rejects a previously received drop after restart before any consent can be reused" -->
+- **WHEN** une demande reçue avant arrêt est présentée au Node redémarré
+- **THEN** elle est refusée sans nouvelle exécution ni remise en attente d'un ancien consentement
+
+#### Scenario: AC: demande périmée ou future
+<!-- openspec-guard:test="bounded received drops > rejects stale and future identifiers before writing a marker" -->
+- **WHEN** une nouvelle demande porte un UUIDv7 plus vieux que 30 minutes ou avancé de plus de 5 minutes
+- **THEN** le Node la refuse avant création d'une demande d'accord
+
+#### Scenario: AC: marqueurs bornés après redémarrage
+<!-- openspec-guard:test="bounded received drops > prunes old markers and rejects them after restart and clock rollback" -->
+- **WHEN** des marqueurs périmés existent et le Node redémarre puis reçoit une demande récente
+- **THEN** les marqueurs périmés sont supprimés et la demande est traitée sans réutiliser un ancien accord
+
+#### Scenario: AC: retour d'horloge
+<!-- openspec-guard:test="bounded received drops > prunes old markers and rejects them after restart and clock rollback" -->
+- **WHEN** l'horloge locale recule après la suppression de marqueurs périmés
+- **THEN** un identifiant déjà supprimé reste refusé, y compris après redémarrage
+
+#### Scenario: AC: stockage anti-rejeu saturé
+<!-- openspec-guard:test="bounded received drops > refuses another claim at the marker cap" -->
+- **WHEN** 16 384 marqueurs non expirés occupent le stockage
+- **THEN** le Node refuse une demande supplémentaire avec `E_RATE`, sans accord ni exécution
+
+#### Scenario: AC: état anti-rejeu corrompu
+<!-- openspec-guard:test="bounded received drops > fails closed when replay clock state is corrupt" -->
+- **WHEN** la marque d'horloge persistante est corrompue
+- **THEN** le Node refuse les nouvelles demandes sans consentement ni exécution
+
+#### Scenario: AC: admission concurrente
+<!-- openspec-guard:test="bounded received drops > refuses a claim while another process owns the replay lock" -->
+- **WHEN** un autre processus possède le verrou d'admission du même `DROP_HOME`
+- **THEN** le Node refuse la nouvelle demande sans ajouter de marqueur
+
+#### Scenario: AC: même identifiant sous deux casses
+<!-- openspec-guard:test="bounded received drops > treats lowercase and uppercase UUIDv7 as the same claim" -->
+- **WHEN** le même UUIDv7 est reçu en minuscules puis en majuscules
+- **THEN** le second envoi est refusé comme doublon, sans nouveau marqueur ni consentement
+
+#### Scenario: AC: anciens marqueurs nil et max
+<!-- openspec-guard:test="bounded received drops > deletes legacy nil and max UUID markers instead of blocking admission" -->
+- **WHEN** le stockage contient un marqueur nil ou max accepté avant T3.1b
+- **THEN** le Node le supprime et admet la nouvelle demande récente
+
+#### Scenario: AC: fichiers étrangers dans le stockage
+<!-- openspec-guard:test="bounded received drops > ignores operating system and foreign entries in the marker directory" -->
+- **WHEN** `received-drops/` contient un fichier ou dossier dont le nom n'a pas la forme d'un UUID, comme `.DS_Store`
+- **THEN** le Node l'ignore, sans le compter ni le supprimer, et continue d'admettre
+
+#### Scenario: AC: verrou abandonné par ce processus
+<!-- openspec-guard:test="bounded received drops > reclaims only its own replay lock and refuses an old foreign lock" -->
+- **WHEN** le verrou d'admission porte le nonce du processus courant, sans admission synchrone en cours
+- **THEN** le Node reprend ce verrou et traite la demande
+
+#### Scenario: AC: verrou d'un autre processus
+<!-- openspec-guard:test="bounded received drops > reclaims only its own replay lock and refuses an old foreign lock" -->
+- **WHEN** le verrou porte un autre nonce, même s'il semble ancien
+- **THEN** le Node refuse la demande sans toucher au verrou
+
+#### Scenario: AC: verrou sans propriétaire
+<!-- openspec-guard:test="bounded received drops > requires manual removal of an ownerless replay lock before admission resumes" -->
+- **WHEN** un verrou sans propriétaire subsiste après un crash, même ancien
+- **THEN** le Node refuse toute admission jusqu'au retrait manuel après arrêt de tous les processus qui partagent ce `DROP_HOME`
+
+#### Scenario: AC: horloge anti-rejeu perdue
+<!-- openspec-guard:test="bounded received drops > fails closed if the durable replay clock disappears after migration and pruning" -->
+- **WHEN** le fichier d'horloge manque après une première admission T3.1b
+- **THEN** le Node refuse toute nouvelle admission sans recréer une horloge initiale
+
+#### Scenario: AC: marqueurs anti-rejeu perdus
+<!-- openspec-guard:test="bounded received drops > fails closed if the marker directory disappears after a durable claim" -->
+- **WHEN** le dossier des marqueurs manque après une première admission T3.1b
+- **THEN** le Node refuse toute nouvelle admission sans recréer ce dossier
+
+#### Scenario: AC: marqueur anti-rejeu isolé perdu
+<!-- openspec-guard:test="bounded received drops > fails closed if one recent marker disappears while the directory remains" -->
+- **WHEN** un marqueur récent est perdu alors que le dossier et l'horloge existent encore
+- **THEN** le Node détecte l'écart avec l'empreinte durable et refuse toute nouvelle admission
+
+#### Scenario: AC: version anti-rejeu perdue
+<!-- openspec-guard:test="bounded received drops > fails closed if replay version and clock disappear while integrity remains" -->
+- **WHEN** le fichier de version manque alors que l'horloge ou l'empreinte indique un stockage déjà utilisé
+- **THEN** le Node refuse l'admission sans réinitialiser l'état anti-rejeu
+
+#### Scenario: AC: doublon d'une demande terminée
+<!-- openspec-guard:test="replay admission through the engine > answers a duplicate of a finished request with its recorded outcome" -->
+- **WHEN** le même demandeur renvoie une demande déjà refusée ou échouée
+- **THEN** le Node renvoie la même erreur, sans nouvel accord
+
+#### Scenario: AC: identifiant actif réutilisé par un autre pair
+<!-- openspec-guard:test="replay admission through the engine > refuses another peer reusing an active drop id without revealing its state" -->
+- **WHEN** un autre pair envoie l'identifiant d'une demande active
+- **THEN** il reçoit `E_DENIED` sans l'état de la demande
+
+#### Scenario: AC: résultat réel après un refus de doublon
+<!-- openspec-guard:test="end to end, in memory: relay and three nodes > a real result still lands after an overtaking refusal or a premature delivered status, and funding is released once" -->
+- **WHEN** un refus de doublon ou un `drop_status` annonçant une livraison précède le vrai résultat
+- **THEN** le demandeur enregistre le vrai résultat et libère le financement une seule fois
+
+#### Scenario: AC: horloge anti-rejeu en avance
+<!-- openspec-guard:test="replay admission through the engine > refuses a request after clock rollback with E_EXPIRED and logs that the replay clock is ahead" -->
+- **WHEN** l'horloge persistante est en avance sur l'horloge du Node
+- **THEN** la demande reçoit `E_EXPIRED` sans accord et le journal indique `replay_clock_ahead`
+
+#### Scenario: AC: doublon d'une demande active
+<!-- openspec-guard:test="replay admission through the engine > answers a duplicate of an active request with its current state" -->
+- **WHEN** une demande encore en attente ou en cours est reçue une seconde fois du même demandeur
+- **THEN** le Node répond par un `drop_status` portant l'état courant, sans nouvel accord
+
+#### Scenario: AC: issue finale conservée chez le demandeur
+<!-- openspec-guard:test="end to end, in memory: relay and three nodes > a late executor update cannot rewrite a finished outbound drop" -->
+- **WHEN** un `drop_error` ou un `drop_status` arrive après l'issue finale d'une demande
+- **THEN** le demandeur conserve l'issue déjà reçue
+
+#### Scenario: AC: décision de relecture reçue deux fois
+<!-- openspec-guard:test="end to end, in memory: relay and three nodes > records one result and receipt when the approver repeats a review decision concurrently" -->
+- **WHEN** deux décisions de relecture pour la même demande arrivent pendant l'envoi du résultat
+- **THEN** l'exécuteur n'émet qu'un résultat et un reçu
+
+#### Scenario: AC: délai de relecture pendant l'envoi
+<!-- openspec-guard:test="end to end, in memory: relay and three nodes > does not expire a review while its accepted result is being sent" -->
+- **WHEN** la relecture acceptée est en cours d'envoi et son délai expire
+- **THEN** l'exécuteur ne produit pas de reçu d'expiration contradictoire
+
+### Requirement: Nettoyage des écritures anti-rejeu échouées
+Le Node MUST supprimer le fichier temporaire d'une écriture durable échouée, afin qu'une panne répétée n'accumule pas de fichiers hors de la borne anti-rejeu.
+
+#### Scenario: AC: échec répété de l'écriture durable
+<!-- openspec-guard:test="replay clock write failures > does not accumulate temporary files when durable writes repeatedly fail" -->
+- **WHEN** la synchronisation de l'horloge échoue plusieurs fois avant le renommage
+- **THEN** le Node refuse chaque demande sans laisser de fichier temporaire supplémentaire
+
+### Requirement: Mémoire des demandes exécutées bornée
+Le Node MUST limiter à 1 024 les demandes reçues encore actives en mémoire. Dès qu'une issue est envoyée, il MUST libérer l'entrée complète ; il MAY conserver pendant au plus 30 minutes un résumé borné du refus pour répondre au même demandeur. La suppression de mémoire MUST NOT supprimer le marqueur anti-rejeu durable ni relancer une demande.
+
+#### Scenario: AC: libération après issue
+<!-- openspec-guard:test="replay admission through the engine > frees a delivered request without reopening its durable replay marker" -->
+- **WHEN** une demande se termine par résultat, refus, expiration ou erreur
+- **THEN** l'entrée contenant son entrée, sa configuration et ses outils sort de la mémoire active, tandis que son identifiant reste protégé contre le rejeu
+
+#### Scenario: AC: doublon après libération
+<!-- openspec-guard:test="replay admission through the engine > answers a duplicate of a finished request with its recorded outcome" -->
+- **WHEN** le demandeur renvoie un identifiant terminé encore dans la fenêtre anti-rejeu
+- **THEN** aucun nouvel accord n'est créé ; une erreur finale mémorisée peut être répétée au même demandeur, sans révéler son contenu à un autre pair
+
+#### Scenario: AC: durée maximale du résumé de refus
+<!-- openspec-guard:test="replay admission through the engine > expires a finished-error summary within 30 minutes even for a future UUIDv7" -->
+- **WHEN** un refus concerne un UUIDv7 avancé de cinq minutes par rapport à l'horloge locale
+- **THEN** son résumé mémoire disparaît au plus tard 30 minutes après le refus, sans modifier le marqueur durable
+
+#### Scenario: AC: plafond de demandes actives
+<!-- openspec-guard:test="replay admission through the engine > refuses another request before consent when active execution memory is full" -->
+- **WHEN** 1 024 demandes reçues sont encore actives
+- **THEN** une demande supplémentaire reçoit `E_RATE` avant accord ou exécution, sans évincer une demande active
+
+### Requirement: Mémoire des demandes émises bornée
+Le Node MUST conserver au plus 1 024 demandes émises en mémoire. Il MUST évincer d'abord les plus anciennes demandes terminées ; si toutes les places sont actives, il MUST refuser la nouvelle demande avec une erreur de capacité explicite sans créer de financement ni envoyer d'enveloppe. L'API locale MUST exposer cette saturation par HTTP 429.
+
+#### Scenario: AC: historique local borné
+<!-- openspec-guard:test="bounded requester memory > evicts the oldest finished drop while retaining every active drop" -->
+- **WHEN** plus de 1 024 demandes sont émises et des issues terminées existent
+- **THEN** le Node ne garde que 1 024 demandes au plus et préserve toutes celles qui sont encore actives
+
+#### Scenario: AC: émission à capacité
+<!-- openspec-guard:test="local API > reports requester capacity as E_RATE/429 for /drops and /ask" -->
+- **WHEN** les 1 024 demandes émises sont encore actives
+- **THEN** le Node refuse une nouvelle demande avec `E_RATE` et l'API locale répond HTTP 429 sans envoyer la demande ni prélever de financement
+
+### Requirement: Boîte d'approbation bornée
+Le Node MUST conserver au plus 1 024 cartes d'approbation ou de relecture reçues. Il MUST refuser une carte dont l'expiration est passée ou avance de plus de 15 minutes, et MUST refuser tout remplacement d'une carte encore visible portant le même `dropId`, même depuis un autre pair. Il MUST NOT évincer une carte encore valide pour accepter une autre carte. Une carte refusée MUST produire un diagnostic local sans contenu sensible.
+
+#### Scenario: AC: saturation de la boîte d'approbation
+<!-- openspec-guard:test="bounded transient node memory > refuses extra approval cards and excessive expiration without evicting a pending card" -->
+- **WHEN** 1 024 cartes non expirées occupent la boîte d'approbation
+- **THEN** une nouvelle carte est refusée sans effacer les cartes déjà visibles
+
+#### Scenario: AC: expiration abusive d'une carte
+<!-- openspec-guard:test="bounded transient node memory > refuses extra approval cards and excessive expiration without evicting a pending card" -->
+- **WHEN** un pair envoie une carte dont `expiresAt` dépasse l'heure courante de plus de 15 minutes
+- **THEN** le Node l'ignore sans l'ajouter à la boîte d'approbation
+
+#### Scenario: AC: collision d'identifiant dans la boîte d'approbation
+<!-- openspec-guard:test="bounded transient node memory > keeps the first approval and review when another paired peer reuses their drop ids" -->
+- **WHEN** un pair envoie une approbation ou une relecture avec le `dropId` d'une carte déjà visible
+- **THEN** la première carte, son émetteur et son contenu restent intacts ; le remplacement est refusé et diagnostiqué
+
+### Requirement: File hors ligne bornée
+Le Node MUST conserver au plus 1 024 enveloppes en attente de reconnexion, en comptant l'enveloppe dont l'envoi est en cours. Un seul vidage de file peut être actif à la fois. Il MUST purger les enveloppes expirées avant une nouvelle mise en file ; à saturation il MUST abandonner l'enveloppe la plus ancienne et journaliser un code stable, sans laisser croître la mémoire. Une exception de transport MUST être traitée comme une panne hors ligne et diagnostiquée.
+
+#### Scenario: AC: panne réseau prolongée
+<!-- openspec-guard:test="bounded transient node memory > caps offline envelopes and logs the oldest envelope dropped at capacity" -->
+- **WHEN** le relais reste indisponible pendant plus de 1 024 envois
+- **THEN** la file reste sous son plafond et chaque perte par saturation est journalisée
+
+#### Scenario: AC: ordre de la file pendant un vidage concurrent
+<!-- openspec-guard:test="bounded transient node memory > requeues an older envelope ahead of newer sends during a concurrent flush" -->
+- **WHEN** une ancienne enveloppe échoue à nouveau pendant qu'un envoi plus récent rejoint la file
+- **THEN** l'ancienne garde sa place chronologique et reste la première à être renvoyée ou abandonnée à saturation
+
+#### Scenario: AC: vidages concurrents et plafond global
+<!-- openspec-guard:test="bounded transient node memory > serializes concurrent flushes and counts the held send against outbox capacity" -->
+- **WHEN** deux vidages démarrent pendant qu'un envoi est suspendu et que la file se remplit
+- **THEN** une seule copie part au transport et les enveloppes retenues, y compris celle en vol, restent sous le plafond
+
+#### Scenario: AC: tentative unique par vidage
+<!-- openspec-guard:test="bounded transient node memory > attempts each queued envelope once per flush even when an older one is requeued" -->
+- **WHEN** plusieurs enveloppes sont en file et la première est replacée après un nouvel échec
+- **THEN** chacune est tentée une seule fois pendant ce vidage et reste disponible pour un prochain essai
+
+#### Scenario: AC: transport qui échoue après accord
+<!-- openspec-guard:test="replay admission through the engine > does not strand an approved request when transport throws on status" -->
+- **WHEN** le transport rejette l'envoi d'un statut après une décision `allow_once`
+- **THEN** le Node n'abandonne pas la demande dans un état intermédiaire retenu indéfiniment
+
+### Requirement: Refus explicite du relais côté demandeur
+Le Node MUST traiter `E_RATE`, `E_QUEUE_FULL` ou l'indisponibilité du relais à la demande initiale comme une non-livraison. Il MUST retirer l'entrée locale active, demander la révocation de la clé plafonnée créée pour cette demande et exposer `E_RATE` à l'appelant ; une demande initiale non livrée MUST NOT rester dans la file volatile, et aucun résultat tardif ne doit recréer une demande effacée.
+
+#### Scenario: AC: relais refuse la demande initiale
+<!-- openspec-guard:test="bounded requester memory > releases funding and active memory when the relay returns E_RATE" -->
+- **WHEN** le relais refuse un `drop_request` avec `E_RATE` ou `E_QUEUE_FULL`
+- **THEN** la demande n'occupe pas une place active, une révocation de la clé plafonnée est déclenchée une fois et l'API locale répond 429 ; un échec fournisseur passe en reprise bornée
+
+#### Scenario: AC: relais indisponible à la demande initiale
+<!-- openspec-guard:test="bounded requester memory > does not leave an offline drop request in volatile memory" -->
+- **WHEN** le relais est hors ligne au moment d'émettre une nouvelle demande
+- **THEN** la demande est retirée, la révocation de sa clé plafonnée est déclenchée, l'API locale répond 429 et aucun `drop_request` volatile ne reste en file
+
+#### Scenario: AC: refus temporaire au vidage de file
+<!-- openspec-guard:test="bounded transient node memory > keeps a queued envelope after a temporary relay refusal on flush" -->
+- **WHEN** le relais répond `E_RATE` ou `E_QUEUE_FULL` à une enveloppe déjà en file
+- **THEN** le Node garde l'enveloppe jusqu'à son expiration et journalise le refus, sans la perdre silencieusement
+
+#### Scenario: AC: enveloppe initiale trop grande
+<!-- openspec-guard:test="bounded requester memory > releases funding and active memory when the initial envelope is too large" -->
+- **WHEN** la demande initiale dépasse la taille maximale de l'enveloppe avant envoi au relais
+- **THEN** la demande locale est retirée, la révocation de la clé plafonnée est déclenchée et l'API locale répond `E_TOO_LARGE` sans fausse réussite ni place active immobilisée
+
+#### Scenario: AC: enveloppe trop grande via /ask
+<!-- openspec-guard:test="local API > reports requester capacity as E_RATE/429 for /drops and /ask" -->
+- **WHEN** une demande routée par `/ask` dépasse la taille maximale de l'enveloppe
+- **THEN** l'API locale répond HTTP 413 avec `E_TOO_LARGE` et indique les routes éventuellement déjà émises
+
+### Requirement: Révocation différée des clés plafonnées
+Si la révocation échoue, le Node MUST conserver uniquement le hash de la clé en mémoire, réessayer avec délai et journaliser sans secret jusqu'à confirmation ou expiration après deux heures. Il MUST limiter à 8 192 les clés et créations en cours, réserver une place avant l'appel fournisseur, refuser un doublon ou un dépassement avec `E_RATE` avant cet appel et libérer la place si la création échoue.
+
+#### Scenario: AC: révocation différée après refus du relais
+<!-- openspec-guard:test="OpenRouter capped keys > retries a failed deletion on node ticks after relay refusal" -->
+- **WHEN** le relais refuse la demande puis le fournisseur échoue à révoquer sa clé plafonnée
+- **THEN** le Node libère la place de la demande, conserve seulement le hash pour une nouvelle tentative bornée et réessaie sans attendre une autre demande
+
+#### Scenario: AC: plafond des révocations en attente
+<!-- openspec-guard:test="OpenRouter capped keys > refuses to mint beyond the pending-key cap before contacting the provider" -->
+- **WHEN** 8 192 clés plafonnées non expirées attendent encore leur fin ou une révocation confirmée
+- **THEN** aucune clé supplémentaire n'est créée, `E_RATE` est retourné et une place se libère après leur expiration automatique
+
+#### Scenario: AC: créations plafonnées simultanées
+<!-- openspec-guard:test="OpenRouter capped keys > reserves pending-key capacity before concurrent provider calls and refuses duplicate drop ids" -->
+- **WHEN** plusieurs créations sont en cours avant la réponse du fournisseur et que le plafond est atteint
+- **THEN** les suivantes et le doublon d'une demande sont refusés avant tout autre appel fournisseur
+
+#### Scenario: AC: réservation libérée après refus fournisseur
+<!-- openspec-guard:test="OpenRouter capped keys > frees a reserved key slot when the provider rejects creation" -->
+- **WHEN** le fournisseur refuse la création d'une clé plafonnée
+- **THEN** la réservation est libérée et une demande ultérieure peut créer sa clé
+
+### Requirement: Raccordement local contrôlé des agents
+Le Node SHALL analyser uniquement les configurations des quatre adaptateurs connus et proposer, par agent, un état et l'ajout précis du connecteur MCP drop. Cette analyse MUST NOT exécuter un serveur MCP, scanner le disque ou contacter le réseau. L'aperçu MUST exclure les valeurs de secrets, arguments et en-têtes existants. Une configuration illisible ou invalide produit une erreur pour cet agent, jamais une configuration vide de remplacement.
+
+#### Scenario: AC-CONNECT-01 — analyse bornée et expurgée
+<!-- openspec-guard:test="local agent onboarding (T3.3) > AC-CONNECT-01 analyzes known adapters without exposing secret values" -->
+- **WHEN** les quatre adaptateurs déclarent des serveurs avec des valeurs secrètes
+- **THEN** l'analyse lit seulement leurs emplacements connus, n'exécute aucun serveur et ne renvoie aucune valeur sensible
+
+#### Scenario: AC-CONNECT-04 — erreur par agent sans écrasement
+<!-- openspec-guard:test="local agent onboarding (T3.3) > AC-CONNECT-04 and AC-CONNECT-05 refuses malformed and changed files without overwriting" -->
+- **WHEN** une configuration est invalide, une CLI manque ou l'accès est refusé
+- **THEN** cet agent reçoit une erreur explicite et sa configuration reste intacte
+
+Le Node MUST exiger une empreinte correspondant à l'aperçu confirmé avant chaque modification. Une entrée drop identique est sans effet ; une entrée différente est un conflit visible. Il MUST ne modifier que l'entrée drop annoncée et ne publier aucune capacité. Les écritures de fichiers MUST préserver les autres entrées et utiliser une sauvegarde locale privée bornée ; la déconnexion MUST retirer seulement l'entrée drop qu'il a installée.
+
+#### Scenario: AC-CONNECT-02 — sélection confirmée sans publication
+<!-- openspec-guard:test="local agent onboarding (T3.3) > AC-CONNECT-02 and AC-CONNECT-03 changes only the selected entry, then becomes idempotent" -->
+- **WHEN** le propriétaire confirme une sélection d'agents après l'aperçu
+- **THEN** seules les entrées drop annoncées pour cette sélection changent et aucune capacité n'est publiée
+
+#### Scenario: AC-CONNECT-03 — répétition et conflit
+<!-- openspec-guard:test="local agent onboarding (T3.3) > AC-CONNECT-03 refuses an existing entry with different settings" -->
+- **WHEN** l'installation est répétée, puis rencontre une entrée drop différente
+- **THEN** la répétition n'écrit rien et l'entrée différente n'est pas remplacée silencieusement
+
+#### Scenario: AC-CONNECT-05 — modification concurrente ou interruption
+<!-- openspec-guard:test="local agent onboarding (T3.3) > AC-CONNECT-05 preserves a competing write during the JSON transaction" -->
+- **WHEN** une configuration change après l'aperçu ou une écriture s'interrompt
+- **THEN** le Node arrête l'action de cet agent et conserve le contenu tiers, avec une sauvegarde privée exploitable
+
+#### Scenario: AC-CONNECT-06 — déconnexion sélective
+<!-- openspec-guard:test="local agent onboarding (T3.3) > AC-CONNECT-06 removes only the owned entry after a third-party addition" -->
+- **WHEN** un tiers ajoute une autre entrée après le raccordement
+- **THEN** la déconnexion retire seulement drop et conserve l'ajout tiers
 ### Requirement: Retour de connexion OAuth sur l'API locale
-L'API locale SHALL accepter `GET /oauth/callback?state=…&code=…` sans son jeton, puisque le navigateur ne peut pas
-l'envoyer, mais seulement avec l'en-tête `Host` de l'API, et MUST n'échanger le code que pour une connexion en cours
-dont le `state`, à usage unique, a moins de 10 minutes (T2.17, D39). La page de réponse n'autorise aucune ressource
-(`default-src 'none'`). `POST /ui/admin/connect { agent, server }`, derrière le jeton, démarre la connexion à un serveur
-détecté et ouvre la page dans le navigateur (macOS, https seulement). Un refus de partage pour OAuth porte le code
-`E_SHARE_OAUTH`.
+L'API locale SHALL accepter `GET /oauth/callback?state=…&code=…` sans jeton mais seulement avec son en-tête `Host`, et MUST n'échanger le code que pour une connexion en cours dont le `state`, à usage unique, a moins de 10 min (T2.17, D74). La page de réponse n'autorise aucune ressource. `POST /ui/admin/connect { agent, server }`, derrière le jeton, ouvre la connexion dans le navigateur (macOS, https seulement). Un refus de partage pour OAuth porte `E_SHARE_OAUTH`.
 
 #### Scenario: Retour du navigateur
 <!-- openspec-guard:test="remote MCP servers behind OAuth (T2.17) > takes the sign-in callback on the local API without its token, for a pending state only" -->

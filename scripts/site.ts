@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = resolve(import.meta.dirname, '..');
 const output = join(root, 'dist/site');
-const sourceSnapshot = 'https://github.com/guillaume-flambard/drop/blob/00fe39a/';
+const sourceBranch = 'https://github.com/guillaume-flambard/drop/blob/main/';
 const sourceFiles: Record<string, string> = {
   'index.html': 'site/index.html',
   'demarrer.html': 'site/demarrer.html',
@@ -24,6 +24,12 @@ const sourceFiles: Record<string, string> = {
   'demo/review-julie.jpg': 'docs/demo/cc-03-review-julie.jpg',
   'downloads/GUIDE.md': 'docs/GUIDE.md',
   'downloads/AVANCEMENT.md': 'docs/AVANCEMENT.md',
+  'downloads/ONBOARDING.md': 'docs/ONBOARDING.md',
+  'downloads/MODELS.md': 'docs/MODELS.md',
+  'downloads/OPEN_SOURCE.md': 'docs/OPEN_SOURCE.md',
+  'downloads/ACCEPTANCE.md': 'docs/ACCEPTANCE.md',
+  'downloads/PRIVATE_PROFILE.md': 'docs/PRIVATE_PROFILE.md',
+  'downloads/HERMES.md': 'docs/HERMES.md',
 };
 const contentTypes: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -40,7 +46,7 @@ const CSP =
   "default-src 'self'; script-src 'none'; style-src 'self'; img-src 'self'; connect-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'";
 
 /**
- * What the home page offers (T2.6, D37). `beta`: ask for access, no download link, while the app is not notarized and
+ * What the home page offers (T2.6, D72). `beta`: ask for access, no download link, while the app is not notarized and
  * npm is blocked (T2.4, T2.11). `open`: the Mac app, the Claude Desktop bundle and the connection guides.
  */
 export interface SiteConfig {
@@ -84,12 +90,16 @@ export function renderPage(html: string, config: SiteConfig): string {
 }
 
 function exportMarkdown(text: string): string {
-  return text.replace(/\]\(([^)]+)\)/g, (match: string, target: string) => {
-    if (target.startsWith('#') || /^https?:/.test(target)) return match;
-    if (/^(GUIDE|AVANCEMENT)\.md(?:#|$)/.test(target)) return match;
-    if (target.startsWith('diagrams/')) return `](../${target})`;
-    return `](${sourceSnapshot}${posix.normalize(posix.join('docs', target))})`;
-  });
+  return (
+    text.replace(/\]\(([^)]+)\)/g, (match: string, target: string) => {
+      if (target.startsWith('#') || /^https?:/.test(target)) return match;
+      const [path] = target.split('#');
+      if (path && sourceFiles[`downloads/${path}`]) return match;
+      if (target.startsWith('diagrams/')) return `](../${target})`;
+      return `](${sourceBranch}${posix.normalize(posix.join('docs', target))})`;
+    }) +
+    '\n> Les liens vers les sources GitHub nécessitent un accès au dépôt, encore privé. Ils suivent la branche main, pas un snapshot audité.\n'
+  );
 }
 
 /** The public surface is explicit: neither the repository nor the owner's DROP_HOME is served. */
@@ -120,7 +130,7 @@ export async function buildSite(directory = output, config?: SiteConfig): Promis
   return assets;
 }
 
-/** Release files served by the public site (D35, D37), by exact name: nothing else in the directory is reachable. */
+/** Release files served by the public site (D70, D72), by exact name: nothing else in the directory is reachable. */
 const RELEASES: { prefix: string; name: RegExp }[] = [
   {
     prefix: '/updates/',
@@ -229,7 +239,7 @@ export async function startSite(assets: ReadonlyMap<string, Buffer>, port = 4173
   return { url: site.url, stop: site.stop };
 }
 
-/** The public site behind Traefik on drop.memolabs.dev (T2.6, D37), with the release files of the Mac app. */
+/** The public site behind Traefik on drop.memolabs.dev (T2.6, D72), with the release files of the Mac app. */
 export async function startPublicSite(
   assets: ReadonlyMap<string, Buffer>,
   options: { port: number; host: string; publicHost: string; releasesDir: string },

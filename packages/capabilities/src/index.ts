@@ -1,8 +1,9 @@
+import { DropError, type PrivateNetwork } from '@drop/protocol';
 import type { CapabilityImpl } from '@drop/runner';
-import { errorSummary } from './error-summary.ts';
-import { a2aAnswer } from './a2a-answer.ts';
-import { mcpAnswer } from './mcp-answer.ts';
-import { repoAnswer } from './repo-answer.ts';
+import { errorSummary, createErrorSummary, readLogLines } from './error-summary.ts';
+import { a2aAnswer, createA2aAnswer } from './a2a-answer.ts';
+import { mcpAnswer, createMcpAnswer } from './mcp-answer.ts';
+import { repoAnswer, createRepoAnswer } from './repo-answer.ts';
 
 export {
   buildLogCommand,
@@ -80,4 +81,19 @@ export {
 } from './a2a-answer.ts';
 
 export const capabilities: CapabilityImpl[] = [errorSummary, repoAnswer, mcpAnswer, a2aAnswer];
+
+export function privateCapabilities(network: PrivateNetwork): CapabilityImpl[] {
+  return [
+    createErrorSummary({
+      readLines: async (source, window, signal) => {
+        if (source.kind !== 'file') throw new DropError('E_DENIED', 'E_DENIED unisolated log process');
+        return readLogLines(source, window, signal);
+      },
+    }),
+    createRepoAnswer({ network }),
+    createMcpAnswer({ network }),
+    createA2aAnswer({ network }),
+  ];
+}
+export { privateFetch } from './private-network.ts';
 export { OAuthSignIns, OAuthStore, runtimeOAuth, SIGN_IN_TTL_MS } from './mcp-oauth.ts';

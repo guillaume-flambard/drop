@@ -5,7 +5,7 @@ import { OAuthSignIns, OAuthStore, runtimeOAuth, type ConnectOptions } from '@dr
 import type { DropHome } from './home.ts';
 
 /**
- * Where this node keeps its OAuth sign-ins to remote MCP servers (T2.17, D39): DROP_HOME/oauth, 0700, one file 0600 per
+ * Where this node keeps its OAuth sign-ins to remote MCP servers (T2.17, D74): DROP_HOME/oauth, 0700, one file 0600 per
  * server. The browser comes back to the local API, on 127.0.0.1 only.
  */
 export { OAuthSignIns, OAuthStore, runtimeOAuth };

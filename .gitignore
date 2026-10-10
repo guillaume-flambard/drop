@@ -1,6 +1,7 @@
 node_modules/
 dist/
 coverage/
+.gstack/
 *.tsbuildinfo
 .DS_Store
 

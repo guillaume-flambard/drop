@@ -64,7 +64,7 @@ function scriptString(text: string): string {
 
 /**
  * The page the assistant opens: one button that hands the decision to the user's drop app. The link carries the
- * client and the domain the answer returns to, which the app shows and the node's link_grant must repeat (D36).
+ * client and the domain the answer returns to, which the app shows and the node's link_grant must repeat (D71).
  */
 export function linkPage(options: { session: Session; gatewayNodeId: string; clientName: string }): string {
   const host = redirectHost(options.session.redirectUri);

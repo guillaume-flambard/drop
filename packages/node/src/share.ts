@@ -68,7 +68,10 @@ export async function shareDetected(
   if (!agent || !server) throw new ShareError(`aucun serveur MCP ${request.agent}/${request.server}`);
   if (!server.shareable) throw new ShareError(`${server.name} fait partie de drop`);
   const source = { transport: 'agent' as const, agent: agent.agent, name: server.name };
-  const client = await connectMcp(source, process.env, options).catch((error: unknown) => {
+  // The private profile checks its source against its allowed destinations, never with a remote sign-in (T3.1, D34).
+  const nodeConfig = home.config();
+  const policy: ConnectOptions = nodeConfig.profile === 'private' ? { network: nodeConfig.network } : options;
+  const client = await connectMcp(source, process.env, policy).catch((error: unknown) => {
     throw connectFailure(error, server.name, agent.agent);
   });
   let tools = request.tools?.filter(Boolean) ?? [];

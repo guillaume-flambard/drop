@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events';
 import {
   createAdmission,
+  DropError,
   createTeam,
   createInvite,
   decodeInvite,
@@ -8,11 +9,14 @@ import {
   isDropError,
   openEnvelope,
   ReplayCache,
+  REPLAY_WINDOW_MS,
+  MAX_CLOCK_SKEW_MS,
   sealEnvelope,
   sha256Hex,
   signCard,
   signReceipt,
   uuidv7,
+  uuidv7Timestamp,
   verifyCard,
   verifyReceipt,
   type CapabilityCard,
@@ -39,12 +43,47 @@ import type { AgentLink, LinkRequest, Peer, Published, TeamState } from './home.
 export const APPROVAL_TTL_MS = 10 * 60_000;
 export const REVIEW_TTL_MS = 10 * 60_000;
 export const CATALOG_TTL_MS = 60_000;
+export const MAX_ACTIVE_EXECUTING_DROPS = 1_024;
+export const MAX_COMPLETED_ERRORS = 1_024;
+export const MAX_OUTBOUND_DROPS = 1_024;
+export const MAX_INBOX_ITEMS = 1_024;
+export const MAX_OUTBOX_ENVELOPES = 1_024;
 
 export interface Transport {
   send(envelope: Envelope): Promise<string>;
 }
 
+interface QueuedEnvelope {
+  envelope: Envelope;
+  order: number;
+}
+
+export type DropClaim = 'claimed' | 'duplicate' | 'expired' | 'capacity';
+
+const CLAIM_ERRORS: Record<Exclude<DropClaim, 'claimed'>, { code: DropErrorCode; message: string }> = {
+  duplicate: { code: 'E_DENIED', message: 'Demande déjà reçue ; créez une nouvelle demande.' },
+  expired: { code: 'E_EXPIRED', message: 'Demande expirée ou horloge désynchronisée.' },
+  capacity: { code: 'E_RATE', message: 'Trop de demandes reçues ; réessayez plus tard.' },
+};
+
+/** Stable log reason for a replay-store failure: our own E_REPLAY_STATE text or the fs error code, never a path. */
+function replayFailureReason(error: unknown): string {
+  const prefix = 'E_REPLAY_STATE ';
+  if (error instanceof Error && error.message.startsWith(prefix)) return error.message.slice(prefix.length);
+  if (error instanceof Error && 'code' in error && typeof error.code === 'string') return error.code;
+  return 'unknown';
+}
+
+/** Executor states in which a drop has not sent its outcome yet; only these are echoed to a duplicate request. */
+const UNSETTLED_STATES: readonly DropState[] = ['awaiting_approval', 'approved', 'running', 'in_review'];
+
 export interface NodeStore {
+  /**
+   * Persistent anti-replay: 'duplicate' for a known id, 'expired' outside the freshness window measured against a
+   * durable high-water clock, 'capacity' when the bounded store is full. A throw (lock, corruption, I/O) is treated
+   * by the engine as 'capacity', so the request is refused before consent.
+   */
+  claimDrop?(dropId: string, now: number): DropClaim;
   peers(): Peer[];
   savePeer(peer: Peer): void;
   published(): Published[];
@@ -110,6 +149,8 @@ interface ExecutorDrop {
   expiresAt: number;
   reviewExpiresAt?: number;
   output?: Record<string, unknown> | undefined;
+  /** The refusal or failure sent to the requester, replayed verbatim to a duplicate request. */
+  error?: { code: DropErrorCode; message: string };
   toolCalls: { name: string; count: number }[];
   costUsd: number;
   reviewed: boolean;
@@ -127,6 +168,8 @@ export interface CatalogEntry {
 export interface EngineLogEntry {
   event: string;
   code?: string;
+  /** Stable cause behind a code, e.g. which replay-store check failed. Never a path or payload. */
+  reason?: string;
   dropId?: string;
   peer?: string;
 }
@@ -145,6 +188,7 @@ export interface EngineOptions {
   funder?: Funder;
   /** Executor side: who pays the model. 'requester' (default, D27) uses the requester's key when one is sent. */
   payer?: 'requester' | 'owner';
+  privateProfile?: boolean;
   /** The coding agents this node's human uses, shared with the team (T2.9). */
   agents?: () => string[];
   /** Runs a call from a linked assistant (T2.13) with the requester tools, in this user's name. */
@@ -166,9 +210,17 @@ export class NodeEngine extends EventEmitter {
   private readonly pairing = new Map<NodeId, { token: string; displayName: string }>();
   private readonly catalogs = new Map<NodeId, { cards: CapabilityCard[]; at: number }>();
   private readonly executing = new Map<string, ExecutorDrop>();
+  /** Minimal duplicate response, without the request input, tools, config or funding. */
+  private readonly completedErrors = new Map<
+    string,
+    { requester: NodeId; error: ExecutorDrop['error']; expiresAt: number }
+  >();
   private readonly outbound = new Map<string, OutboundDrop>();
   private readonly inbox = new Map<string, InboxItem>();
-  private readonly outbox: Envelope[] = [];
+  private readonly outbox: QueuedEnvelope[] = [];
+  private outboxInFlight: QueuedEnvelope | undefined;
+  private outboxFlush: Promise<void> | undefined;
+  private nextOutboxOrder = 0;
 
   constructor(options: EngineOptions) {
     super();
@@ -185,6 +237,17 @@ export class NodeEngine extends EventEmitter {
 
   pending(): InboxItem[] {
     return [...this.inbox.values()].sort((a, b) => a.expiresAt - b.expiresAt);
+  }
+
+  /** Counts only; safe for local diagnostics and bounded-memory tests. */
+  memoryStats(): { executing: number; completedErrors: number; outbound: number; inbox: number; outbox: number } {
+    return {
+      executing: this.executing.size,
+      completedErrors: this.completedErrors.size,
+      outbound: this.outbound.size,
+      inbox: this.inbox.size,
+      outbox: this.outbox.length + (this.outboxInFlight ? 1 : 0),
+    };
   }
 
   drop(dropId: string): OutboundDrop | undefined {
@@ -417,6 +480,7 @@ export class NodeEngine extends EventEmitter {
   }): Promise<OutboundDrop> {
     const entry = this.catalog().find((candidate) => candidate.card.id === request.capabilityId);
     if (!entry) throw new Error(`unknown capability: ${request.capabilityId}`);
+    this.reserveOutboundSlot();
     const dropId = uuidv7(this.now());
     const outbound: OutboundDrop = {
       dropId,
@@ -428,19 +492,66 @@ export class NodeEngine extends EventEmitter {
       createdAt: this.now(),
     };
     this.outbound.set(dropId, outbound);
-    const funding = await this.options.funder?.mint(dropId);
-    await this.send(entry.card.executorNodeId, {
-      type: 'drop_request',
-      dropId,
-      capabilityId: entry.card.id,
-      capabilityVersion: entry.card.version,
-      input: request.input,
-      purpose: request.purpose,
-      requestedBy: { nodeId: this.identity.nodeId, displayName: this.identity.displayName, agent: request.agent },
-      ...(funding ? { funding } : {}),
-    });
+    let funding: Funding | undefined;
+    try {
+      funding = await this.options.funder?.mint(dropId);
+    } catch (error) {
+      this.outbound.delete(dropId);
+      throw error;
+    }
+    let outcome: string;
+    try {
+      outcome = await this.send(
+        entry.card.executorNodeId,
+        {
+          type: 'drop_request',
+          dropId,
+          capabilityId: entry.card.id,
+          capabilityVersion: entry.card.version,
+          input: request.input,
+          purpose: request.purpose,
+          requestedBy: { nodeId: this.identity.nodeId, displayName: this.identity.displayName, agent: request.agent },
+          ...(funding ? { funding } : {}),
+        },
+        { queueOffline: false },
+      );
+    } catch (error) {
+      await this.abandonOutbound(dropId, funding);
+      throw error;
+    }
+    if (outcome === 'E_RATE' || outcome === 'E_QUEUE_FULL' || outcome === 'offline') {
+      await this.abandonOutbound(dropId, funding);
+      throw new DropError('E_RATE', 'Le relais a refusé la demande.');
+    }
     this.changed();
     return outbound;
+  }
+
+  private async abandonOutbound(dropId: string, funding: Funding | undefined): Promise<void> {
+    this.outbound.delete(dropId);
+    if (funding && this.options.funder) {
+      try {
+        await this.options.funder.release(dropId);
+      } catch {
+        this.log({ event: 'funding', code: 'E_FUNDING_RELEASE', dropId });
+      }
+    }
+    this.changed();
+  }
+
+  private reserveOutboundSlot(): void {
+    if (this.outbound.size < MAX_OUTBOUND_DROPS) return;
+    for (const [dropId, drop] of this.outbound) {
+      if (
+        drop.result ||
+        drop.error ||
+        ['denied', 'expired', 'not_now', 'failed', 'delivered', 'receipted'].includes(drop.state)
+      ) {
+        this.outbound.delete(dropId);
+        break;
+      }
+    }
+    if (this.outbound.size >= MAX_OUTBOUND_DROPS) throw new DropError('E_RATE', 'Trop de demandes actives.');
   }
 
   // ---- approver ----------------------------------------------------------------------------------------------
@@ -487,29 +598,67 @@ export class NodeEngine extends EventEmitter {
 
   /** Re-sends envelopes that could not leave while the relay was unreachable. */
   async flushOutbox(): Promise<void> {
-    const pending = this.outbox.splice(0);
-    for (const envelope of pending) {
+    if (this.outboxFlush) return this.outboxFlush;
+    const operation = this.drainOutbox();
+    this.outboxFlush = operation;
+    try {
+      await operation;
+    } finally {
+      this.outboxFlush = undefined;
+    }
+  }
+
+  private async drainOutbox(): Promise<void> {
+    // Keep only order numbers: an evicted envelope must not remain retained by this snapshot.
+    const pendingOrders = this.outbox.map((queued) => queued.order);
+    for (const order of pendingOrders) {
+      const index = this.outbox.findIndex((queued) => queued.order === order);
+      if (index < 0) continue;
+      const [queued] = this.outbox.splice(index, 1);
+      if (!queued) continue;
+      const { envelope } = queued;
       if (envelope.exp <= this.now()) continue;
-      const outcome = await this.options.transport.send(envelope);
-      if (outcome === 'offline') this.outbox.push(envelope);
+      this.outboxInFlight = queued;
+      let outcome: string;
+      try {
+        outcome = await this.options.transport.send(envelope);
+      } catch {
+        this.log({ event: 'send_failed', code: 'E_RUNNER', reason: 'transport_exception', peer: envelope.to });
+        outcome = 'offline';
+      } finally {
+        this.outboxInFlight = undefined;
+      }
+      if (outcome === 'offline' || outcome === 'E_RATE' || outcome === 'E_QUEUE_FULL') {
+        if (outcome !== 'offline')
+          this.log({ event: 'send_failed', code: outcome, reason: 'flush_refused', peer: envelope.to });
+        this.queueOutbox(queued);
+      } else if (outcome !== 'delivered' && outcome !== 'queued') {
+        this.log({ event: 'send_failed', code: outcome, reason: 'flush_rejected', peer: envelope.to });
+      }
     }
   }
 
   /** Expires undecided approvals and reviews. Called every second by the daemon, or with a simulated clock in tests. */
   async tick(): Promise<void> {
     const now = this.now();
+    this.pruneCompletedErrors(now);
     for (const [dropId, item] of this.inbox) if (item.expiresAt <= now) this.inbox.delete(dropId);
     for (const drop of this.executing.values()) {
       if (drop.state === 'awaiting_approval' && drop.expiresAt <= now) {
         drop.state = 'expired';
         drop.funding = undefined;
         await this.fail(drop, 'E_EXPIRED', 'La demande a expiré sans décision.', 'expired');
-      } else if (drop.state === 'in_review' && (drop.reviewExpiresAt ?? Infinity) <= now) {
+      } else if (drop.state === 'in_review' && !drop.reviewed && (drop.reviewExpiresAt ?? Infinity) <= now) {
         drop.state = 'failed';
         await this.fail(drop, 'E_EXPIRED', "La relecture a expiré : rien n'a été envoyé.", 'allow_once');
       }
     }
     this.changed();
+    try {
+      await this.options.funder?.retryPending?.();
+    } catch {
+      this.log({ event: 'funding', code: 'E_FUNDING_RELEASE' });
+    }
   }
 
   // ---- internals ---------------------------------------------------------------------------------------------
@@ -611,6 +760,44 @@ export class NodeEngine extends EventEmitter {
   }
 
   private async onDropRequest(from: NodeId, message: MessageOf<'drop_request'>): Promise<void> {
+    this.pruneCompletedErrors(this.now());
+    // Before any other check, freshness included, so a duplicate never fails a drop the owner may have approved.
+    const active = this.executing.get(message.dropId);
+    if (active) {
+      await this.answerDuplicate(from, active);
+      return;
+    }
+    const finished = this.completedErrors.get(message.dropId);
+    if (finished) {
+      await this.send(from, {
+        type: 'drop_error',
+        dropId: message.dropId,
+        ...(finished.requester === from && finished.error ? finished.error : CLAIM_ERRORS.duplicate),
+      });
+      return;
+    }
+    const requestTime = uuidv7Timestamp(message.dropId);
+    const now = this.now();
+    if (requestTime === undefined || requestTime < now - REPLAY_WINDOW_MS || requestTime > now + MAX_CLOCK_SKEW_MS) {
+      this.log({
+        event: 'drop_rejected',
+        code: 'E_EXPIRED',
+        reason: 'request_clock_skew',
+        dropId: message.dropId,
+        peer: from,
+      });
+      await this.send(from, { type: 'drop_error', dropId: message.dropId, ...CLAIM_ERRORS.expired });
+      return;
+    }
+    if (this.options.privateProfile && this.options.payer === 'owner' && message.funding) {
+      await this.send(from, {
+        type: 'drop_error',
+        dropId: message.dropId,
+        code: 'E_DENIED',
+        message: 'Financement non accepté par le propriétaire.',
+      });
+      return;
+    }
     const published = this.options.store.published().find((entry) => entry.capabilityId === message.capabilityId);
     const built = published ? this.cardFor(published) : undefined;
     if (!published || !built || built.card.version !== message.capabilityVersion) {
@@ -622,7 +809,6 @@ export class NodeEngine extends EventEmitter {
       });
       return;
     }
-    if (this.executing.has(message.dropId)) return;
     const validated = validateInput(built.impl, message.input);
     if (!validated.ok) {
       await this.send(from, {
@@ -633,7 +819,46 @@ export class NodeEngine extends EventEmitter {
       });
       return;
     }
-    const now = this.now();
+    if (this.options.store.claimDrop) {
+      let claim: DropClaim;
+      try {
+        claim = this.options.store.claimDrop(message.dropId, now);
+      } catch (error) {
+        this.log({
+          event: 'drop_rejected',
+          code: 'E_REPLAY_STATE',
+          reason: replayFailureReason(error),
+          dropId: message.dropId,
+          peer: from,
+        });
+        claim = 'capacity';
+      }
+      if (claim === 'expired') {
+        // The id passed the wall-clock window above, so only a persisted replay clock ahead of it can refuse it.
+        this.log({
+          event: 'drop_rejected',
+          code: 'E_EXPIRED',
+          reason: 'replay_clock_ahead',
+          dropId: message.dropId,
+          peer: from,
+        });
+      }
+      if (claim !== 'claimed') {
+        await this.send(from, { type: 'drop_error', dropId: message.dropId, ...CLAIM_ERRORS[claim] });
+        return;
+      }
+    }
+    if (this.executing.size >= MAX_ACTIVE_EXECUTING_DROPS) {
+      this.log({
+        event: 'drop_rejected',
+        code: 'E_RATE',
+        reason: 'execution_capacity',
+        dropId: message.dropId,
+        peer: from,
+      });
+      await this.send(from, { type: 'drop_error', dropId: message.dropId, ...CLAIM_ERRORS.capacity });
+      return;
+    }
     const drop: ExecutorDrop = {
       dropId: message.dropId,
       requester: from,
@@ -681,7 +906,7 @@ export class NodeEngine extends EventEmitter {
   }
 
   private onApprovalRequest(from: NodeId, message: MessageOf<'approval_request'>): void {
-    if (message.expiresAt <= this.now()) return;
+    if (!this.canAcceptInboxCard('approval', from, message.dropId, message.expiresAt, APPROVAL_TTL_MS)) return;
     this.inbox.set(message.dropId, {
       kind: 'approval',
       dropId: message.dropId,
@@ -748,6 +973,7 @@ export class NodeEngine extends EventEmitter {
   }
 
   private onReviewRequest(from: NodeId, message: MessageOf<'review_request'>): void {
+    if (!this.canAcceptInboxCard('review', from, message.dropId, message.expiresAt, REVIEW_TTL_MS)) return;
     this.inbox.set(message.dropId, {
       kind: 'review',
       dropId: message.dropId,
@@ -762,7 +988,7 @@ export class NodeEngine extends EventEmitter {
 
   private async onReviewDecision(from: NodeId, message: MessageOf<'review_decision'>): Promise<void> {
     const drop = this.executing.get(message.dropId);
-    if (drop?.state !== 'in_review' || drop.approver !== from || !drop.output) return;
+    if (drop?.state !== 'in_review' || drop.reviewed || drop.approver !== from || !drop.output) return;
     drop.reviewed = true;
     if (message.decision === 'discard') {
       drop.state = 'failed';
@@ -780,9 +1006,20 @@ export class NodeEngine extends EventEmitter {
   private onRequesterUpdate(from: NodeId, message: MessageOf<'drop_status' | 'drop_result' | 'drop_error'>): void {
     const drop = this.outbound.get(message.dropId);
     if (drop?.executor !== from) return;
-    if (message.type === 'drop_status') drop.state = message.state;
-    // The drop is over: delete the capped key minted for it (D27).
-    if (message.type !== 'drop_status' && this.options.funder) {
+    // A result settles the drop for good. A recorded error yields only to a real result: a duplicate refusal may
+    // overtake it. Status updates never claim an outcome; only drop_result, drop_error and receipt do.
+    if (drop.result) return;
+    const settled = drop.error !== undefined;
+    if (message.type === 'drop_status') {
+      if (!settled && UNSETTLED_STATES.includes(message.state)) {
+        drop.state = message.state;
+        this.changed();
+      }
+      return;
+    }
+    if (message.type === 'drop_error' && settled) return;
+    // The drop is over: delete the capped key minted for it (D27), once.
+    if (!settled && this.options.funder) {
       this.options.funder.release(drop.dropId).catch(() => {
         this.log({ event: 'funding', code: 'E_FUNDING_RELEASE', dropId: drop.dropId });
       });
@@ -790,6 +1027,7 @@ export class NodeEngine extends EventEmitter {
     if (message.type === 'drop_result') {
       drop.state = 'delivered';
       drop.result = { output: message.output, outputSchemaHash: message.outputSchemaHash };
+      delete drop.error;
     }
     if (message.type === 'drop_error') {
       drop.state =
@@ -814,18 +1052,24 @@ export class NodeEngine extends EventEmitter {
   }
 
   private async deliver(drop: ExecutorDrop, output: Record<string, unknown>): Promise<void> {
-    drop.state = 'delivered';
+    // The state moves only once the result is handed to the transport, so a duplicate answered meanwhile can only
+    // learn the unsettled state, never a refusal that would overtake the result.
     drop.timestamps.delivered = this.now();
-    await this.send(drop.requester, {
-      type: 'drop_result',
-      dropId: drop.dropId,
-      output,
-      outputSchemaHash: sha256Hex(drop.card.outputSchema),
-    });
-    await this.writeReceipt(drop, 'allow_once', sha256Hex(output));
-    drop.state = 'receipted';
-    drop.output = undefined;
-    this.changed();
+    try {
+      await this.send(drop.requester, {
+        type: 'drop_result',
+        dropId: drop.dropId,
+        output,
+        outputSchemaHash: sha256Hex(drop.card.outputSchema),
+      });
+      drop.state = 'delivered';
+      await this.writeReceipt(drop, 'allow_once', sha256Hex(output));
+      drop.state = 'receipted';
+    } finally {
+      drop.output = undefined;
+      this.executing.delete(drop.dropId);
+      this.changed();
+    }
   }
 
   private async fail(
@@ -834,10 +1078,34 @@ export class NodeEngine extends EventEmitter {
     text: string,
     decision: Receipt['decision'],
   ): Promise<void> {
-    await this.send(drop.requester, { type: 'drop_error', dropId: drop.dropId, code, message: text });
-    await this.writeReceipt(drop, decision, undefined, code);
-    drop.output = undefined;
-    this.changed();
+    drop.error = { code, message: text };
+    try {
+      await this.send(drop.requester, { type: 'drop_error', dropId: drop.dropId, ...drop.error });
+      await this.writeReceipt(drop, decision, undefined, code);
+    } finally {
+      drop.output = undefined;
+      this.rememberCompletedError(drop);
+      this.executing.delete(drop.dropId);
+      this.changed();
+    }
+  }
+
+  private rememberCompletedError(drop: ExecutorDrop): void {
+    const timestamp = uuidv7Timestamp(drop.dropId);
+    if (timestamp === undefined || !drop.error) return;
+    const expiresAt = Math.min(timestamp + REPLAY_WINDOW_MS, this.now() + REPLAY_WINDOW_MS);
+    if (expiresAt <= this.now()) return;
+    this.pruneCompletedErrors(this.now());
+    if (this.completedErrors.size >= MAX_COMPLETED_ERRORS) {
+      const oldest = this.completedErrors.keys().next().value;
+      if (oldest !== undefined) this.completedErrors.delete(oldest);
+    }
+    this.completedErrors.set(drop.dropId, { requester: drop.requester, error: drop.error, expiresAt });
+  }
+
+  private pruneCompletedErrors(now: number): void {
+    for (const [dropId, summary] of this.completedErrors)
+      if (summary.expiresAt <= now) this.completedErrors.delete(dropId);
   }
 
   private async writeReceipt(
@@ -869,16 +1137,73 @@ export class NodeEngine extends EventEmitter {
     for (const nodeId of recipients) await this.send(nodeId, { type: 'receipt', receipt });
   }
 
+  /**
+   * Never leaves a requester waiting in silence. An unsettled drop reports its current state; a refused or failed
+   * one replays the same error; a delivered one gets the duplicate refusal, which its real result overrides
+   * (see onRequesterUpdate). Another peer reusing the id learns nothing about the drop.
+   */
+  private async answerDuplicate(from: NodeId, drop: ExecutorDrop): Promise<void> {
+    if (drop.requester === from && UNSETTLED_STATES.includes(drop.state)) return this.status(drop);
+    const error = drop.requester === from && drop.error ? drop.error : CLAIM_ERRORS.duplicate;
+    await this.send(from, { type: 'drop_error', dropId: drop.dropId, ...error });
+  }
+
   private async status(drop: ExecutorDrop): Promise<void> {
     await this.send(drop.requester, { type: 'drop_status', dropId: drop.dropId, state: drop.state });
   }
 
-  private async send(to: NodeId, message: Message): Promise<void> {
+  private canAcceptInboxCard(
+    kind: InboxItem['kind'],
+    from: NodeId,
+    dropId: string,
+    expiresAt: number,
+    ttlMs: number,
+  ): boolean {
+    if (this.inbox.has(dropId)) {
+      this.log({ event: `${kind}_rejected`, code: 'E_REPLAY', reason: 'inbox_duplicate', dropId, peer: from });
+      return false;
+    }
+    const now = this.now();
+    if (expiresAt <= now || expiresAt > now + ttlMs + MAX_CLOCK_SKEW_MS) {
+      this.log({ event: `${kind}_rejected`, code: 'E_EXPIRED', reason: `${kind}_expiry`, dropId, peer: from });
+      return false;
+    }
+    if (this.inbox.size >= MAX_INBOX_ITEMS) {
+      this.log({ event: `${kind}_rejected`, code: 'E_RATE', reason: 'inbox_capacity', dropId, peer: from });
+      return false;
+    }
+    return true;
+  }
+
+  private queueOutbox(queued: QueuedEnvelope): void {
+    const now = this.now();
+    for (let index = this.outbox.length - 1; index >= 0; index -= 1) {
+      const entry = this.outbox[index];
+      if (entry && entry.envelope.exp <= now) this.outbox.splice(index, 1);
+    }
+    const insertAt = this.outbox.findIndex((entry) => entry.order > queued.order);
+    if (insertAt === -1) this.outbox.push(queued);
+    else this.outbox.splice(insertAt, 0, queued);
+    if (this.outbox.length + (this.outboxInFlight ? 1 : 0) > MAX_OUTBOX_ENVELOPES) {
+      this.outbox.shift();
+      this.log({ event: 'send_failed', code: 'E_RATE', reason: 'outbox_capacity' });
+    }
+  }
+
+  private async send(to: NodeId, message: Message, options: { queueOffline?: boolean } = {}): Promise<string> {
     const envelope = await sealEnvelope(this.identity, to, message, { now: this.now() });
-    const outcome = await this.options.transport.send(envelope);
-    if (outcome === 'offline') this.outbox.push(envelope);
+    const order = this.nextOutboxOrder++;
+    let outcome: string;
+    try {
+      outcome = await this.options.transport.send(envelope);
+    } catch {
+      this.log({ event: 'send_failed', code: 'E_RUNNER', reason: 'transport_exception', peer: to });
+      outcome = 'offline';
+    }
+    if (outcome === 'offline' && options.queueOffline !== false) this.queueOutbox({ envelope, order });
     else if (outcome !== 'delivered' && outcome !== 'queued')
       this.log({ event: 'send_failed', code: outcome, peer: to });
+    return outcome;
   }
 
   private cardFor(published: Published): { card: CapabilityCard; impl: CapabilityImpl } | undefined {

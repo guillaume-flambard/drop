@@ -1,11 +1,12 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import WebSocket from 'ws';
-import { mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, statSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   createAdmission,
   generateIdentity,
+  MAX_ENVELOPE_BYTES,
   sealEnvelope,
   signDetached,
   type Envelope,
@@ -15,6 +16,7 @@ import {
   allowNode,
   RelayClient,
   readRelayConfig,
+  revokeInConfig,
   revokeNode,
   RelayConfigSchema,
   startRelay,
@@ -36,11 +38,12 @@ async function relayFor(
     maxAdmissionsPerSponsorPerDay?: number;
     maxAdmissionsPerDay?: number;
   } = {},
+  options: { now?: () => number; pingIntervalMs?: number } = {},
 ) {
   const logs: RelayLogEntry[] = [];
   const relay = await startRelay(
     { port: 0, allowedNodeIds: identities.map((identity) => identity.nodeId), ...extra },
-    { logger: (entry) => logs.push(entry), revocationPollMs: 20 },
+    { logger: (entry) => logs.push(entry), revocationPollMs: 20, ...options },
   );
   cleanups.push(() => relay.close());
   return { relay, logs };
@@ -74,6 +77,37 @@ async function until(check: () => boolean, timeoutMs = 3000): Promise<void> {
 }
 
 describe('relay', () => {
+  it('keeps revoked members and their sponsored invitations refused after restore', async () => {
+    const alice = await generateIdentity('Alice');
+    const bob = await generateIdentity('Bob');
+    const newcomer = await generateIdentity('New');
+    const dir = mkdtempSync(join(tmpdir(), 'drop-revoked-'));
+    cleanups.push(() => {
+      rmSync(dir, { recursive: true, force: true });
+    });
+    const configPath = join(dir, 'relay.config.json');
+    const statePath = join(dir, 'admitted.json');
+    writeFileSync(configPath, JSON.stringify({ port: 0, allowedNodeIds: [alice.nodeId], admittedPath: statePath }));
+    writeFileSync(
+      statePath,
+      JSON.stringify({ admitted: [{ nodeId: bob.nodeId, sponsor: alice.nodeId, at: Date.now() }], spentNonces: [] }),
+    );
+    expect(revokeInConfig(configPath, bob.nodeId)).toBe(true);
+    expect(revokeInConfig(configPath, bob.nodeId)).toBe(false);
+    // Restoration uses both the config (revocations) and admissions, including the revoked member's old entry.
+    const restoredConfig = readRelayConfig(configPath);
+    const relay = await startRelay(restoredConfig, { logger: () => undefined });
+    cleanups.push(() => relay.close());
+    const ticket = await createAdmission(alice, Date.now());
+    const denied = client(relay, bob, ticket);
+    const sponsored = client(relay, newcomer, await createAdmission(bob, Date.now()));
+    const permitted = client(relay, alice);
+    await permitted.instance.waitReady();
+    await until(() => denied.statuses.includes('unauthorized') && sponsored.statuses.includes('unauthorized'));
+    expect(denied.instance.connected).toBe(false);
+    expect(sponsored.instance.connected).toBe(false);
+  });
+
   it('reads relay.config.json, with the admission settings optional', () => {
     const dir = mkdtempSync(join(tmpdir(), 'relay-config-'));
     const minimal = join(dir, 'minimal.json');
@@ -178,6 +212,253 @@ describe('relay', () => {
       outcomes.push(await a.instance.send(await sealEnvelope(alice, bob.nodeId, { type: 'catalog_request' })));
     }
     expect(outcomes).toEqual(['queued', 'queued', 'queued', 'E_RATE']);
+  });
+
+  it('restores a sender once its rate window has passed, with idle windows swept', async () => {
+    const alice = await generateIdentity('Alice');
+    const bob = await generateIdentity('Bob');
+    const clock = { now: Date.now() };
+    const { relay } = await relayFor(
+      [alice, bob],
+      { rateLimitPerMinute: 1 },
+      { now: () => clock.now, pingIntervalMs: 20 },
+    );
+    const sender = client(relay, alice);
+    await sender.instance.waitReady();
+    const send = async () => sender.instance.send(await sealEnvelope(alice, bob.nodeId, { type: 'catalog_request' }));
+    expect(await send()).toBe('queued');
+    expect(await send()).toBe('E_RATE');
+    clock.now += 60_001;
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    expect(await send()).toBe('queued');
+    expect(await send()).toBe('E_RATE');
+  });
+
+  it('keeps a node rate limit after reconnect', async () => {
+    const alice = await generateIdentity('Alice');
+    const bob = await generateIdentity('Bob');
+    const { relay } = await relayFor([alice, bob], { rateLimitPerMinute: 2 });
+    const first = client(relay, alice);
+    await first.instance.waitReady();
+    for (let index = 0; index < 2; index += 1) {
+      expect(await first.instance.send(await sealEnvelope(alice, bob.nodeId, { type: 'catalog_request' }))).toBe(
+        'queued',
+      );
+    }
+    first.instance.close();
+    const second = client(relay, alice);
+    await second.instance.waitReady();
+    expect(await second.instance.send(await sealEnvelope(alice, bob.nodeId, { type: 'catalog_request' }))).toBe(
+      'E_RATE',
+    );
+  });
+
+  it('counts oversized envelopes against the sender rate limit', async () => {
+    const alice = await generateIdentity('Alice');
+    const bob = await generateIdentity('Bob');
+    const { relay } = await relayFor([alice, bob], { rateLimitPerMinute: 1 });
+    const a = client(relay, alice);
+    await a.instance.waitReady();
+    const oversized = await sealEnvelope(alice, bob.nodeId, { type: 'catalog_request' });
+    oversized.body = 'A'.repeat(MAX_ENVELOPE_BYTES);
+    expect(await a.instance.send(oversized)).toBe('E_TOO_LARGE');
+    expect(await a.instance.send(await sealEnvelope(alice, bob.nodeId, { type: 'catalog_request' }))).toBe('E_RATE');
+  });
+
+  it('counts a frame rejected by the WebSocket payload limit before reconnect', async () => {
+    const alice = await generateIdentity('Alice');
+    const bob = await generateIdentity('Bob');
+    const { relay, logs } = await relayFor([alice, bob], { rateLimitPerMinute: 1 });
+    const socket = new WebSocket(relay.url);
+    cleanups.push(() => {
+      socket.terminate();
+    });
+    let ready = false;
+    let closed = false;
+    socket.on('message', (data) => {
+      const frame = JSON.parse(Buffer.isBuffer(data) ? data.toString('utf8') : '') as {
+        type: string;
+        challenge?: string;
+      };
+      if (frame.type === 'challenge' && frame.challenge) {
+        void signDetached(alice, frame.challenge).then(
+          (sig) => {
+            socket.send(JSON.stringify({ type: 'auth', nodeId: alice.nodeId, sig }));
+          },
+          () => {
+            socket.close();
+          },
+        );
+      }
+      if (frame.type === 'ready') ready = true;
+    });
+    socket.on('close', () => {
+      closed = true;
+    });
+    await until(() => ready);
+    socket.send('X'.repeat(MAX_ENVELOPE_BYTES * 2 + 1));
+    await until(() => closed);
+    const reconnected = client(relay, alice);
+    await reconnected.instance.waitReady();
+    expect(await reconnected.instance.send(await sealEnvelope(alice, bob.nodeId, { type: 'catalog_request' }))).toBe(
+      'E_RATE',
+    );
+    expect(logs).toContainEqual(expect.objectContaining({ nodeId: alice.nodeId, outcome: 'E_TOO_LARGE' }));
+  });
+
+  it('counts invalid UTF-8 frames rejected by WebSocket before reconnect', async () => {
+    const alice = await generateIdentity('Alice');
+    const bob = await generateIdentity('Bob');
+    const { relay, logs } = await relayFor([alice, bob], { rateLimitPerMinute: 1 });
+    const socket = new WebSocket(relay.url);
+    cleanups.push(() => {
+      socket.terminate();
+    });
+    let ready = false;
+    let closed = false;
+    socket.on('message', (data) => {
+      const frame = JSON.parse(Buffer.isBuffer(data) ? data.toString('utf8') : '') as {
+        type: string;
+        challenge?: string;
+      };
+      if (frame.type === 'challenge' && frame.challenge) {
+        void signDetached(alice, frame.challenge).then(
+          (sig) => {
+            socket.send(JSON.stringify({ type: 'auth', nodeId: alice.nodeId, sig }));
+          },
+          () => {
+            socket.close();
+          },
+        );
+      }
+      if (frame.type === 'ready') ready = true;
+    });
+    socket.on('close', () => {
+      closed = true;
+    });
+    await until(() => ready);
+    socket.send(Buffer.from([0xff]), { binary: false });
+    await until(() => closed);
+    const reconnected = client(relay, alice);
+    await reconnected.instance.waitReady();
+    expect(await reconnected.instance.send(await sealEnvelope(alice, bob.nodeId, { type: 'catalog_request' }))).toBe(
+      'E_RATE',
+    );
+    expect(logs).toContainEqual(expect.objectContaining({ nodeId: alice.nodeId, outcome: 'E_SCHEMA' }));
+  });
+
+  it('counts malformed authenticated frames before parsing', async () => {
+    const alice = await generateIdentity('Alice');
+    const bob = await generateIdentity('Bob');
+    const { relay } = await relayFor([alice, bob], { rateLimitPerMinute: 1 });
+    const socket = new WebSocket(relay.url);
+    cleanups.push(() => {
+      socket.terminate();
+    });
+    const frames: { type?: string; challenge?: string; error?: string; id?: string }[] = [];
+    socket.on('message', (data) => {
+      const frame = JSON.parse(Buffer.isBuffer(data) ? data.toString('utf8') : '') as (typeof frames)[number];
+      frames.push(frame);
+      if (frame.type === 'challenge' && frame.challenge) {
+        void signDetached(alice, frame.challenge)
+          .then((sig) => {
+            socket.send(JSON.stringify({ type: 'auth', nodeId: alice.nodeId, sig }));
+          })
+          .catch(() => {
+            frames.push({ error: 'E_AUTH_TEST' });
+          });
+      }
+    });
+    await until(() => frames.some((frame) => frame.type === 'ready'));
+    socket.send('not-json');
+    await until(() => frames.some((frame) => frame.error === 'E_SCHEMA'));
+    const envelope = await sealEnvelope(alice, bob.nodeId, { type: 'catalog_request' });
+    socket.send(JSON.stringify({ type: 'envelope', envelope }));
+    await until(() => frames.some((frame) => frame.id === envelope.id));
+    expect(frames.find((frame) => frame.id === envelope.id)?.error).toBe('E_RATE');
+  });
+
+  it('closes an exhausted connection when a valid frame has an uncorrelatable late id', async () => {
+    const alice = await generateIdentity('Alice');
+    const bob = await generateIdentity('Bob');
+    const { relay } = await relayFor([alice, bob], { rateLimitPerMinute: 1 });
+    const socket = new WebSocket(relay.url);
+    cleanups.push(() => {
+      socket.terminate();
+    });
+    const frames: { type?: string; challenge?: string; id?: string; error?: string }[] = [];
+    let closed = false;
+    socket.on('close', () => {
+      closed = true;
+    });
+    socket.on('message', (data) => {
+      const frame = JSON.parse(Buffer.isBuffer(data) ? data.toString('utf8') : '') as (typeof frames)[number];
+      frames.push(frame);
+      if (frame.type === 'challenge' && frame.challenge) {
+        void signDetached(alice, frame.challenge).then(
+          (sig) => {
+            socket.send(JSON.stringify({ type: 'auth', nodeId: alice.nodeId, sig }));
+          },
+          () => {
+            socket.close();
+          },
+        );
+      }
+    });
+    await until(() => frames.some((frame) => frame.type === 'ready'));
+    const first = await sealEnvelope(alice, bob.nodeId, { type: 'catalog_request' });
+    socket.send(JSON.stringify({ type: 'envelope', envelope: first }));
+    await until(() => frames.some((frame) => frame.id === first.id));
+    const second = await sealEnvelope(alice, bob.nodeId, { type: 'catalog_request' });
+    const { id, ...rest } = second;
+    const lateIdFrame = JSON.stringify({ type: 'envelope', envelope: { ...rest, id } });
+    expect(lateIdFrame.indexOf('"id"')).toBeGreaterThan(256);
+    socket.send(lateIdFrame);
+    await until(() => frames.some((frame) => frame.error === 'E_RATE'));
+    expect(frames.find((frame) => frame.error === 'E_RATE')?.id).toBeUndefined();
+    await until(() => closed);
+  });
+
+  it('closes an exhausted connection even when a decoy id appears before the envelope id', async () => {
+    const alice = await generateIdentity('Alice');
+    const bob = await generateIdentity('Bob');
+    const { relay } = await relayFor([alice, bob], { rateLimitPerMinute: 1 });
+    const socket = new WebSocket(relay.url);
+    cleanups.push(() => {
+      socket.terminate();
+    });
+    const frames: { type?: string; challenge?: string; id?: string; error?: string }[] = [];
+    let closed = false;
+    socket.on('close', () => {
+      closed = true;
+    });
+    socket.on('message', (data) => {
+      const frame = JSON.parse(Buffer.isBuffer(data) ? data.toString('utf8') : '') as (typeof frames)[number];
+      frames.push(frame);
+      if (frame.type === 'challenge' && frame.challenge) {
+        void signDetached(alice, frame.challenge).then(
+          (sig) => {
+            socket.send(JSON.stringify({ type: 'auth', nodeId: alice.nodeId, sig }));
+          },
+          () => {
+            socket.close();
+          },
+        );
+      }
+    });
+    await until(() => frames.some((frame) => frame.type === 'ready'));
+    const first = await sealEnvelope(alice, bob.nodeId, { type: 'catalog_request' });
+    socket.send(JSON.stringify({ type: 'envelope', envelope: first }));
+    await until(() => frames.some((frame) => frame.id === first.id));
+    const second = await sealEnvelope(alice, bob.nodeId, { type: 'catalog_request' });
+    const { id, ...rest } = second;
+    const decoy = '550e8400-e29b-41d4-a716-446655440000';
+    const frame = JSON.stringify({ type: 'envelope', id: decoy, envelope: { ...rest, id } });
+    expect(frame.indexOf(`"id":"${id}"`)).toBeGreaterThan(256);
+    socket.send(frame);
+    await until(() => frames.some((candidate) => candidate.error === 'E_RATE'));
+    expect(frames.find((candidate) => candidate.error === 'E_RATE')?.id).toBe(decoy);
+    await until(() => closed);
   });
 
   it('no body field in the logs', async () => {

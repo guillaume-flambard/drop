@@ -4,14 +4,15 @@ import {
   createMcpAnswer,
   findAgentServer,
   mcpAnswer,
+  privateCapabilities,
   type ConnectOptions,
 } from '@drop/capabilities';
-import { NodeIdSchema } from '@drop/protocol';
+import { DropError, NodeIdSchema } from '@drop/protocol';
 import { RelayClient } from '@drop/relay';
 import { NodeEngine, type InboxItem } from './engine.ts';
 import { detectAgents } from './detect.ts';
 import { openRouterFunder } from './funding.ts';
-import { install } from './install.ts';
+import { applyOnboarding, manualOnboarding, previewOnboarding } from './onboarding.ts';
 import { isAgentKind, ShareError, shareDetected } from './share.ts';
 import { OAuthSignIns, oauthRedirect, oauthStore, openInBrowser, runtimeOAuth } from './oauth.ts';
 import { runAgentCall } from './assistant.ts';
@@ -39,6 +40,7 @@ export interface DaemonOptions {
 export async function startDaemon(home: DropHome, options: DaemonOptions = {}): Promise<Daemon> {
   const identity = home.identity();
   const config = home.config();
+  const token = home.localToken();
   const log = options.log ?? ((line: string) => process.stderr.write(`${line}\n`));
   // The engine is built before the relay client that delivers to it; the transport reads the client lazily.
   const link: { relay?: RelayClient; apiPort?: number } = {};
@@ -51,14 +53,22 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
     identity,
     ownerKind: config.ownerKind,
     store: home,
-    capabilities: capabilities.map((impl) =>
-      impl === mcpAnswer ? createMcpAnswer({ connect: (server) => connectMcp(server, process.env, oauth) }) : impl,
-    ),
+    // The private profile keeps its policy-bound capabilities (T3.1); elsewhere mcp.answer also uses drop's own OAuth
+    // sign-ins to remote servers (T2.17).
+    capabilities:
+      config.profile === 'private' && config.network
+        ? privateCapabilities(config.network)
+        : capabilities.map((impl) =>
+            impl === mcpAnswer
+              ? createMcpAnswer({ connect: (server) => connectMcp(server, process.env, oauth) })
+              : impl,
+          ),
     transport: { send: (envelope) => (link.relay ? link.relay.send(envelope) : Promise.resolve('offline')) },
     log: (entry) => {
       log(JSON.stringify({ at: new Date().toISOString(), ...entry }));
     },
     payer: config.payer,
+    privateProfile: config.profile === 'private',
     agents: () => detectAgents().flatMap((agent) => (agent.installed ? [agent.label] : [])),
     ...(config.funding
       ? {
@@ -71,7 +81,9 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
       : {}),
     // A linked assistant's call runs the requester tools against this node's own local API (T2.13).
     onAgentCall: (call) =>
-      runAgentCall(`http://127.0.0.1:${String(link.apiPort ?? config.apiPort)}`, home.localToken(), call),
+      config.profile === 'private'
+        ? Promise.reject(new DropError('E_DENIED', 'E_DENIED cloud gateway disabled'))
+        : runAgentCall(`http://127.0.0.1:${String(link.apiPort ?? config.apiPort)}`, token, call),
     onAdmission: (ticket) => {
       home.savePendingAdmission(ticket);
       link.relay?.retryNow();
@@ -105,9 +117,10 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
 
   const api = await startLocalApi({
     engine,
-    token: home.localToken(),
+    token,
     port: options.apiPort ?? config.apiPort,
     relayUrl: config.relayUrl,
+    ...(process.env.DROP_SHELL_INSTANCE ? { shellInstance: process.env.DROP_SHELL_INSTANCE } : {}),
     admin: {
       status: () => ({ displayName: identity.displayName, nodeId: identity.nodeId, relayConnected: relay.connected }),
       tools: () => {
@@ -135,18 +148,24 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
         );
       },
       unshare: (capabilityId) => home.unpublish(capabilityId),
-      install: (agent, remove) => {
-        if (!isAgentKind(agent)) throw new Error(`unknown agent ${agent}`);
-        install(agent, { dropHome: home.root }, remove);
-        return { ok: true };
+      install: () => {
+        throw new Error('E_PREVIEW_REQUIRED');
       },
+      onboardingPreview: () => ({
+        agents: previewOnboarding({ dropHome: home.root }),
+        manual: manualOnboarding({ dropHome: home.root }),
+      }),
+      onboardingApply: (selections) => applyOnboarding(selections, { dropHome: home.root }),
       createTeam: (name) => engine.createTeam(name),
       link: async (gateway, request) => {
+        if (config.profile === 'private') throw new DropError('E_DENIED', 'E_DENIED cloud gateway disabled');
         await engine.linkAssistant(NodeIdSchema.parse(gateway), request);
         return { ok: true, trusted: config.gateways.includes(gateway) };
       },
       unlink: (gateway, client) => engine.unlinkAssistant(NodeIdSchema.parse(gateway), client),
       connect: async (agent, server) => {
+        // A sign-in reaches the server's own authorization endpoints, outside the private destinations (D34).
+        if (config.profile === 'private') throw new DropError('E_DENIED', 'E_DENIED remote sign-in disabled');
         if (!isAgentKind(agent)) throw new Error(`unknown agent ${agent}`);
         const declared = findAgentServer(agent, server);
         if (declared?.transport !== 'http' || !declared.url)
@@ -166,8 +185,8 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
     },
   });
   link.apiPort = api.port;
-  const uiUrl = `http://127.0.0.1:${String(api.port)}/?token=${home.localToken()}`;
-  const panelUrl = `http://127.0.0.1:${String(api.port)}/app?token=${home.localToken()}`;
+  const uiUrl = `http://127.0.0.1:${String(api.port)}/?token=${token}`;
+  const panelUrl = `http://127.0.0.1:${String(api.port)}/app?token=${token}`;
 
   if (options.notifications ?? true) {
     engine.on('approval', (item: Extract<InboxItem, { kind: 'approval' }>) => {

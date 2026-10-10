@@ -201,9 +201,21 @@ describe('remote MCP servers behind OAuth (T2.17)', () => {
           done({ status, stdout, stderr });
         });
       });
-    expect((await run('init', '--name', 'Natha', '--kind', 'human', '--relay', 'wss://relay.example/v1')).status).toBe(
-      0,
-    );
+    expect(
+      (
+        await run(
+          'init',
+          '--profile',
+          'legacy',
+          '--name',
+          'Natha',
+          '--kind',
+          'human',
+          '--relay',
+          'wss://relay.example/v1',
+        )
+      ).status,
+    ).toBe(0);
     const before = await run('share', 'claude_code/notion');
     expect(before.stderr).toContain('demande une connexion OAuth');
     expect(before.stderr).toContain('drop connect claude_code/notion');

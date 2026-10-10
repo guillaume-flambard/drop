@@ -1,147 +1,91 @@
 # Architecture
 
-> Contexte descriptif, lu par les agents avant chaque change. Les exigences normatives vivent dans
-> `openspec/specs/<capacité>/spec.md` ; en cas d'écart, la spec fait foi. État décrit : `main` au 9 octobre 2026
-> (décisions jusqu'à D40).
+Conception adoptée le 9 octobre 2026. Les specs des capacités décrivent les contrats du prototype ; [ACCEPTANCE](../../docs/ACCEPTANCE.md) définit les critères futurs à promouvoir dans ces specs pendant T3.*. Ce document ne prouve pas leur implémentation.
 
-## Vue d'ensemble
+## Infrastructure choisie par le client
 
 ```text
- Poste du demandeur                    drop.memolabs.dev (VPS lab, Traefik)            Mac du propriétaire
- ──────────────────                    ────────────────────────────────────            ───────────────────
- Claude Code, Codex, Cursor,           relay        /v1 (wss), /health                 app de la barre de menus
- Claude Desktop                          ▲   ▲                                          (Tauri, Node embarqué)
-   │ stdio MCP                           │   │      gateway  /mcp, /oauth, /.well-known   │
- requester-mcp                           │   │        ▲  (Claude et ChatGPT en ligne)     │ panneau /app
-   │ HTTP 127.0.0.1 + jeton              │   │        │                                   ▼
- node (demandeur) ── wss sortant ────────┘   └─── wss sortant ─────────────────── node (exécuteur, approbateur)
-                                                site      /, /updates, /downloads        ├ runner + capacités
-                                                                                          └ serveurs MCP du
-                                                                                            propriétaire (Figma…)
+Poste A                                  Poste B / service interne
+Agent compatible                         App de consentement
+  │ MCP stdio                              │ décision du propriétaire
+requester-mcp → API locale → Node A       Node B → runner → capacité
+                              │            │                 │
+                              └─ relais ───┘         source / modèle autorisé
+                                 interne
+                 enveloppes chiffrées entre les Nodes
+
+Agent d’entreprise A2A ↔ interface A2A du Node
+Capacité a2a.answer → agent A2A approuvé dans le périmètre du client
 ```
 
-- Le **relais** ne voit que des enveloppes signées et chiffrées de bout en bout. Il route par identifiant de Node,
-  garde une file courte jusqu'à l'expiration de l'enveloppe (15 min au plus), admet les Nodes par allowlist ou par
-  ticket d'invitation, et applique les révocations (D34, D40). Il ne garde rien d'autre que cette file, l'état
-  d'admission et le fichier de révocations.
-- Chaque **Node** a une paire de clés, se connecte en sortie au relais et joue un ou plusieurs rôles : demandeur,
-  exécuteur (runner), approbateur. Il n'écoute que sur 127.0.0.1, derrière un jeton.
-- Le **runner** exécute une capacité dans un cadre fixe : outils figés par la capacité, répertoire temporaire, budget,
-  validation stricte de la sortie, scan de secrets.
-- L'**approbateur** peut être un autre Node que l'exécuteur : le VPS exécute, le Mac de Guillaume approuve.
-- La **passerelle** rend drop accessible depuis Claude et ChatGPT en ligne, qui n'acceptent que des connecteurs
-  distants : elle fait l'OAuth du connecteur, la liaison se confirme dans l'app du poste, puis chaque appel passe au
-  Node de l'utilisateur par le relais (D31, D36). Elle voit questions et réponses en clair et ne détient aucune clé
-  d'équipe.
-- Le **site** sert la vitrine et les fichiers de mise à jour de l'app Mac (D35, D37).
+Le relais relie les postes sans exposer de port entrant sur chaque runner. Il peut vivre sur un poste pour une démonstration, un serveur interne ou un environnement privé du client. Une recette conteneur sans Internet est vérifiée dans T3.1 ; Kubernetes n’est pas requis. La découverte LAN et le pair-à-pair direct ne sont pas des prérequis.
 
-## Organisation du monorepo
+Un laptop peut héberger le relais de test et plusieurs Nodes. Une équipe répartie nécessite une connectivité vers son relais (réseau ou VPN choisi par elle). « Hors ligne » signifie Internet bloqué avec connectivité interne disponible, modèles et dépendances présents. On ne peut pas joindre un collègue devenu injoignable.
 
-```text
-packages/
-  blocked-observer/   Étape 0, autonome : n'importe aucun autre package.
-  protocol/           Schémas zod, enveloppes, signature, chiffrement, reçus, tickets d'admission. Aucune I/O.
-  relay/              Serveur WebSocket de routage, admission, révocation ; client utilisé par les Nodes.
-  runner/             Cadre d'exécution, validation, scan de secrets, budget.
-  capabilities/       production.error_summary, repo.answer, mcp.answer (et sa connexion OAuth), a2a.answer.
-  a2a/                Client et serveur A2A v1.0 autour du SDK officiel (D33).
-  requester-mcp/      Serveur MCP stdio des agents : lib.ts (bibliothèque) et index.ts (point d'entrée, T2.18).
-  node/               Daemon et CLI `drop` : moteur, API locale, panneau, détection des agents, partage,
-                      installation, équipe, liaison des assistants, A2A entrant.
-  gateway/            Passerelle OAuth + MCP distant pour Claude et ChatGPT (T2.13).
-apps/mac/             App Tauri : coquille autour du Node, qui sert lui-même le panneau (D30, D35).
-site/                 Pages du site public ; `scripts/site.ts` les assemble et les sert.
-scripts/              bundle.ts (fichiers assemblés, D29), build-mac.ts, mac-updates.ts, site.ts.
-docker/               Points d'entrée des services du lab ; une seule image pour tous (Dockerfile).
-openspec/
-  project/            Contexte descriptif : vision, architecture.
-  specs/              Exigences normatives, une capacité par dossier.
-docs/                 TASKS.md (index), DECISIONS.md (journal), guide, bilan, essais, déploiement.
-```
+## Frontières de données
 
-Dépendances entre packages : `protocol` ← tous sauf `blocked-observer` et `a2a` ; `runner` ← `capabilities` ;
-`a2a` ← `capabilities`, `node` ; `relay` ← `node`, `gateway` ; `requester-mcp` ← `node` (outils exécutés pour les assistants
-liés), `gateway`. `requester-mcp` ne parle qu'à l'API locale d'un Node, jamais au relais.
+| Surface                 | Ce qu’elle voit                                       | Contrôle cible                                                                                  |
+| ----------------------- | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| Relais                  | Identités, routage, horodatages, enveloppes chiffrées | Hébergement client, admission, expiration selon la spec `relay`                                 |
+| Node et runner          | Question, sources choisies, résultat                  | Capacité publiée, consentement, outils figés, snapshot en allowlist, validation et scanner      |
+| Modèle                  | Contexte transmis par la capacité                     | Endpoint du propriétaire, jamais remplacé par le financement                                    |
+| MCP ou A2A joint        | Paramètres et données demandés                        | Adresse et outils choisis ; politique réseau ; vérifier sa propre configuration                 |
+| Demandeur               | Résultat autorisé                                     | Schéma, contrôles de sortie, relecture lorsque requise ; contenu traité comme donnée non fiable |
+| Passerelle grand public | Questions et réponses en clair                        | Hors profil privé, activation explicite                                                         |
+| Logs et reçus           | Codes, hash et métadonnées                            | Pas de contenu ni secret, diagnostic local expurgé et export volontaire                         |
 
-## Modèle de données (extrait, normatif dans `openspec/specs/protocol/spec.md`)
+Le chiffrement ne limite pas ce qu’un outil lit. Le scanner ne détecte pas toutes les informations confidentielles. Les règles de sortie, l’isolation des sources, l’autorisation et le contrôle réseau se complètent. drop n’est pas une sandbox universelle pour les outils d’un agent A2A externe : cet agent conserve sa propre frontière de confiance.
 
-```ts
-type NodeId = string; // base64url de la clé publique Ed25519
-type OwnerKind = 'human' | 'team' | 'machine' | 'service';
+Le profil privé cible refuse les destinations hors politique, y compris via redirection ou résolution. Aucun fallback distant. Télémétrie désactivée, activation de licence en ligne non requise, mise à jour et téléchargement séparés de l’usage courant. Installation de paquets vérifiés possible par un canal interne ou hors ligne.
 
-interface CapabilityCard {
-  id: string; // "production.error_summary", ou "mcp.answer.figma" pour une famille
-  version: string; // semver
-  owner: { kind: OwnerKind; displayName: string; nodeId: NodeId };
-  executorNodeId: NodeId;
-  approverNodeIds: NodeId[]; // au moins 1
-  title: string; // « Répondre à partir de mon Figma »
-  sensitivity: 'low' | 'high'; // high : relecture avant envoi
-  inputSchema: JSONSchema;
-  outputSchema: JSONSchema;
-  receives: string[]; // ce que le demandeur recevra
-  neverReceives: string[]; // ce qu'il ne recevra jamais
-  approval: 'always' | 'auto_low';
-  maxOutputChars: number;
-  budget: { maxSeconds: number; maxUsd?: number; maxToolCalls?: number };
-}
-// Publiée signée par son exécuteur : { card, sig }.
-```
+## Application et adaptateurs
 
-Messages entre Nodes (`packages/protocol/src/messages.ts`) : appairage (`pair_request`, `pair_accept`), équipe
-(`team_roster`), catalogue (`catalog_request`, `catalog`), demande (`drop_request`, `drop_status`,
-`approval_request`, `approval_decision`, `review_request`, `review_decision`, `drop_result`, `drop_error`,
-`receipt`), assistants liés par la passerelle (`link_grant`, `agent_call`, `agent_reply`). Le coût affiché sur la
-carte est `free`, `capped` ou `unmeasured` ; une clé plafonnée du demandeur voyage chiffrée avec la demande (D27).
+Tauri 2 conserve le shell de barre de menus, le panneau web local et le cœur Node embarqué. L’icône et les menus utilisent les primitives du système ; le panneau n’est pas une interface SwiftUI. Le WebView système évite d’ajouter Chromium au paquet, sans gain de mémoire chiffré non mesuré. Node reste à distribuer et maintenir.
 
-## Cycle de vie d'un Drop
+Electron imposerait une migration sans bénéfice établi ici. SwiftUI donnerait une intégration Mac plus poussée au prix d’autres interfaces pour Windows et Linux. Voir [les sources et compromis](../../docs/research/2026-10-09-desktop-models.md), D35.
 
-```text
-proposed → awaiting_approval → (denied | expired | not_now)
-                             → approved → running → (failed | delivered)
-                                                  → in_review → (delivered | failed)
-delivered → receipted
-```
+Adaptateurs initiaux : Claude Code, Codex, Cursor, Claude Desktop. Chaque adaptateur décrit chemins, format, installation et versions compatibles. L’inventaire ne lance aucun exécutable découvert. Les nouveaux agents s’ajoutent par adaptateur ; un agent A2A interne se raccorde via son URL approuvée et son authentification.
 
-`in_review` n'existe que pour `sensitivity: 'high'` : l'approbateur voit la sortie et peut en retirer des champs.
+## Cycle d’une demande
 
-## Séquence nominale (VPS exécute, Mac approuve)
+1. `ask_team` ou une capacité précise est appelée via MCP ; A2A rejoint le même consentement.
+2. Le Node valide schémas et destinataires. Le routage `ask_team` reste déterministe et borné.
+3. La demande signée et chiffrée traverse le relais ; l’approbateur accepte, refuse ou reporte.
+4. Le runner utilise uniquement les outils et budgets de la capacité.
+5. Une sortie invalide ou un secret détecté entraîne un rejet, sans réparation par le LLM. Les sorties sensibles passent par relecture.
+6. Le résultat autorisé revient ; les reçus gardent hash et métadonnées. Expiration, refus et indisponibilité restent visibles.
 
-1. L'agent appelle `request_drop(capability_id, input, purpose)`, ou `ask_team(question)` qui choisit les
-   destinataires par des règles (D32).
-2. `requester-mcp` → API locale du Node → enveloppe `drop_request` chiffrée pour l'exécuteur, via le relais.
-3. L'exécuteur vérifie l'enveloppe (schéma, signature, pair connu, expiration, rejeu) puis la requête, et envoie
-   `approval_request` à l'approbateur.
-4. L'approbateur voit la carte de consentement (panneau, notification) : autoriser une fois, refuser, plus tard.
-5. `approval_decision` signée → exécuteur ; le runner exécute la capacité.
-6. Sortie validée par le schéma, scannée ; si `high`, `review_request` à l'approbateur.
-7. `drop_result` (ou `drop_error`, code fermé) → demandeur ; chaque côté écrit un reçu signé (empreintes, pas de
-   contenu).
-8. L'agent récupère la réponse par `get_drop_result(drop_id, wait_seconds)`, attente bornée à 50 s.
+## Modules actuels
 
-Variantes : `request_drops` et `get_drop_results` (plusieurs destinataires, T2.10) ; un assistant en ligne passe par
-la passerelle (`agent_call` vers le Node de l'utilisateur, qui exécute les mêmes outils) ; un agent A2A externe
-appelle `/a2a` du Node (T2.14).
+| Module                      | Responsabilité                                                                 |
+| --------------------------- | ------------------------------------------------------------------------------ |
+| `packages/blocked-observer` | Mesure locale du besoin                                                        |
+| `packages/protocol`         | Schémas zod, identité, signature, chiffrement, reçus                           |
+| `packages/relay`            | Routage WebSocket et admission                                                 |
+| `packages/node`             | Identité, CLI, orchestration, API et panneau locaux, détection et installation |
+| `packages/runner`           | Pipeline, budgets et contrôles                                                 |
+| `packages/capabilities`     | Capacités déterministes, dépôt, MCP et A2A                                     |
+| `packages/requester-mcp`    | Connecteur MCP stdio vers l’API locale                                         |
+| `packages/a2a`              | Adaptation A2A entrante                                                        |
+| `packages/gateway`          | Connecteur distant grand public facultatif                                     |
+| `apps/mac`                  | Shell Tauri                                                                    |
+| `site`, `scripts/site.ts`   | Présentation statique et export explicite de documents                         |
 
-## Outils du propriétaire
+Le runner n’écoute aucun port. L’API du Node écoute localement et reste authentifiée. Les clés privées restent dans `~/.drop/` avec droits `0600`. `requester-mcp` parle à cette API, jamais directement au relais.
 
-`mcp.answer` répond à partir d'un serveur MCP que le propriétaire a déjà : déclaré par un de ses agents (lu dans leur
-configuration, secrets compris, au moment de l'exécution, D28), ou décrit à la main. Les outils utilisables sont fixés
-au partage, jamais par la question, et ceux marqués destructifs sont retirés (D19). Le partage vérifie d'abord le
-serveur (T2.16). Pour un serveur en ligne qui exige OAuth, drop se connecte une fois en son nom, et garde ses jetons
-sur le poste (T2.17, D39).
+## Écart avec le prototype au début de T3.0
 
-## Configuration locale
+T3.1 remplace le bootstrap Mac public par un relais loopback ou explicitement configuré. Le runtime privé propose Ollama local et exige un modèle explicite ; le financement ne remplace plus sa destination. Les transports privés autorisent des IP privées littérales exactes, sans DNS, redirection ni proxy implicite. Les sources MCP stdio non isolées sont refusées. Voir [PRIVATE_PROFILE](../../docs/PRIVATE_PROFILE.md). Les installeurs raccordent individuellement les agents ; la transaction groupée avec restauration reste à construire. A2A entrant et sortant existent, sans démontrer la conformité à tout A2A ni la souveraineté de bout en bout.
 
-`DROP_HOME` (défaut `~/.drop`) : `identity.json` (clés, 0600), `config.json` (relais, port de l'API, passerelles de
-confiance, qui paie), `local-token`, `peers.json`, `team.json`, `capabilities/` (publications), `receipts/` (JSONL),
-`links.json` (assistants liés), `admission.json` (ticket en attente), `oauth/` (jetons OAuth, 0700), `bin/` (serveur
-MCP installé dans les agents). Plusieurs Nodes sur une machine = plusieurs `DROP_HOME`, ainsi qu'on simule « Julie »
-en développement.
+T3.1 prouve le cycle privé dans un conteneur sans Internet, avec deux Nodes et des fixtures MCP/modèle ; cela ne qualifie pas un vrai modèle ni tous les agents tiers. T3.2 qualifie les modèles. T3.3 réalise le raccordement. T3.4 termine l’app distribuable. T3.5 apporte les preuves d’ensemble. Ordre et reprise des anciens chantiers : [TASKS](../../docs/TASKS.md).
 
-## Déploiement
+## Composants de l'étape 2 réunis (D76)
 
-Relais, Node du lab, passerelle et site tournent dans une même image, construite à chaque commit sur `main` et
-déployée par `lab-infra/stacks/drop` derrière Traefik (D22). Ce qui reste à y configurer est listé dans
-`docs/deploiement-lab.md`. L'app Mac et le paquet Claude Desktop embarquent les fichiers assemblés de
-`scripts/bundle.ts` (D29).
+La branche principale a ajouté, avant la réunion du 10 octobre 2026, des composants que ce document garde hors du profil privé :
+
+- **Passerelle** (`packages/gateway`, T2.13, D31, D71) : rend drop joignable depuis Claude et ChatGPT en ligne par OAuth et MCP distant ; la liaison se confirme dans l'app ; elle voit questions et réponses en clair. Désactivée dans le profil privé.
+- **Relais** : en plus de la révocation inscrite dans sa config (T3.1), un fichier de révocations relu à chaud, avec propagation aux nœuds admis par un nœud révoqué, et un plafond global d'admissions par jour (T2.19, D75).
+- **mcp.answer** : connexion OAuth de drop à des serveurs MCP distants, jetons sous `DROP_HOME/oauth` (T2.17, D74), et partage vérifié qui explique pourquoi un serveur est inutilisable (T2.16, D73). Le profil privé n'utilise ni l'un ni l'autre : ses sources passent par sa politique de destinations.
+- **App Mac** : mise à jour signée proposée dans le menu, seulement dans un build fait avec la clé de mise à jour (T2.4, D70, D76).
+- **Site** : pages publiques et fichiers de mise à jour servis par l'image drop (T2.6, D72).
+- `requester-mcp` sépare sa bibliothèque (`src/lib.ts`) de son point d'entrée (`src/index.ts`) pour qu'un fichier assemblé ne démarre jamais le serveur (T2.18).

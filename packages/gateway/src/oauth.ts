@@ -13,7 +13,7 @@ export const REFRESH_TTL_MS = 30 * 24 * 60 * 60_000;
 export const SESSION_TTL_MS = 10 * 60_000;
 export const CODE_TTL_MS = 60_000;
 /**
- * Registration is open to anyone (D36): a client that never obtained a token is forgotten after a day, and beyond the
+ * Registration is open to anyone (D71): a client that never obtained a token is forgotten after a day, and beyond the
  * limits below the oldest pending client or session makes room. Evicting rather than refusing keeps a flood from
  * locking real users out; it would have to outpace a real sign-in, which takes a minute.
  */

@@ -9,7 +9,7 @@ Protocole commun de drop, porté par `packages/protocol` : identité, appairage,
 Le package `packages/protocol` MUST se limiter à des schémas zod, des fonctions pures et de la crypto, sans aucune I/O. Il SHALL être testé à 100 %.
 
 #### Scenario: Aucune I/O dans protocol
-<!-- openspec-guard:test="protocol contract > imports nothing that does I/O: only zod, libsodium and node:crypto for hashes and random bytes" -->
+<!-- openspec-guard:test="protocol contract > imports nothing that does I/O: only zod, libsodium, node:crypto for hashes and random bytes, node:net isIP" -->
 - **WHEN** un relecteur inspecte `packages/protocol`
 - **THEN** il n'y trouve aucun accès réseau, fichier ou processus, seulement des schémas zod, des fonctions pures et de la crypto
 
@@ -176,7 +176,7 @@ Pour chiffrer, un Node SHALL dériver sa paire X25519 de sa paire Ed25519 avec `
 ### Requirement: Financement par le demandeur
 `drop_request` MAY porter `funding: { kind: 'capped_key', baseUrl, apiKey, maxUsd (≤ 50), model? }` : une clé de modèle
 créée pour cette seule demande et plafonnée à `maxUsd` (D27). Elle voyage dans l'enveloppe chiffrée vers l'exécuteur
-seulement ; elle MUST NOT figurer dans `approval_request`, un reçu, un log ou un fichier. La carte de consentement
+seulement ; elle MUST NOT figurer dans `approval_request`, un reçu, un log ou un fichier. Le financement MUST NOT remplacer la destination ni le modèle choisis par le propriétaire. La carte de consentement
 MUST dire qui paie (`paidBy: 'owner' | 'requester'`).
 
 #### Scenario: Clé visible de l'exécuteur seulement
@@ -196,7 +196,7 @@ qui il invite (T2.9).
 - **THEN** l'invité reçoit `team_roster` avec tous les membres, et l'équipe adopte l'invité
 
 ### Requirement: Ticket d'admission
-Un ticket d'admission `{ v: 1, sponsor, nonce, expiresAt, sig }` MUST être signé en Ed25519 par le Node `sponsor` sur `canonical({ v, sponsor, nonce, expiresAt })` et expirer 24 h après l'émission (T2.1, D26). Il ne nomme pas le nouveau venu. Un ticket dont `expiresAt` dépasse l'instant de vérification de plus de 24 h et 5 min (dérive d'horloge) MUST être refusé (D34).
+Un ticket d'admission `{ v: 1, sponsor, nonce, expiresAt, sig }` MUST être signé en Ed25519 par le Node `sponsor` sur `canonical({ v, sponsor, nonce, expiresAt })` et expirer 24 h après l'émission (T2.1, D26). Il ne nomme pas le nouveau venu. Un ticket dont `expiresAt` dépasse l'instant de vérification de plus de 24 h et 5 min (dérive d'horloge) MUST être refusé (D69).
 
 #### Scenario: Ticket falsifié ou expiré
 <!-- openspec-guard:test="cards, receipts, invites, lifecycle, schemas > signs single-use admission tickets that only the sponsor can produce" -->
@@ -369,7 +369,7 @@ Le corps déchiffré SHALL être une union discriminée sur `type`. Tous les mes
 - **THEN** chaque carte de `cards` porte une signature valide de l'exécuteur
 
 ### Requirement: Message drop_request
-`drop_request` SHALL aller du demandeur à l'exécuteur avec `dropId`, `capabilityId`, `capabilityVersion`, `input` (JSON), `purpose` (≤ 140 car.) et `requestedBy` (`{ nodeId, displayName, agent: 'claude_code' | 'codex' | 'cursor' | 'other' }`).
+`drop_request` SHALL aller du demandeur à l'exécuteur avec `dropId`, `capabilityId`, `capabilityVersion`, `input` (JSON), `purpose` (≤ 140 car.) et `requestedBy` (`{ nodeId, displayName, agent: 'claude_code' | 'codex' | 'cursor' | 'other' }`). Le `dropId` d'une nouvelle demande MUST être un UUIDv7 horodaté ; un UUID d'une autre version MUST être rejeté avant tout consentement. Les lettres hexadécimales d'un UUIDv7 MUST être normalisées en minuscules avant l'admission et le stockage anti-rejeu.
 
 #### Scenario: purpose trop long
 <!-- openspec-guard:test="protocol contract > refuses a drop_request with a purpose over 140 characters or an unknown agent, as E_MESSAGE_SCHEMA" -->
@@ -380,6 +380,16 @@ Le corps déchiffré SHALL être une union discriminée sur `type`. Tous les mes
 <!-- openspec-guard:test="protocol contract > refuses a drop_request with a purpose over 140 characters or an unknown agent, as E_MESSAGE_SCHEMA" -->
 - **WHEN** `requestedBy.agent` vaut `'copilot'`
 - **THEN** il est rejeté avec `E_MESSAGE_SCHEMA`
+
+#### Scenario: AC: identifiant UUIDv7 obligatoire
+<!-- openspec-guard:test="drop request id > rejects UUIDv4 for a new drop request" -->
+- **WHEN** une nouvelle demande porte un `dropId` UUIDv4
+- **THEN** elle est rejetée à la validation du message avant toute approbation
+
+#### Scenario: AC: casse canonique du nouvel identifiant
+<!-- openspec-guard:test="drop request id > normalizes uppercase UUIDv7 before dispatch" -->
+- **WHEN** une nouvelle demande porte un `dropId` UUIDv7 en majuscules
+- **THEN** le message validé présente ce même identifiant en minuscules
 
 ### Requirement: Message drop_status
 `drop_status` SHALL aller de l'exécuteur au demandeur avec `dropId` et `state`, une valeur du cycle de vie d'un Drop.
@@ -430,7 +440,7 @@ Le corps déchiffré SHALL être une union discriminée sur `type`. Tous les mes
 - **THEN** il contient `dropId`, `output` et `outputSchemaHash`
 
 ### Requirement: Message drop_error
-`drop_error` SHALL aller de l'exécuteur au demandeur avec `dropId`, `code` parmi `E_DENIED`, `E_NOT_NOW`, `E_EXPIRED`, `E_BUDGET`, `E_OUTPUT_INVALID`, `E_SECRET_DETECTED`, `E_RUNNER`, et `message` lisible MUST NOT contenir de détail interne.
+`drop_error` SHALL aller de l'exécuteur au demandeur avec `dropId`, `code` parmi `E_SCHEMA`, `E_DENIED`, `E_NOT_NOW`, `E_EXPIRED`, `E_RATE`, `E_BUDGET`, `E_OUTPUT_INVALID`, `E_SECRET_DETECTED`, `E_RUNNER`, et `message` lisible MUST NOT contenir de détail interne.
 
 #### Scenario: Code hors liste
 <!-- openspec-guard:test="protocol contract > refuses a drop_error code outside the closed list, as E_MESSAGE_SCHEMA" -->
@@ -441,6 +451,11 @@ Le corps déchiffré SHALL être une union discriminée sur `type`. Tous les mes
 <!-- openspec-guard:test="the protocol as the nodes play it > reports an internal failure as a readable E_RUNNER, without stack or path" -->
 - **WHEN** le runner échoue sur une exception interne
 - **THEN** le `message` du `drop_error` est lisible et ne contient ni pile d'appels ni chemin interne
+
+#### Scenario: AC: quota local explicite
+<!-- openspec-guard:test="replay admission through the engine > reports a full replay store as E_RATE before consent" -->
+- **WHEN** le Node refuse une demande parce que le stockage anti-rejeu est plein
+- **THEN** le demandeur reçoit un `drop_error` `E_RATE` sans détail interne
 
 ### Requirement: Message receipt
 Le message `receipt` SHALL aller de l'exécuteur au demandeur et à l'approbateur et porter un `Receipt`.
@@ -521,3 +536,32 @@ Chaque capacité SHALL déclarer sa propre taille max de sortie (ex. 1 500 carac
 <!-- openspec-guard:test="capability registry > every capability declares its own maximum output size on its card" -->
 - **WHEN** on lit la carte d'une capacité publiée
 - **THEN** elle déclare sa propre taille max de sortie (`maxOutputChars`)
+
+### Requirement: Financement incompatible refusé
+En profil privé, un financement dont le fournisseur ou le modèle diffère du choix du propriétaire MUST être refusé sans appel réseau et sans journaliser sa clé.
+
+#### Scenario: AC: non substitution du fournisseur
+<!-- openspec-guard:test="private network > rejects incompatible funding without disclosing its key or replacing owner settings" -->
+- **WHEN** une demande finance une autre URL ou un autre modèle
+- **THEN** l’exécution échoue sans contacter ce fournisseur ni divulguer la clé.
+
+### Requirement: Refus du financement non sollicité
+En profil privé payé par le propriétaire, un financement reçu MUST être refusé avant consentement et exécution ; aucune clé reçue ne remplace celle du propriétaire.
+
+#### Scenario: AC: financement non sollicité
+<!-- openspec-guard:test="the requester pays with a capped key (T2.3, D27) > refuses unsolicited funding in an owner-paid private profile before consent" -->
+- **WHEN** une demande financée arrive dans un profil privé payé par le propriétaire
+- **THEN** elle échoue en E_DENIED sans carte d’accord ni utilisation de la clé
+
+### Requirement: Cache anti-rejeu des enveloppes borné
+Le cache des identifiants d'enveloppe MUST avoir un plafond fini. Lorsque ce plafond est atteint par des identifiants non expirés, il MUST refuser un nouvel identifiant avant déchiffrement plutôt que d'oublier un identifiant encore protégé. Les entrées expirées MUST pouvoir être retirées à l'arrivée d'une nouvelle enveloppe.
+
+#### Scenario: AC: saturation du cache d'enveloppes
+<!-- openspec-guard:test="bounded envelope replay cache > refuses new ids at capacity without forgetting an unexpired id" -->
+- **WHEN** le cache contient le nombre maximal d'identifiants non expirés
+- **THEN** un nouvel identifiant est refusé et un identifiant déjà vu reste refusé
+
+#### Scenario: AC: place retrouvée après expiration
+<!-- openspec-guard:test="bounded envelope replay cache > admits another id after entries expire without reopening a live id" -->
+- **WHEN** des identifiants expirent dans un cache saturé
+- **THEN** le prochain identifiant peut être admis sans rouvrir le rejeu des identifiants encore valides

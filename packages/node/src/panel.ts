@@ -1,11 +1,11 @@
 /**
  * The menu bar panel (T2.4), served by the node at /app and shown by the Mac app in a window under its tray icon. It
- * follows the mockup https://claude.ai/artifact/Frxdg8DdeGA5CzfNq8PBJD: tabs Demandes, Équipe, Mes outils. It talks only
+ * has tabs Demandes, Équipe and Mes outils. It talks only
  * to this node's own API (same origin, bearer token from the URL). Everything a peer wrote is inserted with
  * textContent, never as HTML. No backtick and no dollar-brace in the script below: it lives in a template string. The
  * one exception is KNOWN_ASSISTANT_HOSTS, a constant of this file injected as JSON.
  */
-/** Where Claude and ChatGPT send their authorization codes back: the app names them, and warns about any other (D36). */
+/** Where Claude and ChatGPT send their authorization codes back: the app names them, and warns about any other (D71). */
 export const KNOWN_ASSISTANT_HOSTS = ['claude.ai', 'chatgpt.com', 'chat.openai.com'];
 
 export function renderPanel(): string {
@@ -16,24 +16,28 @@ export function renderPanel(): string {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>drop</title>
 <style>
-:root { --ground: #F7F6F3; --card: #FFFFFF; --ink: #1A1A19; --soft: #55534E; --mute: #6B6862; --line: #E4E2DC;
-  --edge: #DAD8D2; --accent: #0E5F58; --accent-soft: #E3EFEC; --warn: #9A3412; --ok: #2E8B57; --wait: #C2850C; }
+:root { color-scheme: light dark; --ground: #F7F6F3; --card: #FFFFFF; --ink: #1A1A19; --soft: #55534E; --mute: #6B6862; --line: #E4E2DC;
+  --edge: #DAD8D2; --accent: #0E5F58; --accent-on: #FFFFFF; --accent-soft: #E3EFEC; --warn: #9A3412; --ok: #2E8B57; --wait: #C2850C; }
 @media (prefers-color-scheme: dark) { :root { --ground: #1C1C1B; --card: #262624; --ink: #F2F1EE; --soft: #C9C6BE;
-  --mute: #A29F97; --line: #34332F; --edge: #3D3C38; --accent: #5CC2B5; --accent-soft: #23403C; --warn: #F0A27A; } }
+  --mute: #A29F97; --line: #34332F; --edge: #3D3C38; --accent: #5CC2B5; --accent-on: #122923; --accent-soft: #23403C; --warn: #F0A27A; } }
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--ground); color: var(--ink); font: 13px/1.45 system-ui, -apple-system, sans-serif; }
+body { margin: 0; background: var(--ground); color: var(--ink); font: 14px/1.45 system-ui, -apple-system, sans-serif; }
+button, input { font: inherit; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button:disabled { opacity: .55; cursor: wait; }
+::selection { background: var(--accent); color: var(--accent-on); }
 header { display: flex; align-items: center; gap: 10px; padding: 14px 16px 10px; }
 header strong { font-size: 17px; letter-spacing: -0.02em; }
 .status { display: flex; align-items: center; gap: 6px; color: var(--soft); font-size: 12px; flex-grow: 1; }
 .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; background: var(--edge); flex-shrink: 0; }
 .dot.ok { background: var(--ok); } .dot.wait { background: var(--wait); }
 nav { display: flex; gap: 4px; padding: 0 12px 10px; border-bottom: 1px solid var(--line); }
-nav button { min-height: 32px; padding: 0 12px; border-radius: 8px; border: none; background: transparent;
+nav button { min-height: 40px; padding: 0 12px; border-radius: 8px; border: none; background: transparent;
   color: var(--soft); font: inherit; cursor: pointer; }
 nav button[aria-selected="true"] { background: var(--ink); color: var(--ground); font-weight: 500; }
-.badge { margin-left: 4px; font-size: 11px; padding: 1px 6px; border-radius: 999px; background: var(--accent); color: #fff; }
+.badge { margin-left: 4px; font-size: 11px; padding: 1px 6px; border-radius: 999px; background: var(--accent); color: var(--accent-on); }
 main { padding: 12px; display: flex; flex-direction: column; gap: 12px; }
-h2 { margin: 4px 4px 0; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--mute); }
+h2 { margin: 8px 4px 0; font-size: 13px; font-weight: 650; color: var(--ink); }
 .card { background: var(--card); border: 1px solid var(--edge); border-radius: 12px; padding: 14px; display: flex;
   flex-direction: column; gap: 10px; }
 .row { display: flex; align-items: center; gap: 10px; }
@@ -42,11 +46,13 @@ h2 { margin: 4px 4px 0; font-size: 11px; font-weight: 600; letter-spacing: 0.06e
 .quote { background: var(--ground); border-radius: 8px; padding: 10px; }
 .receives b { color: var(--accent); } .never b { color: var(--warn); }
 .actions { display: flex; gap: 6px; flex-wrap: wrap; }
-button.act { min-height: 36px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--edge); background: var(--card);
+.decision-actions { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.decision-actions button { min-width: 0; padding-inline: 6px; }
+.decision-actions .subtle { grid-column: 1 / -1; border-color: transparent; background: transparent; color: var(--soft); }
+button.act { min-height: 40px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--edge); background: var(--card);
   color: var(--ink); font: inherit; cursor: pointer; }
-button.primary { background: var(--ink); color: var(--ground); border-color: var(--ink); flex-grow: 1; font-weight: 500; }
 button.accent { border-color: var(--accent); color: var(--accent); font-weight: 500; }
-button.fill { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.fill { background: var(--accent); border-color: var(--accent); color: var(--accent-on); }
 .list { background: var(--card); border: 1px solid var(--line); border-radius: 12px; }
 .list > div { padding: 10px 12px; border-bottom: 1px solid var(--line); }
 .list > div:last-child { border-bottom: none; }
@@ -59,29 +65,42 @@ button.fill { background: var(--accent); border-color: var(--accent); color: #ff
 .switch[aria-checked="true"] { background: var(--accent); justify-content: flex-end; }
 .switch span { width: 20px; height: 20px; border-radius: 50%; background: #fff; display: block; }
 .empty { border: 1px dashed var(--edge); border-radius: 12px; padding: 14px; color: var(--soft); text-align: center; }
-input[type="text"] { min-height: 36px; border-radius: 8px; border: 1px solid var(--edge); padding: 0 10px; font: inherit;
+input[type="text"] { min-height: 40px; border-radius: 8px; border: 1px solid var(--edge); padding: 0 10px; font: inherit;
   background: var(--card); color: var(--ink); width: 100%; }
 .error { color: var(--warn); font-size: 12px; }
+.notice { border: 1px solid var(--edge); border-radius: 10px; padding: 10px 12px; background: var(--card); }
+.notice.error { border-color: var(--warn); }
+.loading { color: var(--soft); padding: 16px 4px; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 code { font: 11px ui-monospace, monospace; word-break: break-all; }
 </style>
 </head>
 <body>
 <header>
   <strong>drop</strong>
-  <div class="status"><span class="dot" id="relay-dot"></span><span id="status-text">Connexion…</span></div>
+  <div class="status"><span class="dot" id="relay-dot" aria-hidden="true"></span><span id="status-text" role="status" aria-live="polite">Connexion…</span></div>
 </header>
-<nav role="tablist">
-  <button role="tab" id="tab-requests" aria-selected="true">Demandes<span class="badge" id="badge" hidden></span></button>
-  <button role="tab" id="tab-team" aria-selected="false">Équipe</button>
-  <button role="tab" id="tab-tools" aria-selected="false">Mes outils</button>
+<nav role="tablist" aria-label="Sections de drop">
+  <button role="tab" id="tab-requests" aria-controls="view" aria-selected="true" tabindex="0">Demandes<span class="badge" id="badge" hidden></span></button>
+  <button role="tab" id="tab-team" aria-controls="view" aria-selected="false" tabindex="-1">Équipe</button>
+  <button role="tab" id="tab-tools" aria-controls="view" aria-selected="false" tabindex="-1">Mes outils</button>
 </nav>
-<main id="view"></main>
+<div id="announcement" role="status" aria-live="polite" class="sr-only"></div>
+<main id="view" role="tabpanel" aria-labelledby="tab-requests"></main>
 <script>
 (function () {
   var token = new URLSearchParams(location.search).get('token') || '';
   var tab = 'requests';
   var notice = '';
   var info = '';
+  var onboardingPlans = null;
+  var manualConnector = null;
+  var renderVersion = 0;
+  var pendingRefresh = false;
+
+  function announce(message) {
+    document.getElementById('announcement').textContent = message;
+  }
   // A shared server that needs an OAuth sign-in (T2.17): the panel offers it, then the owner shares again.
   var signInOffer = null;
   var signInLink = '';
@@ -127,8 +146,13 @@ code { font: 11px ui-monospace, monospace; word-break: break-all; }
     return 'Coût : ' + payer + ', non mesuré';
   }
 
-  function decide(path, dropId, decision) {
-    api('POST', path, undefined, { dropId: dropId, decision: decision }).then(render, function (error) { notice = error.message; render(); });
+  function decide(path, dropId, decision, button) {
+    button.disabled = true;
+    api('POST', path, undefined, { dropId: dropId, decision: decision }).then(function () {
+      info = decision === 'allow_once' ? 'Demande autorisée une fois.' : decision === 'deny' ? 'Demande refusée.' : decision === 'not_now' ? 'Demande reportée.' : decision === 'send' ? 'Réponse envoyée.' : 'Réponse conservée sur ce Mac.';
+      announce(info);
+      render(true);
+    }, function (error) { notice = error.message; announce('Action impossible. ' + notice); render(true); });
   }
 
   function approvalCard(item) {
@@ -144,10 +168,10 @@ code { font: 11px ui-monospace, monospace; word-break: break-all; }
       el('div', { class: 'receives' }, el('b', { text: 'Reçoit ' }), item.card.receives.join(', ')),
       el('div', { class: 'never' }, el('b', { text: 'Ne reçoit jamais ' }), item.card.neverReceives.join(', ')),
       cost ? el('div', { class: 'muted', text: cost }) : null,
-      el('div', { class: 'actions' },
-        el('button', { class: 'act primary', onclick: function () { decide('/ui/decide', item.dropId, 'not_now'); } }, 'Pas maintenant'),
-        el('button', { class: 'act', onclick: function () { decide('/ui/decide', item.dropId, 'deny'); } }, 'Refuser'),
-        el('button', { class: 'act accent', onclick: function () { decide('/ui/decide', item.dropId, 'allow_once'); } }, 'Autoriser une fois')));
+      el('div', { class: 'actions decision-actions' },
+        el('button', { class: 'act', 'aria-label': 'Refuser : ' + item.card.title, onclick: function (event) { decide('/ui/decide', item.dropId, 'deny', event.currentTarget); } }, 'Refuser'),
+        el('button', { class: 'act fill', 'aria-label': 'Autoriser une fois : ' + item.card.title, onclick: function (event) { decide('/ui/decide', item.dropId, 'allow_once', event.currentTarget); } }, 'Autoriser une fois'),
+        el('button', { class: 'act subtle', 'aria-label': 'Reporter : ' + item.card.title, onclick: function (event) { decide('/ui/decide', item.dropId, 'not_now', event.currentTarget); } }, 'Pas maintenant')));
   }
 
   function reviewCard(item) {
@@ -162,8 +186,8 @@ code { font: 11px ui-monospace, monospace; word-break: break-all; }
       el('div', { class: 'muted', text: 'Rien n’est parti. Tu peux envoyer ou garder pour toi.' }),
       fields,
       el('div', { class: 'actions' },
-        el('button', { class: 'act', onclick: function () { decide('/ui/review', item.dropId, 'discard'); } }, 'Ne pas envoyer'),
-        el('button', { class: 'act fill', onclick: function () { decide('/ui/review', item.dropId, 'send'); } }, 'Envoyer')));
+        el('button', { class: 'act', 'aria-label': 'Ne pas envoyer : ' + item.title, onclick: function (event) { decide('/ui/review', item.dropId, 'discard', event.currentTarget); } }, 'Ne pas envoyer'),
+        el('button', { class: 'act fill', 'aria-label': 'Envoyer : ' + item.title, onclick: function (event) { decide('/ui/review', item.dropId, 'send', event.currentTarget); } }, 'Envoyer')));
   }
 
   var STATES = { proposed: 'envoyée', awaiting_approval: 'en attente', approved: 'acceptée', running: 'en cours', in_review: 'relue',
@@ -203,7 +227,8 @@ code { font: 11px ui-monospace, monospace; word-break: break-all; }
           el('div', { class: 'muted', text: 'Crée-la, puis invite tes collègues : chacun verra les outils des autres.' }),
           name,
           el('button', { class: 'act fill', onclick: function () {
-            if (name.value.trim()) api('POST', '/ui/admin/team', { name: name.value.trim() }).then(render, function (error) { notice = error.message; render(); });
+            if (!name.value.trim()) { name.setAttribute('aria-invalid', 'true'); announce('Donne un nom à l’équipe.'); name.focus(); return; }
+            api('POST', '/ui/admin/team', { name: name.value.trim() }).then(function () { info = 'Équipe créée.'; announce(info); render(true); }, function (error) { notice = error.message; render(true); });
           } }, 'Créer l’équipe')));
         return;
       }
@@ -234,16 +259,55 @@ code { font: 11px ui-monospace, monospace; word-break: break-all; }
 
   function renderTools(view) {
     return api('GET', '/ui/admin/tools').then(function (data) {
+      view.appendChild(el('h2', { text: 'Connecter mes agents' }));
+      view.appendChild(el('div', { class: 'muted', text: '1. Analyse locale des quatre agents compatibles. 2. Choisis puis confirme les connecteurs à ajouter. Aucun outil ne sera partagé.' }));
+      view.appendChild(el('button', { class: 'act', onclick: function () {
+        api('GET', '/ui/admin/onboarding').then(function (result) { onboardingPlans = result.agents; manualConnector = result.manual; render(true); }, function (error) { notice = error.message; render(true); });
+      } }, '1. Analyser ce Mac'));
+      var plans = onboardingPlans || [];
+      var selectable = [];
+      plans.forEach(function (plan) {
+        if (plan.state === 'absent') return;
+        var checkbox = plan.state === 'ready' ? el('input', { type: 'checkbox', 'aria-label': 'Connecter ' + plan.label }) : null;
+        if (checkbox) { checkbox.checked = true; selectable.push({ plan: plan, checkbox: checkbox }); }
+        view.appendChild(el('div', { class: 'card' },
+          el('div', { class: 'row' }, checkbox, el('strong', { text: plan.label })),
+          el('div', { class: plan.state === 'error' || plan.state === 'conflict' ? 'error' : 'muted', text: plan.detail }),
+          plan.state === 'already_connected' ? el('button', { class: 'act', onclick: function () {
+            api('POST', '/ui/admin/onboarding', { selections: [{ agent: plan.agent, fingerprint: plan.fingerprint, action: 'disconnect' }] }).then(function (result) {
+              info = result.results.map(function (item) { return item.agent + ' : ' + item.detail; }).join(' · ');
+              onboardingPlans = null;
+              announce(info);
+              render(true);
+            }, function (error) { notice = error.message; render(true); });
+          } }, 'Retirer ce connecteur') : null));
+      });
+      if (selectable.length > 0) view.appendChild(el('button', { class: 'act fill', onclick: function () {
+        var selected = selectable.filter(function (item) { return item.checkbox.checked; }).map(function (item) {
+          return { agent: item.plan.agent, fingerprint: item.plan.fingerprint, action: 'connect' };
+        });
+        if (!selected.length) return;
+        api('POST', '/ui/admin/onboarding', { selections: selected }).then(function (result) {
+          info = result.results.map(function (item) { return item.agent + ' : ' + item.detail; }).join(' · ') + ' · Connecteur utilisable : à vérifier après relance. L’état de l’équipe apparaît en haut.';
+          onboardingPlans = null;
+          announce(info);
+          render(true);
+        }, function (error) { notice = error.message; render(true); });
+      } }, '2. Connecter les agents sélectionnés'));
+      if (onboardingPlans && plans.every(function (plan) { return plan.state === 'absent'; })) view.appendChild(el('div', { class: 'empty', text: 'Aucun de ces quatre agents détecté. Tu peux ajouter manuellement le connecteur MCP drop dans ton agent.' }));
+      view.appendChild(el('div', { class: 'muted', text: 'Autre agent ? Ajoute manuellement un serveur MCP stdio nommé drop. Aucune permission générale n’est nécessaire.' }));
+      if (onboardingPlans && manualConnector) view.appendChild(el('div', { class: 'card' },
+        el('strong', { text: 'Configuration manuelle' }),
+        el('code', { text: JSON.stringify({ mcpServers: { drop: manualConnector } }, null, 2) }),
+        el('div', { class: 'muted', text: 'Copie cette entrée dans la configuration MCP de ton agent, puis relance-le. Cela ne partage aucun outil.' })));
+      view.appendChild(el('h2', { text: 'Mes outils' }));
       view.appendChild(el('div', { class: 'muted', text: 'Partager un outil, c’est répondre aux questions de l’équipe avec lui, après ton accord. Personne ne reçoit l’accès.' }));
       data.agents.forEach(function (agent) {
         if (!agent.installed) return;
         view.appendChild(el('h2', { text: agent.label }));
         var card = el('div', { class: 'list' });
         card.appendChild(el('div', { class: 'row' },
-          el('div', { class: 'grow', text: agent.dropInstalled ? 'drop est installé dans ' + agent.label : 'drop n’est pas encore installé' }),
-          el('button', { class: 'act ' + (agent.dropInstalled ? '' : 'accent'), onclick: function () {
-            api('POST', '/ui/admin/install', { agent: agent.agent, remove: agent.dropInstalled }).then(render, function (error) { notice = error.message; render(); });
-          } }, agent.dropInstalled ? 'Retirer' : 'Ajouter')));
+          el('div', { class: 'grow', text: agent.dropInstalled ? 'drop est installé dans ' + agent.label : 'drop n’est pas encore installé' })));
         agent.servers.forEach(function (server) {
           if (!server.shareable) return;
           var shared = data.shared[agent.agent + '/' + server.name];
@@ -252,10 +316,10 @@ code { font: 11px ui-monospace, monospace; word-break: break-all; }
             el('button', { class: 'switch', role: 'switch', 'aria-checked': shared ? 'true' : 'false', 'aria-label': (shared ? 'Ne plus partager ' : 'Partager ') + server.name,
               onclick: function () {
                 var call = shared ? api('POST', '/ui/admin/unshare', { capabilityId: shared }) : api('POST', '/ui/admin/share', { agent: agent.agent, server: server.name });
-                call.then(render, function (error) {
+                call.then(function () { info = shared ? 'Outil retiré du partage.' : 'Outil partagé après consentement.'; announce(info); render(true); }, function (error) {
                   notice = error.message;
                   if (error.code === 'E_SHARE_OAUTH') signInOffer = { agent: agent.agent, server: server.name };
-                  render();
+                  render(true);
                 });
               } }, el('span', {}))));
         });
@@ -286,41 +350,81 @@ code { font: 11px ui-monospace, monospace; word-break: break-all; }
           info = data.connected
             ? 'drop est déjà connecté à ' + offer.server + ' : partage-le de nouveau.'
             : 'Termine la connexion dans ton navigateur, puis partage ' + offer.server + ' de nouveau.';
+          announce(info);
           signInLink = data.authorizationUrl || '';
-          render();
-        }, function (error) { notice = error.message; render(); });
+          render(true);
+        }, function (error) { notice = error.message; render(true); });
       } }, 'Se connecter à ' + offer.server));
   }
 
-  function render() {
+  function render(focusResult) {
+    var version = ++renderVersion;
     var view = document.getElementById('view');
     ['requests', 'team', 'tools'].forEach(function (name) {
       document.getElementById('tab-' + name).setAttribute('aria-selected', String(name === tab));
+      document.getElementById('tab-' + name).setAttribute('tabindex', name === tab ? '0' : '-1');
     });
     var next = document.createElement('main');
     next.id = 'view';
-    if (notice) { next.appendChild(el('div', { class: 'error', text: notice })); notice = ''; }
-    if (info) { next.appendChild(el('div', { class: 'card', text: info })); info = ''; }
+    next.setAttribute('role', 'tabpanel');
+    next.setAttribute('aria-labelledby', 'tab-' + tab);
+    next.setAttribute('aria-busy', 'true');
+    if (notice) { next.appendChild(el('div', { class: 'notice error', role: 'alert', text: notice })); notice = ''; }
+    if (info) { next.appendChild(el('div', { class: 'notice', text: info })); info = ''; }
     if (signInOffer) next.appendChild(signInCard(signInOffer));
     // The sign-in page comes from the remote server: shown as a link only if it is https, never javascript: or else.
     if (signInLink.indexOf('https://') === 0) {
       next.appendChild(el('a', { class: 'act', href: signInLink, target: '_blank', rel: 'noopener noreferrer', text: 'Ouvrir la page de connexion' }));
       signInLink = '';
     }
+    var loading = el('div', { class: 'loading', text: 'Chargement…' });
+    next.appendChild(loading);
+    view.replaceWith(next);
+    function complete(error) {
+      if (version !== renderVersion) return;
+      loading.remove();
+      next.setAttribute('aria-busy', 'false');
+      if (error) {
+        var message = 'Impossible de charger cette section. Vérifie que drop est ouvert, puis réessaie.';
+        next.appendChild(el('div', { class: 'notice error', role: 'alert' },
+          el('div', { text: message }), el('button', { class: 'act', onclick: function () { render(true); } }, 'Réessayer')));
+        announce(message);
+      }
+      if (focusResult) {
+        var target = next.querySelector('h2, [role="alert"], .notice, button');
+        if (target) { target.setAttribute('tabindex', '-1'); target.focus(); }
+      }
+    }
     if (linkRequest) {
-      api('GET', '/ui/admin/tools').then(function (tools) { linkCard(next, tools); view.replaceWith(next); });
+      api('GET', '/ui/admin/tools').then(function (tools) { if (version === renderVersion) linkCard(next, tools); complete(); }, complete);
       return;
     }
     var build = tab === 'requests' ? renderRequests : tab === 'team' ? renderTeam : renderTools;
-    build(next).then(function () { view.replaceWith(next); }, function () { view.replaceWith(next); });
+    build(next).then(function () { complete(); }, complete);
     api('GET', '/ui/admin/status').then(function (status) {
+      if (version !== renderVersion) return;
       document.getElementById('relay-dot').className = 'dot ' + (status.relayConnected ? 'ok' : 'wait');
       document.getElementById('status-text').textContent = status.displayName + (status.relayConnected ? ' · connecté' : ' · hors ligne');
-    }, function () {});
+    }, function () {
+      if (version !== renderVersion) return;
+      document.getElementById('relay-dot').className = 'dot';
+      document.getElementById('status-text').textContent = 'Moteur local indisponible';
+    });
   }
 
-  ['requests', 'team', 'tools'].forEach(function (name) {
-    document.getElementById('tab-' + name).addEventListener('click', function () { tab = name; render(); });
+  var tabNames = ['requests', 'team', 'tools'];
+  tabNames.forEach(function (name) {
+    var control = document.getElementById('tab-' + name);
+    control.addEventListener('click', function () { tab = name; render(); });
+    control.addEventListener('keydown', function (event) {
+      var index = tabNames.indexOf(name);
+      var target = event.key === 'ArrowRight' ? (index + 1) % tabNames.length : event.key === 'ArrowLeft' ? (index + tabNames.length - 1) % tabNames.length : event.key === 'Home' ? 0 : event.key === 'End' ? tabNames.length - 1 : -1;
+      if (target < 0) return;
+      event.preventDefault();
+      tab = tabNames[target];
+      render();
+      document.getElementById('tab-' + tab).focus();
+    });
   });
   // Opened from a drop://link link (T2.13): an assistant such as Claude or ChatGPT asks to reach the team in this
   // user's name, through a gateway. Nothing happens until the user clicks.
@@ -350,13 +454,14 @@ code { font: 11px ui-monospace, monospace; word-break: break-all; }
       !complete ? el('div', { class: 'error', text: 'Ce lien est incomplet : redemande l’autorisation depuis ton assistant.' })
         : known ? null : el('div', { class: 'error', text: 'Attention : les réponses partiront vers ' + request.redirect + ', qui n’est ni Claude ni ChatGPT. Refuse si tu n’as pas ajouté toi-même cet assistant.' }),
       el('div', { class: 'actions' },
-        el('button', { class: 'act', onclick: function () { linkRequest = null; render(); } }, 'Refuser'),
+        el('button', { class: 'act', onclick: function () { linkRequest = null; info = 'Raccordement refusé.'; announce(info); render(true); } }, 'Refuser'),
         complete ? el('button', { class: 'act fill', onclick: function () {
           api('POST', '/ui/admin/link', { gateway: request.gateway, session: request.session, client: request.client, clientId: request.clientId, redirect: request.redirect }).then(function () {
             linkRequest = null;
             info = request.client + ' est relié. Tu peux revenir dans ta conversation.';
-            render();
-          }, function (error) { notice = error.message; render(); });
+            announce(info);
+            render(true);
+          }, function (error) { notice = error.message; render(true); });
         } }, 'Autoriser') : null)));
   }
 
@@ -367,11 +472,19 @@ code { font: 11px ui-monospace, monospace; word-break: break-all; }
     api('POST', '/ui/pair', undefined, { code: pairCode }).then(function () {
       info = 'Invitation acceptée : tu rejoins l’équipe dans quelques secondes.';
       tab = 'team';
-      render();
-    }, function () { notice = 'Ce lien d’invitation n’est plus valable. Demande-en un nouveau.'; render(); });
+      announce(info);
+      render(true);
+    }, function () { notice = 'Ce lien d’invitation n’est plus valable. Demande-en un nouveau.'; render(true); });
   }
   var events = new EventSource('/ui/events?token=' + encodeURIComponent(token));
-  events.onmessage = function () { if (tab === 'requests') render(); };
+  events.onmessage = function () {
+    if (tab !== 'requests') return;
+    if (document.activeElement && document.activeElement.closest('#view')) { pendingRefresh = true; return; }
+    render();
+  };
+  document.addEventListener('focusin', function (event) {
+    if (pendingRefresh && !event.target.closest('#view')) { pendingRefresh = false; render(); }
+  });
   render();
 })();
 </script>

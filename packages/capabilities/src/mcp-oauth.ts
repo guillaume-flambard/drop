@@ -15,7 +15,7 @@ import { DropError } from '@drop/protocol';
 import { McpConnectError } from './mcp-answer.ts';
 
 /**
- * OAuth for the owner's remote MCP servers (T2.17, D39), such as Notion's: drop registers itself as its own client
+ * OAuth for the owner's remote MCP servers (T2.17, D74), such as Notion's: drop registers itself as its own client
  * (dynamic registration, client name "drop"), the owner signs in once in their browser, and the tokens stay on their
  * machine, mode 0600 under DROP_HOME/oauth. They are never logged nor sent to a peer, and the tools a colleague's
  * question may use stay the ones chosen when sharing (D19). Built on the MCP SDK's OAuth client.

@@ -83,15 +83,18 @@ export async function sealEnvelope(
 export class ReplayCache {
   private readonly seen = new Map<string, number>();
   private readonly windowMs: number;
+  private readonly maxEntries: number;
 
-  constructor(windowMs: number = REPLAY_WINDOW_MS) {
+  constructor(windowMs: number = REPLAY_WINDOW_MS, maxEntries = 65_536) {
     this.windowMs = windowMs;
+    this.maxEntries = maxEntries;
   }
 
   /** Returns false when the id was already seen inside the window. */
   check(id: string, now: number): boolean {
     for (const [key, expiresAt] of this.seen) if (expiresAt <= now) this.seen.delete(key);
     if (this.seen.has(id)) return false;
+    if (this.seen.size >= this.maxEntries) return false;
     this.seen.set(id, now + this.windowMs);
     return true;
   }

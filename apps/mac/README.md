@@ -11,7 +11,7 @@ node scripts/build-mac.ts --sign "Developer ID Application: …"
 
 Une construction sans `--updates` ne cherche jamais de mise à jour.
 
-## Mises à jour signées (D35)
+## Mises à jour signées (D70)
 
 Une seule fois, sur le Mac qui publie :
 

@@ -33,23 +33,28 @@ des questions envoyées par ce Node.
 - **THEN** chaque action atteint le Node dans cet ordre ; une demande de partage incomplète est refusée (400), une demande sans jeton aussi (401)
 
 ### Requirement: App de la barre de menus
-L'app SHALL embarquer Node et `drop.mjs` (D29), créer au premier lancement une identité au nom de l'utilisateur du Mac
-sur le relais public, lancer `drop serve` et l'arrêter en quittant, afficher le panneau sous son icône, et ouvrir les
-liens `drop://pair?code=…` dans le panneau, qui accepte l'invitation. Seule la version finale s'inscrit au démarrage de
-la session.
+L’app SHALL embarquer Node et `drop.mjs`, créer une identité au premier lancement avec un relais local ou explicitement configuré, lancer le daemon et l’arrêter en quittant. Le panneau et les liens d’appairage restent locaux. Le bootstrap MUST NOT sélectionner le relais public. Seule la version finale s’inscrit au démarrage de session.
 
 #### Scenario: Premier lancement
-<!-- openspec-guard:non-testable reason="App native : vérifiée à la main le 2026-10-08 (drop.app de debug, daemon embarqué connecté au relais public)" -->
-- **WHEN** l'utilisateur ouvre drop.app
-- **THEN** le Node démarre avec le Node embarqué, se connecte au relais, et le panneau s'affiche au clic sur l'icône
+<!-- openspec-guard:test="private bundled bootstrap > initializes a fresh private home without starting the imported MCP executable" -->
+- **WHEN** l’utilisateur ouvre l’app sur une installation vierge
+- **THEN** le bootstrap choisit le profil privé et une destination locale, sans connexion imposée au lab
+
+### Requirement: Deux confirmations de raccordement
+Le panneau SHALL d'abord montrer l'analyse locale expurgée des adaptateurs connus et laisser choisir ceux à raccorder. Une seconde action explicite SHALL appliquer cette sélection et afficher un résultat par agent. Il MUST distinguer configuration modifiée, relance de l'agent nécessaire et équipe joignable. Sans agent compatible, ou pour un agent non pris en charge, il SHALL montrer une voie de configuration manuelle sans demander de permission générale.
+
+#### Scenario: AC-CONNECT-07 — états de relance et d'équipe distincts
+<!-- openspec-guard:test="local agent onboarding (T3.3) > AC-CONNECT-07 reports agent restart independently of team connectivity" -->
+- **WHEN** la configuration est raccordée mais l'agent doit redémarrer ou l'équipe est hors ligne
+- **THEN** le panneau affiche ces états distincts sans annoncer que le parcours entier est terminé
+
+#### Scenario: AC-CONNECT-08 — état vide et voie manuelle
+<!-- openspec-guard:test="local agent onboarding (T3.3) > AC-CONNECT-08 offers a manual stdio entry without broad permissions" -->
+- **WHEN** aucun des quatre adaptateurs n'est détecté, ou que l'agent de l'utilisateur n'est pas pris en charge
+- **THEN** le panneau propose la configuration manuelle et n'élargit aucune permission
 
 ### Requirement: Mises à jour signées
-Une app construite avec la clé de mise à jour de drop SHALL chercher une nouvelle version au lancement puis toutes les
-6 h sur `https://drop.memolabs.dev/updates/latest.json`, et la proposer dans le menu de son icône (« Mettre à jour vers
-x.y.z ») ; rien ne se télécharge ni ne s'installe sans ce clic (D35). L'archive MUST être signée par cette clé et sa
-signature MUST porter la version annoncée (`requireSignedVersion` du plugin updater de Tauri), sinon l'app la refuse.
-Une app construite sans la clé ne cherche pas de mise à jour. Le manifeste publié MUST être refusé à la construction si
-la signature porte une autre version que celle de l'app.
+Une app construite avec la clé de mise à jour SHALL chercher une version au lancement puis toutes les 6 h sur `https://drop.memolabs.dev/updates/latest.json` et la proposer dans le menu ; rien ne s'installe sans ce clic (D70). L'archive MUST être signée par cette clé pour la version annoncée (`requireSignedVersion`), sinon refusée. Sans la clé, l'app ne cherche aucune mise à jour (D76). La construction MUST refuser un manifeste signé pour une autre version.
 
 #### Scenario: Manifeste publié
 <!-- openspec-guard:test="signed updates of the Mac app (T2.4) > announces the build for darwin-aarch64 with its signature and a versioned URL under /updates" -->
