@@ -102,6 +102,32 @@
                     <td>Aligner la vision, le README, le guide, ce site et les specs sur le repositionnement.</td>
                   </tr>
                   <tr>
+                    <td>T4.1 Simulation minimale</td>
+                    <td>Faite</td>
+                    <td>
+                      50 nœuds sur un Mac, graine 1 : 124 livrées, 14 refusées, 14 reportées, aucune fuite, latence
+                      médiane 100 ms. Les 8 délais dépassés viennent d’un propriétaire bloqué par la limite de débit du
+                      relais (T3.1d).
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>T4.14 Panneau conforme</td>
+                    <td>Faite</td>
+                    <td>
+                      Notifications à l’icône de l’app et clic qui ouvre le panneau, vérifiés sur la build notarisée ;
+                      invitation confirmée avant de rejoindre (sur test) ; carte avec expiration en direct. VoiceOver et
+                      une vraie invitation restent à tester.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>T4.18 Arrêt du moteur</td>
+                    <td>Faite</td>
+                    <td>
+                      Le moteur s’arrête de lui-même si l’app meurt sans quitter, vérifié sur la build notarisée avec un
+                      kill -9.
+                    </td>
+                  </tr>
+                  <tr>
                     <td>T3.1b Bornes anti-rejeu</td>
                     <td>En cours</td>
                     <td>Corrections implémentées et testées ; revue formelle à terminer.</td>
@@ -115,8 +141,8 @@
                     <td>T3.4 App Mac distribuable</td>
                     <td>Bloquée</td>
                     <td>
-                      Une build acceptée par Apple le 10 octobre sur le Mac de Guillaume, preuve pas encore archivée.
-                      Recette VoiceOver et installation sur un Mac de test restent humaines.
+                      Build signée et notarisée, preuve consignée le 10 octobre (Apple Silicon seulement). Recette
+                      VoiceOver et installation sur un Mac de test restent humaines.
                     </td>
                   </tr>
                 </tbody>
