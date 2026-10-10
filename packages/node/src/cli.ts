@@ -157,6 +157,23 @@ switch (command) {
     };
     process.on('SIGINT', stop);
     process.on('SIGTERM', stop);
+    // Launched by the Mac app (T4.18): the app holds this stdin pipe open; the system closes it when the app dies,
+    // even when killed, so the daemon never outlives its shell. A terminal or a script never sets this variable.
+    if (process.env.DROP_EXIT_WITH_PARENT === 'stdin') {
+      let gone = false;
+      const parentGone = (): void => {
+        if (gone) return;
+        gone = true;
+        process.stderr.write(
+          `${JSON.stringify({ at: new Date().toISOString(), event: 'daemon_parent_gone', code: 'E_PARENT_GONE' })}\n`,
+        );
+        stop();
+      };
+      process.stdin.once('end', parentGone);
+      process.stdin.once('close', parentGone);
+      process.stdin.once('error', parentGone);
+      process.stdin.resume();
+    }
     break;
   }
   case 'invite': {

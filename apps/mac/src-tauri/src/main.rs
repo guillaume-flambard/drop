@@ -143,6 +143,11 @@ fn start_daemon(app: &AppHandle, marker: &str, port: u16) -> Result<(), &'static
     let mut command = drop_command(app, &["serve"]);
     // The daemon hands notifications to the app as JSON lines on stdout (T4.14), so they carry the app's icon.
     command.stdout(Stdio::piped()).env("DROP_NOTIFY", "shell");
+    // The stdin pipe stays held by the Child kept in the app state: when the app dies, even killed, the system closes
+    // it and the daemon stops itself (T4.18).
+    command
+        .stdin(Stdio::piped())
+        .env("DROP_EXIT_WITH_PARENT", "stdin");
     command.stderr(log).env("DROP_SHELL_INSTANCE", marker);
     let mut child = command.spawn().map_err(|_| "E_SPAWN")?;
     if let Some(stdout) = child.stdout.take() {
