@@ -3,6 +3,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { z } from 'zod';
 import { decodeInvite, isDropError } from '@drop/protocol';
 import type { NodeEngine } from './engine.ts';
+import { LinkRequestSchema, type LinkRequest } from './home.ts';
 import { renderPanel } from './panel.ts';
 import { routeQuestion, takesQuestion } from './route.ts';
 import { teamAgent } from './a2a-inbound.ts';
@@ -20,6 +21,27 @@ export interface LocalApiOptions {
   now?: () => number;
   /** Owner actions of the app's panel (T2.4), wired by the daemon; absent in tests of the drop routes. */
   admin?: AdminHooks;
+  /**
+   * Where the browser brings back an OAuth sign-in (T2.17): exchanges the code of a pending sign-in, by its single-use
+   * state, and resolves to the server's host. The browser cannot send the local token: the state is the check.
+   */
+  oauthCallback?: (state: string, code: string) => Promise<string>;
+}
+
+function escapeText(text: string): string {
+  return text.replace(/[&<>"']/g, (char) => `&#${String(char.charCodeAt(0))};`);
+}
+
+function signInPage(res: ServerResponse, status: number, message: string): void {
+  res.writeHead(status, {
+    'Content-Type': 'text/html; charset=utf-8',
+    'Content-Security-Policy': "default-src 'none'",
+    'Cache-Control': 'no-store',
+    'Referrer-Policy': 'no-referrer',
+  });
+  res.end(
+    `<!doctype html><html lang="fr"><meta charset="utf-8"><title>drop</title><body style="font:16px system-ui;margin:3em"><p>${escapeText(message)}</p></body></html>`,
+  );
 }
 
 /** What the panel can do beyond deciding: see and share tools, install drop in agents, create a team. */
@@ -43,7 +65,9 @@ export interface AdminHooks {
     }[],
   ): unknown;
   createTeam(name: string): unknown;
-  link(gateway: string, session: string, client: string): Promise<unknown>;
+  link(gateway: string, request: LinkRequest): Promise<unknown>;
+  /** Starts drop's OAuth sign-in to a detected remote MCP server (T2.17): the URL to open, or `connected`. */
+  connect(agent: string, server: string): Promise<unknown>;
   unlink(gateway: string, client: string): boolean;
 }
 
@@ -160,6 +184,25 @@ export function startLocalApi(options: LocalApiOptions): Promise<LocalApi> {
       localHost(req)
     ) {
       json(res, 200, { instance: options.shellInstance });
+      return;
+    }
+    if ((req.method ?? 'GET') === 'GET' && url.pathname === '/oauth/callback' && localHost(req)) {
+      const state = url.searchParams.get('state') ?? '';
+      const code = url.searchParams.get('code') ?? '';
+      if (url.searchParams.has('error')) {
+        signInPage(res, 400, 'Connexion refusée. Tu peux fermer cet onglet et réessayer depuis drop.');
+        return;
+      }
+      if (!options.oauthCallback || !state || !code) {
+        signInPage(res, 400, 'Lien de connexion incomplet.');
+        return;
+      }
+      try {
+        const host = await options.oauthCallback(state, code);
+        signInPage(res, 200, `drop est connecté à ${host}. Tu peux fermer cet onglet et partager cet outil.`);
+      } catch {
+        signInPage(res, 400, 'Cette connexion a expiré ou a déjà servi. Recommence depuis drop.');
+      }
       return;
     }
     if (!authorized(req, url)) {
@@ -383,8 +426,22 @@ export function startLocalApi(options: LocalApiOptions): Promise<LocalApi> {
           json(res, 200, admin.install(field('agent'), (body as { remove?: unknown }).remove === true));
           return;
         }
+        if (method === 'POST' && path === '/ui/admin/connect') {
+          json(res, 200, await admin.connect(field('agent'), field('server')));
+          return;
+        }
         if (method === 'POST' && path === '/ui/admin/link') {
-          json(res, 200, await admin.link(field('gateway'), field('session'), field('client')));
+          const request = LinkRequestSchema.safeParse({
+            sessionId: field('session'),
+            clientId: field('clientId'),
+            clientName: field('client'),
+            redirectHost: field('redirect'),
+          });
+          if (!request.success) {
+            json(res, 400, { error: 'E_SCHEMA' });
+            return;
+          }
+          json(res, 200, await admin.link(field('gateway'), request.data));
           return;
         }
         if (method === 'POST' && path === '/ui/admin/unlink') {
@@ -396,9 +453,11 @@ export function startLocalApi(options: LocalApiOptions): Promise<LocalApi> {
           return;
         }
       } catch (error) {
+        const code = (error as { code?: unknown } | null)?.code;
         json(res, 400, {
           error: 'E_ADMIN',
           message: error instanceof Error ? error.message.slice(0, 300) : 'failed',
+          ...(typeof code === 'string' && code.startsWith('E_SHARE_') ? { code } : {}),
         });
         return;
       }
