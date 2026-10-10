@@ -19,8 +19,11 @@ export function renderPanel(): string {
   --soft: #C9C6BE; --mute: #A29F97; --line: #34332F; --edge: #43413C; --accent: #5CC2B5; --accent-on: #122923;
   --accent-soft: #23403C; --warn: #F0A27A; --ok: #5FBF85; --wait: #E0A93B; --shade: rgba(0, 0, 0, .35); } }
 * { box-sizing: border-box; }
-html { scrollbar-width: thin; scrollbar-color: var(--edge) transparent; scroll-padding-top: 104px; }
-body { margin: 0; background: var(--ground); color: var(--ink); font: 13px/1.4 -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+/* The Mac window is transparent with a rounded popover material: the page paints a translucent ground inside it. */
+html { height: 100%; overflow: hidden; border-radius: 12px; background: transparent; }
+body { height: 100%; overflow-y: auto; border-radius: 12px; scrollbar-width: thin; scrollbar-color: var(--edge) transparent;
+  scroll-padding-top: 104px; }
+body { margin: 0; background: color-mix(in srgb, var(--ground) 88%, transparent); color: var(--ink); font: 13px/1.4 -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   -webkit-font-smoothing: antialiased; -webkit-user-select: none; user-select: none; touch-action: manipulation;
   -webkit-tap-highlight-color: transparent; }
 .quote, code, .fields dd { -webkit-user-select: text; user-select: text; }
@@ -138,7 +141,7 @@ code { font: 11px/1.4 ui-monospace, SFMono-Regular, monospace; word-break: break
   border-radius: 7px; background: var(--well); }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition-property: opacity, background-color, color !important; }
   .card.leaving, button.act:active, .switch:active span { transform: none; } .switch[aria-checked="true"] span { transform: translateX(13px); } }
-@media (prefers-reduced-transparency: reduce) { header { background: var(--ground); -webkit-backdrop-filter: none; backdrop-filter: none; } }
+@media (prefers-reduced-transparency: reduce) { body { background: var(--ground); } header { background: var(--ground); -webkit-backdrop-filter: none; backdrop-filter: none; } }
 @media (prefers-contrast: more) { :root { --edge: #8C8981; --line: #B5B2AB; --mute: #4A4843; } .card, .list, button.act { border-width: 1px; } }
 </style>
 </head>
@@ -229,6 +232,20 @@ code { font: 11px/1.4 ui-monospace, SFMono-Regular, monospace; word-break: break
   function agentName(agent) {
     var names = { claude_code: 'Claude Code', claude_desktop: 'Claude Desktop', cursor: 'Cursor', codex: 'Codex' };
     return names[agent] || agent.replace(/_/g, ' ');
+  }
+
+  var CODES = {
+    E_CLI_MISSING: 'Outil en ligne de commande introuvable sur ce Mac. Installe-le, puis relance l’analyse.',
+    E_CONFIG_INVALID_OR_UNREADABLE: 'Configuration de cet agent illisible. Corrige-la ou ajoute drop à la main.',
+    E_DROP_CONFLICT: 'Un serveur nommé drop existe déjà avec une autre commande.',
+    E_CONFIG_CHANGED: 'La configuration a changé depuis l’analyse. Relance l’analyse.',
+    E_CLI_COMMAND: 'L’agent n’a pas accepté l’ajout du connecteur. Réessaie ou ajoute drop à la main.',
+    E_CLI_UNVERIFIED: 'L’agent n’a pas confirmé l’ajout du connecteur. Réessaie ou ajoute drop à la main.',
+    E_AGENT_INVALID: 'Agent non pris en charge.'
+  };
+
+  function explain(detail) {
+    return CODES[detail] ? CODES[detail] + ' (' + detail + ')' : detail;
   }
 
   function initials(name) {
@@ -392,10 +409,10 @@ code { font: 11px/1.4 ui-monospace, SFMono-Regular, monospace; word-break: break
         if (checkbox) { checkbox.checked = true; selectable.push({ plan: plan, checkbox: checkbox }); }
         found.appendChild(el(checkbox ? 'label' : 'div', { class: 'row' }, checkbox,
           el('div', { class: 'grow' }, el('div', { class: 'name', text: plan.label }),
-            el('div', { class: plan.state === 'error' || plan.state === 'conflict' ? 'error' : 'muted', text: plan.detail })),
+            el('div', { class: plan.state === 'error' || plan.state === 'conflict' ? 'error' : 'muted', text: explain(plan.detail) })),
           plan.state === 'already_connected' ? el('button', { class: 'act', onclick: function () {
             api('POST', '/ui/admin/onboarding', { selections: [{ agent: plan.agent, fingerprint: plan.fingerprint, action: 'disconnect' }] }).then(function (result) {
-              info = result.results.map(function (item) { return item.agent + ' : ' + item.detail; }).join(' · ');
+              info = result.results.map(function (item) { return agentName(item.agent) + ' : ' + explain(item.detail); }).join(' · ');
               onboardingPlans = null;
               announce(info);
               render(true);
@@ -409,7 +426,7 @@ code { font: 11px/1.4 ui-monospace, SFMono-Regular, monospace; word-break: break
         });
         if (!selected.length) { announce('Coche au moins un agent.'); return; }
         api('POST', '/ui/admin/onboarding', { selections: selected }).then(function (result) {
-          info = result.results.map(function (item) { return item.agent + ' : ' + item.detail; }).join(' · ') + ' · Connecteur utilisable : à vérifier après relance. L’état de l’équipe apparaît en haut.';
+          info = result.results.map(function (item) { return agentName(item.agent) + ' : ' + explain(item.detail); }).join(' · ') + ' · Connecteur utilisable : à vérifier après relance. L’état de l’équipe apparaît en haut.';
           onboardingPlans = null;
           announce(info);
           render(true);
