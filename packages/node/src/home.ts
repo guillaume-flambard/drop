@@ -1,4 +1,5 @@
 import { StoredFactSchema, type StoredFact } from './facts.ts';
+import { decodeLanKey, newLanKey } from './lan-tags.ts';
 import { randomBytes } from 'node:crypto';
 import {
   appendFileSync,
@@ -392,6 +393,35 @@ export class DropHome {
 
   saveLinks(links: AgentLink[]): void {
     writePrivate(join(this.root, 'links.json'), `${JSON.stringify(links, null, 2)}\n`);
+  }
+
+  /** This node's local-network discovery key (T4.2c): created once, owner-only. */
+  lanKey(): string {
+    const path = join(this.root, 'lan-key');
+    if (existsSync(path)) {
+      const key = readFileSync(path, 'utf8').trim();
+      if (decodeLanKey(key)) return key;
+      // Never replaced silently: the daemon logs it and turns the local mode off.
+      throw new Error('E_LAN_KEY unreadable lan-key');
+    }
+    const key = newLanKey();
+    writeDurablePrivate(path, `${key}\n`);
+    return key;
+  }
+
+  /** The discovery keys peers sent (T4.2c), kept apart from peers.json, owner-only. */
+  lanKeys(): Record<string, string> {
+    const path = join(this.root, 'lan-keys.json');
+    if (!existsSync(path)) return {};
+    // Throws when unreadable: the engine logs it, and saveLanKey never overwrites the other peers' keys.
+    return z.record(z.string(), z.string().regex(/^[A-Za-z0-9_-]{43}$/)).parse(JSON.parse(readFileSync(path, 'utf8')));
+  }
+
+  saveLanKey(nodeId: string, key: string): void {
+    writeDurablePrivate(
+      join(this.root, 'lan-keys.json'),
+      `${JSON.stringify({ ...this.lanKeys(), [nodeId]: key }, null, 2)}\n`,
+    );
   }
 
   /** Published facts (T4.4): private to this node, written whole through a temporary file. */

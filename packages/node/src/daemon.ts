@@ -48,6 +48,14 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
   const log = options.log ?? ((line: string) => process.stderr.write(`${line}\n`));
   // The engine is built before the relay client that delivers to it; the transport reads the client lazily.
   const link: { relay?: RelayClient; lan?: LanService; apiPort?: number } = {};
+  // An unreadable local-network key turns the local mode off, logged, rather than inventing a new identity silently.
+  let lanKey: string | undefined;
+  try {
+    lanKey = home.lanKey();
+  } catch {
+    log(JSON.stringify({ at: new Date().toISOString(), event: 'lan_key_unreadable', code: 'E_LAN_KEY' }));
+  }
+  const lanEnabled = lanKey !== undefined && config.lan && process.env.DROP_LAN !== 'off';
   // OAuth sign-ins to remote MCP servers (T2.17): the browser comes back to this node's API, on its bound port.
   const redirectUrl = () => oauthRedirect(link.apiPort ?? config.apiPort);
   const store = oauthStore(home);
@@ -55,6 +63,7 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
   const oauth: ConnectOptions = { oauth: (serverUrl) => runtimeOAuth(store, redirectUrl())(serverUrl) };
   const engine = new NodeEngine({
     identity,
+    ...(lanKey ? { lanKey } : {}),
     ownerKind: config.ownerKind,
     store: home,
     // The private profile keeps its policy-bound capabilities (T3.1); elsewhere mcp.answer also uses drop's own OAuth
@@ -130,18 +139,27 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
     discovery: mdnsDiscovery(),
     canReach: (nodeId) => engine.canReachDirectly(nodeId),
     canAccept: (nodeId) => engine.canAcceptDirectly(nodeId),
+    announcement: () => engine.lanAnnouncement(),
+    recognizes: (nodeId, seen) => engine.lanRecognizes(nodeId, seen),
+    knockSecrets: () => engine.lanKnockSecrets(),
+    secretFor: (nodeId) => engine.lanSecretFor(nodeId),
     onEnvelope: (envelope) => {
       void engine.handleEnvelope(envelope).catch(() => {
         log('E_RUNNER envelope handling failed');
       });
     },
-    enabled: config.lan && process.env.DROP_LAN !== 'off',
+    enabled: lanEnabled,
     log: (entry) => {
       log(JSON.stringify({ at: new Date().toISOString(), ...entry }));
     },
   });
   link.lan = lan;
   await lan.start();
+  // Peers learn this node's discovery key again at each start; queued like any message when they are away.
+  if (lanEnabled)
+    engine.announceLanKey().catch(() => {
+      log('E_RUNNER lan key not shared');
+    });
 
   const api = await startLocalApi({
     engine,
