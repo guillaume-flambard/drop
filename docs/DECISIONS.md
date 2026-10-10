@@ -248,6 +248,83 @@ Format : `D<n> — date — décision — raison`. Les agents ajoutent ici toute
   `TASK_STATE_REJECTED` sur un refus, `TASK_STATE_FAILED` sur une expiration ou une erreur. Sortant : une capacité
   `a2a.answer` permet à une entreprise de brancher son propre agent A2A comme source de réponses, comme `mcp.answer`.
 
+Les décisions D69 à D75 ont été prises le 9 octobre 2026 sur la branche principale sous les numéros D34 à D40, en même
+temps que D34 à D46 sur la branche du profil privé. Elles ont été renumérotées à la réunion des deux branches
+(10 octobre 2026), références comprises ; les numéros D34 à D46 gardent le sens du profil privé.
+
+- **D69** — Clôture de T2.1 (2026-10-09). Revue de sécurité de l'admission par invitation : la course entre deux
+  connexions qui présentent le même ticket est fermée (le test du `nonce` et son écriture se font d'un seul pas
+  synchrone), le `nonce` n'est jamais journalisé. Un trou corrigé : le relais acceptait un ticket au `expiresAt`
+  arbitrairement lointain, alors que la spec le borne à 24 h ; un ticket qui dépasse 24 h et 5 min (même dérive
+  d'horloge que les enveloppes) est désormais refusé (`too_long`). Deux points restent ouverts, ci-dessous. Hors de ce
+  dépôt : `lab-infra/stacks/drop/relay.config.json` doit fixer `admittedPath` sur un volume persistant, sinon le relais
+  oublie les Nodes admis à chaque redéploiement.
+- **D70** — Mises à jour signées de l'app Mac (2026-10-09, T2.4, choix de Guillaume). Le dépôt est privé, donc l'app
+  ne peut pas lire les Releases GitHub sans jeton : les mises à jour sont servies en statique sous
+  `https://drop.memolabs.dev/updates/` (`latest.json` et une archive nommée par version). L'app vérifie au lancement
+  puis toutes les 6 h et propose la version dans le menu de son icône ; rien ne s'installe sans clic. Plugin updater
+  de Tauri 2.13.2 (doc lue le 2026-10-09 dans tauri-docs, branche v2, et le source du plugin) avec
+  `requireSignedVersion` : la CLI Tauri 2.12.1 inscrit la version dans le commentaire signé, ce qui empêche de
+  ressortir une ancienne archive signée sous un numéro plus récent. La clé privée est générée et gardée par Guillaume
+  (procédure dans `apps/mac/README.md`) ; seule la clé publique, `apps/mac/updater.pub`, entre dans le dépôt. Hors de
+  ce dépôt : une route statique `/updates` dans `lab-infra/stacks/drop`. Le manifeste est validé sans zod pour ne pas
+  ajouter de dépendance à la racine.
+- **D71** — Durcissement de la passerelle (2026-10-09, T2.13, plan accepté par Guillaume). Trois trous relevés en
+  revue. (1) Hameçonnage du consentement : le nom de l'assistant vient de l'enregistrement dynamique, ouvert à tous ;
+  un tiers pouvait enregistrer « Claude » avec sa propre adresse de retour et faire autoriser sa session par la
+  victime, puis interroger l'équipe en son nom. Le lien `drop://link` porte désormais `client_id` et le domaine de
+  retour, affichés par la page et le panneau (avertissement si ce n'est ni `claude.ai`, ni `chatgpt.com`, ni
+  `chat.openai.com`) ; `link_grant` répète ce qui a été affiché, et la passerelle refuse s'il ne correspond pas à la
+  session. Un lien truqué ne peut donc pas afficher `claude.ai` pour une session qui renvoie ailleurs. (2) Retrait :
+  `agent_call` porte `clientId`, et le Node n'exécute que les appels d'un assistant encore relié ; les liens
+  enregistrés avant gardent leur portée sur toute la passerelle. (3) Abus : un client sans jeton est oublié après
+  24 h, et au-delà de 1 000 clients sans jeton ou de 1 000 sessions ouvertes, le plus ancien est oublié. Le plan
+  accepté prévoyait un 503 ; il a été remplacé en cours de réalisation, parce qu'un 503 laissait 1 000 requêtes par
+  jour bloquer tous les nouveaux utilisateurs, alors que l'éviction oblige à dépasser en continu le rythme d'une vraie
+  connexion. L'état
+  persisté est validé par un schéma zod au lieu de `z.any()`. Changement de protocole incompatible pour `link_grant`
+  et `agent_call` : passerelle et Nodes se mettent à jour ensemble, ce qui convient tant que la passerelle n'est pas
+  ouverte au public. Les adresses de retour de Claude et ChatGPT sont à revérifier dans leur aide officielle au
+  premier essai réel.
+- **D72** — Site public (2026-10-09, T2.6, choix de Guillaume). Trois pages s'ajoutent au site de T2.6a :
+  « Démarrer en 5 minutes », « Cas d'usage », « Sécurité » ; l'accueil gagne la démo réelle en trois captures et une
+  section d'installation. Tant que l'app n'est pas notarisée (T2.4) et que npm est bloqué (T2.11), `site/site.json`
+  est en `beta` : un accès sur invitation, aucun lien de téléchargement ; passer à `open` affiche l'app Mac, le
+  `.mcpb` et les guides, sans autre changement. `contact` reste vide tant que Guillaume n'a pas choisi l'adresse à
+  publier. Le site est servi par l'image drop (`node scripts/site.ts serve`, rendu en mémoire, aucune écriture),
+  sur l'hôte public seulement, avec HSTS et la politique de contenu sans script ; il sert aussi les fichiers de
+  mise à jour de l'app (D70) depuis `SITE_RELEASES_DIR`, par nom exact. Hors de ce dépôt, dans
+  `lab-infra/stacks/drop` : un service `drop-site` (même image, cette commande, le dossier des releases en volume)
+  et les routes Traefik de `drop.memolabs.dev` : `/v1` et `/health` vers le relais ; `/oauth`, `/mcp`,
+  `/.well-known/oauth-*` et `/gateway` vers la passerelle ; tout le reste vers le site. La vidéo n'est pas tournée :
+  l'accueil montre les captures de la démo du 8 octobre et l'annonce pour les premiers essais (T2.7). Les exports
+  Markdown pointent vers le dépôt, qui est privé : à revoir avant la mise en ligne.
+- **D73** — Préparation des essais réels (2026-10-09, T2.7). Protocole dans `docs/essais/README.md`. Ce que la
+  confrontation aux vrais serveurs a montré, sources lues ce jour : Figma se branche par le serveur local de l'app de
+  bureau (`127.0.0.1:3845/mcp`, sans jeton), mais exige un siège Dev ou Full (sinon 6 appels d'outil par mois) et lit
+  la sélection ou un lien ; GitHub par `api.githubcopilot.com/mcp/readonly` avec un jeton en en-tête ; Linear par
+  `mcp.linear.app/mcp/readonly` avec une clé d'API en en-tête (d'après les résultats de recherche, la doc n'était pas
+  joignable d'ici). Deux manques deviennent des tâches : un serveur qui exige OAuth se partage sans erreur puis échoue
+  à chaque demande (T2.16), et drop ne sait pas se connecter aux serveurs distants OAuth (T2.17). Pour Notion, voir le
+  point ouvert ci-dessous.
+- **D74** — Connexion OAuth de drop aux serveurs MCP distants (2026-10-09, T2.17, plan accepté par Guillaume). drop
+  s'enregistre comme son propre client (enregistrement dynamique, nom « drop »), avec le client OAuth du SDK MCP déjà
+  installé, sans dépendance nouvelle. Connexion une fois, par `drop connect <agent>/<serveur>` ou le bouton du panneau ;
+  le navigateur revient sur l'API locale (`127.0.0.1:<port>/oauth/callback`), vérifié par un `state` à usage unique de
+  10 minutes ; le vérificateur PKCE ne vit qu'en mémoire, avec la connexion en cours. Jetons sous `DROP_HOME/oauth`
+  (0700, fichiers 0600), comme la clé d'identité ; une exécution ne fait que les réutiliser et les rafraîchir. Exclus :
+  le serveur distant de Figma, réservé à une liste de clients approuvés par leur nom (s'en faire passer pour un
+  enfreindrait ses conditions) ; le serveur local de l'app reste la voie. Linear garde aussi la clé d'API. Vérifié
+  contre un faux serveur conforme ; l'essai réel avec un compte Notion reste à faire, T2.17 reste `doing` jusque-là.
+- **D75** — Révocation et plafond global au relais (2026-10-09, T2.19, choix de Guillaume), qui tranche le point ouvert
+  de D69. `drop-relay revoke <nodeId>` écrit dans `revokedPath`, que le relais relit toutes les 2 s : pas de
+  redémarrage, pas de port d'administration ; le relais et la commande partagent le fichier par le volume. Un Node
+  révoqué est coupé, refusé même avec un nouveau ticket ou dans l'allowlist, et ses tickets ne valent plus rien. Par
+  défaut, ses invités gardent leur place (un membre qui part ne doit pas couper ceux qu'il a fait venir) ;
+  `--with-invited` les révoque de proche en proche, pour un parrain malveillant. `maxAdmissionsPerDay` (100) borne la
+  croissance que le quota par sponsor ne bornait pas. Dans `lab-infra/stacks/drop/relay.config.json` : ajouter
+  `revokedPath` sur le même volume que `admittedPath`.
+
 ## À décider par l'humain
 
 - **Nom de produit** : à vérifier (nom + domaine) avant le pilote.
@@ -273,7 +350,20 @@ Format : `D<n> — date — décision — raison`. Les agents ajoutent ici toute
     caractères. Un `answer` à la limite ferait échouer la validation de taille.
   - T1.13 : aucun code d'erreur n'est prévu pour un snapshot au-delà de `maxSnapshotBytes`, ni pour le post-contrôle
     d'extrait de code.
-    Détail : `coverage.md` de la change `migrate-spec-kit` (archivée sous `openspec/changes/archive/`).
+  - T2.1, relevé en clôture (D69), **tranché par D75** : l'admission est transitive. Un Node admis parraine 20 Nodes par jour, qui
+    parrainent chacun 20 Nodes ; le quota ne borne donc pas la croissance, seulement sa vitesse. Aucune révocation
+    n'existe non plus (`admittedPath` s'édite à la main, puis redémarrage). Le risque se limite à la charge du relais :
+    l'admission ne donne accès à personne, l'appairage exige toujours le jeton de l'invitation. Options : quota global
+    par jour, profondeur de parrainage maximale, commande `drop relay revoke`. À trancher avant d'ouvrir le relais
+    au-delà des testeurs.
+  - T2.7, Notion (D73) : le serveur local `@notionhq/notion-mcp-server` 2.5.2 marque toute requête POST comme
+    destructive, dont la recherche (`post-search`) et la requête de base (`query-data-source`) ; `mcp.answer` retire
+    ces outils, si bien que drop ne lit qu'une page dont la question donne le lien. Options : (a) accepter la limite
+    pour l'essai ; (b) laisser le propriétaire autoriser nommément un outil marqué destructif, après un avertissement,
+    ce qui assouplit une règle de sécurité ; (c) attendre T2.17 et le serveur distant de Notion, qui cherche.
+    Recommandation : (a) pour l'essai, puis (c). Mise à jour : (c) est construit (D74), à essayer avec un vrai
+    compte Notion.
+  Détail : `coverage.md` de la change `migrate-spec-kit` (archivée sous `openspec/changes/archive/`).
 - **Financement des demandes, options gardées pour plus tard** (D21 a retenu A). B : une clé d'équipe ou
   d'organisation sur chaque Node ; aucun code, c'est la variable d'environnement. C : le demandeur finance, en joignant
   à sa demande une clé jetable à plafond dur (OpenRouter sait en créer), chiffrée pour l'exécuteur ; il faut l'ajouter
@@ -329,3 +419,5 @@ Ces décisions viennent d'un grilling mené le 10 octobre 2026 et des recherches
 - **D61** : `bonjour-service` pour la découverte locale. Dépendance nouvelle, JavaScript pur, licence MIT, maintenue (1.4.4, juillet 2026), construite sur `multicast-dns` ; elle annonce et découvre. Service `_drop._tcp`, enregistrement TXT portant l’identifiant du nœud. `@homebridge/ciao`, d’abord retenue sur la foi de la recherche, ne fait qu’annoncer (« discover functionality » sans date, README 1.3.12) : écartée à l’implémentation. Écartée aussi : la liaison Node d’iroh (pas de découverte locale, en retard sur iroh, Apple Silicon seulement).
 - **D62 : autorisation réseau local de macOS.** L'app déclare `NSLocalNetworkUsageDescription` et `NSBonjourServices` (`_drop._tcp`) dans `src-tauri/Info.plist`, que Tauri fusionne. Si la personne refuse, le mode local échoue avec `E_LAN_DENIED` et le relais configuré reste utilisable. Le mode local peut être désactivé par la configuration ; le banc de simulation le désactive.
 - **D63 : accusé signé plutôt que canal chiffré, après revue (T4.2).** La revue a montré que la poignée de main peut être relayée par quelqu'un sur le réseau local, qui pouvait alors faire passer pour remises des enveloppes perdues. Une enveloppe ne compte comme remise localement qu'après un accusé signé par la clé du destinataire ; sinon, relais. Corrige D60 : une clé inconnue n'ouvre une session entrante que tant qu'une invitation est en cours. Le bouclage n'est plus accepté depuis le réseau. Le client du relais ne signe plus qu'un défi de 32 octets, pour qu'aucun relais ne lui fasse signer une preuve locale. Limites acceptées : un intermédiaire voit qui parle à qui et peut forcer le relais ; l'annonce mDNS porte un identifiant fixe (T4.2c).
+
+- **D76 : réunion de la branche principale et du profil privé (2026-10-10, demande de Guillaume).** Les deux histoires partaient du 8 octobre ; la branche principale portait l'étape 2 (T2.1, T2.4, T2.6, T2.7, T2.13, T2.16 à T2.19), la branche Codex le profil privé (T3.x). Elles sont réunies par une fusion, sans réécrire l'historique. Règles suivies : le cap privé (D34 à D38) l'emporte quand les deux se contredisent ; une fonction de l'étape 2 est gardée si elle ne s'impose pas au profil privé. Ainsi la mise à jour signée dans l'app (D70) reste, mais seulement dans un build fait avec la clé de mise à jour (`--updates`) : le build par défaut n'en contient aucune et D46 vaut toujours pour lui. Les numéros en double sont renumérotés (D69 à D75).

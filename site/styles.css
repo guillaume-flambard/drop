@@ -904,6 +904,51 @@
     padding-top: 18px;
     font-size: 0.92rem;
   }
+  /* T2.6: the real demo in three screens, and the install cards (beta or open). */
+  .capture-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 28px;
+    margin: 0;
+  }
+  .capture-row figure {
+    margin: 0;
+  }
+  .capture-row img {
+    display: block;
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    object-fit: cover;
+    object-position: top;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: #fff;
+  }
+  .capture-row figcaption {
+    margin-top: 14px;
+    font-size: 0.92rem;
+    color: var(--muted);
+  }
+  .capture-row figcaption strong {
+    color: var(--ink);
+  }
+  .install-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 28px;
+  }
+  .install-card {
+    padding: 34px;
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 18px;
+  }
+  .install-card h3 {
+    margin-top: 0;
+  }
+  .install-card .button {
+    margin: 6px 12px 6px 0;
+  }
 }
 
 @layer responsive {
@@ -945,6 +990,13 @@
   @media (max-width: 760px) {
     .wrap {
       width: calc(100% - 40px);
+    }
+    .capture-row,
+    .install-grid {
+      grid-template-columns: 1fr;
+    }
+    .install-card {
+      padding: 24px;
     }
     .header-inner {
       min-height: 80px;

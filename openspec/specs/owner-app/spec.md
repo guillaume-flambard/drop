@@ -73,3 +73,35 @@ Le panneau SHALL afficher sur la carte de consentement la ligne de sensibilité 
 <!-- openspec-guard:test="menu bar panel and its admin routes (T4.14) > renders expiry, high sensitivity, a default Pas maintenant and per-field redaction" -->
 - **WHEN** le panneau rend une carte de capacité sensible puis son écran de relecture
 - **THEN** la carte montre la sensibilité haute, « Expire dans » et « Pas maintenant » par défaut, et la relecture propose une case par champ qui ajoute ce champ aux retraits envoyés
+### Requirement: Mises à jour signées
+Une app construite avec la clé de mise à jour SHALL chercher une version au lancement puis toutes les 6 h sur `https://drop.memolabs.dev/updates/latest.json` et la proposer dans le menu ; rien ne s'installe sans ce clic (D70). L'archive MUST être signée par cette clé pour la version annoncée (`requireSignedVersion`), sinon refusée. Sans la clé, l'app ne cherche aucune mise à jour (D76). La construction MUST refuser un manifeste signé pour une autre version.
+
+#### Scenario: Manifeste publié
+<!-- openspec-guard:test="signed updates of the Mac app (T2.4) > announces the build for darwin-aarch64 with its signature and a versioned URL under /updates" -->
+- **WHEN** la version x.y.z est construite avec `--updates`
+- **THEN** `latest.json` annonce x.y.z pour `darwin-aarch64`, avec la signature de l'archive et son URL sous `/updates/`
+
+#### Scenario: Signature d'une autre version
+<!-- openspec-guard:test="signed updates of the Mac app (T2.4) > refuses a signature made for another version, or carrying none" -->
+- **WHEN** la signature de l'archive porte une autre version, ou aucune
+- **THEN** la construction du manifeste échoue avec `E_UPDATE_SIGNATURE`
+
+#### Scenario: Clé publique et HTTPS
+<!-- openspec-guard:test="signed updates of the Mac app (T2.4) > turns the updater on only with a public key, over HTTPS, and requires the version in the signature" -->
+- **WHEN** l'app est construite avec `--updates`
+- **THEN** sa configuration porte la clé publique, l'adresse HTTPS de `latest.json` et `requireSignedVersion`, et une clé vide ou un chemin de fichier est refusé avec `E_UPDATER_KEY`
+
+#### Scenario: Mise à jour proposée, pas imposée
+<!-- openspec-guard:non-testable reason="App native : à vérifier à la main à la première version publiée sur drop.memolabs.dev/updates" -->
+- **WHEN** une version plus récente est publiée
+- **THEN** le menu de l'icône affiche « Mettre à jour vers x.y.z », et seul un clic télécharge, vérifie la signature, installe et relance l'app avec son Node
+
+### Requirement: Connexion proposée dans le panneau
+Quand le partage d'un outil échoue avec `E_SHARE_OAUTH`, le panneau SHALL proposer « Se connecter à <serveur> », qui
+démarre la connexion de drop (T2.17). Le lien de secours vers la page de connexion MUST n'être affiché que s'il est en
+https.
+
+#### Scenario: Outil qui demande une connexion
+<!-- openspec-guard:test="menu bar panel and its admin routes (T2.4) > offers to sign in when a shared server needs OAuth, and links only an https sign-in page (T2.17)" -->
+- **WHEN** Natha partage Notion avant d'y avoir connecté drop
+- **THEN** le panneau propose « Se connecter à notion », et n'affiche la page de connexion qu'en https
