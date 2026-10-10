@@ -345,3 +345,43 @@ describe('menu bar panel (T4.4)', () => {
     expect(() => new Script(script ?? '')).not.toThrow();
   });
 });
+
+describe('menu bar panel (T4.5)', () => {
+  it('analyses thirteen clients, separates global and project configurations, and shows manual steps', () => {
+    const html = renderPanel();
+    expect(html).not.toContain('quatre agents');
+    expect(html).toContain(
+      "'Analyse locale des treize clients MCP compatibles, dans leurs fichiers documentés seulement.'",
+    );
+    expect(html).toContain("'Aucun des treize clients détecté'");
+    // Analysis reads the clients and the projects together.
+    expect(html).toContain("api('GET', '/ui/admin/projects')");
+    // A manual client shows its own steps and snippet, as text.
+    expect(html).toContain(
+      "plan.state === 'manual' && plan.manual ? el('details', {}, el('summary', { text: 'Marche à suivre' }),",
+    );
+    expect(html).toContain("el('code', { text: plan.manual.snippet })");
+    const projects = html.slice(
+      html.indexOf('function projectsSection(view, projects)'),
+      html.indexOf('function renderTools(view)'),
+    );
+    expect(projects).toContain("el('h2', { text: 'Configurations par projet' })");
+    expect(projects).toContain("api('POST', '/ui/admin/projects', { dir: dir.value.trim() })");
+    expect(projects).toContain("api('POST', '/ui/admin/projects/remove', { dir: project.dir })");
+    expect(projects).toContain("project.sources.indexOf('added') !== -1");
+    for (const label of [
+      'OpenCode',
+      'Gemini CLI',
+      'Devin Desktop',
+      'Zed',
+      'goose',
+      'VS Code',
+      'Cline',
+      'Roo Code',
+      'JetBrains AI',
+    ])
+      expect(html).toContain(`'${label}'`);
+    const script = /<script>([\s\S]*?)<\/script>/.exec(html)?.[1];
+    expect(() => new Script(script ?? '')).not.toThrow();
+  });
+});

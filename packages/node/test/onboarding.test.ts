@@ -61,12 +61,16 @@ describe('local agent onboarding (T3.3)', () => {
       home: f.home,
       dropHome: f.dropHome,
       serverSource: f.source,
+      // No app or binary in this temporary home: the nine clients added in T4.5 are absent.
+      probe: { home: f.home, apps: [], path: '' },
       run: (argv) => {
         executed.push(argv);
       },
     });
-    expect(plans).toHaveLength(4);
-    expect(plans.every((plan) => plan.state === 'ready')).toBe(true);
+    expect(plans).toHaveLength(13);
+    const known = ['claude_code', 'claude_desktop', 'cursor', 'codex'];
+    expect(plans.filter((plan) => known.includes(plan.agent)).every((plan) => plan.state === 'ready')).toBe(true);
+    expect(plans.filter((plan) => !known.includes(plan.agent)).every((plan) => plan.state === 'absent')).toBe(true);
     expect(plans.find((plan) => plan.agent === 'cursor')?.state).toBe('ready');
     expect(JSON.stringify(plans)).not.toContain('secret-value');
     expect(JSON.stringify(plans)).not.toContain('secret-argument');

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { CapabilityView, DropView, LocalNode } from '../src/client.ts';
 import { FACT_OUTPUT_SCHEMA, HUMAN_ANSWER_OUTPUT_SCHEMA, sha256Hex } from '@drop/protocol';
 import { createTools, wrapResult } from '../src/tools.ts';
+import { requesterAgent } from '../src/server.ts';
 
 const capability: CapabilityView = {
   capability_id: 'production.error_summary',
@@ -291,5 +292,14 @@ describe('published facts (T4.4)', () => {
       output,
     );
     expect(plain).toMatch(/^Résultat fourni par Mallory/);
+  });
+});
+
+describe('mcp clients (T4.5)', () => {
+  it('reports an unknown DROP_AGENT as other', () => {
+    expect(requesterAgent('zed')).toBe('zed');
+    expect(requesterAgent('gemini_cli')).toBe('gemini_cli');
+    expect(requesterAgent('chatgpt')).toBe('other');
+    expect(requesterAgent(undefined)).toBe('other');
   });
 });

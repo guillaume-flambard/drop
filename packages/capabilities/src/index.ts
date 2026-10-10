@@ -47,9 +47,27 @@ export {
   agentServers,
   codexServers,
   findAgentServer,
+  locationServers,
+  projectServers,
   type AgentKind,
   type AgentServer,
 } from './agents.ts';
+export {
+  CLIENT_SPECS,
+  CLIENTS,
+  clientInstalled,
+  defaultProbe,
+  gooseExtensions,
+  isClientId,
+  MAX_GLOBAL_CONFIG_BYTES,
+  MAX_PROJECT_CONFIG_BYTES,
+  readConfigText,
+  stripJsonc,
+  type ClientId,
+  type ClientSpec,
+  type ConfigLocation,
+  type InstallProbe,
+} from './clients.ts';
 export {
   connectMcp,
   McpConnectError,

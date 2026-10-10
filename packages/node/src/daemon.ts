@@ -21,6 +21,7 @@ import type { DropHome } from './home.ts';
 import { notify } from './notify.ts';
 import { LanService } from './lan.ts';
 import { mdnsDiscovery } from './lan-mdns.ts';
+import { addProject, listProjects, removeProject } from './projects.ts';
 
 export interface Daemon {
   engine: NodeEngine;
@@ -188,6 +189,9 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
         manual: manualOnboarding({ dropHome: home.root }),
       }),
       onboardingApply: (selections) => applyOnboarding(selections, { dropHome: home.root }),
+      projects: () => listProjects(home.root),
+      addProject: (dir) => addProject(home.root, dir),
+      removeProject: (dir) => removeProject(home.root, dir),
       createTeam: (name) => engine.createTeam(name),
       link: async (gateway, request) => {
         if (config.profile === 'private') throw new DropError('E_DENIED', 'E_DENIED cloud gateway disabled');
