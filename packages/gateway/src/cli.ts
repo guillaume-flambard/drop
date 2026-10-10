@@ -44,7 +44,7 @@ if (command === 'init') {
   const bridge = new Bridge({
     identity,
     relayUrl,
-    isPendingSession: (sessionId) => oauth.session(sessionId) !== undefined,
+    claimPendingSession: (sessionId) => oauth.claimLink(sessionId),
     onLinkGrant: (sessionId, nodeId, claim) => oauth.approve(sessionId, nodeId, claim),
     isLinkedNode: (nodeId) => oauth.hasNode(nodeId),
     log: (line) => process.stderr.write(`${line}\n`),

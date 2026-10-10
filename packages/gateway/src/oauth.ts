@@ -63,6 +63,8 @@ export interface Session {
   createdAt: number;
   /** Set when the user's node sent a link_grant for this session. */
   nodeId?: string | undefined;
+  /** Set by the first link_grant received for this session, accepted or not: a session is linked once (T4.2d). */
+  claimed?: boolean;
 }
 
 export const TokenRecordSchema = z.object({
@@ -199,6 +201,17 @@ export class OAuthServer {
   session(id: string): Session | undefined {
     const session = this.sessions.get(id);
     return session && session.createdAt + SESSION_TTL_MS > this.now() ? session : undefined;
+  }
+
+  /**
+   * Claims a live session for the one link_grant it may receive (T4.2d, D78). A grant that then fails approve() still
+   * spends the session: the user starts the authorization again, and a flood on one session costs a single check.
+   */
+  claimLink(sessionId: string): boolean {
+    const session = this.session(sessionId);
+    if (!session || session.nodeId !== undefined || session.claimed === true) return false;
+    session.claimed = true;
+    return true;
   }
 
   /**

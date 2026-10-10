@@ -159,7 +159,7 @@ describe('consumer gateway: Claude or ChatGPT reach the team through the user’
     const bridge = new Bridge({
       identity: gatewayId,
       relayUrl: relay.url,
-      isPendingSession: (sessionId) => oauth.session(sessionId) !== undefined,
+      claimPendingSession: (sessionId) => oauth.claimLink(sessionId),
       onLinkGrant: (sessionId, nodeId, claim) => oauth.approve(sessionId, nodeId, claim),
       isLinkedNode: (nodeId) => oauth.hasNode(nodeId),
       callTimeoutMs: 3000,
