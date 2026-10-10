@@ -4,6 +4,7 @@ import { CapabilityIdSchema, SignedCapabilityCardSchema } from './capability.ts'
 import { NodeIdSchema, OwnerKindSchema } from './identity.ts';
 import { DropStateSchema } from './lifecycle.ts';
 import { ReceiptSchema } from './receipt.ts';
+import { HumanAnswerSchema } from './human-answer.ts';
 
 const DropId = z.uuid();
 // overwrite keeps the UUIDv7 pattern in the exported JSON Schema, unlike refine/transform.
@@ -136,6 +137,8 @@ export const MessageSchema = z.discriminatedUnion('type', [
     decision: z.enum(['allow_once', 'deny', 'not_now']),
     decidedAt: Timestamp,
   }),
+  // In place of approval_decision: the approver answers by hand, which consents to this request only (T4.3).
+  z.object({ type: z.literal('human_answer'), dropId: DropId, answer: HumanAnswerSchema, decidedAt: Timestamp }),
   z.object({ type: z.literal('review_request'), dropId: DropId, output: z.unknown(), expiresAt: Timestamp }),
   z.object({
     type: z.literal('review_decision'),
