@@ -45,6 +45,8 @@ export const NodeConfigSchema = z
     network: PrivateNetworkSchema.optional(),
     ownerKind: OwnerKindSchema,
     apiPort: z.number().int().min(0).max(65535).default(7781),
+    /** Local network mode (T4.2, D59 to D62): mDNS discovery and direct sessions with paired peers. */
+    lan: z.boolean().default(true),
     /** Gateways this node trusts to carry its assistants' calls (T2.13); the app warns about any other one. */
     gateways: z.array(NodeIdSchema).default([]),
     /** As executor: who pays the model of the capabilities run here (D27: the requester, by default). */

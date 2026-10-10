@@ -19,10 +19,13 @@ import { runAgentCall } from './assistant.ts';
 import { startLocalApi, type LocalApi } from './api.ts';
 import type { DropHome } from './home.ts';
 import { notify } from './notify.ts';
+import { LanService } from './lan.ts';
+import { mdnsDiscovery } from './lan-mdns.ts';
 
 export interface Daemon {
   engine: NodeEngine;
   relay: RelayClient;
+  lan: LanService;
   api: LocalApi;
   uiUrl: string;
   /** The menu bar panel (T2.4). */
@@ -43,7 +46,7 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
   const token = home.localToken();
   const log = options.log ?? ((line: string) => process.stderr.write(`${line}\n`));
   // The engine is built before the relay client that delivers to it; the transport reads the client lazily.
-  const link: { relay?: RelayClient; apiPort?: number } = {};
+  const link: { relay?: RelayClient; lan?: LanService; apiPort?: number } = {};
   // OAuth sign-ins to remote MCP servers (T2.17): the browser comes back to this node's API, on its bound port.
   const redirectUrl = () => oauthRedirect(link.apiPort ?? config.apiPort);
   const store = oauthStore(home);
@@ -63,7 +66,13 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
               ? createMcpAnswer({ connect: (server) => connectMcp(server, process.env, oauth) })
               : impl,
           ),
-    transport: { send: (envelope) => (link.relay ? link.relay.send(envelope) : Promise.resolve('offline')) },
+    // A direct local session first (T4.2), then the configured relay; otherwise the outbox keeps the envelope.
+    transport: {
+      send: async (envelope) => {
+        if (link.lan && (await link.lan.send(envelope)) === 'delivered') return 'delivered';
+        return link.relay ? link.relay.send(envelope) : 'offline';
+      },
+    },
     log: (entry) => {
       log(JSON.stringify({ at: new Date().toISOString(), ...entry }));
     },
@@ -115,6 +124,24 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
   link.relay = relay;
   relay.start();
 
+  const lan = new LanService({
+    identity,
+    discovery: mdnsDiscovery(),
+    canReach: (nodeId) => engine.canReachDirectly(nodeId),
+    canAccept: (nodeId) => engine.canAcceptDirectly(nodeId),
+    onEnvelope: (envelope) => {
+      void engine.handleEnvelope(envelope).catch(() => {
+        log('E_RUNNER envelope handling failed');
+      });
+    },
+    enabled: config.lan && process.env.DROP_LAN !== 'off',
+    log: (entry) => {
+      log(JSON.stringify({ at: new Date().toISOString(), ...entry }));
+    },
+  });
+  link.lan = lan;
+  await lan.start();
+
   const api = await startLocalApi({
     engine,
     token,
@@ -122,7 +149,12 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
     relayUrl: config.relayUrl,
     ...(process.env.DROP_SHELL_INSTANCE ? { shellInstance: process.env.DROP_SHELL_INSTANCE } : {}),
     admin: {
-      status: () => ({ displayName: identity.displayName, nodeId: identity.nodeId, relayConnected: relay.connected }),
+      status: () => ({
+        displayName: identity.displayName,
+        nodeId: identity.nodeId,
+        relayConnected: relay.connected,
+        lan: lan.state(),
+      }),
       tools: () => {
         const shared: Record<string, string> = {};
         for (const published of home.published()) {
@@ -201,17 +233,24 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
     void engine.tick().catch(() => {
       log('E_RUNNER tick failed');
     });
+    // A peer that appears on the local network gets what waited for it, even with no relay.
+    if (lan.state() === 'on')
+      void engine.flushOutbox().catch(() => {
+        log('E_RUNNER flush failed');
+      });
   }, 1000);
 
   return {
     engine,
     relay,
+    lan,
     api,
     uiUrl,
     panelUrl,
     stop: async () => {
       clearInterval(ticker);
       relay.close();
+      await lan.stop();
       await api.close();
     },
   };
