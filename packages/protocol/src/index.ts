@@ -13,5 +13,7 @@ export * from './receipt.ts';
 export * from './schemas.ts';
 export * from './team.ts';
 export * from './human-answer.ts';
+export * from './fact.ts';
+export * from './text-guards.ts';
 
 export * from './private-network.ts';

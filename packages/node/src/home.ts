@@ -1,3 +1,4 @@
+import { StoredFactSchema, type StoredFact } from './facts.ts';
 import { randomBytes } from 'node:crypto';
 import {
   appendFileSync,
@@ -378,6 +379,16 @@ export class DropHome {
 
   saveLinks(links: AgentLink[]): void {
     writePrivate(join(this.root, 'links.json'), `${JSON.stringify(links, null, 2)}\n`);
+  }
+
+  /** Published facts (T4.4): private to this node, written whole through a temporary file. */
+  facts(): StoredFact[] {
+    const path = join(this.root, 'facts.json');
+    return existsSync(path) ? z.array(StoredFactSchema).parse(JSON.parse(readFileSync(path, 'utf8'))) : [];
+  }
+
+  saveFacts(facts: StoredFact[]): void {
+    writeDurablePrivate(join(this.root, 'facts.json'), `${JSON.stringify(facts, null, 2)}\n`);
   }
 
   team(): TeamState | undefined {

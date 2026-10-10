@@ -1,3 +1,4 @@
+import { isFactCapabilityId } from '@drop/protocol';
 import type { CatalogEntry } from './engine.ts';
 
 /**
@@ -13,6 +14,8 @@ export interface Route {
   online: boolean;
   /** Why this one was picked, shown to the person asking. */
   reason: string;
+  /** A published fact (T4.4) is asked with an empty input and served without a decision. */
+  fact?: boolean;
 }
 
 export const MAX_ROUTES = 3;
@@ -137,6 +140,11 @@ function normalize(text: string): string {
     .replace(/[^a-z0-9]+/g, ' ')} `;
 }
 
+/** A routing term must keep at least three letters or digits once normalized. */
+function meaningful(term: string): boolean {
+  return normalize(term).replace(/ /g, '').length >= 3;
+}
+
 function mentions(question: string, word: string): boolean {
   return question.includes(` ${normalize(word).trim()} `);
 }
@@ -185,4 +193,32 @@ export function routeQuestion(catalog: CatalogEntry[], question: string): Route[
         ? `tu as cité ${entry.ownerName.split(/\s+/)[0] ?? entry.ownerName}`
         : `la question parle de ${hits.slice(0, 3).join(', ')}`,
   }));
+}
+
+/**
+ * Published facts first (T4.4, D65): a fact whose topic or one of its keywords appears in the question is served as is,
+ * without a model and without a decision. At most three; none means the usual routing. Only terms of three letters
+ * or more count, so that an emoji, a word in another script or « de » never captures every question (T4.4 review),
+ * and only facts whose owner is online, so that the usual routing still answers when they are not.
+ */
+export function routeFacts(catalog: CatalogEntry[], question: string): Route[] {
+  const text = normalize(question);
+  return catalog
+    .filter((entry) => isFactCapabilityId(entry.card.id) && entry.online)
+    .map((entry) => {
+      const hits = (entry.card.keywords ?? []).filter((keyword) => meaningful(keyword) && mentions(text, keyword));
+      const topic = meaningful(entry.card.title) && mentions(text, entry.card.title);
+      return { entry, hits, score: hits.length + (topic ? 2 : 0) };
+    })
+    .filter((candidate) => candidate.score > 0)
+    .sort((a, b) => b.score - a.score || Number(b.entry.online) - Number(a.entry.online))
+    .slice(0, MAX_ROUTES)
+    .map(({ entry, hits }) => ({
+      capabilityId: entry.card.id,
+      ownerName: entry.ownerName,
+      title: entry.card.title,
+      online: entry.online,
+      reason: hits.length > 0 ? `fait publié sur ${hits.slice(0, 3).join(', ')}` : 'fait publié sur ce sujet',
+      fact: true,
+    }));
 }
