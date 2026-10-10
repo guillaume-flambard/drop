@@ -108,14 +108,20 @@ export const MessageSchema = z.discriminatedUnion('type', [
     members: z.array(TeamMemberSchema).max(200),
   }),
   // A user's own assistant (Claude, ChatGPT) reaching their node through the gateway (T2.13, D31).
+  // `link_grant` repeats what the user saw in the app (the assistant, its OAuth client, the domain the answer returns
+  // to): the gateway binds the session only if all of it is the session's own, so a forged link cannot pass for Claude.
   z.object({
     type: z.literal('link_grant'),
     sessionId: z.string().regex(/^[A-Za-z0-9_-]{16,64}$/),
+    clientId: z.string().regex(/^[A-Za-z0-9_-]{8,64}$/),
     clientName: z.string().min(1).max(80),
+    redirectHost: z.string().min(1).max(253),
   }),
+  // `clientId` names the linked assistant the call comes from, so removing one link cuts off that assistant only.
   z.object({
     type: z.literal('agent_call'),
     callId: z.string().regex(/^[A-Za-z0-9_-]{8,64}$/),
+    clientId: z.string().regex(/^[A-Za-z0-9_-]{8,64}$/),
     tool: z.enum(['ask_team', 'get_drop_results', 'list_capabilities']),
     args: z.record(z.string(), z.unknown()),
   }),
