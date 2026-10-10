@@ -1227,6 +1227,19 @@ export class NodeEngine extends EventEmitter {
     return [this.identity.nodeId, ...this.peers().map((peer) => peer.nodeId)];
   }
 
+  /** Local network (T4.2, D60): a direct session may only be opened toward a paired peer or the inviter being joined. */
+  canReachDirectly(nodeId: string): boolean {
+    return (
+      nodeId !== this.identity.nodeId &&
+      (this.pairing.has(nodeId) || this.peers().some((peer) => peer.nodeId === nodeId))
+    );
+  }
+
+  /** Local network (T4.2, D60): a direct session may only come from a paired peer, a pairing in progress, or anyone while an invite is live. */
+  canAcceptDirectly(nodeId: string): boolean {
+    return nodeId !== this.identity.nodeId && (this.canReachDirectly(nodeId) || this.hasLiveInvite());
+  }
+
   private isKnown(nodeId: NodeId): boolean {
     return (
       nodeId === this.identity.nodeId ||

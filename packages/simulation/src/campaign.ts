@@ -182,6 +182,8 @@ export async function runCampaign(options: CampaignOptions): Promise<CampaignRes
     DROP_HOME: home,
     HOME: join(home, 'user-home'),
     DROP_NOTIFY: 'off',
+    // Dozens of nodes on one Mac must not flood the network with mDNS (T4.2).
+    DROP_LAN: 'off',
   });
 
   const cli = async (node: SimNode, args: string[]) => {
