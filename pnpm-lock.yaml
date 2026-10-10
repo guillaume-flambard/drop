@@ -171,6 +171,12 @@ importers:
         specifier: ^4.6.5
         version: 4.6.5
 
+  packages/simulation:
+    dependencies:
+      zod:
+        specifier: ^4.6.5
+        version: 4.6.5
+
 packages:
 
   '@a2a-js/sdk@1.3.0':
