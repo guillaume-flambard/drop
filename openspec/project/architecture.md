@@ -1,6 +1,6 @@
 # Architecture
 
-Conception adoptée le 9 octobre 2026. Les specs des capacités décrivent les contrats du prototype ; [ACCEPTANCE](../../docs/ACCEPTANCE.md) définit les critères futurs à promouvoir dans ces specs pendant T3.*. Ce document ne prouve pas leur implémentation.
+Résumé de l’architecture actuelle. La référence descriptive complète, avec l’architecture visée par phase, est le [TRD](../../docs/product/TRD.md) ; le [schéma backend](../../docs/product/BACKEND_SCHEMA.md) détaille messages et stockage. Conception adoptée le 9 octobre 2026, précisée le 10 octobre (D47 à D58). Les specs des capacités décrivent les contrats du prototype ; [ACCEPTANCE](../../docs/ACCEPTANCE.md) définit les critères futurs à promouvoir dans ces specs pendant T3.*. Ce document ne prouve pas leur implémentation.
 
 ## Infrastructure choisie par le client
 
@@ -18,7 +18,7 @@ Agent d’entreprise A2A ↔ interface A2A du Node
 Capacité a2a.answer → agent A2A approuvé dans le périmètre du client
 ```
 
-Le relais relie les postes sans exposer de port entrant sur chaque runner. Il peut vivre sur un poste pour une démonstration, un serveur interne ou un environnement privé du client. Une recette conteneur sans Internet est vérifiée dans T3.1 ; Kubernetes n’est pas requis. La découverte LAN et le pair-à-pair direct ne sont pas des prérequis.
+Le relais relie les postes sans exposer de port entrant sur chaque runner. Il peut vivre sur un poste pour une démonstration, un serveur interne ou un environnement privé du client. Une recette conteneur sans Internet est vérifiée dans T3.1 ; Kubernetes n’est pas requis. La découverte sur le réseau local et la connexion directe par iroh sont visées (D53, T4.2), sans relais de secours par défaut ; elles ne sont pas encore implémentées.
 
 Un laptop peut héberger le relais de test et plusieurs Nodes. Une équipe répartie nécessite une connectivité vers son relais (réseau ou VPN choisi par elle). « Hors ligne » signifie Internet bloqué avec connectivité interne disponible, modèles et dépendances présents. On ne peut pas joindre un collègue devenu injoignable.
 
@@ -44,7 +44,7 @@ Tauri 2 conserve le shell de barre de menus, le panneau web local et le cœur No
 
 Electron imposerait une migration sans bénéfice établi ici. SwiftUI donnerait une intégration Mac plus poussée au prix d’autres interfaces pour Windows et Linux. Voir [les sources et compromis](../../docs/research/2026-10-09-desktop-models.md), D35.
 
-Adaptateurs initiaux : Claude Code, Codex, Cursor, Claude Desktop. Chaque adaptateur décrit chemins, format, installation et versions compatibles. L’inventaire ne lance aucun exécutable découvert. Les nouveaux agents s’ajoutent par adaptateur ; un agent A2A interne se raccorde via son URL approuvée et son authentification.
+Adaptateurs livrés : Claude Code, Codex, Cursor, Claude Desktop (T3.3). Treize clients MCP sont visés par détection déterministe (D55, T4.5). Chaque adaptateur décrit chemins, format, installation et versions compatibles. L’inventaire ne lance aucun exécutable découvert. Les nouveaux agents s’ajoutent par adaptateur ; un agent A2A interne se raccorde via son URL approuvée et son authentification.
 
 ## Cycle d’une demande
 
@@ -75,9 +75,9 @@ Le runner n’écoute aucun port. L’API du Node écoute localement et reste au
 
 ## Écart avec le prototype au début de T3.0
 
-T3.1 remplace le bootstrap Mac public par un relais loopback ou explicitement configuré. Le runtime privé propose Ollama local et exige un modèle explicite ; le financement ne remplace plus sa destination. Les transports privés autorisent des IP privées littérales exactes, sans DNS, redirection ni proxy implicite. Les sources MCP stdio non isolées sont refusées. Voir [PRIVATE_PROFILE](../../docs/PRIVATE_PROFILE.md). Les installeurs raccordent individuellement les agents ; la transaction groupée avec restauration reste à construire. A2A entrant et sortant existent, sans démontrer la conformité à tout A2A ni la souveraineté de bout en bout.
+T3.1 remplace le bootstrap Mac public par un relais loopback ou explicitement configuré. Le runtime privé propose Ollama local et exige un modèle explicite ; le financement ne remplace plus sa destination. Les transports privés autorisent des IP privées littérales exactes, sans DNS, redirection ni proxy implicite. Les sources MCP stdio non isolées sont refusées. Voir [PRIVATE_PROFILE](../../docs/PRIVATE_PROFILE.md). Le raccordement groupé en deux confirmations, avec sauvegarde et restauration, est livré (T3.3). A2A entrant et sortant existent, sans démontrer la conformité à tout A2A ni la souveraineté de bout en bout.
 
-T3.1 prouve le cycle privé dans un conteneur sans Internet, avec deux Nodes et des fixtures MCP/modèle ; cela ne qualifie pas un vrai modèle ni tous les agents tiers. T3.2 qualifie les modèles. T3.3 réalise le raccordement. T3.4 termine l’app distribuable. T3.5 apporte les preuves d’ensemble. Ordre et reprise des anciens chantiers : [TASKS](../../docs/TASKS.md).
+T3.1 prouve le cycle privé dans un conteneur sans Internet, avec deux Nodes et des fixtures MCP/modèle ; cela ne qualifie pas un vrai modèle ni tous les agents tiers. T3.2 qualifie les modèles. T3.3 a livré le raccordement. T3.4 termine l’app distribuable. T3.5 apporte les preuves d’ensemble. Ordre et reprise des anciens chantiers : [TASKS](../../docs/TASKS.md).
 
 ## Composants de l'étape 2 réunis (D76)
 

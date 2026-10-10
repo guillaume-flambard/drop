@@ -2,6 +2,8 @@
 
 <!-- impeccable:product-schema 1 -->
 
+Product reference: [docs/product/PRD.md](docs/product/PRD.md) (French, with existing, targeted and hypothesis statuses). This file is the design brief for the panel and must stay consistent with it.
+
 ## Platform
 
 web
@@ -10,9 +12,9 @@ The menu bar panel is HTML served by the local Node at `/app` and shown in a Tau
 
 ## Users
 
-Primary user of the panel: a non-technical owner, for example a designer who works in Figma. A colleague's agent asks a bounded question that needs this person's tools; the panel shows who asks, what will leave, and what never leaves, and the owner allows once or refuses in a few seconds. This person does not know what MCP or A2A is and must not need to.
+Primary user of the panel: the owner of a source, technical or not, for example a designer who works in Figma (a targeted scenario, D48). Owners without an agent will answer by hand or through a built-in agent (targeted, T4.3 and T4.8). A colleague's agent asks a bounded question that needs this person's tools; the panel shows who asks, what will leave, and what never leaves, and the owner allows once or refuses in a few seconds. This person does not know what MCP or A2A is and must not need to.
 
-Secondary user: a developer in a small technical team who connects their agents, shares tools with the team and follows the questions they sent. Configuration screens may use more technical words; deciding never does.
+Secondary user: the requester, a developer in a small technical team, who connects their agents, shares tools with the team and follows the questions they sent. Configuration screens may use more technical words; deciding never does.
 
 ## Product Purpose
 
@@ -22,13 +24,13 @@ Success for the panel: the owner understands a request and decides correctly wit
 
 ## Positioning
 
-The owner keeps the decision on every request, and the requester gets an answer, never access to the source. Capabilities fix input, output, tools, budget and approver before any request; the LLM never decides permissions.
+The owner keeps the decision on every request, and the requester gets an answer, never access to the source. Public promise (D52), always shown with its limit: drop controls what goes through drop, not the own flows of a connector or model the owner chose. Capabilities fix input, output, tools, budget and approver before any request; the LLM never decides permissions.
 
 ## Operating Context
 
-- The panel lives in a small window under a menu bar icon; it is opened briefly, often from a notification, and closed again.
+- The panel lives in a small window under a menu bar icon; it is opened briefly, often after a notification, and closed again. Clicking the notification does not open the panel yet (gap E5, T4.14).
 - Tabs: Demandes (requests to decide, results to review before sending, questions I sent), Équipe (members, online state, their shared tools, invite links), Mes outils (two-confirmation agent connection, tool sharing, linked assistants).
-- Deep links `drop://pair` and `drop://link` open the panel on an invitation or an assistant link to approve.
+- Deep links `drop://pair` and `drop://link` open the panel. Today an invitation is accepted as soon as the panel opens, without a confirmation click (gap E2, fixed in T4.14), and `drop://link` is refused in the private profile.
 - A separate startup page (`apps/mac/web/index.html`) shows boot and failure states with diagnostic codes before the panel is reachable.
 
 ## Capabilities and Constraints
