@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Des questions qui débloquent le travail : une maquette Figma, l'état d'un projet, la santé de la production, le code d'un collègue."
+    />
+    <meta name="theme-color" content="#2548ed" />
+    <title>Cas d'usage · drop</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#contenu">Aller au contenu</a>
+    <header class="site-header">
+      <div class="wrap header-inner">
+        <a class="logo" href="index.html" aria-label="drop, accueil"
+          ><img src="favicon.svg" width="34" height="34" alt="" />drop</a
+        >
+        <nav class="nav" aria-label="Navigation principale">
+          <a href="demarrer.html">Démarrer</a><a class="desktop-link" href="cas.html" aria-current="page">Cas d'usage</a
+          ><a class="desktop-link" href="securite.html">Sécurité</a><a href="guide.html">Le guide</a
+          ><a href="avancement.html">Avancement</a><span class="header-note">Un projet Memo Labs</span>
+        </nav>
+      </div>
+    </header>
+    <main id="contenu" class="wrap">
+      <div class="page-title">
+        <span class="pill">Cas d'usage</span>
+        <h1>La réponse est<br />chez quelqu'un d'autre.</h1>
+        <p>
+          Quelques questions qui bloquent un travail, et ce que drop en fait. Chaque cas indique s'il a été démontré,
+          construit ou reste à essayer.
+        </p>
+      </div>
+      <div class="doc-layout">
+        <nav class="toc" aria-label="Sommaire">
+          <a href="#design">Une maquette</a><a href="#projet">L'état d'un projet</a
+          ><a href="#production">La production</a><a href="#code">Le code d'un collègue</a
+          ><a href="#assistants">Claude et ChatGPT</a><a href="#entreprise">L'agent de l'entreprise</a
+          ><a href="#limites">Ce que drop ne fait pas</a>
+        </nav>
+        <article class="article">
+          <section id="design">
+            <h2>« La maquette du paiement est-elle prête ? »</h2>
+            <p>
+              Julie travaille dans Figma. Guillaume code l'écran de paiement et demande, depuis son agent, l'état de la
+              maquette et les couleurs utilisées. Julie autorise : la réponse vient de son Figma, avec les seuls outils
+              en lecture qu'elle a choisis.
+            </p>
+            <p><span class="tag yes">Construit</span> <span class="tag">À essayer chez notre testeuse</span></p>
+          </section>
+          <section id="projet">
+            <h2>« Où en est le projet Atlas ? »</h2>
+            <p>
+              Une seule question part vers plusieurs personnes : les tickets Linear chez l'une, les PR GitHub chez
+              l'autre, la page Notion chez un troisième. Chacun accepte ou non ; l'agent assemble ce qui revient. Le
+              demandeur peut être n'importe qui de l'équipe.
+            </p>
+            <p><span class="tag yes">Construit</span> <span class="tag">À essayer chez notre testeur</span></p>
+          </section>
+          <section id="production">
+            <h2>« La production va-t-elle bien ? »</h2>
+            <p>
+              Un développeur veut savoir si un service a des erreurs depuis une heure. Le Node du serveur renvoie
+              l'état, le nombre d'erreurs et les types les plus fréquents, jamais les lignes de log ni les identifiants
+              clients. Le traitement est déterministe : aucun modèle ne lit les logs.
+            </p>
+            <p><span class="tag yes">Démontré le 8 octobre 2026</span></p>
+          </section>
+          <section id="code">
+            <h2>« Ton code gère-t-il déjà le mode sombre ? »</h2>
+            <p>
+              Avant de développer, Guillaume vérifie dans le dépôt de Julie. Il reçoit une réponse courte, un verdict et
+              des noms de fichiers ; jamais le contenu des fichiers. Julie relit la réponse avant qu'elle parte.
+            </p>
+            <p><span class="tag yes">Démontré le 8 octobre 2026</span></p>
+          </section>
+          <section id="assistants">
+            <h2>Depuis Claude ou ChatGPT, sans terminal.</h2>
+            <p>
+              Une cheffe de projet pose sa question dans Claude ou ChatGPT, comme d'habitude. drop route vers la bonne
+              personne et rapporte la réponse autorisée dans la conversation.
+            </p>
+            <p><span class="tag yes">Construit</span> <span class="tag">À déployer</span></p>
+          </section>
+          <section id="entreprise">
+            <h2>Brancher l'agent de l'entreprise.</h2>
+            <p>
+              Une entreprise qui a déjà un agent compatible A2A peut l'offrir comme source de réponses, et voir son
+              équipe drop comme un agent A2A : chaque tâche passe par le même consentement.
+            </p>
+            <p><span class="tag yes">Construit</span> <span class="tag">À valider avec une entreprise</span></p>
+          </section>
+          <section id="limites">
+            <h2>Ce que drop ne fait pas.</h2>
+            <ul>
+              <li>Il ne donne d'accès à personne : ni au dépôt, ni à Figma, ni au serveur.</li>
+              <li>Il ne synchronise ni ne copie de fichiers : il rapporte une réponse bornée.</li>
+              <li>Il ne répond pas à la place du propriétaire : chaque demande attend son accord.</li>
+              <li>Il ne cherche pas encore dans les documents de l'entreprise : ce sera une étape ultérieure.</li>
+            </ul>
+            <p><a href="demarrer.html">Démarrer</a> · <a href="securite.html">Sécurité</a></p>
+          </section>
+        </article>
+      </div>
+    </main>
+    <footer class="footer">
+      <div class="wrap footer-inner">
+        <a class="logo" href="index.html">drop</a>
+        <div class="footer-links">
+          <a href="demarrer.html">Démarrer</a><a href="cas.html">Cas d'usage</a><a href="securite.html">Sécurité</a
+          ><a href="guide.html">Documentation</a><a href="avancement.html">État du projet</a>
+        </div>
+        <span>Nom de code, par Memo Labs.</span>
+      </div>
+    </footer>
+  </body>
+</html>

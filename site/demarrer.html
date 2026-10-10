@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Installer drop pour répondre depuis son Mac, ou pour demander depuis Claude Code, Codex, Cursor, Claude Desktop, Claude ou ChatGPT."
+    />
+    <meta name="theme-color" content="#2548ed" />
+    <title>Démarrer en 5 minutes · drop</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#contenu">Aller au contenu</a>
+    <header class="site-header">
+      <div class="wrap header-inner">
+        <a class="logo" href="index.html" aria-label="drop, accueil"
+          ><img src="favicon.svg" width="34" height="34" alt="" />drop</a
+        >
+        <nav class="nav" aria-label="Navigation principale">
+          <a href="demarrer.html" aria-current="page">Démarrer</a><a class="desktop-link" href="cas.html">Cas d'usage</a
+          ><a class="desktop-link" href="securite.html">Sécurité</a><a href="guide.html">Le guide</a
+          ><a href="avancement.html">Avancement</a><span class="header-note">Un projet Memo Labs</span>
+        </nav>
+      </div>
+    </header>
+    <main id="contenu" class="wrap">
+      <div class="page-title">
+        <span class="pill">Démarrer en 5 minutes</span>
+        <h1>Installer une fois.<br />Demander en une phrase.</h1>
+        <p>
+          Une app pour répondre, un connecteur pour demander. Personne ne reçoit d'accès : seulement des réponses que
+          leur propriétaire a autorisées.
+        </p>
+      </div>
+      <div class="doc-layout">
+        <nav class="toc" aria-label="Sommaire">
+          <a href="#avant">Avant de commencer</a><a href="#repondre">Pour répondre</a
+          ><a href="#agents">Depuis un agent de code</a><a href="#assistants">Depuis Claude ou ChatGPT</a
+          ><a href="#ensuite">Et ensuite</a>
+        </nav>
+        <article class="article">
+          <!-- if:beta -->
+          <div class="note">
+            <p>
+              <strong>Pendant la bêta, nous faisons ces étapes avec vous.</strong> L'app Mac attend sa signature Apple
+              et le paquet public son nom définitif. Voici déjà le parcours tel qu'il se passera.
+            </p>
+          </div>
+          <!-- /if:beta -->
+          <section id="avant">
+            <h2>Avant de commencer.</h2>
+            <p>drop relie des personnes d'une même équipe. Il faut :</p>
+            <ul>
+              <li>pour répondre, un Mac avec puce Apple et macOS 13 ou plus récent ;</li>
+              <li>pour demander, Claude Code, Codex, Cursor, Claude Desktop, ou Claude et ChatGPT sur le web ;</li>
+              <li>un lien d'invitation envoyé par quelqu'un de l'équipe, ou créer l'équipe vous-même.</li>
+            </ul>
+          </section>
+          <section id="repondre">
+            <h2>Pour répondre : l'app Mac.</h2>
+            <p>Deux minutes. L'app vit dans la barre de menus et ne demande aucun terminal.</p>
+            <ol>
+              <li>
+                <strong>Installez l'app et ouvrez-la.</strong> Elle crée votre identité à votre prénom, se connecte au
+                relais et démarre avec votre session.
+              </li>
+              <li>
+                <strong>Rejoignez l'équipe.</strong> Ouvrez le lien d'invitation reçu (il commence par
+                <code>drop://pair</code>, valable 24 h, une seule fois). Ou créez l'équipe dans l'onglet Équipe, puis
+                invitez les autres.
+              </li>
+              <li>
+                <strong>Partagez vos outils.</strong> L'onglet Mes outils liste ce que drop a trouvé dans vos agents :
+                Figma, Notion, Linear, GitHub… Pour chacun, choisissez les outils en lecture que vos collègues pourront
+                faire utiliser.
+              </li>
+              <li>
+                <strong>Décidez.</strong> Chaque demande s'affiche sous l'icône : qui demande, pourquoi, ce qu'il
+                recevra et ce qu'il ne recevra jamais. Autoriser une fois, refuser, ou plus tard.
+              </li>
+            </ol>
+          </section>
+          <section id="agents">
+            <h2>Pour demander depuis un agent de code.</h2>
+            <p>
+              Une minute. Dans l'onglet Mes outils de l'app, ajoutez drop aux agents détectés : Claude Code, Codex,
+              Cursor ou Claude Desktop. Ou dans un terminal :
+            </p>
+            <pre><code>drop install all</code></pre>
+            <p>
+              Redémarrez l'agent, puis demandez simplement : « Demande à mon équipe où en est la maquette du paiement. »
+              drop choisit qui peut répondre, par le prénom cité ou par les outils partagés, et rassemble les réponses.
+            </p>
+            <!-- if:open -->
+            <p>
+              Pour Claude Desktop seul, le paquet <a href="downloads/drop.mcpb">drop.mcpb</a> s'installe d'un double
+              clic.
+            </p>
+            <!-- /if:open -->
+          </section>
+          <section id="assistants">
+            <h2>Pour demander depuis Claude ou ChatGPT.</h2>
+            <p>Deux minutes, avec l'app drop installée sur le même Mac.</p>
+            <ol>
+              <li>
+                <strong>Ajoutez le connecteur</strong> avec cette adresse : <code>https://drop.memolabs.dev/mcp</code>.
+                Dans Claude : Réglages, Connecteurs, ajouter un connecteur personnalisé. Dans ChatGPT : le mode
+                développeur des connecteurs, disponible selon votre abonnement.
+              </li>
+              <li>
+                <strong>Autorisez dans l'app drop.</strong> La page de connexion ouvre l'app, qui affiche le nom de
+                l'assistant et le domaine où partira l'autorisation : <code>claude.ai</code> ou
+                <code>chatgpt.com</code>. Si c'est un autre domaine, l'app vous prévient : refusez si vous n'avez rien
+                demandé.
+              </li>
+              <li>
+                <strong>Posez votre question</strong> dans la conversation. Vos collègues décident comme pour un agent
+                de code.
+              </li>
+            </ol>
+            <div class="note">
+              <p>
+                Le connecteur passe par la passerelle de drop, qui voit vos questions et les réponses en clair, comme
+                Claude ou ChatGPT eux-mêmes. Elle n'en garde rien. <a href="securite.html#assistants">En savoir plus</a>
+              </p>
+            </div>
+          </section>
+          <section id="ensuite">
+            <h2>Et ensuite.</h2>
+            <ul>
+              <li>Un assistant relié se retire d'un clic dans l'onglet Mes outils.</li>
+              <li>Chaque échange laisse un reçu signé des deux côtés, sans le contenu.</li>
+              <li>
+                Par défaut, celui qui demande paie le modèle qui répond, avec une clé plafonnée créée pour sa seule
+                demande. Le plafond est affiché sur la carte.
+              </li>
+            </ul>
+            <p><a href="cas.html">Des idées de questions</a> · <a href="guide.html#essayer">Questions fréquentes</a></p>
+          </section>
+        </article>
+      </div>
+    </main>
+    <footer class="footer">
+      <div class="wrap footer-inner">
+        <a class="logo" href="index.html">drop</a>
+        <div class="footer-links">
+          <a href="demarrer.html">Démarrer</a><a href="cas.html">Cas d'usage</a><a href="securite.html">Sécurité</a
+          ><a href="guide.html">Documentation</a><a href="avancement.html">État du projet</a>
+        </div>
+        <span>Nom de code, par Memo Labs.</span>
+      </div>
+    </footer>
+  </body>
+</html>
