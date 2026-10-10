@@ -81,7 +81,7 @@ export async function sealEnvelope(
 
 /** Remembers envelope ids for the replay window. */
 export class ReplayCache {
-  private readonly seen = new Map<string, number>();
+  private readonly entries = new Map<string, number>();
   private readonly windowMs: number;
   private readonly maxEntries: number;
 
@@ -90,13 +90,38 @@ export class ReplayCache {
     this.maxEntries = maxEntries;
   }
 
-  /** Returns false when the id was already seen inside the window. */
+  /** Returns false when the id was already seen inside the window; otherwise remembers it. */
   check(id: string, now: number): boolean {
-    for (const [key, expiresAt] of this.seen) if (expiresAt <= now) this.seen.delete(key);
-    if (this.seen.has(id)) return false;
-    if (this.seen.size >= this.maxEntries) return false;
-    this.seen.set(id, now + this.windowMs);
+    this.purge(now);
+    if (this.seen(id, now)) return false;
+    // Full: a clock that jumped forward may have left a far-future entry that stops the purge; sweep it all once.
+    if (this.entries.size >= this.maxEntries)
+      for (const [key, expiresAt] of this.entries) if (expiresAt <= now) this.entries.delete(key);
+    if (this.entries.size >= this.maxEntries) return false;
+    // Re-inserted at the end: the map stays in writing order, which the purge relies on.
+    this.entries.delete(id);
+    this.entries.set(id, now + this.windowMs);
     return true;
+  }
+
+  /** Whether the id was already seen inside the window, without remembering it (T4.2d). */
+  seen(id: string, now: number): boolean {
+    return (this.entries.get(id) ?? 0) > now;
+  }
+
+  size(): number {
+    return this.entries.size;
+  }
+
+  /**
+   * Drops expired entries from the oldest, stopping at the first live one: expiries grow with the clock, so the rest
+   * is live too. If the clock went back, an expired entry may stay behind a live one; seen() never counts it.
+   */
+  private purge(now: number): void {
+    for (const [key, expiresAt] of this.entries) {
+      if (expiresAt > now) return;
+      this.entries.delete(key);
+    }
   }
 }
 
@@ -113,6 +138,7 @@ export interface OpenOptions {
   /**
    * The gateway's counterpart of acceptPairToken (T2.13): an unknown node may send a `link_grant` for a link session
    * this returns true for. That is how a user's node first reaches the gateway, after approving the link in its app.
+   * It MUST claim the session: true at most once per session, so that a grant cannot be replayed (T4.2d, D78).
    */
   acceptLinkSession?: (sessionId: string) => boolean;
 }
@@ -144,7 +170,10 @@ export async function openEnvelope(recipient: Identity, raw: unknown, options: O
     throw new DropError('E_EXPIRED', 'envelope expired or out of time window');
   }
 
-  if (!options.replay.check(envelope.id, now)) throw new DropError('E_REPLAY', 'envelope id already seen');
+  // A known peer's id is remembered now. An unknown sender's is only looked up: it is remembered once its pairing is
+  // accepted below, so that refused envelopes cannot fill the cache every peer shares (T4.2d, D78).
+  if (known ? !options.replay.check(envelope.id, now) : options.replay.seen(envelope.id, now))
+    throw new DropError('E_REPLAY', 'envelope id already seen');
 
   const sodium = await getSodium();
   let plain: string;
@@ -175,5 +204,8 @@ export async function openEnvelope(recipient: Identity, raw: unknown, options: O
   if (!known && !pairing && !linking) {
     throw new DropError('E_UNKNOWN_PEER', 'sender is not a paired peer');
   }
+  // A link needs no place: acceptLinkSession claims its session once, so the same grant can never pass again.
+  if (pairing && !known && !options.replay.check(envelope.id, now))
+    throw new DropError('E_REPLAY', 'envelope id already seen');
   return { envelope, message };
 }
