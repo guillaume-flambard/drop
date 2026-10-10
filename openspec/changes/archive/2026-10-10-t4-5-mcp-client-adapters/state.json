@@ -1,0 +1,10 @@
+{
+  "phase": "READY_FOR_MANUAL_ACCEPTANCE",
+  "scope": "T4.5 treize clients MCP : détection déterministe, raccordement prudent, projets connus ou ajoutés",
+  "requirements": { "total": 6, "covered": 6 },
+  "acceptance": { "total": 8, "verified": 8, "pending": 0, "failed": 0 },
+  "todos": { "p0_open": 0, "p1_open": 0 },
+  "risks": { "critical_open": 0, "high_open": 0 },
+  "verification": { "status": "PASS", "evidence": "evidence.md" },
+  "ready_for_manual_acceptance": true
+}

@@ -183,6 +183,8 @@ code { font: 11px/1.4 ui-monospace, SFMono-Regular, monospace; word-break: break
   var info = '';
   var onboardingPlans = null;
   var manualConnector = null;
+  // Projects whose MCP configurations the analysis read (T4.5): known to the agents or added here.
+  var projectsData = null;
   var renderVersion = 0;
   var pendingRefresh = false;
   var focusNext = null;
@@ -251,7 +253,8 @@ code { font: 11px/1.4 ui-monospace, SFMono-Regular, monospace; word-break: break
   }
 
   function agentName(agent) {
-    var names = { claude_code: 'Claude Code', claude_desktop: 'Claude Desktop', cursor: 'Cursor', codex: 'Codex', other: 'un autre agent' };
+    var names = { claude_code: 'Claude Code', claude_desktop: 'Claude Desktop', cursor: 'Cursor', codex: 'Codex', opencode: 'OpenCode', gemini_cli: 'Gemini CLI',
+      devin_desktop: 'Devin Desktop', zed: 'Zed', goose: 'goose', vscode: 'VS Code', cline: 'Cline', roo_code: 'Roo Code', jetbrains: 'JetBrains AI', other: 'un autre agent' };
     return names[agent] || agent.replace(/_/g, ' ');
   }
 
@@ -263,6 +266,9 @@ code { font: 11px/1.4 ui-monospace, SFMono-Regular, monospace; word-break: break
     E_CLI_COMMAND: 'L’agent n’a pas accepté l’ajout du connecteur. Réessaie ou ajoute drop à la main.',
     E_CLI_UNVERIFIED: 'L’agent n’a pas confirmé l’ajout du connecteur. Réessaie ou ajoute drop à la main.',
     E_AGENT_INVALID: 'Agent non pris en charge.',
+    E_MANUAL_ONLY: 'Raccordement à la main : drop n’écrit pas dans ce client. Suis la marche à suivre.',
+    E_PROJECT_PATH: 'Dossier introuvable : indique le chemin complet d’un dossier de projet.',
+    E_PROJECT_LIMIT: '50 dossiers de projet au plus.',
     E_SECRET_DETECTED: 'Secret détecté dans ta réponse : retire-le, rien n’est parti.',
     E_TOO_LARGE: 'Réponse trop longue : 8 000 caractères et un fichier de 128 Kio au plus.',
     E_SCHEMA: 'Réponse vide ou fichier illisible : écris un texte ou joins un fichier texte.'
@@ -660,6 +666,43 @@ code { font: 11px/1.4 ui-monospace, SFMono-Regular, monospace; word-break: break
     } }, 'Publier un fait'));
   }
 
+  // Projects (T4.5, D66): read where the agents already work, or in a folder added here; never a scan of the disk.
+  function projectsSection(view, projects) {
+    var SOURCES = { claude_code: 'connu de Claude Code', codex: 'connu de Codex', added: 'ajouté ici' };
+    view.appendChild(el('h2', { text: 'Configurations par projet' }));
+    if (projects.length === 0) view.appendChild(el('div', { class: 'muted', text: 'Aucun projet connu de tes agents. Ajoute un dossier pour lire ses configurations MCP.' }));
+    projects.forEach(function (project) {
+      var card = el('div', { class: 'list' }, el('div', { class: 'row' },
+        el('div', { class: 'grow' }, el('div', { class: 'name', text: project.dir }),
+          el('div', { class: 'muted', text: project.sources.map(function (source) { return SOURCES[source] || source; }).join(' · ') })),
+        project.sources.indexOf('added') !== -1 ? el('button', { class: 'act', 'aria-label': 'Retirer le dossier ' + project.dir, onclick: function (event) {
+          event.currentTarget.disabled = true;
+          api('POST', '/ui/admin/projects/remove', { dir: project.dir }).then(function () {
+            projectsData = projectsData.filter(function (item) { return item.dir !== project.dir || item.sources.length > 1; });
+            info = 'Dossier retiré de la liste.'; announce(info); render(true);
+          }, function (error) { notice = error.message; render(true); });
+        } }, 'Retirer') : null));
+      if (project.clients.length === 0) card.appendChild(el('div', { class: 'row muted', text: 'Aucune configuration MCP dans ce dossier.' }));
+      project.clients.forEach(function (client) {
+        card.appendChild(el('div', { class: 'row' }, el('div', { class: 'grow' },
+          el('div', { class: 'name', text: client.label + (client.dropInstalled ? ' · drop raccordé' : '') }),
+          el('div', { class: 'muted', text: client.servers.map(function (server) { return server.name + (server.where ? ' (' + server.where + ')' : ''); }).join(', ') }))));
+      });
+      view.appendChild(card);
+    });
+    var dir = el('input', { type: 'text', autocomplete: 'off', spellcheck: 'false', placeholder: '/Users/…/mon-projet', 'aria-label': 'Chemin complet du dossier de projet' });
+    view.appendChild(el('div', { class: 'card' }, el('label', { class: 'field' }, 'Ajouter un dossier de projet', dir),
+      el('div', { class: 'actions' }, el('button', { class: 'act', onclick: function (event) {
+        if (!dir.value.trim()) { dir.setAttribute('aria-invalid', 'true'); announce('Indique le chemin complet du dossier.'); dir.focus(); return; }
+        var button = event.currentTarget;
+        button.disabled = true;
+        api('POST', '/ui/admin/projects', { dir: dir.value.trim() }).then(function () {
+          return api('GET', '/ui/admin/projects');
+        }).then(function (result) { projectsData = result.projects; info = 'Dossier ajouté.'; announce(info); render(true); },
+          function (error) { notice = error.message; announce('Action impossible. ' + notice); render(true); });
+      } }, 'Ajouter ce dossier'))));
+  }
+
   function renderTools(view) {
     // A failing fact store must not take the rest of « Mes outils » down with it.
     var facts = api('GET', '/ui/facts').catch(function () { return null; });
@@ -668,11 +711,13 @@ code { font: 11px/1.4 ui-monospace, SFMono-Regular, monospace; word-break: break
       factsSection(view, all[1]);
       view.appendChild(el('h2', { text: 'Connecter mes agents' }));
       var steps = el('ol', { class: 'steps' },
-        el('li', {}, el('span', { 'aria-hidden': 'true', text: '1' }), 'Analyse locale des quatre agents compatibles.'),
+        el('li', {}, el('span', { 'aria-hidden': 'true', text: '1' }), 'Analyse locale des treize clients MCP compatibles, dans leurs fichiers documentés seulement.'),
         el('li', {}, el('span', { 'aria-hidden': 'true', text: '2' }), 'Choisis puis confirme les connecteurs à ajouter. Aucun outil ne sera partagé.'));
       view.appendChild(el('div', { class: 'card' }, steps, el('button', { class: 'act wide', onclick: function (event) {
         event.currentTarget.disabled = true;
-        api('GET', '/ui/admin/onboarding').then(function (result) { onboardingPlans = result.agents; manualConnector = result.manual; render(true); }, function (error) { notice = error.message; render(true); });
+        Promise.all([api('GET', '/ui/admin/onboarding'), api('GET', '/ui/admin/projects').catch(function () { return { projects: [] }; })]).then(function (both) {
+          onboardingPlans = both[0].agents; manualConnector = both[0].manual; projectsData = both[1].projects; render(true);
+        }, function (error) { notice = error.message; render(true); });
       } }, '1. Analyser ce Mac')));
       var plans = onboardingPlans || [];
       var selectable = [];
@@ -683,7 +728,10 @@ code { font: 11px/1.4 ui-monospace, SFMono-Regular, monospace; word-break: break
         if (checkbox) { checkbox.checked = true; selectable.push({ plan: plan, checkbox: checkbox }); }
         found.appendChild(el(checkbox ? 'label' : 'div', { class: 'row' }, checkbox,
           el('div', { class: 'grow' }, el('div', { class: 'name', text: plan.label }),
-            el('div', { class: plan.state === 'error' || plan.state === 'conflict' ? 'error' : 'muted', text: explain(plan.detail) })),
+            el('div', { class: plan.state === 'error' || plan.state === 'conflict' ? 'error' : 'muted', text: explain(plan.detail) }),
+            plan.state === 'manual' && plan.manual ? el('details', {}, el('summary', { text: 'Marche à suivre' }),
+              el('div', { class: 'muted', text: plan.manual.steps }),
+              el('code', { text: plan.manual.snippet })) : null),
           plan.state === 'already_connected' ? el('button', { class: 'act', onclick: function () {
             api('POST', '/ui/admin/onboarding', { selections: [{ agent: plan.agent, fingerprint: plan.fingerprint, action: 'disconnect' }] }).then(function (result) {
               info = result.results.map(function (item) { return agentName(item.agent) + ' : ' + explain(item.detail); }).join(' · ');
@@ -707,13 +755,14 @@ code { font: 11px/1.4 ui-monospace, SFMono-Regular, monospace; word-break: break
         }, function (error) { notice = error.message; render(true); });
       } }, '2. Connecter les agents sélectionnés'));
       if (onboardingPlans && plans.every(function (plan) { return plan.state === 'absent'; })) view.appendChild(el('div', { class: 'card empty' },
-        el('strong', { text: 'Aucun des quatre agents détecté' }),
+        el('strong', { text: 'Aucun des treize clients détecté' }),
         el('div', { class: 'muted', text: 'Tu peux ajouter manuellement le connecteur MCP drop dans ton agent.' })));
       view.appendChild(el('div', { class: 'lead', text: 'Autre agent ? Ajoute manuellement un serveur MCP stdio nommé drop. Aucune permission générale n’est nécessaire.' }));
       if (onboardingPlans && manualConnector) view.appendChild(el('div', { class: 'card' },
         el('div', { class: 'name', text: 'Configuration manuelle' }),
         el('code', { text: JSON.stringify({ mcpServers: { drop: manualConnector } }, null, 2) }),
         el('div', { class: 'muted', text: 'Copie cette entrée dans la configuration MCP de ton agent, puis relance-le. Cela ne partage aucun outil.' })));
+      if (projectsData) projectsSection(view, projectsData);
       view.appendChild(el('h2', { text: 'Mes outils' }));
       view.appendChild(el('div', { class: 'lead', text: 'Partager un outil, c’est répondre aux questions de l’équipe avec lui, après ton accord. Personne ne reçoit l’accès.' }));
       data.agents.forEach(function (agent) {

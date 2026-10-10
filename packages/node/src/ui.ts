@@ -5,6 +5,16 @@ const AGENT_NAMES: Record<string, string> = {
   claude_code: 'Claude Code',
   codex: 'Codex',
   cursor: 'Cursor',
+  claude_desktop: 'Claude Desktop',
+  opencode: 'OpenCode',
+  gemini_cli: 'Gemini CLI',
+  devin_desktop: 'Devin Desktop',
+  zed: 'Zed',
+  goose: 'goose',
+  vscode: 'VS Code',
+  cline: 'Cline',
+  roo_code: 'Roo Code',
+  jetbrains: 'JetBrains AI',
   other: 'un agent',
 };
 

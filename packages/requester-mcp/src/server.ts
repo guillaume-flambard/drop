@@ -1,4 +1,5 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { RequesterAgentSchema } from '@drop/protocol';
 import type { LocalNode } from './client.ts';
 import {
   ASK_TEAM_DESCRIPTION,
@@ -37,4 +38,9 @@ export function createRequesterServer(node: LocalNode, agent = 'other'): McpServ
     tools.getDropResults(args),
   );
   return server;
+}
+
+/** The agent named by DROP_AGENT when the protocol knows it, `other` otherwise (T4.5): never an unknown value. */
+export function requesterAgent(value: string | undefined): string {
+  return RequesterAgentSchema.safeParse(value).success && value !== undefined ? value : 'other';
 }

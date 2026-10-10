@@ -1,6 +1,6 @@
 # Raccorder ses agents en deux confirmations
 
-**Existant : T3.3 est livrée, vérifiée sur fixtures, en attente de recette manuelle.** La change est archivée ([vérification](../openspec/changes/archive/2026-10-09-t3-3-local-agent-onboarding/proof/verification.md)) ; la recette humaine sur un Mac de test reste à faire. Le panneau local (`packages/node/src/panel.ts`) permet d'analyser les quatre adaptateurs livrés (`packages/node/src/onboarding.ts`), de sélectionner ceux à raccorder, puis de confirmer l'ajout. **Visé : treize clients** (D55, T4.5). L'app Mac distribuée et signée reste le chantier T3.4 ; l'expérience finale dans la barre de menus n'est donc pas encore validée sur une installation neuve.
+**Existant : T3.3 est livrée, vérifiée sur fixtures, en attente de recette manuelle.** La change est archivée ([vérification](../openspec/changes/archive/2026-10-09-t3-3-local-agent-onboarding/proof/verification.md)) ; la recette humaine sur un Mac de test reste à faire. Le panneau local (`packages/node/src/panel.ts`) permet d'analyser les treize clients de D55 (T4.5, D66, `packages/capabilities/src/clients.ts`), de sélectionner ceux que drop sait raccorder, puis de confirmer l'ajout ; pour les autres, il donne la configuration à copier. L'app Mac distribuée et signée reste le chantier T3.4 ; l'expérience finale dans la barre de menus n'est donc pas encore validée sur une installation neuve.
 
 ## Ce que couvrent les deux confirmations
 
@@ -22,11 +22,23 @@ Le panneau distingue « configuration raccordée », « connecteur utilisable à
 
 Sources : `packages/capabilities/src/agents.ts` pour les emplacements, `packages/node/src/onboarding.ts` et `packages/node/src/install.ts` pour le raccordement, D45 pour les choix.
 
-## Clients visés (T4.5)
+## Treize clients (T4.5, D66)
 
-D55 fixe treize clients compatibles. Les quatre ci-dessus existent. Les neuf autres sont visés en T4.5, avec leurs configurations globales et par projet : OpenCode, Gemini CLI, Windsurf/Devin Desktop, Zed, goose, VS Code Copilot, Cline, Roo Code et JetBrains AI. La détection reste déterministe ; aucun modèle ne fouille la machine. Emplacements recensés : [recherche du 10 octobre](research/2026-10-10-repositionnement.md#4-clients-mcp-configuration). D'ici là, ces clients utilisent la voie manuelle.
+| Client | Lu (global ; projet) | Raccordement |
+| --- | --- | --- |
+| OpenCode | `~/.config/opencode/opencode.json(c)` ; `opencode.json(c)`, `.opencode/` | À copier (JSONC commenté) |
+| Gemini CLI | `~/.gemini/settings.json` ; `.gemini/settings.json` | `gemini mcp add --scope user`, résultat relu |
+| Devin Desktop (Windsurf) | `~/.config/devin/mcp_config.json`, `~/.codeium/windsurf/mcp_config.json`, `~/.config/devin/config.json` ; `.devin/mcp_config.json` | À copier (emplacements contradictoires dans sa doc) |
+| Zed | `~/.config/zed/settings.json` ; `.zed/settings.json` | À copier (JSONC) |
+| goose | `~/.config/goose/config.yaml` | À copier (YAML, `goose configure`) |
+| VS Code (Copilot) | profil `mcp.json` ; `.vscode/mcp.json` | `code --add-mcp`, résultat relu ; retrait à la main |
+| Cline | `~/.cline/data/settings/cline_mcp_settings.json` | Fichier temporaire renommé, sauvegarde privée |
+| Roo Code (archivé) | `globalStorage/…/mcp_settings.json` ; `.roo/mcp.json` | À copier |
+| JetBrains AI | Junie : `~/.junie/mcp/mcp.json` ; `.junie/mcp/mcp.json` | À copier dans Settings, Tools, AI Assistant, Model Context Protocol (MCP) |
 
-La compatibilité dépend de la version du client. Aujourd'hui, seuls les quatre adaptateurs livrés sont détectés ; si aucun n'est présent, le panneau affiche « Aucun des quatre agents détecté ». Après l'analyse, le panneau fournit une entrée MCP stdio locale à copier pour les autres agents lorsque le connecteur est présent. Pas de scan du disque, des conversations, du trousseau ou des ports. L'aperçu masque les valeurs d'environnement, en-têtes et arguments sensibles. Une config illisible n'est pas assimilée à un agent absent.
+Un client est dit installé par son application, son binaire ou son extension, jamais par un dossier de configuration seul ; les quatre clients de T3.3 gardent aussi leur fichier comme signe. Les configurations par projet sont lues dans les projets que Claude Code et Codex connaissent déjà et dans les dossiers ajoutés depuis le panneau ; aucun projet n'est raccordé automatiquement. Sources par client : [revérification du 10 octobre](research/2026-10-10-repositionnement.md#4-clients-mcp-configuration).
+
+Pas de scan du disque, des conversations, du trousseau ou des ports. L'aperçu masque les valeurs d'environnement, en-têtes et arguments sensibles. Une config illisible n'est pas assimilée à un agent absent. Si aucun client n'est présent, le panneau affiche « Aucun des treize clients détecté » et une entrée MCP stdio à copier.
 
 ## Échecs et restauration
 

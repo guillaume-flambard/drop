@@ -207,3 +207,11 @@ Le MCP demandeur SHALL présenter un résultat portant l'empreinte de `FACT_OUTP
 <!-- openspec-guard:test="published facts (T4.4) > presents a fact with its owner and end of validity" -->
 - **WHEN** un agent lit un fait publié par Julie valable jusqu'au 9 novembre
 - **THEN** le texte commence par « Fait publié par Julie » et donne la date de fin
+
+### Requirement: Agent inconnu ramené à other
+Le MCP demandeur SHALL transmettre comme agent la valeur de `DROP_AGENT` si elle fait partie des agents acceptés, et `other` sinon.
+
+#### Scenario: AC: agent inconnu
+<!-- openspec-guard:test="mcp clients (T4.5) > reports an unknown DROP_AGENT as other" -->
+- **WHEN** `DROP_AGENT` vaut `zed`, puis `chatgpt`
+- **THEN** les demandes portent `zed`, puis `other`
