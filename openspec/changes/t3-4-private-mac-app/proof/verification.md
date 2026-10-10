@@ -25,3 +25,15 @@ Date : 9 octobre 2026. Les preuves ci-dessous concernent un **paquet de dévelop
 - La revue fonctionnelle et la revue de sécurité formelles du diff demandées par le repo restent à terminer. La relecture locale a corrigé un risque de port relu après vérification en conservant le port vérifié dans l’état du shell.
 
 T3.4 reste `doing` et la change reste ouverte. Ne pas présenter le paquet de développement ou la prévisualisation comme une validation des quatre AC-MAC.
+
+## Build signée et notarisée (10 octobre 2026)
+
+Construite par `node scripts/build-mac.ts --release --sign "Developer ID Application: Guillaume Flambard (Q52VN4UT34)" --notary-profile drop-notary` sur le commit `5242fd7` (branche `t3-4-notary-profile`), Mac arm64, Node 24.21.0.
+
+- `xcrun notarytool submit` : statut `Accepted` ; ticket agrafé au DMG et à l'app.
+- `spctl --assess --type open --context context:primary-signature -vv dist/mac/drop_0.1.0_aarch64.dmg` : `accepted`, `source=Notarized Developer ID`, `origin=Developer ID Application: Guillaume Flambard (Q52VN4UT34)`.
+- `xcrun stapler validate` sur le DMG : `The validate action worked!`.
+- SHA-256 du DMG : `f5098f1b8bf656c4c0c0a916d2d2a6f496de6fe5c463c9b9aed8f3ced4d6f1ba`, identique au manifeste `drop-build-manifest.json`.
+- Node embarqué re-signé avec l'identité Developer ID, runtime renforcé, sans `get-task-allow`, et exécutable depuis l'app.
+
+Cela lève la partie « pas de DMG signé/notarisé » d'AC-MAC-01. Restent ouverts : installation sur un Mac propre sans Node de développement, matrice publiée macOS et architecture (arm64 seulement), recette VoiceOver. T3.4 reste `blocked` sur ces recettes humaines.
