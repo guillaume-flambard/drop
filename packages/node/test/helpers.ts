@@ -13,6 +13,15 @@ export class MemoryStore implements NodeStore {
   teamState: TeamState | undefined;
   linkList: AgentLink[] = [];
   factList: StoredFact[] = [];
+  lanKeyMap: Record<string, string> = {};
+
+  lanKeys(): Record<string, string> {
+    return this.lanKeyMap;
+  }
+
+  saveLanKey(nodeId: string, key: string): void {
+    this.lanKeyMap = { ...this.lanKeyMap, [nodeId]: key };
+  }
 
   facts(): StoredFact[] {
     return this.factList;

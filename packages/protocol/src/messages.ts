@@ -100,6 +100,8 @@ export const MessageSchema = z.discriminatedUnion('type', [
     displayName: z.string().min(1).max(80),
     ownerKind: OwnerKindSchema,
   }),
+  // A node's local-network discovery key, sent to each of its peers (T4.2c, D67): 32 bytes, base64url.
+  z.object({ type: z.literal('lan_key'), key: z.string().regex(/^[A-Za-z0-9_-]{43}$/) }),
   z.object({
     type: z.literal('team_roster'),
     team: TeamSchema,
