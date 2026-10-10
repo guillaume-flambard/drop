@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import WebSocket from 'ws';
+import WebSocket, { WebSocketServer } from 'ws';
 import { mkdtempSync, readFileSync, statSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -9,6 +9,7 @@ import {
   MAX_ENVELOPE_BYTES,
   sealEnvelope,
   signDetached,
+  verifyDetached,
   type Envelope,
   type Identity,
 } from '@drop/protocol';
@@ -150,6 +151,46 @@ describe('relay', () => {
     const forged = await sealEnvelope(alice, bob.nodeId, { type: 'catalog_request' });
     expect(await m.instance.send(forged)).toBe('offline');
     expect(logs).toContainEqual(expect.objectContaining({ outcome: 'spoofed_from', from: alice.nodeId }));
+  });
+
+  it('signs only a 32-byte challenge, never another text a relay sends', async () => {
+    const alice = await generateIdentity('Alice');
+    const server = new WebSocketServer({ host: '127.0.0.1', port: 0 });
+    await new Promise<void>((resolve) => server.once('listening', resolve));
+    cleanups.push(
+      () =>
+        new Promise<void>((resolve) => {
+          for (const socket of server.clients) socket.terminate();
+          server.close(() => {
+            resolve();
+          });
+        }),
+    );
+    const answers: string[] = [];
+    server.on('connection', (socket) => {
+      socket.on('message', (data) => answers.push(Buffer.isBuffer(data) ? data.toString('utf8') : ''));
+      // A text another protocol would accept as proof (a local network session, D63): no answer expected.
+      socket.send(JSON.stringify({ type: 'challenge', challenge: `drop-lan-v1|${'a'.repeat(43)}|x|y` }));
+      setTimeout(() => {
+        socket.send(JSON.stringify({ type: 'challenge', challenge: 'b'.repeat(43) }));
+      }, 200);
+    });
+    const address = server.address();
+    const port = typeof address === 'object' && address ? address.port : 0;
+    const client = new RelayClient({
+      identity: alice,
+      url: `ws://127.0.0.1:${String(port)}/v1`,
+      onEnvelope: () => undefined,
+    });
+    cleanups.push(() => {
+      client.close();
+    });
+    client.start();
+    await until(() => answers.length > 0);
+    expect(answers).toHaveLength(1);
+    const auth = JSON.parse(answers[0] ?? '{}') as { type: string; sig: string };
+    expect(auth.type).toBe('auth');
+    expect(await verifyDetached(alice.nodeId, 'b'.repeat(43), auth.sig)).toBe(true);
   });
 
   it('rejects a node that is not allowed', async () => {
