@@ -359,6 +359,7 @@ describe('internet (T4.2b)', () => {
       createTeam: () => ({}),
       link: () => Promise.resolve({}),
       unlink: () => true,
+      connect: () => Promise.resolve({}),
       internet: () => ({ settings: saved, state: 'off' }),
       setInternet: (settings) => {
         saved = settings;

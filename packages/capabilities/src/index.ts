@@ -70,6 +70,8 @@ export {
 } from './clients.ts';
 export {
   connectMcp,
+  McpConnectError,
+  type ConnectOptions,
   createMcpAnswer,
   mcpAnswer,
   McpAnswerConfigSchema,
@@ -112,3 +114,4 @@ export function privateCapabilities(network: PrivateNetwork): CapabilityImpl[] {
   ];
 }
 export { privateFetch } from './private-network.ts';
+export { OAuthSignIns, OAuthStore, runtimeOAuth, SIGN_IN_TTL_MS } from './mcp-oauth.ts';
