@@ -14,6 +14,7 @@ export default defineConfig(
     'docs/demo/julie-repo/',
     // Mac app (T2.4): Rust build output, generated schemas and the bundles copied in as resources.
     'apps/mac/src-tauri/target/',
+    'crates/*/target/',
     'apps/mac/src-tauri/gen/',
     'apps/mac/src-tauri/resources/',
   ]),
