@@ -16,75 +16,152 @@ export function renderPanel(): string {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>drop</title>
 <style>
-:root { color-scheme: light dark; --ground: #F7F6F3; --card: #FFFFFF; --ink: #1A1A19; --soft: #55534E; --mute: #6B6862; --line: #E4E2DC;
-  --edge: #DAD8D2; --accent: #0E5F58; --accent-on: #FFFFFF; --accent-soft: #E3EFEC; --warn: #9A3412; --ok: #2E8B57; --wait: #C2850C; }
-@media (prefers-color-scheme: dark) { :root { --ground: #1C1C1B; --card: #262624; --ink: #F2F1EE; --soft: #C9C6BE;
-  --mute: #A29F97; --line: #34332F; --edge: #3D3C38; --accent: #5CC2B5; --accent-on: #122923; --accent-soft: #23403C; --warn: #F0A27A; } }
+:root { color-scheme: light dark; --ground: #F7F6F3; --well: #EFEDE8; --card: #FFFFFF; --ink: #1A1A19; --soft: #55534E;
+  --mute: #6B6862; --line: #E4E2DC; --edge: #DAD8D2; --accent: #0E5F58; --accent-on: #FFFFFF; --accent-soft: #E3EFEC;
+  --warn: #9A3412; --ok: #2E8B57; --wait: #B7791F; --shade: rgba(26, 26, 25, .08); --ease-out: cubic-bezier(.23, 1, .32, 1); }
+@media (prefers-color-scheme: dark) { :root { --ground: #1C1C1B; --well: #232321; --card: #2A2A28; --ink: #F2F1EE;
+  --soft: #C9C6BE; --mute: #A29F97; --line: #34332F; --edge: #43413C; --accent: #5CC2B5; --accent-on: #122923;
+  --accent-soft: #23403C; --warn: #F0A27A; --ok: #5FBF85; --wait: #E0A93B; --shade: rgba(0, 0, 0, .35); } }
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--ground); color: var(--ink); font: 14px/1.45 system-ui, -apple-system, sans-serif; }
-button, input { font: inherit; }
-button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-button:disabled { opacity: .55; cursor: wait; }
+/* The Mac window is transparent with a rounded popover material: the page paints a translucent ground inside it. */
+html { height: 100%; overflow: hidden; border-radius: 12px; background: transparent; }
+body { height: 100%; overflow-y: auto; border-radius: 12px; scrollbar-width: thin; scrollbar-color: var(--edge) transparent;
+  scroll-padding-top: 104px; }
+body { margin: 0; background: color-mix(in srgb, var(--ground) 88%, transparent); color: var(--ink); font: 13px/1.4 -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased; -webkit-user-select: none; user-select: none; touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent; }
+.quote, code, .fields dd { -webkit-user-select: text; user-select: text; }
+button, input { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button:disabled { opacity: .5; cursor: progress; }
 ::selection { background: var(--accent); color: var(--accent-on); }
-header { display: flex; align-items: center; gap: 10px; padding: 14px 16px 10px; }
-header strong { font-size: 17px; letter-spacing: -0.02em; }
-.status { display: flex; align-items: center; gap: 6px; color: var(--soft); font-size: 12px; flex-grow: 1; }
-.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; background: var(--edge); flex-shrink: 0; }
-.dot.ok { background: var(--ok); } .dot.wait { background: var(--wait); }
-nav { display: flex; gap: 4px; padding: 0 12px 10px; border-bottom: 1px solid var(--line); }
-nav button { min-height: 40px; padding: 0 12px; border-radius: 8px; border: none; background: transparent;
-  color: var(--soft); font: inherit; cursor: pointer; }
-nav button[aria-selected="true"] { background: var(--ink); color: var(--ground); font-weight: 500; }
-.badge { margin-left: 4px; font-size: 11px; padding: 1px 6px; border-radius: 999px; background: var(--accent); color: var(--accent-on); }
-main { padding: 12px; display: flex; flex-direction: column; gap: 12px; }
-h2 { margin: 8px 4px 0; font-size: 13px; font-weight: 650; color: var(--ink); }
-.card { background: var(--card); border: 1px solid var(--edge); border-radius: 12px; padding: 14px; display: flex;
-  flex-direction: column; gap: 10px; }
+::-webkit-scrollbar { width: 8px; } ::-webkit-scrollbar-thumb { background: var(--edge); border-radius: 8px; border: 2px solid var(--ground); }
+.icon { width: 14px; height: 14px; flex-shrink: 0; fill: currentColor; }
+.name, .muted, .quote, .ledger ul, .fields dd { overflow-wrap: anywhere; }
+
+header { position: sticky; top: 0; z-index: 1; padding: 12px 14px 10px; display: flex; flex-direction: column; gap: 10px;
+  background: color-mix(in srgb, var(--ground) 80%, transparent); -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%); border-bottom: .5px solid transparent; transition: border-color .2s ease; }
+header.edge { border-bottom-color: var(--edge); }
+#edge { height: 1px; margin-bottom: -1px; }
+.bar { display: flex; align-items: center; gap: 8px; }
+.mark { font-size: 15px; font-weight: 700; letter-spacing: -0.02em; }
+.status { margin-left: auto; display: flex; align-items: center; gap: 6px; color: var(--soft); font-size: 12px; min-width: 0; }
+#status-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; background: var(--mute); flex-shrink: 0; }
+.dot.ok { background: var(--ok); } .dot.wait { background: var(--wait); } .dot.bad { background: var(--warn); }
+nav { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2px; padding: 2px; border-radius: 8px; background: var(--well);
+  border: 1px solid var(--line); }
+nav button { min-height: 26px; border-radius: 6px; border: none; background: transparent; color: var(--soft); font-size: 12px; font-weight: 500;
+  cursor: default; display: flex; align-items: center; justify-content: center; gap: 5px; transition: background-color .15s, color .15s; }
+@media (hover: hover) { nav button:hover { color: var(--ink); } }
+nav button[aria-selected="true"] { background: var(--card); color: var(--ink); box-shadow: 0 1px 2px var(--shade), 0 0 0 .5px var(--edge); }
+.badge { min-width: 16px; height: 16px; padding: 0 5px; border-radius: 8px; background: var(--accent); color: var(--accent-on); font-size: 10px;
+  font-weight: 600; line-height: 16px; font-variant-numeric: tabular-nums; }
+
+main { padding: 12px 14px 18px; display: flex; flex-direction: column; gap: 10px; }
+h2 { margin: 8px 2px -2px; font-size: 12px; font-weight: 600; color: var(--soft); }
+h2:first-child { margin-top: 0; }
+.muted { color: var(--mute); font-size: 12px; }
+.lead { color: var(--soft); font-size: 12px; margin: 0 2px; }
 .row { display: flex; align-items: center; gap: 10px; }
 .grow { flex-grow: 1; min-width: 0; }
-.muted { color: var(--mute); font-size: 12px; }
-.quote { background: var(--ground); border-radius: 8px; padding: 10px; }
-.receives b { color: var(--accent); } .never b { color: var(--warn); }
-.actions { display: flex; gap: 6px; flex-wrap: wrap; }
-.decision-actions { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
-.decision-actions button { min-width: 0; padding-inline: 6px; }
-.decision-actions .subtle { grid-column: 1 / -1; border-color: transparent; background: transparent; color: var(--soft); }
-button.act { min-height: 40px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--edge); background: var(--card);
-  color: var(--ink); font: inherit; cursor: pointer; }
-button.accent { border-color: var(--accent); color: var(--accent); font-weight: 500; }
+.name { font-weight: 600; }
+
+.card { background: var(--card); border: .5px solid var(--edge); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 10px;
+  box-shadow: 0 1px 2px var(--shade); }
+.card.ask { padding: 14px; gap: 12px; transition: opacity .16s ease-out, transform .16s ease-out; }
+.card.fresh { animation: arrive .24s var(--ease-out); }
+.card.leaving { opacity: 0; transform: scale(.98); pointer-events: none; }
+@keyframes arrive { from { opacity: 0; transform: translateY(6px) scale(.99); } }
+.who { display: flex; align-items: center; gap: 10px; }
+.who .muted { margin-top: 1px; }
+.avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-weight: 600; font-size: 11px;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.quote { margin: 0; text-wrap: pretty; font-size: 14px; line-height: 1.45; color: var(--ink); padding: 10px 12px; border-radius: 8px; background: var(--well); }
+.why { font-size: 12px; color: var(--soft); }
+.why b { font-weight: 600; color: var(--ink); }
+.ledger { display: flex; flex-direction: column; border-top: .5px solid var(--line); }
+.ledger > div { display: flex; gap: 8px; padding: 9px 0 0; align-items: flex-start; }
+.ledger > div + div { padding-top: 8px; }
+.ledger .icon { margin-top: 2px; }
+.ledger .give .icon { color: var(--accent); }
+.ledger .keep .icon { color: var(--mute); }
+.ledger .label { font-size: 12px; font-weight: 600; }
+.ledger ul { margin: 2px 0 0; padding: 0; list-style: none; color: var(--soft); font-size: 12px; }
+.cost { font-size: 11px; color: var(--mute); font-variant-numeric: tabular-nums; }
+.decision-actions { display: flex; align-items: center; gap: 6px; padding-top: 2px; }
+.decision-actions .subtle { margin-right: auto; padding-inline: 4px; border-color: transparent; background: transparent; color: var(--soft); box-shadow: none; }
+@media (hover: hover) { .decision-actions .subtle:hover { color: var(--ink); background: transparent; } }
+.actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+button.act { min-height: 30px; padding: 0 11px; white-space: nowrap; border-radius: 7px; border: .5px solid var(--edge); background: var(--card); color: var(--ink);
+  font-weight: 500; cursor: default; box-shadow: 0 .5px 1px var(--shade);
+  transition: transform .16s var(--ease-out), background-color .15s ease, filter .15s ease; }
+@media (hover: hover) { button.act:hover { background: var(--well); } button.fill:hover { background: var(--accent); filter: brightness(1.08); } }
+button.act:active { transform: scale(.97); }
+button.accent { color: var(--accent); }
 button.fill { background: var(--accent); border-color: var(--accent); color: var(--accent-on); }
-.list { background: var(--card); border: 1px solid var(--line); border-radius: 12px; }
-.list > div { padding: 10px 12px; border-bottom: 1px solid var(--line); }
-.list > div:last-child { border-bottom: none; }
-.chips { display: flex; gap: 6px; flex-wrap: wrap; }
-.chip { font-size: 12px; padding: 3px 8px; border-radius: 999px; background: var(--ground); border: 1px solid var(--line); }
-.avatar { width: 30px; height: 30px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-weight: 600;
-  font-size: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-.switch { width: 44px; height: 26px; border-radius: 999px; border: none; padding: 3px; display: flex; cursor: pointer;
-  background: var(--edge); justify-content: flex-start; flex-shrink: 0; }
-.switch[aria-checked="true"] { background: var(--accent); justify-content: flex-end; }
-.switch span { width: 20px; height: 20px; border-radius: 50%; background: #fff; display: block; }
-.empty { border: 1px dashed var(--edge); border-radius: 12px; padding: 14px; color: var(--soft); text-align: center; }
-input[type="text"] { min-height: 40px; border-radius: 8px; border: 1px solid var(--edge); padding: 0 10px; font: inherit;
-  background: var(--card); color: var(--ink); width: 100%; }
+button.wide { width: 100%; }
+
+.fields { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; font-size: 12px; padding: 10px 12px; border-radius: 8px;
+  background: var(--well); }
+.fields dt { color: var(--mute); } .fields dd { margin: 0; }
+.list { background: var(--card); border: .5px solid var(--edge); border-radius: 10px; box-shadow: 0 1px 2px var(--shade); overflow: hidden; }
+.list > * { padding: 9px 12px; min-height: 40px; position: relative; }
+.list > * + *::before { content: ""; position: absolute; top: 0; left: 12px; right: 0; border-top: .5px solid var(--line); }
+.state { font-size: 11px; color: var(--mute); white-space: nowrap; }
+.state.ok { color: var(--ok); } .state.bad { color: var(--warn); }
+.chips { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 6px; }
+.chip { font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--well); color: var(--soft); border: .5px solid var(--line); }
+.switch { width: 32px; height: 19px; border-radius: 999px; border: none; padding: 2px; display: block; cursor: default; background: var(--edge);
+  flex-shrink: 0; transition: background-color .2s ease; }
+.switch[aria-checked="true"] { background: var(--accent); }
+.switch span { width: 15px; height: 15px; border-radius: 50%; background: #FCFCFB; display: block; box-shadow: 0 1px 2px rgba(0, 0, 0, .25);
+  transition: transform .2s var(--ease-out); }
+.switch[aria-checked="true"] span { transform: translateX(13px); }
+.switch:active span { transform: scaleX(1.12); transform-origin: left; }
+.switch[aria-checked="true"]:active span { transform: translateX(11px) scaleX(1.12); }
+.steps { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.steps li { display: flex; gap: 8px; color: var(--soft); font-size: 12px; }
+.steps li span { width: 18px; height: 18px; border-radius: 50%; background: var(--well); border: .5px solid var(--edge); color: var(--ink);
+  font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.empty { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; padding: 22px 16px; color: var(--soft); }
+.empty .icon { width: 22px; height: 22px; color: var(--ok); }
+.empty strong { color: var(--ink); font-size: 13px; }
+.field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 500; }
+input[type="text"] { min-height: 30px; font-weight: 400; border-radius: 7px; border: .5px solid var(--edge); padding: 0 9px; background: var(--card); width: 100%;
+  -webkit-user-select: text; user-select: text; }
+input[type="checkbox"] { accent-color: var(--accent); width: 14px; height: 14px; margin: 0; }
+input[aria-invalid="true"] { border-color: var(--warn); }
 .error { color: var(--warn); font-size: 12px; }
-.notice { border: 1px solid var(--edge); border-radius: 10px; padding: 10px 12px; background: var(--card); }
-.notice.error { border-color: var(--warn); }
-.loading { color: var(--soft); padding: 16px 4px; }
+.notice { border-radius: 8px; padding: 9px 11px; background: var(--accent-soft); color: var(--ink); font-size: 12px; }
+.notice.error { background: transparent; border: .5px solid var(--warn); color: var(--ink); }
+.notice.error button { margin-top: 8px; }
+.loading { display: flex; flex-direction: column; gap: 10px; }
+.loading div { height: 64px; border-radius: 10px; background: var(--well); animation: breathe 1.2s ease-in-out infinite alternate; }
+@keyframes breathe { to { opacity: .5; } }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
-code { font: 11px ui-monospace, monospace; word-break: break-all; }
+code { font: 11px/1.4 ui-monospace, SFMono-Regular, monospace; word-break: break-all; white-space: pre-wrap; display: block; padding: 8px 10px;
+  border-radius: 7px; background: var(--well); }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition-property: opacity, background-color, color !important; }
+  .card.leaving, button.act:active, .switch:active span { transform: none; } .switch[aria-checked="true"] span { transform: translateX(13px); } }
+@media (prefers-reduced-transparency: reduce) { body { background: var(--ground); } header { background: var(--ground); -webkit-backdrop-filter: none; backdrop-filter: none; } }
+@media (prefers-contrast: more) { :root { --edge: #8C8981; --line: #B5B2AB; --mute: #4A4843; } .card, .list, button.act { border-width: 1px; } }
 </style>
 </head>
 <body>
+<div id="edge" aria-hidden="true"></div>
 <header>
-  <strong>drop</strong>
+<div class="bar">
+  <span class="mark">drop</span>
   <div class="status"><span class="dot" id="relay-dot" aria-hidden="true"></span><span id="status-text" role="status" aria-live="polite">Connexion…</span></div>
-</header>
+</div>
 <nav role="tablist" aria-label="Sections de drop">
   <button role="tab" id="tab-requests" aria-controls="view" aria-selected="true" tabindex="0">Demandes<span class="badge" id="badge" hidden></span></button>
   <button role="tab" id="tab-team" aria-controls="view" aria-selected="false" tabindex="-1">Équipe</button>
   <button role="tab" id="tab-tools" aria-controls="view" aria-selected="false" tabindex="-1">Mes outils</button>
 </nav>
+</header>
 <div id="announcement" role="status" aria-live="polite" class="sr-only"></div>
 <main id="view" role="tabpanel" aria-labelledby="tab-requests"></main>
 <script>
@@ -112,7 +189,7 @@ code { font: 11px ui-monospace, monospace; word-break: break-all; }
     else if (body !== undefined) { headers['Content-Type'] = 'application/json'; payload = JSON.stringify(body); }
     return fetch(path, { method: method, headers: headers, body: payload }).then(function (res) {
       return res.json().then(function (data) {
-        if (!res.ok) { var error = new Error((data && data.message) || 'erreur'); error.code = data && data.code; throw error; }
+        if (!res.ok) { var error = new Error((data && data.message) || 'Action impossible. Réessaie dans un instant.'); error.code = data && data.code; throw error; }
         return data;
       });
     });
@@ -134,56 +211,116 @@ code { font: 11px ui-monospace, monospace; word-break: break-all; }
     return node;
   }
 
+  // Phosphor Icons regular set (MIT, phosphoricons.com): check, lock-simple, check-circle.
+  var ICONS = {
+    give: 'M229.66,77.66l-128,128a8,8,0,0,1-11.32,0l-56-56a8,8,0,0,1,11.32-11.32L96,188.69,218.34,66.34a8,8,0,0,1,11.32,11.32Z',
+    keep: 'M208,80H176V56a48,48,0,0,0-96,0V80H48A16,16,0,0,0,32,96V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V96A16,16,0,0,0,208,80ZM96,56a32,32,0,0,1,64,0V80H96ZM208,208H48V96H208V208Z',
+    calm: 'M173.66,98.34a8,8,0,0,1,0,11.32l-56,56a8,8,0,0,1-11.32,0l-24-24a8,8,0,0,1,11.32-11.32L112,148.69l50.34-50.35A8,8,0,0,1,173.66,98.34ZM232,128A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z'
+  };
+
+  function icon(name) {
+    var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 256 256');
+    svg.setAttribute('class', 'icon');
+    svg.setAttribute('aria-hidden', 'true');
+    var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', ICONS[name]);
+    svg.appendChild(path);
+    return svg;
+  }
+
+  function list(items) {
+    var node = el('ul', {});
+    items.forEach(function (item) { node.appendChild(el('li', { text: item })); });
+    return node;
+  }
+
+  function firstName(name) {
+    return name.split(/\\s+/)[0] || name;
+  }
+
+  function agentName(agent) {
+    var names = { claude_code: 'Claude Code', claude_desktop: 'Claude Desktop', cursor: 'Cursor', codex: 'Codex' };
+    return names[agent] || agent.replace(/_/g, ' ');
+  }
+
+  var CODES = {
+    E_CLI_MISSING: 'Outil en ligne de commande introuvable sur ce Mac. Installe-le, puis relance l’analyse.',
+    E_CONFIG_INVALID_OR_UNREADABLE: 'Configuration de cet agent illisible. Corrige-la ou ajoute drop à la main.',
+    E_DROP_CONFLICT: 'Un serveur nommé drop existe déjà avec une autre commande.',
+    E_CONFIG_CHANGED: 'La configuration a changé depuis l’analyse. Relance l’analyse.',
+    E_CLI_COMMAND: 'L’agent n’a pas accepté l’ajout du connecteur. Réessaie ou ajoute drop à la main.',
+    E_CLI_UNVERIFIED: 'L’agent n’a pas confirmé l’ajout du connecteur. Réessaie ou ajoute drop à la main.',
+    E_AGENT_INVALID: 'Agent non pris en charge.'
+  };
+
+  function explain(detail) {
+    return CODES[detail] ? CODES[detail] + ' (' + detail + ')' : detail;
+  }
+
   function initials(name) {
     return name.split(/\\s+/).map(function (part) { return part.charAt(0); }).join('').slice(0, 2).toUpperCase();
   }
+
+  var USD = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'USD', currencyDisplay: 'narrowSymbol' });
+  var seen = {};
 
   function costLine(card, requester) {
     if (!card.cost) return null;
     if (card.cost.kind === 'free') return 'Coût : gratuit';
     var payer = card.paidBy === 'requester' ? 'payé par ' + requester : 'à ta charge';
-    if (card.cost.kind === 'capped') return 'Coût max : ' + card.cost.maxUsd.toFixed(2).replace('.', ',') + ' $, ' + payer;
+    if (card.cost.kind === 'capped') return 'Coût max : ' + USD.format(card.cost.maxUsd) + ', ' + payer;
     return 'Coût : ' + payer + ', non mesuré';
   }
 
   function decide(path, dropId, decision, button) {
     button.disabled = true;
     api('POST', path, undefined, { dropId: dropId, decision: decision }).then(function () {
+      var card = button.closest('.card');
+      if (card) card.classList.add('leaving');
       info = decision === 'allow_once' ? 'Demande autorisée une fois.' : decision === 'deny' ? 'Demande refusée.' : decision === 'not_now' ? 'Demande reportée.' : decision === 'send' ? 'Réponse envoyée.' : 'Réponse conservée sur ce Mac.';
       announce(info);
-      render(true);
+      setTimeout(function () { render(true); }, 160);
     }, function (error) { notice = error.message; announce('Action impossible. ' + notice); render(true); });
   }
 
   function approvalCard(item) {
     var who = item.requestedBy.displayName;
     var cost = costLine(item.card, who);
-    return el('div', { class: 'card' },
-      el('div', { class: 'row' }, el('span', { class: 'avatar', text: initials(who) }),
-        el('div', { class: 'grow' }, el('div', { text: who + ' a besoin d’aide' }),
-          el('div', { class: 'muted', text: 'via ' + item.requestedBy.agent.replace('_', ' ') }))),
-      el('strong', { text: item.card.title }),
-      el('div', { class: 'quote', text: '« ' + item.inputPreview + ' »' }),
-      el('div', { class: 'muted', text: 'Pourquoi : ' + item.purpose }),
-      el('div', { class: 'receives' }, el('b', { text: 'Reçoit ' }), item.card.receives.join(', ')),
-      el('div', { class: 'never' }, el('b', { text: 'Ne reçoit jamais ' }), item.card.neverReceives.join(', ')),
-      cost ? el('div', { class: 'muted', text: cost }) : null,
-      el('div', { class: 'actions decision-actions' },
+    var first = firstName(who);
+    return el('article', { class: 'card ask' + fresh(item.dropId), 'aria-label': who + ' : ' + item.card.title },
+      el('div', { class: 'who' }, el('span', { class: 'avatar', 'aria-hidden': 'true', text: initials(who) }),
+        el('div', { class: 'grow' }, el('div', {}, el('span', { class: 'name', text: who }), ' a besoin d’aide'),
+          el('div', { class: 'muted', text: item.card.title + ' · via ' + agentName(item.requestedBy.agent) }))),
+      el('p', { class: 'quote', text: '« ' + item.inputPreview + ' »' }),
+      el('div', { class: 'why' }, el('b', { text: 'Pourquoi ' }), item.purpose),
+      el('div', { class: 'ledger' },
+        el('div', { class: 'give' }, icon('give'), el('div', {}, el('div', { class: 'label', text: first + ' recevra' }), list(item.card.receives))),
+        el('div', { class: 'keep' }, icon('keep'), el('div', {}, el('div', { class: 'label', text: first + ' ne recevra jamais' }), list(item.card.neverReceives)))),
+      cost ? el('div', { class: 'cost', text: cost }) : null,
+      el('div', { class: 'decision-actions' },
+        el('button', { class: 'act subtle', 'aria-label': 'Reporter : ' + item.card.title, onclick: function (event) { decide('/ui/decide', item.dropId, 'not_now', event.currentTarget); } }, 'Pas maintenant'),
         el('button', { class: 'act', 'aria-label': 'Refuser : ' + item.card.title, onclick: function (event) { decide('/ui/decide', item.dropId, 'deny', event.currentTarget); } }, 'Refuser'),
-        el('button', { class: 'act fill', 'aria-label': 'Autoriser une fois : ' + item.card.title, onclick: function (event) { decide('/ui/decide', item.dropId, 'allow_once', event.currentTarget); } }, 'Autoriser une fois'),
-        el('button', { class: 'act subtle', 'aria-label': 'Reporter : ' + item.card.title, onclick: function (event) { decide('/ui/decide', item.dropId, 'not_now', event.currentTarget); } }, 'Pas maintenant')));
+        el('button', { class: 'act fill', 'aria-label': 'Autoriser une fois : ' + item.card.title, onclick: function (event) { decide('/ui/decide', item.dropId, 'allow_once', event.currentTarget); } }, 'Autoriser une fois')));
+  }
+
+  function fresh(dropId) {
+    if (seen[dropId]) return '';
+    seen[dropId] = true;
+    return ' fresh';
   }
 
   function reviewCard(item) {
-    var fields = el('div', { class: 'quote' });
+    var fields = el('dl', { class: 'fields' });
     var output = item.output || {};
     Object.keys(output).forEach(function (key) {
       var value = output[key];
-      fields.appendChild(el('div', {}, el('span', { class: 'muted', text: key + ' ' }), Array.isArray(value) ? value.join(', ') : String(value)));
+      fields.appendChild(el('dt', { text: key }));
+      fields.appendChild(el('dd', { text: Array.isArray(value) ? value.join(', ') : String(value) }));
     });
-    return el('div', { class: 'card' },
-      el('strong', { text: 'À relire avant envoi : ' + item.title }),
-      el('div', { class: 'muted', text: 'Rien n’est parti. Tu peux envoyer ou garder pour toi.' }),
+    return el('article', { class: 'card ask' + fresh(item.dropId), 'aria-label': 'À relire : ' + item.title },
+      el('div', {}, el('div', { class: 'name', text: item.title }),
+        el('div', { class: 'muted', text: 'À relire avant envoi. Rien n’est parti : tu peux envoyer ou garder pour toi.' })),
       fields,
       el('div', { class: 'actions' },
         el('button', { class: 'act', 'aria-label': 'Ne pas envoyer : ' + item.title, onclick: function (event) { decide('/ui/review', item.dropId, 'discard', event.currentTarget); } }, 'Ne pas envoyer'),
@@ -192,6 +329,7 @@ code { font: 11px ui-monospace, monospace; word-break: break-all; }
 
   var STATES = { proposed: 'envoyée', awaiting_approval: 'en attente', approved: 'acceptée', running: 'en cours', in_review: 'relue',
     delivered: 'reçue', receipted: 'reçue', denied: 'refusée', not_now: 'pas maintenant', expired: 'expirée', failed: 'échouée' };
+  var TONES = { delivered: 'ok', receipted: 'ok', denied: 'bad', failed: 'bad', expired: '', not_now: '' };
 
   function renderRequests(view) {
     return Promise.all([api('GET', '/ui/pending'), api('GET', '/ui/outbound')]).then(function (data) {
@@ -200,20 +338,22 @@ code { font: 11px ui-monospace, monospace; word-break: break-all; }
       badge.hidden = pending.length === 0;
       badge.textContent = String(pending.length);
       view.appendChild(el('h2', { text: 'À décider' }));
-      if (pending.length === 0) view.appendChild(el('div', { class: 'empty', text: 'Rien à décider. Une notification arrivera quand quelqu’un aura besoin de toi.' }));
+      if (pending.length === 0) view.appendChild(el('div', { class: 'card empty' }, icon('calm'),
+        el('strong', { text: 'Rien à décider' }),
+        el('div', { class: 'muted', text: 'Quand un collègue aura besoin d’un de tes outils, sa question arrivera ici avec une notification.' })));
       pending.forEach(function (item) { view.appendChild(item.kind === 'approval' ? approvalCard(item) : reviewCard(item)); });
       var drops = data[1].drops;
       if (drops.length > 0) {
         view.appendChild(el('h2', { text: 'Mes questions' }));
-        var list = el('div', { class: 'list' });
+        var rows = el('div', { class: 'list' });
         drops.slice(0, 10).forEach(function (drop) {
-          var done = drop.result || drop.state === 'delivered' || drop.state === 'receipted';
-          list.appendChild(el('div', { class: 'row' },
-            el('span', { class: 'dot ' + (done ? 'ok' : drop.error ? '' : 'wait') }),
-            el('div', { class: 'grow' }, el('div', { text: drop.ownerName + ' · ' + drop.title })),
-            el('span', { class: 'muted', text: STATES[drop.state] || drop.state })));
+          var tone = drop.result ? 'ok' : drop.error ? 'bad' : drop.state in TONES ? TONES[drop.state] : 'wait';
+          rows.appendChild(el('div', { class: 'row' },
+            el('span', { class: 'dot ' + tone, 'aria-hidden': 'true' }),
+            el('div', { class: 'grow' }, el('div', { class: 'name', text: drop.ownerName }), el('div', { class: 'muted', text: drop.title })),
+            el('span', { class: 'state ' + tone, text: STATES[drop.state] || drop.state })));
         });
-        view.appendChild(list);
+        view.appendChild(rows);
       }
     });
   }
@@ -221,36 +361,39 @@ code { font: 11px ui-monospace, monospace; word-break: break-all; }
   function renderTeam(view) {
     return api('GET', '/ui/team').then(function (data) {
       if (!data.team) {
-        var name = el('input', { type: 'text', placeholder: 'Nom de l’équipe', 'aria-label': 'Nom de l’équipe' });
+        var name = el('input', { type: 'text', name: 'team', autocomplete: 'off', spellcheck: 'false', placeholder: 'Ex. Atlas…' });
         view.appendChild(el('div', { class: 'card' },
-          el('strong', { text: 'Pas encore d’équipe' }),
-          el('div', { class: 'muted', text: 'Crée-la, puis invite tes collègues : chacun verra les outils des autres.' }),
-          name,
-          el('button', { class: 'act fill', onclick: function () {
+          el('div', {}, el('div', { class: 'name', text: 'Pas encore d’équipe' }),
+            el('div', { class: 'muted', text: 'Crée-la, puis invite tes collègues : chacun verra les outils des autres.' })),
+          el('label', { class: 'field' }, 'Nom de l’équipe', name),
+          el('div', { class: 'actions' }, el('button', { class: 'act fill', onclick: function () {
             if (!name.value.trim()) { name.setAttribute('aria-invalid', 'true'); announce('Donne un nom à l’équipe.'); name.focus(); return; }
             api('POST', '/ui/admin/team', { name: name.value.trim() }).then(function () { info = 'Équipe créée.'; announce(info); render(true); }, function (error) { notice = error.message; render(true); });
-          } }, 'Créer l’équipe')));
+          } }, 'Créer l’équipe'))));
         return;
       }
-      view.appendChild(el('h2', { text: data.team.name + ' · ' + data.members.length + ' membres' }));
+      var online = data.members.filter(function (member) { return member.online; }).length;
+      view.appendChild(el('h2', { text: data.team.name + ' · ' + data.members.length + ' membres, ' + online + ' en ligne' }));
+      var members = el('div', { class: 'list' });
       data.members.forEach(function (member) {
         var chips = el('div', { class: 'chips' });
         member.capabilities.forEach(function (capability) { chips.appendChild(el('span', { class: 'chip', text: capability.title.replace('Répondre à partir de ', '') })); });
-        view.appendChild(el('div', { class: 'card' },
-          el('div', { class: 'row' }, el('span', { class: 'avatar', text: initials(member.displayName) }),
-            el('div', { class: 'grow' }, el('div', { text: member.displayName + (member.self ? ' (toi)' : '') }),
-              el('div', { class: 'muted', text: member.agents.join(', ') || 'aucun agent signalé' })),
-            el('span', { class: 'dot ' + (member.online ? 'ok' : '') }),
-            el('span', { class: 'muted', text: member.online ? 'en ligne' : 'hors ligne' })),
-          member.capabilities.length > 0 ? chips : null));
+        members.appendChild(el('div', {},
+          el('div', { class: 'row' }, el('span', { class: 'avatar', 'aria-hidden': 'true', text: initials(member.displayName) }),
+            el('div', { class: 'grow' }, el('div', { class: 'name', text: member.displayName + (member.self ? ' (toi)' : '') }),
+              el('div', { class: 'muted', text: member.agents.join(', ') || 'aucun agent signalé' }),
+              member.capabilities.length > 0 ? chips : null),
+            el('span', { class: 'dot ' + (member.online ? 'ok' : ''), 'aria-hidden': 'true' }),
+            el('span', { class: 'state', text: member.online ? 'en ligne' : 'hors ligne' }))));
       });
+      view.appendChild(members);
       var code = el('div', {});
-      view.appendChild(el('button', { class: 'act', onclick: function () {
+      view.appendChild(el('button', { class: 'act wide', onclick: function () {
         api('POST', '/ui/invite').then(function (data) {
           var link = 'drop://pair?code=' + encodeURIComponent(data.code);
           code.textContent = '';
           code.appendChild(el('div', { class: 'card' }, el('div', { class: 'muted', text: 'Envoie ce lien, valable 24 h, une seule fois :' }), el('code', { text: link }),
-            el('button', { class: 'act accent', onclick: function () { navigator.clipboard.writeText(link); } }, 'Copier')));
+            el('div', { class: 'actions' }, el('button', { class: 'act accent', onclick: function () { navigator.clipboard.writeText(link).then(function () { announce('Lien copié.'); }); } }, 'Copier le lien'))));
         });
       } }, 'Inviter quelqu’un dans l’équipe'));
       view.appendChild(code);
@@ -260,61 +403,69 @@ code { font: 11px ui-monospace, monospace; word-break: break-all; }
   function renderTools(view) {
     return api('GET', '/ui/admin/tools').then(function (data) {
       view.appendChild(el('h2', { text: 'Connecter mes agents' }));
-      view.appendChild(el('div', { class: 'muted', text: '1. Analyse locale des quatre agents compatibles. 2. Choisis puis confirme les connecteurs à ajouter. Aucun outil ne sera partagé.' }));
-      view.appendChild(el('button', { class: 'act', onclick: function () {
+      var steps = el('ol', { class: 'steps' },
+        el('li', {}, el('span', { 'aria-hidden': 'true', text: '1' }), 'Analyse locale des quatre agents compatibles.'),
+        el('li', {}, el('span', { 'aria-hidden': 'true', text: '2' }), 'Choisis puis confirme les connecteurs à ajouter. Aucun outil ne sera partagé.'));
+      view.appendChild(el('div', { class: 'card' }, steps, el('button', { class: 'act wide', onclick: function (event) {
+        event.currentTarget.disabled = true;
         api('GET', '/ui/admin/onboarding').then(function (result) { onboardingPlans = result.agents; manualConnector = result.manual; render(true); }, function (error) { notice = error.message; render(true); });
-      } }, '1. Analyser ce Mac'));
+      } }, '1. Analyser ce Mac')));
       var plans = onboardingPlans || [];
       var selectable = [];
+      var found = el('div', { class: 'list' });
       plans.forEach(function (plan) {
         if (plan.state === 'absent') return;
         var checkbox = plan.state === 'ready' ? el('input', { type: 'checkbox', 'aria-label': 'Connecter ' + plan.label }) : null;
         if (checkbox) { checkbox.checked = true; selectable.push({ plan: plan, checkbox: checkbox }); }
-        view.appendChild(el('div', { class: 'card' },
-          el('div', { class: 'row' }, checkbox, el('strong', { text: plan.label })),
-          el('div', { class: plan.state === 'error' || plan.state === 'conflict' ? 'error' : 'muted', text: plan.detail }),
+        found.appendChild(el(checkbox ? 'label' : 'div', { class: 'row' }, checkbox,
+          el('div', { class: 'grow' }, el('div', { class: 'name', text: plan.label }),
+            el('div', { class: plan.state === 'error' || plan.state === 'conflict' ? 'error' : 'muted', text: explain(plan.detail) })),
           plan.state === 'already_connected' ? el('button', { class: 'act', onclick: function () {
             api('POST', '/ui/admin/onboarding', { selections: [{ agent: plan.agent, fingerprint: plan.fingerprint, action: 'disconnect' }] }).then(function (result) {
-              info = result.results.map(function (item) { return item.agent + ' : ' + item.detail; }).join(' · ');
+              info = result.results.map(function (item) { return agentName(item.agent) + ' : ' + explain(item.detail); }).join(' · ');
               onboardingPlans = null;
               announce(info);
               render(true);
             }, function (error) { notice = error.message; render(true); });
           } }, 'Retirer ce connecteur') : null));
       });
-      if (selectable.length > 0) view.appendChild(el('button', { class: 'act fill', onclick: function () {
+      if (found.childNodes.length > 0) view.appendChild(found);
+      if (selectable.length > 0) view.appendChild(el('button', { class: 'act fill wide', onclick: function () {
         var selected = selectable.filter(function (item) { return item.checkbox.checked; }).map(function (item) {
           return { agent: item.plan.agent, fingerprint: item.plan.fingerprint, action: 'connect' };
         });
-        if (!selected.length) return;
+        if (!selected.length) { announce('Coche au moins un agent.'); return; }
         api('POST', '/ui/admin/onboarding', { selections: selected }).then(function (result) {
-          info = result.results.map(function (item) { return item.agent + ' : ' + item.detail; }).join(' · ') + ' · Connecteur utilisable : à vérifier après relance. L’état de l’équipe apparaît en haut.';
+          info = result.results.map(function (item) { return agentName(item.agent) + ' : ' + explain(item.detail); }).join(' · ') + ' · Connecteur utilisable : à vérifier après relance. L’état de l’équipe apparaît en haut.';
           onboardingPlans = null;
           announce(info);
           render(true);
         }, function (error) { notice = error.message; render(true); });
       } }, '2. Connecter les agents sélectionnés'));
-      if (onboardingPlans && plans.every(function (plan) { return plan.state === 'absent'; })) view.appendChild(el('div', { class: 'empty', text: 'Aucun de ces quatre agents détecté. Tu peux ajouter manuellement le connecteur MCP drop dans ton agent.' }));
-      view.appendChild(el('div', { class: 'muted', text: 'Autre agent ? Ajoute manuellement un serveur MCP stdio nommé drop. Aucune permission générale n’est nécessaire.' }));
+      if (onboardingPlans && plans.every(function (plan) { return plan.state === 'absent'; })) view.appendChild(el('div', { class: 'card empty' },
+        el('strong', { text: 'Aucun des quatre agents détecté' }),
+        el('div', { class: 'muted', text: 'Tu peux ajouter manuellement le connecteur MCP drop dans ton agent.' })));
+      view.appendChild(el('div', { class: 'lead', text: 'Autre agent ? Ajoute manuellement un serveur MCP stdio nommé drop. Aucune permission générale n’est nécessaire.' }));
       if (onboardingPlans && manualConnector) view.appendChild(el('div', { class: 'card' },
-        el('strong', { text: 'Configuration manuelle' }),
+        el('div', { class: 'name', text: 'Configuration manuelle' }),
         el('code', { text: JSON.stringify({ mcpServers: { drop: manualConnector } }, null, 2) }),
         el('div', { class: 'muted', text: 'Copie cette entrée dans la configuration MCP de ton agent, puis relance-le. Cela ne partage aucun outil.' })));
       view.appendChild(el('h2', { text: 'Mes outils' }));
-      view.appendChild(el('div', { class: 'muted', text: 'Partager un outil, c’est répondre aux questions de l’équipe avec lui, après ton accord. Personne ne reçoit l’accès.' }));
+      view.appendChild(el('div', { class: 'lead', text: 'Partager un outil, c’est répondre aux questions de l’équipe avec lui, après ton accord. Personne ne reçoit l’accès.' }));
       data.agents.forEach(function (agent) {
         if (!agent.installed) return;
-        view.appendChild(el('h2', { text: agent.label }));
         var card = el('div', { class: 'list' });
         card.appendChild(el('div', { class: 'row' },
-          el('div', { class: 'grow', text: agent.dropInstalled ? 'drop est installé dans ' + agent.label : 'drop n’est pas encore installé' })));
+          el('div', { class: 'grow' }, el('div', { class: 'name', text: agent.label }),
+            el('div', { class: 'muted', text: agent.dropInstalled ? 'drop est installé dans ' + agent.label : 'drop n’est pas encore installé' }))));
         agent.servers.forEach(function (server) {
           if (!server.shareable) return;
           var shared = data.shared[agent.agent + '/' + server.name];
           card.appendChild(el('div', { class: 'row' },
             el('div', { class: 'grow' }, el('div', { text: server.name }), el('div', { class: 'muted', text: (server.kind ? server.kind + ' · ' : '') + server.where })),
             el('button', { class: 'switch', role: 'switch', 'aria-checked': shared ? 'true' : 'false', 'aria-label': (shared ? 'Ne plus partager ' : 'Partager ') + server.name,
-              onclick: function () {
+              onclick: function (event) {
+                event.currentTarget.disabled = true;
                 var call = shared ? api('POST', '/ui/admin/unshare', { capabilityId: shared }) : api('POST', '/ui/admin/share', { agent: agent.agent, server: server.name });
                 call.then(function () { info = shared ? 'Outil retiré du partage.' : 'Outil partagé après consentement.'; announce(info); render(true); }, function (error) {
                   notice = error.message;
@@ -330,14 +481,14 @@ code { font: 11px ui-monospace, monospace; word-break: break-all; }
         var linked = el('div', { class: 'list' });
         data.links.forEach(function (link) {
           linked.appendChild(el('div', { class: 'row' },
-            el('div', { class: 'grow' }, el('div', { text: link.clientName + (link.redirectHost ? ' (' + link.redirectHost + ')' : '') }), el('div', { class: 'muted', text: 'peut demander à ton équipe en ton nom' })),
-            el('button', { class: 'act', onclick: function () {
-              api('POST', '/ui/admin/unlink', { gateway: link.gateway, client: link.clientName }).then(render);
+            el('div', { class: 'grow' }, el('div', { class: 'name', text: link.clientName + (link.redirectHost ? ' (' + link.redirectHost + ')' : '') }), el('div', { class: 'muted', text: 'peut demander à ton équipe en ton nom' })),
+            el('button', { class: 'act', 'aria-label': 'Retirer ' + link.clientName, onclick: function () {
+              api('POST', '/ui/admin/unlink', { gateway: link.gateway, client: link.clientName }).then(function () { render(true); });
             } }, 'Retirer')));
         });
         view.appendChild(linked);
       }
-      view.appendChild(el('div', { class: 'muted', text: 'Qui paie le modèle : ' + (data.payer === 'owner' ? 'toi' : 'celui qui demande') }));
+      view.appendChild(el('div', { class: 'lead', text: 'Qui paie le modèle : ' + (data.payer === 'owner' ? 'toi' : 'celui qui demande') }));
     });
   }
 
@@ -377,7 +528,7 @@ code { font: 11px ui-monospace, monospace; word-break: break-all; }
       next.appendChild(el('a', { class: 'act', href: signInLink, target: '_blank', rel: 'noopener noreferrer', text: 'Ouvrir la page de connexion' }));
       signInLink = '';
     }
-    var loading = el('div', { class: 'loading', text: 'Chargement…' });
+    var loading = el('div', { class: 'loading' }, el('span', { class: 'sr-only', text: 'Chargement…' }), el('div', {}), el('div', {}));
     next.appendChild(loading);
     view.replaceWith(next);
     function complete(error) {
@@ -407,7 +558,7 @@ code { font: 11px ui-monospace, monospace; word-break: break-all; }
       document.getElementById('status-text').textContent = status.displayName + (status.relayConnected ? ' · connecté' : ' · hors ligne');
     }, function () {
       if (version !== renderVersion) return;
-      document.getElementById('relay-dot').className = 'dot';
+      document.getElementById('relay-dot').className = 'dot bad';
       document.getElementById('status-text').textContent = 'Moteur local indisponible';
     });
   }
@@ -485,6 +636,9 @@ code { font: 11px ui-monospace, monospace; word-break: break-all; }
   document.addEventListener('focusin', function (event) {
     if (pendingRefresh && !event.target.closest('#view')) { pendingRefresh = false; render(); }
   });
+  new IntersectionObserver(function (entries) {
+    document.querySelector('header').classList.toggle('edge', !entries[0].isIntersecting);
+  }).observe(document.getElementById('edge'));
   render();
 })();
 </script>

@@ -16,6 +16,14 @@ Ce paquet sert aux essais uniquement. Pour une release destinée à un autre Mac
 node scripts/build-mac.ts --release
 ```
 
+Sans mot de passe dans l'environnement, un profil du trousseau convient : l'enregistrer une fois avec `xcrun notarytool store-credentials drop-notary --apple-id <apple-id> --team-id <team-id>` (mot de passe d'app saisi au clavier), puis :
+
+```sh
+node scripts/build-mac.ts --release --sign "Developer ID Application: …" --notary-profile drop-notary
+```
+
+Tauri ne sait pas lire ce profil : le script signe alors le Node embarqué pour le runtime renforcé (le binaire officiel porte `get-task-allow`, refusé à la notarisation), soumet le DMG à `notarytool`, exige le statut `Accepted`, puis agrafe le ticket au DMG et à l'app.
+
 Le script refuse une release sans ces prérequis, vérifie que le Node embarqué a l'architecture du Mac constructeur, puis exige le passage de `codesign --verify`, `spctl --assess` et `xcrun stapler validate`. Il écrit `drop-build-manifest.json` à côté des paquets avec version, architecture, version de Node et empreintes SHA-256. Une compilation locale ou un manifeste seul ne qualifie pas le paquet : installer le DMG sur un Mac de test sans Node de développement, vérifier le tray, le premier lancement privé, une décision et les liens `drop://` avant distribution.
 
 ## Mise à jour facultative
