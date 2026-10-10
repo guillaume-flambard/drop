@@ -5,10 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       name="description"
-      content="Vos agents collaborent dans votre infrastructure. Découvrez la cible de drop : A2A, MCP, consentement et app Mac en barre de menus."
+      content="La réponse, pas l’accès. drop est un prototype de couche de consentement au-dessus d’A2A et MCP : le propriétaire décide, seule la réponse validée revient."
     />
     <meta name="theme-color" content="#2548ed" />
-    <title>drop · Vos agents, votre infrastructure</title>
+    <title>drop · La réponse, pas l’accès</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg" />
     <link rel="stylesheet" href="styles.css" />
   </head>
@@ -29,20 +29,23 @@
     <main id="contenu">
       <section class="hero wrap" aria-labelledby="hero-title">
         <div>
-          <span class="pill">Prototype · Cap sur l’open source</span>
-          <h1 id="hero-title">Vos agents.<br />Votre équipe.<br />Chez vous.</h1>
+          <span class="pill">Prototype · Apache-2.0, dépôt encore privé</span>
+          <h1 id="hero-title">La réponse.<br />Pas l’accès.</h1>
           <p class="intro">
-            Votre agent a besoin d’une réponse chez un collègue. drop organise la demande et son autorisation. Les accès
-            restent chez leur propriétaire.
+            Votre agent a besoin d’une information qui vit dans les outils d’un collègue. Il pose une question bornée.
+            Le collègue voit ce qui partira, puis décide. Seule la réponse validée revient ; les accès restent chez lui.
           </p>
           <p class="hero-promise">
-            Notre cap : une collaboration A2A et MCP dans votre infrastructure, sans compte Memo Labs obligatoire.
+            Une couche de consentement au-dessus d’A2A et MCP, sans compte Memo Labs ni relais tiers obligatoire.
           </p>
           <div class="actions">
-            <a class="button" href="#connexion">Découvrir le parcours prévu</a
+            <a class="button" href="#connexion">Raccorder ses agents</a
             ><a class="text-link" href="#echange">Explorer un échange</a>
           </div>
-          <p class="hero-foot">Mac en barre de menus d’abord. Profil privé et connexion simplifiée en construction.</p>
+          <p class="hero-foot">
+            App Mac en barre de menus d’abord, puis Windows (T3.7) et Linux (T3.8). Rien n’a encore été validé avec de
+            vrais utilisateurs.
+          </p>
         </div>
         <div class="exchange" id="echange">
           <svg class="route-art" viewBox="0 0 530 470" aria-hidden="true">
@@ -108,7 +111,7 @@
                   <span aria-hidden="true">↳</span
                   ><span>Sources : <code>src/theme.ts</code>, <code>docs/theme.md</code></span>
                 </div>
-                <div class="status-band">Julie peut retirer des champs ou arrêter l'envoi.</div>
+                <div class="status-band">Julie envoie la réponse ou arrête l'envoi.</div>
               </section>
               <section class="demo-panel panel-result" id="panel-result" aria-label="La réponse reçue par Guillaume">
                 <div class="panel-top"><span class="mini-logo">drop</span><span>Retour chez Guillaume</span></div>
@@ -132,8 +135,8 @@
       </section>
       <div class="principle-strip">
         <div class="wrap strip-inner">
-          <p><strong>Get the answer, not the access.</strong></p>
-          <p class="muted">Un accord humain. Une réponse bornée. Votre infrastructure.</p>
+          <p><strong>La réponse, pas l’accès.</strong></p>
+          <p class="muted">Un accord humain. Une réponse bornée. Aucun accès permanent transmis.</p>
         </div>
       </div>
       <section class="section white-section" id="principe">
@@ -141,8 +144,9 @@
           <div class="section-head">
             <h2>Le contexte est chez un collègue.<br />La réponse revient à votre agent.</h2>
             <p>
-              Pour les équipes techniques de PME qui utilisent déjà des agents. Chacun garde ses outils, son modèle et
-              ses accès.
+              Premiers essais prévus avec deux amis techniques (T4.6). Conçu pour rester acceptable par l’informatique
+              d’une entreprise souveraine ; adoption visée par les petites équipes. Le propriétaire de la donnée peut ne
+              pas être technique.
             </p>
           </div>
           <div class="sequence">
@@ -171,6 +175,11 @@
               </p>
             </div>
           </div>
+          <p class="source-link">
+            Aujourd’hui, seul l’échange par capacité existe. Les faits publiés (T4.4), les petites questions (T4.9) et
+            les tâches déléguées (T4.11) sont visés ; la conversation libre entre agents est exclue.
+            <a href="guide.html#echelle">Voir l’échelle des échanges</a>.
+          </p>
           <a class="source-link" href="guide.html#parcours">Voir le parcours complet et ses limites</a>
         </div>
       </section>
@@ -178,8 +187,8 @@
         <div class="section-head">
           <h2>Deux confirmations.<br />Puis drop reste à portée de main.</h2>
           <p>
-            Parcours cible après installation de l’app et permissions accordées. Aucun modèle n’est nécessaire pour
-            raccorder vos agents.
+            Ce raccordement existe dans le panneau local (T3.3) et passe ses tests sur fixtures. La recette humaine sur
+            un Mac reste à faire. Aucun modèle ne fouille votre machine.
           </p>
         </div>
         <div class="setup-layout">
@@ -205,7 +214,7 @@
               ><span class="menu-drop"><img src="favicon.svg" width="18" height="18" alt="" /> drop</span>
             </div>
             <div class="menu-preview">
-              <div class="panel-top"><span class="mini-logo">drop</span><span>Aperçu simulé</span></div>
+              <div class="panel-top"><span class="mini-logo">drop</span><span>Maquette</span></div>
               <h3>Vos agents sur ce Mac</h3>
               <ul class="agent-list">
                 <li>
@@ -226,17 +235,19 @@
                 </li>
               </ul>
               <p class="preview-action">Étape suivante : connecter la sélection</p>
-              <p class="preview-note">Connexion locale possible même si l’équipe est hors ligne.</p>
+              <p class="preview-note">Pour un autre agent : une configuration à copier.</p>
             </div>
             <figcaption>
-              Maquette du parcours prévu. Cette page n’analyse pas votre Mac et ne modifie aucune configuration.
+              Maquette inspirée du panneau. Cette page n’analyse pas votre Mac et ne modifie aucune configuration.
             </figcaption>
           </figure>
         </div>
         <div class="setup-foot">
           <p>
-            Les adaptateurs couvrent aujourd’hui Claude Code, Codex, Cursor et Claude Desktop. La cible prévoit une voie
-            manuelle pour les autres agents, des erreurs visibles par agent et un aperçu sans secret.
+            Quatre adaptateurs existent : Claude Code, Codex, Cursor et Claude Desktop, avec un aperçu sans secret, un
+            résultat par agent et une voie manuelle. Neuf autres clients MCP sont visés (T4.5). ChatGPT n’accepte qu’un
+            serveur distant : il passera par une passerelle publique facultative (T2.13, non livrée), qu’une entreprise
+            pourra interdire (T4.10).
           </p>
           <a class="text-link" href="guide.html#connexion">Prérequis, restauration et étapes séparées</a>
         </div>
@@ -286,28 +297,39 @@
       <section class="section privacy" id="confiance">
         <div class="wrap split">
           <div>
-            <h2>Votre équipe choisit où les données passent.</h2>
+            <h2>Une promesse, avec sa limite.</h2>
             <p>
-              La cible privée garde le relais, les modèles et les sources dans votre périmètre. Aucun service drop
-              externe n’est requis pour ce parcours.
+              « Vos données restent sur votre machine. Seule une réponse que vous avez approuvée en sort, chiffrée, vers
+              la personne qui l’a demandée. Aucun index central, aucun serveur qui lit, code ouvert et journal local de
+              tout ce qui est sorti. »
+            </p>
+            <p>
+              <strong>Sa limite.</strong> drop contrôle ce qui passe par drop. Un connecteur MCP, un modèle ou un agent
+              A2A choisi par le propriétaire peut avoir ses propres flux, que drop ne voit pas.
+            </p>
+            <p>
+              Aujourd’hui, le journal local garde des reçus signés (empreintes et métadonnées), pas une copie du
+              contenu. Le code sera ouvert après les contrôles de publication (T3.6).
             </p>
             <a class="text-link" href="guide.html#confidentialite">Comprendre les frontières de confidentialité</a>
           </div>
           <div class="privacy-points">
+            <h3>Sans serveur, quand c’est possible.</h3>
+            <p>
+              Visé (T4.2) : découverte sur le réseau local et connexion directe par Internet. Par défaut, aucun relais
+              de secours : si la connexion directe échoue, l’app l’explique et vous laisse en choisir un.
+            </p>
             <h3>Un relais exploité chez vous.</h3>
             <p>
-              Il transmet les enveloppes chiffrées. Le contenu reste protégé entre les Nodes ; les métadonnées
-              nécessaires au routage restent visibles.
-            </p>
-            <h3>Vos agents et votre modèle.</h3>
-            <p>
-              MCP raccorde les outils. A2A permet les échanges avec des agents compatibles. Un agent joint conserve sa
-              propre politique : sa destination et ses accès doivent être examinés.
+              Existant : le relais transmet les enveloppes chiffrées et voit seulement les métadonnées de routage et
+              d’admission (identités, parrain, horodatages, adresses de connexion). Visé (T4.10) : paquet entreprise du
+              relais (binaire, Docker, Helm) avec une politique signée par l’informatique. Une image Docker de
+              laboratoire existe déjà.
             </p>
             <h3>Une frontière que l’on doit prouver.</h3>
             <p>
               Le profil privé refuse les destinations hors politique et fonctionne avec Internet bloqué dans notre
-              recette à deux Nodes et sources simulées. Les modèles et agents réels restent à qualifier.
+              recette à deux Nodes et sources simulées (T3.1). Les modèles et agents réels restent à qualifier (T3.2).
             </p>
           </div>
         </div>
@@ -370,40 +392,39 @@
       <section class="section white-section" id="offre">
         <div class="wrap">
           <div class="section-head">
-            <h2>Le socle est gratuit.<br />L’accompagnement a sa place.</h2>
+            <h2>Le socle est gratuit.<br />Rien n’est payant aujourd’hui.</h2>
             <p>
-              Une base ouverte pour les petites équipes. La même liberté de déploiement et de modèle pour les
-              entreprises.
+              Rien de payant avant d’avoir des utilisateurs. La sécurité n’est jamais une option payante. Aucun tarif
+              n’est fixé.
             </p>
           </div>
           <div class="offer-grid">
             <div>
-              <span class="offer-label">Community · Gratuit</span>
+              <span class="offer-label">Socle · Apache-2.0</span>
               <h3>Exploiter drop vous-même.</h3>
               <p>
-                Auto-hébergement, A2A et MCP, consentement, contrôles de sécurité, reçus et modèles internes font partie
-                du socle prévu sous Apache-2.0.
+                Consentement, contrôles de sortie, reçus, relais auto-hébergé, A2A et MCP. Le code est sous licence
+                Apache-2.0 ; aucun compte Memo Labs n’est requis.
               </p>
             </div>
             <div>
-              <span class="offer-label">Accompagnement · Payant</span>
+              <span class="offer-label">Installation et support · Hypothèse</span>
               <h3>Être aidé à l’installer.</h3>
               <p>
-                Installation dans votre infrastructure, intégration de capacités, formation et maintenance au périmètre
-                convenu.
+                Des contrats d’installation et de support pourraient financer le projet. Rien n’est proposé aujourd’hui.
               </p>
             </div>
             <div>
-              <span class="offer-label">Organisation · Plus tard</span>
+              <span class="offer-label">Pack entreprise · Hypothèse</span>
               <h3>Administrer plusieurs équipes.</h3>
               <p>
-                Annuaire d’entreprise, gestion des départs, politiques et audit consolidés : des fonctions futures, à
-                construire avec les équipes utilisatrices.
+                Console de politiques, SSO, export d’audit, versions maintenues : à construire seulement si un grand
+                compte le demande par écrit.
               </p>
             </div>
           </div>
           <p class="source-link">
-            Le kit open source est préparé. Le dépôt reste privé et aucun installateur public n’est proposé.
+            Le dépôt reste privé et aucun installateur public n’est proposé.
             <a href="guide.html#open-source">Voir les étapes avant ouverture</a>.
           </p>
         </div>
@@ -411,19 +432,20 @@
       <section class="section wrap">
         <div class="progress-callout">
           <div>
-            <span class="pill">État au 9 octobre 2026</span>
-            <h2>Un socle privé vérifié.<br />La simplicité à construire.</h2>
+            <span class="pill">État au 10 octobre 2026</span>
+            <h2>Un socle vérifié.<br />Aucun essai réel encore.</h2>
             <p>
-              Le protocole, le consentement et les ponts A2A existent. L’app Mac a un premier shell. Le parcours privé
-              simple doit encore être implémenté et éprouvé.
+              Protocole, consentement, capacités, ponts A2A, profil privé et raccordement de quatre agents existent dans
+              le prototype. Toutes les démonstrations ont tourné sur les machines de Guillaume.
             </p>
             <a class="button" href="avancement.html">Voir l’avancement réel</a>
           </div>
           <ul class="milestone-list">
             <li><span>Protocole, consentement et A2A</span><span class="tag yes">Dans le prototype</span></li>
-            <li><span>Relais privé et aucun repli cloud</span><span class="tag yes">Recette vérifiée</span></li>
-            <li><span>Connexion en deux confirmations</span><span class="tag">À construire</span></li>
-            <li><span>Mac, puis Windows, puis Linux</span><span class="tag">Parcours prévu</span></li>
+            <li><span>Profil privé sans repli cloud</span><span class="tag yes">Recette vérifiée</span></li>
+            <li><span>Raccordement en deux confirmations</span><span class="tag yes">Sur fixtures</span></li>
+            <li><span>App Mac signée et notarisée</span><span class="tag">Preuve à archiver (T3.4)</span></li>
+            <li><span>Essai avec deux amis</span><span class="tag">Visé (T4.6)</span></li>
           </ul>
         </div>
       </section>
