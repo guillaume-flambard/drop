@@ -295,8 +295,16 @@ export class NodeEngine extends EventEmitter {
   }
 
   /** Counts only; safe for local diagnostics and bounded-memory tests. */
-  memoryStats(): { executing: number; completedErrors: number; outbound: number; inbox: number; outbox: number } {
+  memoryStats(): {
+    executing: number;
+    completedErrors: number;
+    outbound: number;
+    inbox: number;
+    outbox: number;
+    replay: number;
+  } {
     return {
+      replay: this.replay.size(),
       executing: this.executing.size,
       completedErrors: this.completedErrors.size,
       outbound: this.outbound.size,
