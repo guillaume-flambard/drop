@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import type { CapabilityView, DropView, LocalNode } from '../src/client.ts';
-import { createTools } from '../src/tools.ts';
+import { HUMAN_ANSWER_OUTPUT_SCHEMA, sha256Hex } from '@drop/protocol';
+import { createTools, wrapResult } from '../src/tools.ts';
 
 const capability: CapabilityView = {
   capability_id: 'production.error_summary',
@@ -219,5 +220,28 @@ describe('requester MCP tools', () => {
       '';
     expect(refused).toContain("je n'ai rien envoyé");
     expect(refused).toContain('- Julie : Répondre à partir de mon Figma');
+  });
+});
+
+describe('human answer (T4.3)', () => {
+  it('presents a hand-written answer as such, from the hash of its fixed schema only', () => {
+    const drop = {
+      dropId: '01923456-789a-7bcd-8ef0-123456789abc',
+      capabilityId: 'service.status',
+      title: 'État du service',
+      ownerName: 'Julie',
+      executor: 'x'.repeat(43),
+      state: 'receipted',
+      createdAt: 1,
+    };
+    const output = { kind: 'human', text: 'Jeudi.' };
+    const byHand = wrapResult(
+      { ...drop, result: { output, outputSchemaHash: sha256Hex(HUMAN_ANSWER_OUTPUT_SCHEMA) } },
+      output,
+    );
+    expect(byHand).toMatch(/^Réponse écrite à la main, transmise par Julie pour « État du service »/);
+    // The same content under a capability's schema is not presented as written by hand.
+    const claimed = wrapResult({ ...drop, result: { output, outputSchemaHash: 'a'.repeat(64) } }, output);
+    expect(claimed).toMatch(/^Résultat fourni par Julie/);
   });
 });

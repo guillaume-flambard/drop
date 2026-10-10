@@ -1,7 +1,7 @@
 import { timingSafeEqual } from 'node:crypto';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { z } from 'zod';
-import { decodeInvite, isDropError } from '@drop/protocol';
+import { decodeInvite, DropError, isDropError } from '@drop/protocol';
 import type { NodeEngine } from './engine.ts';
 import { LinkRequestSchema, type LinkRequest } from './home.ts';
 import { renderPanel } from './panel.ts';
@@ -111,6 +111,8 @@ const AskBody = z.object({
 });
 
 const MAX_BODY_BYTES = 128 * 1024;
+/** A hand-written answer carries up to 160 KiB of JSON (T4.3): only its route reads more. */
+const MAX_ANSWER_BODY_BYTES = 200 * 1024;
 
 function json(res: ServerResponse, status: number, body: unknown): void {
   const payload = JSON.stringify(body);
@@ -129,13 +131,13 @@ function sameToken(given: string, expected: string): boolean {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
-async function readBody(req: IncomingMessage): Promise<string> {
+async function readBody(req: IncomingMessage, limit = MAX_BODY_BYTES): Promise<string> {
   const chunks: Buffer[] = [];
   let size = 0;
   for await (const chunk of req) {
     const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk));
     size += buffer.length;
-    if (size > MAX_BODY_BYTES) throw new Error('body too large');
+    if (size > limit) throw new Error('body too large');
     chunks.push(buffer);
   }
   return Buffer.concat(chunks).toString('utf8');
@@ -357,7 +359,13 @@ export function startLocalApi(options: LocalApiOptions): Promise<LocalApi> {
       return;
     }
     if (method === 'GET' && path === '/ui/pending') {
-      json(res, 200, { pending: engine.pending() });
+      // Who a hand-written answer reaches first (T4.3): the executor's name from the local peer store, not from the card.
+      const peers = engine.peers();
+      const pending = engine.pending().map((item) => {
+        const executor = peers.find((peer) => peer.nodeId === item.executor);
+        return executor ? { ...item, executorName: executor.displayName } : item;
+      });
+      json(res, 200, { pending });
       return;
     }
     if (method === 'GET' && path === '/ui/outbound') {
@@ -495,6 +503,32 @@ export function startLocalApi(options: LocalApiOptions): Promise<LocalApi> {
         done = await engine.review(dropId, decision, form.getAll('redact'));
       }
       json(res, done ? 200 : 404, { ok: done });
+      return;
+    }
+    // The owner answers by hand (T4.3): checked by the engine before anything leaves, refused with a stable code.
+    if (method === 'POST' && path === '/ui/answer') {
+      let raw: string;
+      try {
+        raw = await readBody(req, MAX_ANSWER_BODY_BYTES);
+      } catch {
+        json(res, 413, { ok: false, code: 'E_TOO_LARGE', message: 'Réponse trop volumineuse pour être envoyée.' });
+        return;
+      }
+      try {
+        let body: unknown;
+        try {
+          body = JSON.parse(raw);
+        } catch {
+          throw new DropError('E_SCHEMA', 'Réponse illisible : recharge le panneau et réessaie.');
+        }
+        const { dropId, ...answer } =
+          typeof body === 'object' && body !== null ? (body as Record<string, unknown>) : {};
+        const done = await engine.answer(typeof dropId === 'string' ? dropId : '', answer);
+        json(res, done ? 200 : 404, { ok: done });
+      } catch (error) {
+        if (!isDropError(error)) throw error;
+        json(res, 400, { ok: false, code: error.code, message: error.message });
+      }
       return;
     }
     if (method === 'POST' && path === '/ui/invite') {

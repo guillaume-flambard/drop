@@ -269,3 +269,44 @@ describe('menu bar panel and its admin routes (T4.14)', () => {
     expect(() => new Script(script ?? '')).not.toThrow();
   });
 });
+
+describe('menu bar panel (T4.3)', () => {
+  it('offers to answer by hand, keeps the ledger visible and reviews the answer before sending', () => {
+    const html = renderPanel();
+    const card = html.slice(html.indexOf('function approvalCard(item)'), html.indexOf('function fresh(dropId)'));
+    expect(card).toContain("'Répondre moi-même'");
+    // The composer lives inside the decision card, after the ledger, which stays in place while writing.
+    expect(card.indexOf("text: who + ' recevra :'")).toBeLessThan(card.indexOf('composer(item, who)'));
+    const composer = html.slice(html.indexOf('function attach(item'), html.indexOf('function approvalCard(item)'));
+    expect(composer).toContain("maxlength: '8000'");
+    expect(composer).toContain("accept: '.txt,.md,.csv,.json,.log,text/plain,text/markdown,text/csv,application/json'");
+    expect(composer).toContain("'Relire la réponse'");
+    expect(composer).toContain(": who + ' recevra exactement :'");
+    // The first real recipient is named from the local peer store when the capability lives elsewhere (T4.3 review).
+    expect(composer).toContain("'Ta réponse part chez ' + item.executorName");
+    // The review shows the file content itself, as text only, and refuses a file that is not UTF-8.
+    expect(composer).toContain(
+      "el('pre', { class: 'filepreview', tabindex: '0', 'aria-label': 'Contenu de ' + draft.file.name, text: draft.file.content })",
+    );
+    expect(composer).toContain("content.indexOf('\\uFFFD') !== -1");
+    expect(composer).toContain("focusTo(item.dropId + ':send')");
+    expect(html).toContain('if (!pending.some(function (item) { return item.dropId === id; })) delete drafts[id];');
+    // Only « Envoyer », in the review step, posts the answer; a draft survives the live refresh.
+    expect(composer.split("api('POST', '/ui/answer'").length).toBe(2);
+    const send = composer.slice(composer.indexOf('function sendAnswer('));
+    expect(send).toContain("api('POST', '/ui/answer'");
+    const builder = composer.slice(composer.indexOf('function composer(item, who)'));
+    const review = builder.slice(builder.indexOf("if (draft.stage === 'review')"), builder.indexOf('var counter'));
+    const write = builder.slice(builder.indexOf('var counter'));
+    expect(review).toContain("'Envoyer'");
+    expect(review).toContain('sendAnswer(item, draft');
+    expect(write).not.toContain("'Envoyer'");
+    expect(write).not.toContain('sendAnswer(');
+    expect(html).toContain('var drafts = {};');
+    expect(composer).toContain('drafts[item.dropId]');
+    expect(html).toContain('E_SECRET_DETECTED:');
+    expect(html).toContain('E_TOO_LARGE:');
+    const script = /<script>([\s\S]*?)<\/script>/.exec(html)?.[1];
+    expect(() => new Script(script ?? '')).not.toThrow();
+  });
+});

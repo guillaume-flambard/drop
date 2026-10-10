@@ -5,7 +5,26 @@
 
 export interface SecretPattern {
   kind: string;
-  regex: RegExp;
+  regex: { test(text: string): boolean };
+}
+
+const BASE64URL = /^[A-Za-z0-9_-]$/;
+
+/**
+ * Same match as /eyJ[A-Za-z0-9_-]*\.eyJ[A-Za-z0-9_-]*\./ in linear time: that regex backtracks quadratically on a long
+ * run such as 'eyJeyJeyJ…', which a hand-written answer of 128 KiB can carry (T4.3 review).
+ */
+export function looksLikeJwt(text: string): boolean {
+  const parts = text.split('.');
+  for (let index = 0; index + 2 < parts.length; index += 1) {
+    const head = parts[index] ?? '';
+    let start = head.length;
+    while (start > 0 && BASE64URL.test(head.charAt(start - 1))) start -= 1;
+    if (!head.slice(start).includes('eyJ')) continue;
+    const body = parts[index + 1] ?? '';
+    if (body.startsWith('eyJ') && Array.from(body).every((char) => BASE64URL.test(char))) return true;
+  }
+  return false;
 }
 
 export const SECRET_PATTERNS: readonly SecretPattern[] = [
@@ -16,7 +35,7 @@ export const SECRET_PATTERNS: readonly SecretPattern[] = [
   { kind: 'sk_key', regex: /(?<![A-Za-z0-9])sk-[A-Za-z0-9_-]{20,}/ },
   { kind: 'github_token', regex: /gh[pousr]_[A-Za-z0-9]{36}/ },
   { kind: 'slack_token', regex: /xox[baprs]-/ },
-  { kind: 'jwt', regex: /eyJ[A-Za-z0-9_-]*\.eyJ[A-Za-z0-9_-]*\./ },
+  { kind: 'jwt', regex: { test: looksLikeJwt } },
   { kind: 'credential_assignment', regex: /(?:KEY|SECRET|TOKEN|PASSWORD)\s*=\s*\S/i },
 ];
 
