@@ -32,7 +32,7 @@ function list(items: string[]): string {
 export function costLine(cost: ConsentCost | undefined, requester?: string): string | undefined {
   if (!cost) return undefined;
   if (cost.kind === 'free') return 'Coût : gratuit.';
-  const payer = requester ? `payé par ${requester}` : 'à votre charge';
+  const payer = requester ? `payé par ${requester}` : 'à ta charge';
   if (cost.kind === 'capped') return `Coût max : ${cost.maxUsd.toFixed(2).replace('.', ',')} $, ${payer}.`;
   return `Coût : ${payer}, non mesuré (tarifs du modèle non configurés).`;
 }
@@ -46,7 +46,7 @@ export function renderConsentCard(item: Extract<InboxItem, { kind: 'approval' }>
   const cost = costLine(item.card.cost, item.card.paidBy === 'requester' ? item.requestedBy.displayName : undefined);
   const high =
     item.card.sensitivity === 'high'
-      ? '<p class="high">Sensibilité haute : vous relirez le résultat avant envoi.</p>'
+      ? '<p class="high">Sensibilité haute : tu reliras le résultat avant envoi.</p>'
       : '';
   return `<article class="card" data-drop="${escapeHtml(item.dropId)}">
   <header><strong>${who} a besoin d'aide</strong><span class="via">via ${escapeHtml(AGENT_NAMES[item.requestedBy.agent] ?? 'un agent')}</span></header>
