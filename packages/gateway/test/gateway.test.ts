@@ -11,7 +11,7 @@ import { generateIdentity, type Identity } from '@drop/protocol';
 import { startRelay } from '@drop/relay';
 import { startDaemon, type Daemon } from '../../node/src/daemon.ts';
 import { DropHome, NodeConfigSchema } from '../../node/src/home.ts';
-import { Bridge, OAuthServer, pkceMatches, startGatewayHttp } from '../src/index.ts';
+import { Bridge, linkPage, OAuthServer, pkceMatches, startGatewayHttp } from '../src/index.ts';
 
 const cleanups: (() => Promise<void> | void)[] = [];
 afterEach(async () => {
@@ -28,6 +28,7 @@ const FIXTURE = resolve(
   'fake-design-mcp-stdio.ts',
 );
 const CALLBACK = 'https://claude.ai/api/mcp/auth_callback';
+const CHATGPT_CALLBACK = 'https://chatgpt.com/connector_platform_oauth_redirect';
 
 function freePort(): Promise<number> {
   return new Promise((done) => {
@@ -47,6 +48,72 @@ async function until(check: () => boolean | Promise<boolean>, timeoutMs = 8000):
     if (Date.now() - start > timeoutMs) throw new Error('timeout');
     await new Promise((resolve) => setTimeout(resolve, 25));
   }
+}
+
+interface LinkRequest {
+  sessionId: string;
+  clientId: string;
+  clientName: string;
+  redirectHost: string;
+}
+
+/** Registers an assistant, approves its link in the app with what the drop:// link shows, and connects it over MCP. */
+async function linkedAssistant(
+  publicUrl: string,
+  name: string,
+  callbackUrl: string,
+  approve: (request: LinkRequest) => Promise<void>,
+): Promise<Client> {
+  const registered = (await (
+    await fetch(`${publicUrl}/oauth/register`, {
+      method: 'POST',
+      body: JSON.stringify({ redirect_uris: [callbackUrl], client_name: name }),
+    })
+  ).json()) as { client_id: string };
+  const verifier = randomBytes(32).toString('base64url');
+  const authorize = new URL(`${publicUrl}/oauth/authorize`);
+  for (const [key, value] of Object.entries({
+    response_type: 'code',
+    client_id: registered.client_id,
+    redirect_uri: callbackUrl,
+    code_challenge: createHash('sha256').update(verifier).digest('base64url'),
+    code_challenge_method: 'S256',
+  }))
+    authorize.searchParams.set(key, value);
+  const page = await (await fetch(authorize)).text();
+  const link = /href="(drop:\/\/link\?[^"]+)"/.exec(page)?.[1]?.replaceAll('&#38;', '&') ?? '';
+  const params = new URL(link).searchParams;
+  const sessionId = params.get('session') ?? '';
+  await approve({
+    sessionId,
+    clientId: params.get('client_id') ?? '',
+    clientName: params.get('client') ?? '',
+    redirectHost: params.get('redirect') ?? '',
+  });
+  await until(async () => {
+    const status = (await (await fetch(`${publicUrl}/oauth/session/${sessionId}`)).json()) as { approved: boolean };
+    return status.approved;
+  });
+  const complete = await fetch(`${publicUrl}/oauth/complete?session=${sessionId}`, { redirect: 'manual' });
+  const code = new URL(complete.headers.get('location') ?? '').searchParams.get('code') ?? '';
+  const tokens = (await (
+    await fetch(`${publicUrl}/oauth/token`, {
+      method: 'POST',
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        code,
+        code_verifier: verifier,
+        client_id: registered.client_id,
+      }),
+    })
+  ).json()) as { access_token: string };
+  const client = new Client({ name: `${name}-test`, version: '1.0.0' });
+  await client.connect(
+    new StreamableHTTPClientTransport(new URL(`${publicUrl}/mcp`), {
+      requestInit: { headers: { Authorization: `Bearer ${tokens.access_token}` } },
+    }) as Transport,
+  );
+  return client;
 }
 
 async function daemonFor(identity: Identity, relayUrl: string): Promise<{ home: DropHome; daemon: Daemon }> {
@@ -93,9 +160,7 @@ describe('consumer gateway: Claude or ChatGPT reach the team through the user’
       identity: gatewayId,
       relayUrl: relay.url,
       isPendingSession: (sessionId) => oauth.session(sessionId) !== undefined,
-      onLinkGrant: (sessionId, nodeId) => {
-        oauth.approve(sessionId, nodeId);
-      },
+      onLinkGrant: (sessionId, nodeId, claim) => oauth.approve(sessionId, nodeId, claim),
       isLinkedNode: (nodeId) => oauth.hasNode(nodeId),
       callTimeoutMs: 3000,
     });
@@ -107,7 +172,7 @@ describe('consumer gateway: Claude or ChatGPT reach the team through the user’
       publicUrl,
       gatewayNodeId: gatewayId.nodeId,
       oauth,
-      caller: { call: (nodeId, tool, args) => bridge.call(nodeId, tool, args) },
+      caller: { call: (link, tool, args) => bridge.call(link, tool, args) },
       port,
     });
     cleanups.push(() => http.close());
@@ -159,9 +224,17 @@ describe('consumer gateway: Claude or ChatGPT reach the team through the user’
     const params = new URL(link).searchParams;
     expect(params.get('gateway')).toBe(gatewayId.nodeId);
     expect(params.get('client')).toBe('Claude');
+    expect(params.get('client_id')).toBe(registered.client_id);
+    expect(params.get('redirect')).toBe('claude.ai');
+    expect(page).toContain('claude.ai');
     const sessionId = params.get('session') ?? '';
     // 5. The user approves in the app (the panel calls this); the node sends its signed link_grant.
-    await g.daemon.engine.linkAssistant(gatewayId.nodeId, sessionId, 'Claude');
+    await g.daemon.engine.linkAssistant(gatewayId.nodeId, {
+      sessionId,
+      clientId: registered.client_id,
+      clientName: 'Claude',
+      redirectHost: 'claude.ai',
+    });
     await until(async () => {
       const status = (await (await fetch(`${publicUrl}/oauth/session/${sessionId}`)).json()) as { approved: boolean };
       return status.approved;
@@ -206,11 +279,90 @@ describe('consumer gateway: Claude or ChatGPT reach the team through the user’
     expect(text).toContain('Julie (« Répondre à partir de mon Figma »)');
     await until(() => j.daemon.engine.pending().length === 1);
 
-    // 8. Removing the link in the app cuts the assistant off.
+    // 8. ChatGPT is linked too, through the same gateway. Removing Claude in the app cuts Claude off, not ChatGPT.
+    const chatgpt = await linkedAssistant(publicUrl, 'ChatGPT', CHATGPT_CALLBACK, async (request) => {
+      await g.daemon.engine.linkAssistant(gatewayId.nodeId, request);
+    });
+    cleanups.push(() => chatgpt.close());
     g.daemon.engine.unlinkAssistant(gatewayId.nodeId, 'Claude');
     const cut = await client.callTool({ name: 'list_capabilities', arguments: {} });
     expect(cut.isError).toBe(true);
-  }, 30_000);
+    const kept = await chatgpt.callTool({ name: 'list_capabilities', arguments: {} });
+    expect(kept.isError).toBeFalsy();
+  }, 40_000);
+
+  it('binds a link only to the assistant and return domain the user saw in the app (consent phishing)', () => {
+    const oauth = new OAuthServer({ resource: 'https://drop.example/mcp' });
+    // Someone registers a client called "Claude" that returns to their own server, and sends the authorize page around.
+    const { client_id } = oauth.register({ redirect_uris: ['https://evil.example/cb'], client_name: 'Claude' }) as {
+      client_id: string;
+    };
+    const session = oauth.authorize(
+      new URLSearchParams({
+        response_type: 'code',
+        client_id,
+        redirect_uri: 'https://evil.example/cb',
+        code_challenge: createHash('sha256').update('v'.repeat(43)).digest('base64url'),
+        code_challenge_method: 'S256',
+      }),
+    );
+    expect(linkPage({ session, gatewayNodeId: 'gw', clientName: 'Claude' })).toContain('evil.example');
+    const injected = linkPage({ session, gatewayNodeId: 'gw', clientName: '</script><script>alert(1)</script>' });
+    expect(injected).not.toContain('<script>alert');
+    const node = 'node-of-the-victim';
+    // A forged drop:// link made the app show claude.ai: the gateway refuses the grant, the session stays unbound.
+    expect(
+      oauth.approve(session.id, node, { clientId: client_id, clientName: 'Claude', redirectHost: 'claude.ai' }),
+    ).toBe(false);
+    expect(
+      oauth.approve(session.id, node, { clientId: 'x'.repeat(24), clientName: 'Claude', redirectHost: 'evil.example' }),
+    ).toBe(false);
+    expect(
+      oauth.approve(session.id, node, { clientId: client_id, clientName: 'ChatGPT', redirectHost: 'evil.example' }),
+    ).toBe(false);
+    expect(oauth.session(session.id)?.nodeId).toBeUndefined();
+    // What the user really saw (and was warned about): only then is the session bound.
+    expect(
+      oauth.approve(session.id, node, { clientId: client_id, clientName: 'Claude', redirectHost: 'evil.example' }),
+    ).toBe(true);
+  });
+
+  it('forgets clients that never got a token after a day, and the oldest pending client or session beyond its limits', () => {
+    let now = 1_000_000;
+    const oauth = new OAuthServer({
+      resource: 'https://drop.example/mcp',
+      now: () => now,
+      maxPendingClients: 2,
+      maxSessions: 2,
+    });
+    const register = () =>
+      (oauth.register({ redirect_uris: [CALLBACK], client_name: 'Claude' }) as { client_id: string }).client_id;
+    const first = register();
+    const second = register();
+    const third = register();
+    // A flood of registrations evicts the oldest pending one rather than locking everyone out.
+    expect(oauth.client(first)).toBeUndefined();
+    expect(oauth.client(third)).toBeDefined();
+    const authorize = () =>
+      oauth.authorize(
+        new URLSearchParams({
+          response_type: 'code',
+          client_id: third,
+          redirect_uri: CALLBACK,
+          code_challenge: createHash('sha256').update('v'.repeat(43)).digest('base64url'),
+          code_challenge_method: 'S256',
+        }),
+      );
+    const oldest = authorize();
+    authorize();
+    const newest = authorize();
+    expect(oauth.session(oldest.id)).toBeUndefined();
+    expect(oauth.session(newest.id)).toBeDefined();
+    now += 24 * 60 * 60_000;
+    expect(oauth.client(second)).toBeDefined();
+    register();
+    expect(oauth.client(second)).toBeUndefined();
+  });
 
   it('refuses unregistered redirects, plain PKCE and a foreign resource', () => {
     const oauth = new OAuthServer({ resource: 'https://drop.example/mcp' });
