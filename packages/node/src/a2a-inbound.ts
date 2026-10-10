@@ -1,7 +1,7 @@
 import { TaskState } from '@a2a-js/sdk';
 import type { AgentExecutor } from '@a2a-js/sdk/server';
 import { a2aEndpoint, buildCard, cardToJson, finishTask, startTask, textOf, type A2aEndpoint } from '@drop/a2a';
-import type { NodeEngine, OutboundDrop } from './engine.ts';
+import { AmbiguousCapabilityError, type NodeEngine, type OutboundDrop } from './engine.ts';
 import { kindOf, routeQuestion, takesQuestion } from './route.ts';
 
 /**
@@ -24,16 +24,16 @@ export function teamAgent(options: { engine: NodeEngine; refreshCatalogs: () => 
   const { engine } = options;
   const card = (url: string) => {
     const team = engine.team();
-    const skills = engine
-      .catalog()
-      .filter(takesQuestion)
-      .map((entry) => ({
-        id: entry.card.id,
-        name: entry.card.title,
-        description: `${entry.ownerName} : ${entry.card.receives.join(', ')}`,
-        tags: [kindOf(entry) ?? 'question'],
-        examples: [],
-      }));
+    const entries = engine.catalog().filter(takesQuestion);
+    const shared = (id: string) => entries.filter((entry) => entry.card.id === id).length > 1;
+    const skills = entries.map((entry) => ({
+      // A skill id is unique on an A2A card: a share two colleagues publish is told apart by its owner (T4.17).
+      id: shared(entry.card.id) ? `${entry.card.id}@${entry.ownerNodeId}` : entry.card.id,
+      name: entry.card.title,
+      description: `${entry.ownerName} : ${entry.card.receives.join(', ')}`,
+      tags: [kindOf(entry) ?? 'question'],
+      examples: [],
+    }));
     return buildCard({
       name: team ? `Équipe ${team.team.name} (drop)` : `${engine.identity.displayName} et ses collègues (drop)`,
       description:
@@ -67,15 +67,22 @@ export function teamAgent(options: { engine: NodeEngine; refreshCatalogs: () => 
         return;
       }
       const drops: OutboundDrop[] = [];
-      for (const route of routes)
-        drops.push(
-          await engine.requestDrop({
-            capabilityId: route.capabilityId,
-            input: { question },
-            purpose: 'Question reçue d’un agent A2A.',
-            agent: 'other',
-          }),
-        );
+      for (const route of routes) {
+        try {
+          drops.push(
+            await engine.requestDrop({
+              capabilityId: route.capabilityId,
+              ownerNodeId: route.ownerNodeId,
+              input: { question },
+              purpose: 'Question reçue d’un agent A2A.',
+              agent: 'other',
+            }),
+          );
+        } catch (error) {
+          // Routes name their owner; should one still be ambiguous, the others are asked all the same (T4.17).
+          if (!(error instanceof AmbiguousCapabilityError)) throw error;
+        }
+      }
       await new Promise<void>((resolve) => {
         const done = (): void => {
           clearTimeout(timer);

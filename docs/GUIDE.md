@@ -78,7 +78,7 @@ request_drops        Envoyer une même question à 2 à 10 capacités ; rien ne 
 get_drop_results     Attendre ou récupérer les résultats de plusieurs demandes (0 à 50 s, 30 par défaut)
 ```
 
-`request_drop` reçoit `capability_id`, `input` et `purpose`. L'entrée est validée localement avant envoi. Le résultat d'un pair est encadré comme une donnée non fiable, pas comme une instruction à suivre.
+`request_drop` reçoit `capability_id`, `input` et `purpose`, plus `owner_node_id` quand plusieurs collègues publient le même `capability_id` (un partage Figma s'appelle `mcp.answer.figma` chez chacun) : sans lui, rien ne part et l'outil liste les propriétaires possibles. L'entrée est validée localement avant envoi. Le résultat d'un pair est encadré comme une donnée non fiable, pas comme une instruction à suivre.
 
 ## Ce qui circule et ce qui reste chez soi
 
