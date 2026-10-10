@@ -16,6 +16,7 @@ use std::time::{Duration, Instant};
 use tauri::image::Image;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+use tauri::window::{Effect, EffectState, EffectsBuilder};
 use tauri::{
     ActivationPolicy, AppHandle, Manager, PhysicalPosition, RunEvent, WebviewUrl,
     WebviewWindowBuilder, WindowEvent,
@@ -31,6 +32,7 @@ fn bootstrap_relay(configured: Option<String>) -> String {
 }
 const PANEL_WIDTH: f64 = 380.0;
 const PANEL_HEIGHT: f64 = 620.0;
+const PANEL_RADIUS: f64 = 12.0;
 
 struct Daemon {
     child: Mutex<Option<Child>>,
@@ -465,6 +467,16 @@ fn main() {
                     .decorations(false)
                     .always_on_top(true)
                     .skip_taskbar(true)
+                    // A popover material with rounded corners, like the system menu bar extras.
+                    .transparent(true)
+                    .shadow(true)
+                    .effects(
+                        EffectsBuilder::new()
+                            .effect(Effect::Popover)
+                            .state(EffectState::Active)
+                            .radius(PANEL_RADIUS)
+                            .build(),
+                    )
                     .visible(false)
                     .build()?;
             *handle
