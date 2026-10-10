@@ -11,7 +11,7 @@ use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use tauri::image::Image;
 use tauri::menu::{Menu, MenuItem};
@@ -23,6 +23,7 @@ use tauri::{
 };
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
 use tauri_plugin_deep_link::DeepLinkExt;
+use tauri_plugin_updater::{Update, UpdaterExt};
 use url::Url;
 
 const DEFAULT_RELAY: &str = "ws://127.0.0.1:7780/v1";
@@ -33,6 +34,9 @@ fn bootstrap_relay(configured: Option<String>) -> String {
 const PANEL_WIDTH: f64 = 380.0;
 const PANEL_HEIGHT: f64 = 620.0;
 const PANEL_RADIUS: f64 = 12.0;
+const TRAY: &str = "drop";
+/// The app looks for an update at launch, then this often (D70).
+const UPDATE_CHECK_EVERY: Duration = Duration::from_secs(6 * 60 * 60);
 
 struct Daemon {
     child: Mutex<Option<Child>>,
@@ -43,6 +47,9 @@ struct Daemon {
     splash_url: Mutex<Option<Url>>,
     pending_links: Mutex<Vec<Url>>,
 }
+
+/// An update found by the last check, offered in the menu until the user installs it (T2.4, D70).
+struct PendingUpdate(Mutex<Option<Update>>);
 
 fn instance_marker() -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -112,6 +119,15 @@ fn ensure_identity(app: &AppHandle) -> Result<(), &'static str> {
         return Err("E_INIT");
     }
     Ok(())
+}
+
+/// Appends `{ at, code, detail }` to ~/.drop/app.log: the app's own errors, with a stable code (AGENTS.md).
+fn log_error(code: &str, detail: &str) {
+    let at = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    let line = serde_json::json!({ "at": at, "code": code, "detail": detail });
+    if let Ok(mut file) = fs::OpenOptions::new().create(true).append(true).open(drop_home().join("app.log")) {
+        let _ = writeln!(file, "{line}");
+    }
 }
 
 fn start_daemon(app: &AppHandle, marker: &str, port: u16) -> Result<(), &'static str> {
@@ -372,8 +388,9 @@ fn retry_daemon(app: AppHandle) {
     app.state::<Daemon>().retry.store(true, Ordering::SeqCst);
 }
 
-/// `drop://pair?code=…` joins a team; `drop://link?session=…&gateway=…&client=…` asks to link an assistant such as
-/// Claude or ChatGPT (T2.13). Either way the panel opens with the request and the user decides there.
+/// `drop://pair?code=…` joins a team; `drop://link?session=…&gateway=…&client=…&client_id=…&redirect=…` asks to link
+/// an assistant such as Claude or ChatGPT (T2.13). Either way the panel opens with the request and the user decides
+/// there; for a link it shows the domain the answers return to, which the gateway checks against the session (D71).
 fn open_links(app: &AppHandle, urls: Vec<Url>) {
     if !app.state::<Daemon>().ready.load(Ordering::SeqCst) {
         let daemon = app.state::<Daemon>();
@@ -421,6 +438,8 @@ fn open_links(app: &AppHandle, urls: Vec<Url>) {
                         "client",
                         param("client").unwrap_or_else(|| "Un assistant".to_string()),
                     ),
+                    ("clientId", param("client_id").unwrap_or_default()),
+                    ("redirect", param("redirect").unwrap_or_default()),
                 ],
                 _ => vec![],
             },
@@ -436,6 +455,72 @@ fn open_links(app: &AppHandle, urls: Vec<Url>) {
             show_panel(app, None);
         }
     }
+}
+
+/// The icon's menu; with an update pending it starts with "Mettre à jour vers x.y.z", greyed out while installing.
+fn set_tray_menu(app: &AppHandle, update: Option<&str>, installing: bool) -> tauri::Result<()> {
+    let open = MenuItem::with_id(app, "open", "Ouvrir drop", true, None::<&str>)?;
+    let retry = MenuItem::with_id(app, "retry", "Réessayer le démarrage", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", "Quitter drop", true, None::<&str>)?;
+    let menu = match update {
+        Some(version) => {
+            let label = if installing {
+                format!("Mise à jour vers {version}…")
+            } else {
+                format!("Mettre à jour vers {version}")
+            };
+            let item = MenuItem::with_id(app, "update", label, !installing, None::<&str>)?;
+            Menu::with_items(app, &[&item, &open, &retry, &quit])?
+        }
+        None => Menu::with_items(app, &[&open, &retry, &quit])?,
+    };
+    if let Some(tray) = app.tray_by_id(TRAY) {
+        tray.set_menu(Some(menu))?;
+    }
+    Ok(())
+}
+
+/// Checks the update endpoint; a newer version, signed for that version with drop's key, is offered in the menu.
+/// Nothing is downloaded before the user clicks it.
+fn check_for_update(app: &AppHandle) {
+    let found = tauri::async_runtime::block_on(async {
+        match app.updater() {
+            Ok(updater) => updater.check().await,
+            Err(error) => Err(error),
+        }
+    });
+    match found {
+        Ok(Some(update)) => {
+            let version = update.version.clone();
+            *app.state::<PendingUpdate>().0.lock().unwrap() = Some(update);
+            if let Err(error) = set_tray_menu(app, Some(&version), false) {
+                log_error("E_UPDATE_MENU", &error.to_string());
+            }
+        }
+        Ok(None) => {}
+        Err(error) => log_error("E_UPDATE_CHECK", &error.to_string()),
+    }
+}
+
+/// Downloads the pending update, checks its signature, replaces the app, then restarts it with its daemon.
+fn install_update(app: &AppHandle) {
+    let Some(update) = app.state::<PendingUpdate>().0.lock().unwrap().take() else { return };
+    let version = update.version.clone();
+    let _ = set_tray_menu(app, Some(&version), true);
+    let app = app.clone();
+    thread::spawn(move || {
+        match tauri::async_runtime::block_on(update.download_and_install(|_, _| {}, || {})) {
+            Ok(()) => {
+                stop_daemon(&app);
+                app.restart();
+            }
+            Err(error) => {
+                log_error("E_UPDATE_INSTALL", &error.to_string());
+                // Offered again by the next check.
+                let _ = set_tray_menu(&app, None, false);
+            }
+        }
+    });
 }
 
 fn main() {
@@ -455,9 +540,15 @@ fn main() {
             splash_url: Mutex::new(None),
             pending_links: Mutex::new(Vec::new()),
         })
+        .manage(PendingUpdate(Mutex::new(None)))
         .setup(|app| {
             app.set_activation_policy(ActivationPolicy::Accessory);
             let handle = app.handle().clone();
+            // Only a build made with the update key carries the updater config (scripts/build-mac.ts --updates).
+            let updates = app.config().plugins.0.contains_key("updater");
+            if updates {
+                handle.plugin(tauri_plugin_updater::Builder::new().build())?;
+            }
 
             let window =
                 WebviewWindowBuilder::new(app, "panel", WebviewUrl::App("index.html".into()))
@@ -499,7 +590,7 @@ fn main() {
                 MenuItem::with_id(app, "retry", "Réessayer le démarrage", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quitter drop", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&open, &retry, &quit])?;
-            TrayIconBuilder::new()
+            TrayIconBuilder::with_id(TRAY)
                 .icon(Image::from_bytes(include_bytes!("../icons/tray.png"))?)
                 .icon_as_template(true)
                 .tooltip("drop")
@@ -511,6 +602,7 @@ fn main() {
                         app.state::<Daemon>().retry.store(true, Ordering::SeqCst);
                         show_panel(app, None);
                     }
+                    "update" => install_update(app),
                     "quit" => app.exit(0),
                     _ => {}
                 })
@@ -537,6 +629,13 @@ fn main() {
             // release build registers itself: a debug build must not end up in the developer's login items.
             if !cfg!(debug_assertions) {
                 let _ = app.autolaunch().enable();
+            }
+            if updates {
+                let checker = handle.clone();
+                thread::spawn(move || loop {
+                    check_for_update(&checker);
+                    thread::sleep(UPDATE_CHECK_EVERY);
+                });
             }
             Ok(())
         })
