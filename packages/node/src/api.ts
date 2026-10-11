@@ -3,13 +3,13 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { z } from 'zod';
 import { AGENTS, type AgentKind } from '@drop/capabilities';
 import { decodeInvite, DropError, isDropError, RequesterAgentSchema } from '@drop/protocol';
-import { AmbiguousCapabilityError, type NodeEngine } from './engine.ts';
+import { AmbiguousCapabilityError, UnknownCapabilityError, type NodeEngine } from './engine.ts';
 import { LinkRequestSchema, type LinkRequest } from './home.ts';
 import { InternetSettingsSchema, type InternetSettings } from './iroh.ts';
 import { renderPanel } from './panel.ts';
 import { routeFacts, routeQuestion, takesQuestion } from './route.ts';
 import { teamAgent } from './a2a-inbound.ts';
-import { renderInbox, renderPage } from './ui.ts';
+import { escapeHtml, renderInbox, renderPage } from './ui.ts';
 
 export interface LocalApiOptions {
   engine: NodeEngine;
@@ -28,21 +28,35 @@ export interface LocalApiOptions {
    * state, and resolves to the server's host. The browser cannot send the local token: the state is the check.
    */
   oauthCallback?: (state: string, code: string) => Promise<string>;
+  /** Where a request that failed unexpectedly is reported: a stable code and the path, never a body or a token. */
+  log?: (entry: ApiLogEntry) => void;
 }
 
-function escapeText(text: string): string {
-  return text.replace(/[&<>"']/g, (char) => `&#${String(char.charCodeAt(0))};`);
+export interface ApiLogEntry {
+  event: string;
+  code: string;
+  /** The error's class name, e.g. TypeError: never its message, which may quote a request. */
+  reason?: string;
+  path?: string;
+}
+
+/** A page of drop's own HTML, never cached nor sent along as a referrer, under the given content security policy. */
+function sendHtml(res: ServerResponse, csp: string, body: string, status = 200): void {
+  res.writeHead(status, {
+    'Content-Type': 'text/html; charset=utf-8',
+    'Cache-Control': 'no-store',
+    'Referrer-Policy': 'no-referrer',
+    'Content-Security-Policy': csp,
+  });
+  res.end(body);
 }
 
 function signInPage(res: ServerResponse, status: number, message: string): void {
-  res.writeHead(status, {
-    'Content-Type': 'text/html; charset=utf-8',
-    'Content-Security-Policy': "default-src 'none'",
-    'Cache-Control': 'no-store',
-    'Referrer-Policy': 'no-referrer',
-  });
-  res.end(
-    `<!doctype html><html lang="fr"><meta charset="utf-8"><title>drop</title><body style="font:16px system-ui;margin:3em"><p>${escapeText(message)}</p></body></html>`,
+  sendHtml(
+    res,
+    "default-src 'none'",
+    `<!doctype html><html lang="fr"><meta charset="utf-8"><title>drop</title><body style="font:16px system-ui;margin:3em"><p>${escapeHtml(message)}</p></body></html>`,
+    status,
   );
 }
 
@@ -151,20 +165,39 @@ function sameToken(given: string, expected: string): boolean {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
+/** A request body that cannot be read: too large, or not JSON. Answered 413 or 400 with its code, never 500. */
+class BodyError extends DropError {}
+
 async function readBody(req: IncomingMessage, limit = MAX_BODY_BYTES): Promise<string> {
   const chunks: Buffer[] = [];
   let size = 0;
   for await (const chunk of req) {
     const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk));
     size += buffer.length;
-    if (size > limit) throw new Error('body too large');
+    if (size > limit) throw new BodyError('E_TOO_LARGE', 'Requête trop volumineuse.');
     chunks.push(buffer);
   }
   return Buffer.concat(chunks).toString('utf8');
 }
 
-function parseForm(body: string): URLSearchParams {
-  return new URLSearchParams(body);
+async function readJson(req: IncomingMessage): Promise<unknown> {
+  const body = await readBody(req);
+  try {
+    return JSON.parse(body) as unknown;
+  } catch {
+    throw new BodyError('E_SCHEMA', 'Requête illisible : JSON invalide.');
+  }
+}
+
+/** The answer to a request the engine refused before sending it: too many active drops, or an envelope too large. */
+function dropErrorStatus(
+  error: unknown,
+): { status: number; body: { error: 'E_RATE' | 'E_TOO_LARGE'; message: string } } | undefined {
+  if (isDropError(error, 'E_RATE'))
+    return { status: 429, body: { error: 'E_RATE', message: 'Trop de demandes actives.' } };
+  if (isDropError(error, 'E_TOO_LARGE'))
+    return { status: 413, body: { error: 'E_TOO_LARGE', message: 'Enveloppe trop grande.' } };
+  return undefined;
 }
 
 /**
@@ -183,6 +216,32 @@ export function startLocalApi(options: LocalApiOptions): Promise<LocalApi> {
     return host === `127.0.0.1:${String(boundPort)}` || host === `localhost:${String(boundPort)}`;
   };
   const team = teamAgent({ engine, refreshCatalogs: options.refreshCatalogs });
+  const log =
+    options.log ??
+    ((entry: ApiLogEntry) => process.stderr.write(`${JSON.stringify({ at: new Date().toISOString(), ...entry })}\n`));
+
+  // Long polls on /drops/:id share one engine listener: one each would pass the emitter's limit of ten.
+  const waiters = new Set<() => void>();
+  const wakeWaiters = (): void => {
+    for (const waiter of [...waiters]) waiter();
+  };
+  const waitUntil = (ready: () => boolean, ms: number, req: IncomingMessage): Promise<void> =>
+    new Promise((resolve) => {
+      const done = (): void => {
+        clearTimeout(timer);
+        req.off('close', done);
+        waiters.delete(check);
+        if (waiters.size === 0) engine.off('change', wakeWaiters);
+        resolve();
+      };
+      const check = (): void => {
+        if (ready()) done();
+      };
+      const timer = setTimeout(done, ms);
+      if (waiters.size === 0) engine.on('change', wakeWaiters);
+      waiters.add(check);
+      req.on('close', done);
+    });
 
   const authorized = (req: IncomingMessage, url: URL): boolean => {
     if (!localHost(req)) return false;
@@ -254,7 +313,7 @@ export function startLocalApi(options: LocalApiOptions): Promise<LocalApi> {
       return;
     }
     if (method === 'POST' && path === '/drops') {
-      const parsed = DropRequestBody.safeParse(JSON.parse(await readBody(req)));
+      const parsed = DropRequestBody.safeParse(await readJson(req));
       if (!parsed.success) {
         json(res, 400, { error: 'E_SCHEMA', message: 'invalid drop request' });
         return;
@@ -275,12 +334,9 @@ export function startLocalApi(options: LocalApiOptions): Promise<LocalApi> {
         const drop = await engine.requestDrop(parsed.data);
         json(res, 201, { dropId: drop.dropId, owner: drop.ownerName, title: drop.title });
       } catch (error) {
-        if (isDropError(error, 'E_RATE')) {
-          json(res, 429, { error: 'E_RATE', message: 'Trop de demandes actives.' });
-          return;
-        }
-        if (isDropError(error, 'E_TOO_LARGE')) {
-          json(res, 413, { error: 'E_TOO_LARGE', message: 'Enveloppe trop grande.' });
+        const refused = dropErrorStatus(error);
+        if (refused) {
+          json(res, refused.status, refused.body);
           return;
         }
         if (error instanceof AmbiguousCapabilityError) {
@@ -291,6 +347,7 @@ export function startLocalApi(options: LocalApiOptions): Promise<LocalApi> {
           });
           return;
         }
+        if (!(error instanceof UnknownCapabilityError)) throw error;
         json(res, 404, { error: 'E_UNKNOWN_CAPABILITY', message: 'no such capability among paired peers' });
       }
       return;
@@ -301,7 +358,7 @@ export function startLocalApi(options: LocalApiOptions): Promise<LocalApi> {
     }
     if (method === 'POST' && path === '/ask') {
       // « Demander à mon équipe » (T2.12, D32): routed by rules, then one drop per chosen capability.
-      const parsed = AskBody.safeParse(JSON.parse(await readBody(req)));
+      const parsed = AskBody.safeParse(await readJson(req));
       if (!parsed.success) {
         json(res, 400, { error: 'E_SCHEMA', message: 'a question of 10 to 300 characters is needed' });
         return;
@@ -323,12 +380,9 @@ export function startLocalApi(options: LocalApiOptions): Promise<LocalApi> {
           });
           asked.push({ dropId: drop.dropId, ...route });
         } catch (error) {
-          if (isDropError(error, 'E_RATE')) {
-            json(res, 429, { error: 'E_RATE', message: 'Trop de demandes actives.', asked });
-            return;
-          }
-          if (isDropError(error, 'E_TOO_LARGE')) {
-            json(res, 413, { error: 'E_TOO_LARGE', message: 'Enveloppe trop grande.', asked });
+          const refused = dropErrorStatus(error);
+          if (refused) {
+            json(res, refused.status, { ...refused.body, asked });
             return;
           }
           // Routes always name their owner; should one still be ambiguous, the others are asked all the same.
@@ -355,46 +409,26 @@ export function startLocalApi(options: LocalApiOptions): Promise<LocalApi> {
         json(res, 404, { error: 'not_found' });
         return;
       }
-      if (waitSeconds > 0 && !settled()) {
-        await new Promise<void>((resolve) => {
-          const timer = setTimeout(done, waitSeconds * 1000);
-          function done(): void {
-            clearTimeout(timer);
-            engine.off('change', onChange);
-            resolve();
-          }
-          function onChange(): void {
-            if (settled()) done();
-          }
-          engine.on('change', onChange);
-          req.on('close', done);
-        });
-      }
+      if (waitSeconds > 0 && !settled()) await waitUntil(settled, waitSeconds * 1000, req);
       json(res, 200, view());
       return;
     }
 
     // ---- consent UI and CLI decision routes ----
     if (method === 'GET' && path === '/') {
-      res.writeHead(200, {
-        'Content-Type': 'text/html; charset=utf-8',
-        'Cache-Control': 'no-store',
-        'Referrer-Policy': 'no-referrer',
-        'Content-Security-Policy':
-          "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; form-action 'self'",
-      });
-      res.end(renderPage(''));
+      sendHtml(
+        res,
+        "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; form-action 'self'",
+        renderPage(''),
+      );
       return;
     }
     if (method === 'GET' && path === '/app') {
-      res.writeHead(200, {
-        'Content-Type': 'text/html; charset=utf-8',
-        'Cache-Control': 'no-store',
-        'Referrer-Policy': 'no-referrer',
-        'Content-Security-Policy':
-          "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'",
-      });
-      res.end(renderPanel());
+      sendHtml(
+        res,
+        "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'",
+        renderPanel(),
+      );
       return;
     }
     if (method === 'GET' && path === '/ui/inbox') {
@@ -479,6 +513,13 @@ export function startLocalApi(options: LocalApiOptions): Promise<LocalApi> {
             json(res, 200, admin.internet());
             return;
           }
+          if (method !== 'POST') {
+            // Its body is never read: the connection closes, so a client cannot reuse it mid-body.
+            res.setHeader('Allow', 'GET, POST');
+            res.setHeader('Connection', 'close');
+            json(res, 405, { error: 'E_METHOD' });
+            return;
+          }
           const parsed = InternetSettingsSchema.safeParse(body);
           if (!parsed.success) {
             json(res, 400, {
@@ -501,7 +542,7 @@ export function startLocalApi(options: LocalApiOptions): Promise<LocalApi> {
             json(res, 400, { error: 'E_SCHEMA' });
             return;
           }
-          json(res, 200, { results: admin.onboardingApply(parsed.data.selections) });
+          json(res, 200, { results: await admin.onboardingApply(parsed.data.selections) });
           return;
         }
         if (method === 'POST' && path === '/ui/admin/share') {
@@ -587,7 +628,7 @@ export function startLocalApi(options: LocalApiOptions): Promise<LocalApi> {
       return;
     }
     if (method === 'POST' && (path === '/ui/decide' || path === '/ui/review')) {
-      const form = parseForm(await readBody(req));
+      const form = new URLSearchParams(await readBody(req));
       const dropId = form.get('dropId') ?? '';
       const decision = form.get('decision') ?? '';
       let done = false;
@@ -666,7 +707,7 @@ export function startLocalApi(options: LocalApiOptions): Promise<LocalApi> {
     }
     // Shows who invites before anything is sent: the panel asks « Rejoindre » first (T4.14).
     if (method === 'POST' && path === '/ui/pair/preview') {
-      const code = parseForm(await readBody(req)).get('code') ?? '';
+      const code = new URLSearchParams(await readBody(req)).get('code') ?? '';
       try {
         const invite = decodeInvite(code);
         json(res, 200, { displayName: invite.displayName, ...(invite.team ? { team: invite.team.name } : {}) });
@@ -676,7 +717,7 @@ export function startLocalApi(options: LocalApiOptions): Promise<LocalApi> {
       return;
     }
     if (method === 'POST' && path === '/ui/pair') {
-      const code = parseForm(await readBody(req)).get('code') ?? '';
+      const code = new URLSearchParams(await readBody(req)).get('code') ?? '';
       try {
         json(res, 200, { nodeId: await engine.pair(code) });
       } catch {
@@ -688,7 +729,20 @@ export function startLocalApi(options: LocalApiOptions): Promise<LocalApi> {
   };
 
   const server = createServer((req, res) => {
-    handle(req, res).catch(() => {
+    handle(req, res).catch((error: unknown) => {
+      if (error instanceof BodyError && !res.headersSent) {
+        // The rest of a body too large is never read: the connection closes rather than serve another request.
+        if (error.code === 'E_TOO_LARGE') res.setHeader('Connection', 'close');
+        json(res, error.code === 'E_TOO_LARGE' ? 413 : 400, { error: error.code, message: error.message });
+        return;
+      }
+      // The path only: the query may carry the local token, the body anything at all.
+      log({
+        event: 'api_request_failed',
+        code: isDropError(error) ? error.code : 'E_INTERNAL',
+        reason: error instanceof Error ? error.name : typeof error,
+        path: (req.url ?? '/').split('?')[0]?.slice(0, 120) ?? '/',
+      });
       if (!res.headersSent) json(res, 500, { error: 'internal' });
       else res.end();
     });

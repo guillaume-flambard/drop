@@ -36,7 +36,7 @@ export const StoredFactSchema = z.object({
 const DAY = 24 * 60 * 60 * 1000;
 
 /** What the panel sends to publish or edit a fact. */
-export const FactInputSchema = z
+const FactInputSchema = z
   .object({
     topic: z.string(),
     keywords: z.array(z.string()).max(8).default([]),
@@ -51,7 +51,6 @@ export const FactInputSchema = z
     audience: FactAudienceSchema.default({ kind: 'team' }),
   })
   .strict();
-export type FactInput = z.input<typeof FactInputSchema>;
 
 /** Builds and checks a fact before it is signed: shape and limits, then the secret scanner. Never repaired. */
 export function draftFact(

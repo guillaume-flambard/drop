@@ -68,6 +68,10 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
   const config = home.config();
   const token = home.localToken();
   const log = options.log ?? ((line: string) => process.stderr.write(`${line}\n`));
+  /** A structured log line: a timestamp, an event and a stable code, never a payload. */
+  const logEntry = (entry: object): void => {
+    log(JSON.stringify({ at: new Date().toISOString(), ...entry }));
+  };
   // The organization policy, deployed by IT (T4.10, D81): one that does not verify stops the daemon here.
   const policy = await loadPolicy();
   if (policy) assertPolicy(relayAllowed(policy.policy, config.relayUrl), 'relay not allowed by policy');
@@ -82,7 +86,7 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
   try {
     lanKey = home.lanKey();
   } catch {
-    log(JSON.stringify({ at: new Date().toISOString(), event: 'lan_key_unreadable', code: 'E_LAN_KEY' }));
+    logEntry({ event: 'lan_key_unreadable', code: 'E_LAN_KEY' });
   }
   const lanEnabled =
     lanKey !== undefined &&
@@ -121,9 +125,7 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
     transport: {
       send: (envelope) => sendInOrder(envelope, [link.lan, link.iroh], link.relay),
     },
-    log: (entry) => {
-      log(JSON.stringify({ at: new Date().toISOString(), ...entry }));
-    },
+    log: logEntry,
     payer: config.payer,
     privateProfile: config.profile === 'private',
     agents: () => detectAgents().flatMap((agent) => (agent.installed ? [agent.label] : [])),
@@ -146,17 +148,19 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
       link.relay?.retryNow();
     },
   });
+  // Every path (relay, local network, iroh) hands its envelopes to the engine the same way.
+  const receive = (envelope: unknown): void => {
+    engine.handleEnvelope(envelope).catch(() => {
+      log('E_RUNNER envelope handling failed');
+    });
+  };
   const relay = new RelayClient({
     identity,
     url: config.relayUrl,
     admission: () => home.pendingAdmission(),
     // The internal relay checks this node runs its organization's policy (T4.10).
     ...(policy ? { policy: () => policy.fingerprint } : {}),
-    onEnvelope: (envelope) => {
-      void engine.handleEnvelope(envelope).catch(() => {
-        log('E_RUNNER envelope handling failed');
-      });
-    },
+    onEnvelope: receive,
     onStatus: (status) => {
       log(`relay: ${status}`);
       if (status === 'connected') {
@@ -185,15 +189,9 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
     recognizes: (nodeId, seen) => engine.lanRecognizes(nodeId, seen),
     knockSecrets: () => engine.lanKnockSecrets(),
     secretFor: (nodeId) => engine.lanSecretFor(nodeId),
-    onEnvelope: (envelope) => {
-      void engine.handleEnvelope(envelope).catch(() => {
-        log('E_RUNNER envelope handling failed');
-      });
-    },
+    onEnvelope: receive,
     enabled: lanEnabled,
-    log: (entry) => {
-      log(JSON.stringify({ at: new Date().toISOString(), ...entry }));
-    },
+    log: logEntry,
   });
   link.lan = lan;
   await lan.start();
@@ -215,7 +213,7 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
     internetAllowed(internet);
   } catch {
     internet = { mode: 'off' };
-    log(JSON.stringify({ at: new Date().toISOString(), event: 'internet_settings_refused', code: 'E_IROH_SETTINGS' }));
+    logEntry({ event: 'internet_settings_refused', code: 'E_IROH_SETTINGS' });
   }
   const startIroh = async (settings: InternetSettings): Promise<IrohService> => {
     const relayUrl = relayChoice(settings);
@@ -227,20 +225,14 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
       ...(config.profile === 'private' ? { allowSocket: privateSocket } : {}),
       access: () => engine.irohAccess(),
       addressOf: (nodeId) => engine.irohAddressOf(nodeId),
-      onEnvelope: (envelope) => {
-        void engine.handleEnvelope(envelope).catch(() => {
-          log('E_RUNNER envelope handling failed');
-        });
-      },
+      onEnvelope: receive,
       // Peers learn where to reach this node when the program starts and whenever its addresses change.
       onAddress: (address) => {
         engine.setIrohAddress(address).catch(() => {
           log('E_RUNNER iroh address not shared');
         });
       },
-      log: (entry) => {
-        log(JSON.stringify({ at: new Date().toISOString(), ...entry }));
-      },
+      log: logEntry,
     });
     link.iroh = service;
     await service.start();
@@ -267,6 +259,7 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
     token,
     port: options.apiPort ?? config.apiPort,
     relayUrl: config.relayUrl,
+    log: logEntry,
     ...(process.env.DROP_SHELL_INSTANCE ? { shellInstance: process.env.DROP_SHELL_INSTANCE } : {}),
     admin: {
       status: () => ({
@@ -395,7 +388,7 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
     // A policy that expires while the node runs closes every path to the team; only the local API stays (T4.10).
     if (policy && !policyLapsed && policyExpired(policy.policy, Date.now())) {
       policyLapsed = true;
-      log(JSON.stringify({ at: new Date().toISOString(), event: 'policy_expired', code: 'E_POLICY' }));
+      logEntry({ event: 'policy_expired', code: 'E_POLICY' });
       relay.close();
       void Promise.all([lan.stop(), iroh.stop()]).catch(() => {
         log('E_RUNNER direct paths did not stop');
