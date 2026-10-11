@@ -49,9 +49,13 @@ function gitFiles(args: string[]): string[] {
 }
 
 function trackedFiles(pattern: RegExp): string[] {
-  return gitFiles(['--cached', '--others', '--exclude-standard'])
-    .filter((file) => pattern.test(file))
-    .filter((file) => !/^(openspec|\.claude|\.agents|docs\/demo\/julie-repo)\//.test(file));
+  return (
+    gitFiles(['--cached', '--others', '--exclude-standard'])
+      .filter((file) => pattern.test(file))
+      .filter((file) => !/^(openspec|\.claude|\.agents|docs\/demo\/julie-repo)\//.test(file))
+      // Still in the index but deleted from the working tree: the next commit removes it, nothing is left to check.
+      .filter((file) => existsSync(join(root, file)))
+  );
 }
 
 // Dependencies imposed by AGENTS.md; anything else must be named in a `- **D<n>**` entry of docs/DECISIONS.md.

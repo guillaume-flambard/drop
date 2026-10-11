@@ -22,3 +22,6 @@ apps/mac/src-tauri/icons/ios/
 apps/mac/src-tauri/icons/Square*.png
 apps/mac/src-tauri/icons/StoreLogo.png
 apps/mac/src-tauri/icons/64x64.png
+
+# Rust crates (drop-iroh, T4.2b): cargo build output
+crates/*/target/

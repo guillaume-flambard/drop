@@ -13,6 +13,10 @@ on:
     branches: [main]
   workflow_dispatch: {}
 
+# The job only reads the checkout; the image goes to the VPS's local registry, never to GitHub.
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true

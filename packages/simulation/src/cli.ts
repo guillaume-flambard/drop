@@ -6,6 +6,7 @@
  */
 import type { ChildProcess } from 'node:child_process';
 import { parseArgs } from 'node:util';
+import { campaignExitCode, parseRunOptions } from './args.ts';
 import { MAX_PROCESS_NODES, runCampaign, stopAll } from './campaign.ts';
 import { renderMarkdown } from './report.ts';
 
@@ -44,18 +45,13 @@ const onSignal = (signal: NodeJS.Signals) => {
 process.on('SIGINT', onSignal);
 process.on('SIGTERM', onSignal);
 
-const nodes = Number(values.nodes);
-process.stderr.write(
-  `${String(nodes)} nodes in separate processes (limit ${String(MAX_PROCESS_NODES)}); about 70 MB each measured on 10 October 2026\n`,
-);
 try {
+  const options = parseRunOptions(values);
+  process.stderr.write(
+    `${String(options.nodes)} nodes in separate processes (limit ${String(MAX_PROCESS_NODES)}); about 70 MB each measured on 10 October 2026\n`,
+  );
   const result = await runCampaign({
-    nodes,
-    owners: Number(values.owners),
-    requestsPerRequester: Number(values.requests),
-    durationMs: Number(values.duration) * 1000,
-    seed: Number(values.seed),
-    policy: { allow: Number(values.allow), deny: Number(values.deny), notNow: Number(values['not-now']) },
+    ...options,
     relayUrl: values.relay,
     ...(values.dir ? { workDir: values.dir } : {}),
     log: (line) => process.stderr.write(`${line}\n`),
@@ -65,7 +61,11 @@ try {
   });
   process.stdout.write(renderMarkdown(result.report));
   process.stdout.write(`\nCampaign directory: ${result.dir}\n`);
-  process.exit(result.report.leaks === 0 ? 0 : 1);
+  const code = campaignExitCode(result.report);
+  if (code !== 0 && result.report.leaks === 0) {
+    process.stderr.write('E_SIM_NO_RESULT: every request ended in a bench error, the campaign measured nothing\n');
+  }
+  process.exit(code);
 } catch (error) {
   process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
   process.exit(1);

@@ -68,7 +68,26 @@ if (command === 'hook') {
 }
 
 const { ObserverStore } = await import('./store.ts');
-const store = new ObserverStore();
+// A skipped line is reported once per command, on stderr: stdout stays the command's own output.
+const warned = new Set<string>();
+const store = new ObserverStore(undefined, {
+  warn: (code, detail) => {
+    if (warned.has(code)) return;
+    warned.add(code);
+    process.stderr.write(`${code}: lignes illisibles ignorées (${detail}), voir errors.log\n`);
+  },
+});
+
+/** Minutes lost, or undefined when the human does not know: an empty answer is unknown, never 0 (D24 median). */
+async function askMinutes(ask: (question: string) => Promise<string>): Promise<number | undefined> {
+  for (;;) {
+    const answer = (await ask('minutes perdues (attente et contournement ; vide si inconnu) : ')).trim();
+    if (answer === '') return undefined;
+    const minutes = Number(answer.replace(',', '.'));
+    if (Number.isFinite(minutes) && minutes >= 0) return minutes;
+    process.stdout.write('un nombre de minutes positif ou nul, ou vide si inconnu\n');
+  }
+}
 
 /** Codex has no hook: list and report first pull in new Codex blocks (idempotent), unless --no-codex is given. */
 async function syncCodex(args: string[]): Promise<void> {
@@ -160,8 +179,7 @@ switch (command) {
       rl.close();
       throw new Error('invalid answer');
     }
-    const minutes =
-      choice === 'NOT_A_BLOCK' ? 0 : Number(await rl.ask('minutes perdues (attente et contournement) : '));
+    const minutes = choice === 'NOT_A_BLOCK' ? 0 : await askMinutes(rl.ask);
     const note = await rl.ask('note (optionnelle) : ');
     rl.close();
     // Re-read just before writing: the human may answer minutes later, after the hook, an import or another classify
@@ -170,7 +188,7 @@ switch (command) {
     const target = fresh.find((candidate) => candidate.id === event.id);
     if (!target) throw new Error(`event ${event.id} is no longer stored`);
     target.classification = choice;
-    if (Number.isFinite(minutes) && minutes >= 0) target.pain_minutes = minutes;
+    if (minutes !== undefined) target.pain_minutes = minutes;
     if (note.trim() !== '') target.note = note.trim();
     store.replaceEvents(fresh);
     process.stdout.write(`${choice}, saved\n`);

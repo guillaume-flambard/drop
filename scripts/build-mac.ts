@@ -8,7 +8,7 @@ import { createHash } from 'node:crypto';
 import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { updateManifest, updaterConfig } from './mac-updates.ts';
+import { updateManifest, updatePlatform, updaterConfig } from './mac-updates.ts';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const tauriDir = join(root, 'apps', 'mac', 'src-tauri');
@@ -50,10 +50,10 @@ const publicKeyPath = join(root, 'apps', 'mac', 'updater.pub');
 const updates = args.includes('--updates');
 const notesIndex = args.indexOf('--notes');
 if (updates && !existsSync(publicKeyPath)) {
-  throw new Error(`E_UPDATER_KEY: ${publicKeyPath} is missing, see apps/mac/README.md`);
+  throw new Error(`E_UPDATER_KEY: ${publicKeyPath} is missing, see docs/MAC_RELEASE.md`);
 }
 if (updates && !process.env.TAURI_SIGNING_PRIVATE_KEY) {
-  throw new Error('E_UPDATER_KEY: set TAURI_SIGNING_PRIVATE_KEY to the update private key, see apps/mac/README.md');
+  throw new Error('E_UPDATER_KEY: set TAURI_SIGNING_PRIVATE_KEY to the update private key, see docs/MAC_RELEASE.md');
 }
 
 execFileSync(process.execPath, [join(root, 'scripts', 'bundle.ts')], { stdio: 'inherit' });
@@ -114,8 +114,9 @@ const config = JSON.parse(readFileSync(join(tauriDir, 'tauri.conf.json'), 'utf8'
 const bundleRoot = join(tauriDir, 'target', release ? 'release' : 'debug', 'bundle');
 const appPath = join(bundleRoot, 'macos', 'drop.app');
 const dmgDir = join(bundleRoot, 'dmg');
-const dmg = readdirSync(dmgDir).find((name) => name.endsWith('.dmg'));
-if (!dmg) throw new Error('Tauri did not produce a DMG');
+// The DMG of this version: an older build may have left its own in the same directory.
+const dmg = readdirSync(dmgDir).find((name) => name.startsWith(`drop_${config.version}_`) && name.endsWith('.dmg'));
+if (!dmg) throw new Error(`E_BUILD_DMG: Tauri did not produce drop_${config.version}_*.dmg in ${dmgDir}`);
 const dmgPath = join(dmgDir, dmg);
 
 if (release && notarizeWithProfile && notaryProfile) {
@@ -170,6 +171,7 @@ if (updates) {
     signature: readFileSync(join(bundleDir, 'drop.app.tar.gz.sig'), 'utf8'),
     notes: notesIndex >= 0 ? (args[notesIndex + 1] ?? '') : '',
     pubDate: new Date(),
+    platform: updatePlatform(hostArch),
   });
   const out = join(root, 'dist', 'updates');
   mkdirSync(out, { recursive: true });

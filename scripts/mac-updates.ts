@@ -5,10 +5,25 @@
 
 export const UPDATES_URL = 'https://drop.memolabs.dev/updates';
 export const UPDATE_ENDPOINT = `${UPDATES_URL}/latest.json`;
-/** The app embeds the Node binary of the Mac that builds it, so one platform per build: Apple silicon for now (D30). */
-const PLATFORM = 'darwin-aarch64';
+/** The update platforms Tauri names `darwin-<arch>`: Apple silicon and Intel. */
+const PLATFORMS = ['darwin-aarch64', 'darwin-x86_64'] as const;
+export type UpdatePlatform = (typeof PLATFORMS)[number];
 
-const SEMVER = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
+/**
+ * The app embeds the Node binary of the Mac that builds it, so one platform per build (D30), named after that Mac's
+ * `uname -m` (scripts/build-mac.ts refuses any other architecture).
+ */
+export function updatePlatform(machine: string): UpdatePlatform {
+  if (machine === 'arm64' || machine === 'aarch64') return 'darwin-aarch64';
+  if (machine === 'x86_64') return 'darwin-x86_64';
+  throw new Error(`E_UPDATE_PLATFORM: no update platform for a ${machine} Mac`);
+}
+
+// One version pattern for the manifest and for the archive names the public site serves (scripts/site.ts).
+const VERSION = String.raw`\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?`;
+const SEMVER = new RegExp(`^${VERSION}$`);
+/** The name of an update archive, exactly as updateManifest() publishes it. */
+export const UPDATE_ARCHIVE = new RegExp(String.raw`^drop-${VERSION}-darwin-(?:aarch64|x86_64)\.app\.tar\.gz$`);
 // A public key as `tauri signer generate` writes it to the .pub file: base64 on one line, never a path.
 const BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
 
@@ -41,24 +56,32 @@ function signedVersion(signature: string): string | undefined {
  * `latest.json` for the archive `tauri build` signed, and the name to publish that archive under. Refuses a signature
  * made for another version: the app would reject the update (requireSignedVersion), better to fail the release.
  */
-export function updateManifest(input: { version: string; signature: string; notes: string; pubDate: Date }): {
+export function updateManifest(input: {
+  version: string;
+  signature: string;
+  notes: string;
+  pubDate: Date;
+  platform: string;
+}): {
   manifest: UpdateManifest;
   artifact: string;
 } {
   if (!SEMVER.test(input.version)) throw new Error(`E_UPDATE_VERSION: ${input.version} is not a semver version`);
+  const platform = PLATFORMS.find((candidate) => candidate === input.platform);
+  if (!platform) throw new Error(`E_UPDATE_PLATFORM: ${input.platform} is not ${PLATFORMS.join(' or ')}`);
   const signature = input.signature.trim();
   const signed = signature && BASE64.test(signature) ? signedVersion(signature) : undefined;
   if (signed !== input.version) {
     throw new Error(`E_UPDATE_SIGNATURE: the signature is for ${signed ?? 'no version'}, not ${input.version}`);
   }
-  const artifact = `drop-${input.version}-${PLATFORM}.app.tar.gz`;
+  const artifact = `drop-${input.version}-${platform}.app.tar.gz`;
   return {
     artifact,
     manifest: {
       version: input.version,
       notes: input.notes,
       pub_date: input.pubDate.toISOString(),
-      platforms: { [PLATFORM]: { signature, url: `${UPDATES_URL}/${artifact}` } },
+      platforms: { [platform]: { signature, url: `${UPDATES_URL}/${artifact}` } },
     },
   };
 }
