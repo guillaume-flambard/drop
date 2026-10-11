@@ -285,26 +285,26 @@ describe('all thirteen clients connected automatically (T4.22)', () => {
 
   it(
     'connects every file client at its documented macOS path, keeps comments and layout, is idempotent, then removes only its entry',
-    slowRunner,
     async () => {
       await connectsEverywhere('darwin');
     },
+    slowRunner,
   );
 
   it(
     'connects every file client at its documented Windows path, keeps comments and layout, is idempotent, then removes only its entry',
-    slowRunner,
     async () => {
       await connectsEverywhere('win32');
     },
+    slowRunner,
   );
 
   it(
     'connects every file client at its documented Linux path, keeps comments and layout, is idempotent, then removes only its entry',
-    slowRunner,
     async () => {
       await connectsEverywhere('linux');
     },
+    slowRunner,
   );
 
   it('creates a missing file where each client documents it, and keeps a neighbour added after the connection', async () => {
