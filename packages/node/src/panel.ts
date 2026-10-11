@@ -265,14 +265,19 @@ ${humanPanelStyles}
   }
 
   var CODES = {
-    E_CLI_MISSING: 'Outil en ligne de commande introuvable sur ce Mac. Installe-le, puis relance l’analyse.',
-    E_CONFIG_INVALID_OR_UNREADABLE: 'Configuration de cet agent illisible. Corrige-la ou ajoute drop à la main.',
+    E_CLI_MISSING: 'Commande officielle de cet agent introuvable sur cet ordinateur : lance la commande ci-dessous, ou installe-la puis relance l’analyse.',
+    E_CLI_SHIM_UNSAFE: 'La commande officielle ne peut pas recevoir ces chemins sans risque sous Windows : lance-la toi-même.',
+    E_CONFIG_INVALID_OR_UNREADABLE: 'Configuration de cet agent illisible ou invalide : drop ne la réécrit pas. Corrige-la, ou ajoute l’entrée ci-dessous.',
+    E_CONFIG_LOCKED: 'Configuration verrouillée ou protégée en écriture : ferme l’agent puis relance l’analyse, ou ajoute l’entrée ci-dessous.',
+    E_CONFIG_UNDOCUMENTED: 'Cet agent ne documente pas l’emplacement de sa configuration sur ce système : ajoute l’entrée depuis ses réglages.',
+    E_CONFIG_AMBIGUOUS: 'Plusieurs entrées drop dans cette configuration : drop ne choisit pas à ta place. Garde-en une seule.',
+    E_SCOPE_CONFLICT: 'Une entrée drop existe déjà dans un projet de cet agent : retire-la avant de raccorder l’agent entier.',
+    E_CONFIG_SYMLINK: 'Cette configuration est un lien vers un autre fichier : drop ne le suit pas. Ajoute l’entrée ci-dessous dans le fichier visé.',
     E_DROP_CONFLICT: 'Un serveur nommé drop existe déjà avec une autre commande.',
     E_CONFIG_CHANGED: 'La configuration a changé depuis l’analyse. Relance l’analyse.',
     E_CLI_COMMAND: 'L’agent n’a pas accepté l’ajout du connecteur. Réessaie ou ajoute drop à la main.',
     E_CLI_UNVERIFIED: 'L’agent n’a pas confirmé l’ajout du connecteur. Réessaie ou ajoute drop à la main.',
     E_AGENT_INVALID: 'Agent non pris en charge.',
-    E_MANUAL_ONLY: 'Raccordement à la main : drop n’écrit pas dans ce client. Suis la marche à suivre.',
     E_PROJECT_PATH: 'Dossier introuvable : indique le chemin complet d’un dossier de projet.',
     E_PROJECT_LIMIT: '50 dossiers de projet au plus.',
     E_SECRET_DETECTED: 'Secret détecté dans ta réponse : retire-le, rien n’est parti.',
@@ -802,7 +807,7 @@ ${humanPanelStyles}
         Promise.all([api('GET', '/ui/admin/onboarding'), api('GET', '/ui/admin/projects').catch(function () { return { projects: [] }; })]).then(function (both) {
           onboardingPlans = both[0].agents; manualConnector = both[0].manual; projectsData = both[1].projects; render(true);
         }, function (error) { notice = error.message; render(true); });
-      } }, '1. Analyser ce Mac')));
+      } }, '1. Analyser cet ordinateur')));
       var plans = onboardingPlans || [];
       var selectable = [];
       var found = el('div', { class: 'list' });
@@ -813,7 +818,7 @@ ${humanPanelStyles}
         found.appendChild(el(checkbox ? 'label' : 'div', { class: 'row' }, checkbox,
           el('div', { class: 'grow' }, el('div', { class: 'name', text: plan.label }),
             el('div', { class: plan.state === 'error' || plan.state === 'conflict' ? 'error' : 'muted', text: explain(plan.detail) }),
-            plan.state === 'manual' && plan.manual ? el('details', {}, el('summary', { text: 'Marche à suivre' }),
+            plan.manual ? el('details', {}, el('summary', { text: 'Secours : à faire toi-même' }),
               el('div', { class: 'muted', text: plan.manual.steps }),
               el('code', { text: plan.manual.snippet })) : null),
           plan.state === 'already_connected' ? el('button', { class: 'act', onclick: function () {

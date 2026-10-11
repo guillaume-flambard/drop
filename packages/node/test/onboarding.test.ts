@@ -61,8 +61,10 @@ describe('local agent onboarding (T3.3)', () => {
       home: f.home,
       dropHome: f.dropHome,
       serverSource: f.source,
+      // Laid out as on macOS, whatever system runs the tests.
+      platform: 'darwin',
       // No app or binary in this temporary home: the nine clients added in T4.5 are absent.
-      probe: { home: f.home, apps: [], path: '' },
+      probe: { home: f.home, apps: [], path: '', platform: 'darwin' },
       run: (argv) => {
         executed.push(argv);
       },
@@ -318,7 +320,7 @@ describe('local agent onboarding (T3.3)', () => {
     const path = join(f.home, 'Library', 'Application Support', 'Claude', 'claude_desktop_config.json');
     mkdirSync(join(f.home, 'Library', 'Application Support', 'Claude'), { recursive: true });
     writeFileSync(path, JSON.stringify({ mcpServers: { github: { command: 'node', env: { KEY: 'private' } } } }));
-    const options = { home: f.home, dropHome: f.dropHome, serverSource: f.source };
+    const options = { home: f.home, dropHome: f.dropHome, serverSource: f.source, platform: 'darwin' as const };
     const plan = previewOnboarding(options).find((item) => item.agent === 'claude_desktop');
     if (!plan) throw new Error('Claude Desktop plan missing');
     expect(plan.state).toBe('ready');
