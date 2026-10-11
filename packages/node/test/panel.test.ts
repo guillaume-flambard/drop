@@ -175,7 +175,7 @@ describe('menu bar panel and its admin routes (T2.4)', () => {
     expect(html).not.toContain('innerHTML');
     expect(html).not.toContain('insertAdjacentHTML');
     expect(html).toContain('node.textContent = a[key]');
-    expect(html).toContain('1. Analyser ce Mac');
+    expect(html).toContain('1. Analyser cet ordinateur');
     expect(html).toContain('2. Connecter les agents sélectionnés');
     expect(html).toContain('Configuration manuelle');
     expect(html).toContain('hors ligne');
@@ -369,10 +369,8 @@ describe('menu bar panel (T4.5)', () => {
     expect(html).toContain("'Aucun des treize clients détecté'");
     // Analysis reads the clients and the projects together.
     expect(html).toContain("api('GET', '/ui/admin/projects')");
-    // A manual client shows its own steps and snippet, as text.
-    expect(html).toContain(
-      "plan.state === 'manual' && plan.manual ? el('details', {}, el('summary', { text: 'Marche à suivre' }),",
-    );
+    // Steps and a snippet appear only as a fallback, as text (T4.22).
+    expect(html).toContain("plan.manual ? el('details', {}, el('summary', { text: 'Secours : à faire toi-même' }),");
     expect(html).toContain("el('code', { text: plan.manual.snippet })");
     const projects = html.slice(
       html.indexOf('function projectsSection(view, projects)'),
@@ -396,5 +394,22 @@ describe('menu bar panel (T4.5)', () => {
       expect(html).toContain(`'${label}'`);
     const script = /<script>([\s\S]*?)<\/script>/.exec(html)?.[1];
     expect(() => new Script(script ?? '')).not.toThrow();
+  });
+});
+
+describe('menu bar panel (T4.22)', () => {
+  it('connects every client without a copy step and explains the fallback only when a write is impossible', () => {
+    const html = renderPanel();
+    expect(html).not.toContain('E_MANUAL_ONLY');
+    expect(html).not.toContain('drop n’écrit pas dans ce client');
+    expect(html).not.toContain("plan.state === 'manual'");
+    for (const code of [
+      'E_CONFIG_LOCKED',
+      'E_CONFIG_UNDOCUMENTED',
+      'E_CLI_SHIM_UNSAFE',
+      'E_CONFIG_INVALID_OR_UNREADABLE',
+    ])
+      expect(html).toContain(`${code}: '`);
+    expect(html).toContain('1. Analyser cet ordinateur');
   });
 });

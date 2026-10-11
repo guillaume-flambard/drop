@@ -1,5 +1,4 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { execFile } from 'node:child_process';
 import {
   accessSync,
   constants,
@@ -19,23 +18,39 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { homedir } from 'node:os';
-import { basename, delimiter, dirname, isAbsolute, join } from 'node:path';
-import { promisify } from 'node:util';
+import { basename, dirname, join, posix, win32 } from 'node:path';
 import {
   AGENTS,
-  agentConfigPath,
-  agentServers,
   CLIENT_SPECS,
+  clientConfigLocation,
+  clientHost,
+  clientPlatform,
   codexServers,
   defaultProbe,
-  locationServers,
+  executableNames,
+  MAX_GLOBAL_CONFIG_BYTES,
   type AgentKind,
+  type ClientHost,
+  type ClientPlatform,
+  type ConfigLocation,
   type InstallProbe,
 } from '@drop/capabilities';
+import { editJson, editYaml, readJsonEntry, readYamlEntry } from './config-edit.ts';
 import { AGENT_LABELS, detectAgents } from './detect.ts';
-import { bundledServer, installSteps, manualStep, serverEntry, type ManualStep, type ServerEntry } from './install.ts';
+import {
+  bundledServer,
+  entryKeyPath,
+  entryValue,
+  fallbackStep,
+  installSteps,
+  normalizeEntry,
+  serverEntry,
+  type ManualStep,
+  type ServerEntry,
+} from './install.ts';
+import { runOfficial } from './official-command.ts';
 
-export type OnboardingState = 'absent' | 'ready' | 'already_connected' | 'conflict' | 'error' | 'manual';
+export type OnboardingState = 'absent' | 'ready' | 'already_connected' | 'conflict' | 'error';
 export interface AgentPreview {
   agent: AgentKind;
   label: string;
@@ -43,7 +58,9 @@ export interface AgentPreview {
   action: 'connect' | 'none';
   fingerprint: string;
   detail: string;
-  /** For a client drop does not write (D66): what to paste where, in its own format. */
+  /** The file drop writes for this client on this system, or the file its official command owns. */
+  configPath?: string | undefined;
+  /** Only when drop cannot write (D84): why, what to paste or run, and where. */
   manual?: ManualStep;
 }
 export interface AgentSelection {
@@ -53,7 +70,7 @@ export interface AgentSelection {
 }
 export interface AgentResult {
   agent: AgentKind;
-  state: 'connected' | 'disconnected' | 'already_connected' | 'changed' | 'conflict' | 'error' | 'manual';
+  state: 'connected' | 'disconnected' | 'already_connected' | 'changed' | 'conflict' | 'error';
   detail: string;
   restartRequired: boolean;
   manual?: ManualStep;
@@ -61,6 +78,10 @@ export interface AgentResult {
 export interface OnboardingOptions {
   dropHome: string;
   home?: string;
+  /** The system whose locations apply; this machine's by default. Tests simulate Windows and Linux with it. */
+  platform?: ClientPlatform;
+  /** Environment overrides (APPDATA, XDG_CONFIG_HOME, CODEX_HOME…); this process's for the real home only. */
+  env?: Readonly<Record<string, string | undefined>>;
   serverSource?: string;
   run?: (argv: string[]) => void | Promise<void>;
   /** Test seam for a competing writer between temporary-file creation and the final freshness check. */
@@ -69,14 +90,19 @@ export interface OnboardingOptions {
   probe?: InstallProbe;
 }
 
-const execFileAsync = promisify(execFile);
+/** Codes for which a write is impossible here: the owner gets the configuration to paste, and why (D84). */
+const FALLBACK_CODES = new Set([
+  'E_CONFIG_INVALID_OR_UNREADABLE',
+  'E_CONFIG_UNDOCUMENTED',
+  'E_CONFIG_AMBIGUOUS',
+  'E_CONFIG_LOCKED',
+  'E_CLI_MISSING',
+  'E_CLI_SHIM_UNSAFE',
+]);
 
-/** Bounded: an official command waiting for an update or a login must not hold the daemon, nor block it meanwhile. */
-async function runOfficial(argv: string[]): Promise<void> {
-  const running = execFileAsync(argv[0] ?? '', argv.slice(1), { timeout: 60_000, killSignal: 'SIGKILL' });
-  // Its output is not read, and a question it asks gets end of input at once, as with stdio ignored.
-  running.child.stdin?.end();
-  await running;
+function hostOf(options: OnboardingOptions): ClientHost {
+  const home = options.home ?? homedir();
+  return clientHost(home, options.platform ?? clientPlatform(), options.env);
 }
 
 /** Copyable stdio entry for clients without an adapter; no permissions or publication are granted. */
@@ -103,39 +129,39 @@ function executable(path: string): boolean {
   }
 }
 
-function onPath(binary: string, path: string): string | undefined {
-  return path
-    .split(delimiter)
-    .filter((dir) => isAbsolute(dir))
-    .map((dir) => join(dir, binary))
+function onPath(binary: string, probe: InstallProbe): string | undefined {
+  const platform = probe.platform ?? clientPlatform();
+  const path = platform === 'win32' ? win32 : posix;
+  return probe.path
+    .split(path.delimiter)
+    .filter((dir) => dir !== '' && path.isAbsolute(dir))
+    .flatMap((dir) => executableNames(binary, probe).map((name) => join(dir, name)))
     .find((candidate) => executable(candidate));
 }
 
 const CLI_BINARY: Partial<Record<AgentKind, string>> = {
   claude_code: 'claude',
   codex: 'codex',
-  gemini_cli: 'gemini',
-  vscode: 'code',
 };
 
-/** The official command of a CLI-connected client: on PATH, or VS Code's `code` shim inside its app bundle. */
+/** The official command of a CLI-connected client: on PATH, or at its installer's place in the home folder. */
 function cliPath(agent: AgentKind, probe: InstallProbe): string | undefined {
   const binary = CLI_BINARY[agent];
   if (!binary) return undefined;
-  const found =
-    onPath(binary, probe.path) ??
+  return (
+    onPath(binary, probe) ??
     CLIENT_SPECS[agent].homeBinaries
-      .map((relative) => join(probe.home, relative))
-      .find((candidate) => executable(candidate));
-  if (found || agent !== 'vscode') return found;
-  return probe.apps
-    .map((dir) => join(dir, 'Visual Studio Code.app', 'Contents', 'Resources', 'app', 'bin', 'code'))
-    .find((candidate) => executable(candidate));
+      .flatMap((relative) => executableNames(join(probe.home, ...relative.split('/')), probe))
+      .find((candidate) => executable(candidate))
+  );
 }
 
+/** A regular file of bounded size, never through a symlink; undefined when absent. */
 function readConfig(path: string): string | undefined {
   try {
-    if (!lstatSync(path).isFile()) throw new Error('E_CONFIG_TYPE');
+    const stats = lstatSync(path);
+    if (!stats.isFile()) throw new Error('E_CONFIG_TYPE');
+    if (stats.size > MAX_GLOBAL_CONFIG_BYTES) throw new Error('E_CONFIG_TOO_LARGE');
     return readFileSync(path, 'utf8');
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
@@ -148,62 +174,42 @@ function record(value: unknown): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
-function jsonConfig(content: string | undefined): {
-  config: Record<string, unknown>;
-  servers: Record<string, unknown>;
-} {
-  const config = content === undefined ? {} : record(JSON.parse(content) as unknown);
-  const servers = config.mcpServers === undefined ? {} : record(config.mcpServers);
-  return { config, servers };
-}
-
-interface DropEntry {
-  command?: unknown;
-  args?: unknown;
-  env?: unknown;
-}
-
-function existingDrop(agent: AgentKind, content: string | undefined, home: string): unknown {
-  if (content === undefined && CLIENT_SPECS[agent].connect !== 'manual') return undefined;
-  if (agent === 'codex' && content !== undefined) {
+/** Our entry as the file holds it, in the client's own layout; undefined when there is none. */
+function existingDrop(agent: AgentKind, content: string | undefined, location: ConfigLocation): unknown {
+  if (content === undefined) return undefined;
+  if (agent === 'codex') {
     const definitions = content.match(/^\s*\[mcp_servers\.(?:"drop"|drop)\]\s*(?:#.*)?$/gm) ?? [];
     const related = content.match(/^\s*\[mcp_servers\.(?:"drop"|drop)(?:\]|\.)/gm) ?? [];
     if (definitions.length > 1) throw new Error('E_CONFIG_AMBIGUOUS');
     const parsed = codexServers(content).find((server) => server.name === 'drop');
     if (related.length > 0 && !parsed) throw new Error('E_DROP_CONFLICT');
-    return parsed;
+    return parsed ? { command: parsed.command, args: parsed.args, env: parsed.env } : undefined;
   }
-  const spec = CLIENT_SPECS[agent];
-  const primary = spec.global(home)[0];
-  if (agent !== 'claude_code' && spec.connect !== 'file' && primary) {
-    // CLI-connected and manual clients: read through the registry, in each client's own format and layout.
-    if (spec.connect === 'cli') {
-      const server = locationServers(primary).find((item) => item.name === 'drop');
-      return server ? { command: server.command, args: server.args, env: server.env } : undefined;
-    }
-    const server = agentServers(agent, home).find((item) => item.name === 'drop');
-    return server ? { command: server.command, args: server.args, env: server.env } : undefined;
+  if (agent === 'claude_code') {
+    const config = record(JSON.parse(content) as unknown);
+    if (config.projects !== undefined)
+      for (const project of Object.values(record(config.projects))) {
+        const projectServers = record(project).mcpServers;
+        if (projectServers !== undefined && Object.hasOwn(record(projectServers), 'drop'))
+          throw new Error('E_SCOPE_CONFLICT');
+      }
+    return config.mcpServers === undefined ? undefined : record(config.mcpServers).drop;
   }
-  const { config, servers } = jsonConfig(content);
-  if (agent === 'claude_code' && config.projects !== undefined) {
-    for (const project of Object.values(record(config.projects))) {
-      const projectServers = record(project).mcpServers;
-      if (projectServers !== undefined && Object.hasOwn(record(projectServers), 'drop'))
-        throw new Error('E_SCOPE_CONFLICT');
-    }
-  }
-  return servers.drop;
+  const path = entryKeyPath(location.layout, content);
+  if (location.format === 'yaml') return readYamlEntry(content, path);
+  if (location.format === 'toml') throw new Error('E_CONFIG_FORMAT');
+  return readJsonEntry(content, path, location.format);
 }
 
-function sameEntry(existing: unknown, entry: ServerEntry): boolean {
+function sameEntry(location: ConfigLocation, existing: unknown, entry: ServerEntry): boolean {
   if (existing === undefined) return false;
-  const server = record(existing) as DropEntry;
-  const env = record(server.env ?? {});
+  const server = normalizeEntry(location.layout, existing);
+  if (!server) return false;
   return (
     server.command === entry.command &&
-    JSON.stringify(server.args ?? []) === JSON.stringify(entry.args) &&
-    Object.keys(env).length === Object.keys(entry.env).length &&
-    Object.entries(entry.env).every(([key, item]) => env[key] === item)
+    JSON.stringify(server.args) === JSON.stringify(entry.args) &&
+    Object.keys(server.env).length === Object.keys(entry.env).length &&
+    Object.entries(entry.env).every(([key, item]) => server.env[key] === item)
   );
 }
 
@@ -211,78 +217,67 @@ function expected(agent: AgentKind, options: OnboardingOptions): ServerEntry {
   return serverEntry(agent, options.dropHome, join(options.dropHome, 'bin', 'drop-mcp.mjs'));
 }
 
+/** The error code an exception stands for: a locked or forbidden file is a fallback, anything else unreadable. */
+function failureCode(error: unknown): string {
+  const code = (error as NodeJS.ErrnoException).code;
+  if (code === 'EACCES' || code === 'EPERM' || code === 'EBUSY') return 'E_CONFIG_LOCKED';
+  if (error instanceof Error && error.message.startsWith('E_')) return error.message;
+  return 'E_ONBOARDING_FAILED';
+}
+
+function withFallback<T extends { detail: string; manual?: ManualStep }>(
+  item: T,
+  agent: AgentKind,
+  options: OnboardingOptions,
+  location: ConfigLocation | undefined,
+): T {
+  if (!FALLBACK_CODES.has(item.detail)) return item;
+  return { ...item, manual: fallbackStep(agent, expected(agent, options), location, item.detail) };
+}
+
 function inspect(agent: AgentKind, options: OnboardingOptions, installed: boolean): AgentPreview {
-  const home = options.home ?? homedir();
-  const probe = options.probe ?? defaultProbe(home);
-  const path = agentConfigPath(agent, home);
+  const host = hostOf(options);
+  const probe = options.probe ?? defaultProbe(host);
+  const location = clientConfigLocation(agent, host);
+  const base = { agent, label: AGENT_LABELS[agent], configPath: location?.path };
+  const preview = (state: OnboardingState, fingerprint: string, detail: string): AgentPreview =>
+    withFallback(
+      { ...base, state, action: state === 'ready' ? 'connect' : 'none', fingerprint, detail },
+      agent,
+      options,
+      location,
+    );
+  if (!location)
+    return installed && CLIENT_SPECS[agent].undocumented?.[host.platform]
+      ? preview('error', '', 'E_CONFIG_UNDOCUMENTED')
+      : preview('absent', digest(undefined), 'Agent non disponible sur ce système');
   try {
-    const content = readConfig(path);
+    const content = readConfig(location.path);
     const fingerprint = digest(content);
-    if (!installed)
-      return {
-        agent,
-        label: AGENT_LABELS[agent],
-        state: 'absent',
-        action: 'none',
-        fingerprint,
-        detail: 'Agent non détecté',
-      };
+    if (!installed) return preview('absent', fingerprint, 'Agent non détecté');
     if (CLIENT_SPECS[agent].connect === 'cli' && !options.run && !cliPath(agent, probe))
-      return {
-        agent,
-        label: AGENT_LABELS[agent],
-        state: 'error',
-        action: 'none',
-        fingerprint,
-        detail: 'E_CLI_MISSING',
-      };
-    const existing = existingDrop(agent, content, home);
+      return preview('error', fingerprint, 'E_CLI_MISSING');
+    const existing = existingDrop(agent, content, location);
     if (existing !== undefined) {
-      const state = sameEntry(existing, expected(agent, options)) ? 'already_connected' : 'conflict';
-      return {
-        agent,
-        label: AGENT_LABELS[agent],
-        state,
-        action: 'none',
+      const same = sameEntry(location, existing, expected(agent, options));
+      return preview(
+        same ? 'already_connected' : 'conflict',
         fingerprint,
-        detail: state === 'conflict' ? 'Une autre entrée drop existe déjà' : 'Connecteur déjà configuré',
-      };
+        same ? 'Connecteur déjà configuré' : 'Une autre entrée drop existe déjà',
+      );
     }
-    if (CLIENT_SPECS[agent].connect === 'manual')
-      return {
-        agent,
-        label: AGENT_LABELS[agent],
-        state: 'manual',
-        action: 'none',
-        fingerprint,
-        detail: 'E_MANUAL_ONLY',
-        manual: manualStep(agent, expected(agent, options)),
-      };
-    return {
-      agent,
-      label: AGENT_LABELS[agent],
-      state: 'ready',
-      action: 'connect',
-      fingerprint,
-      detail: 'Ajout du connecteur MCP drop uniquement',
-    };
-  } catch {
-    return {
-      agent,
-      label: AGENT_LABELS[agent],
-      state: 'error',
-      action: 'none',
-      fingerprint: '',
-      detail: 'E_CONFIG_INVALID_OR_UNREADABLE',
-    };
+    return preview('ready', fingerprint, 'Ajout du connecteur MCP drop uniquement');
+  } catch (error) {
+    const code = failureCode(error);
+    return preview('error', '', code === 'E_CONFIG_LOCKED' ? code : 'E_CONFIG_INVALID_OR_UNREADABLE');
   }
 }
 
 /** Analysis reads each client's documented files only. It does not start agents, MCP servers or network clients. */
 export function previewOnboarding(options: OnboardingOptions): AgentPreview[] {
-  const home = options.home ?? homedir();
+  const host = hostOf(options);
   const present = new Map(
-    detectAgents(home, options.probe ?? defaultProbe(home)).map((agent) => [agent.agent, agent.installed]),
+    detectAgents(host, options.probe ?? defaultProbe(host)).map((agent) => [agent.agent, agent.installed]),
   );
   return AGENTS.map((agent) => inspect(agent, options, present.get(agent) ?? false));
 }
@@ -295,24 +290,25 @@ function saveBackup(file: string, content: string, dropHome: string): void {
     if (!lstatSync(path).isDirectory()) throw new Error('E_BACKUP_DIR');
     if (path !== dropHome) chmodSync(path, 0o700);
   }
-  const name = `${basename(file)}-${String(Date.now())}-${randomUUID()}.bak`;
-  writeFileSync(join(dir, name), content, { mode: 0o600, flag: 'wx' });
+  // Several clients share a file name (mcp.json, settings.json): three versions per file, not per name.
+  const prefix = `${basename(file)}-${createHash('sha256').update(file).digest('hex').slice(0, 8)}-`;
+  writeFileSync(join(dir, `${prefix}${String(Date.now())}-${randomUUID()}.bak`), content, { mode: 0o600, flag: 'wx' });
   const files = readdirSync(dir)
-    .filter((item) => item.startsWith(`${basename(file)}-`) && item.endsWith('.bak'))
+    .filter((item) => item.startsWith(prefix) && item.endsWith('.bak'))
     .sort();
   for (const old of files.slice(0, Math.max(0, files.length - 3))) unlinkSync(join(dir, old));
 }
 
-function writeJsonEntry(
-  file: string,
-  old: string | undefined,
-  entry: ServerEntry | null,
-  options: OnboardingOptions,
-): void {
-  const { config, servers } = jsonConfig(old);
-  if (entry) servers.drop = entry;
-  else delete servers.drop;
-  const content = `${JSON.stringify({ ...config, mcpServers: servers }, null, 2)}\n`;
+/** The new text of a client's file: only our entry added or removed, in its own format, the rest kept as is. */
+function editedText(location: ConfigLocation, old: string | undefined, value: unknown): string {
+  const path = entryKeyPath(location.layout, old);
+  if (location.format === 'yaml') return editYaml(old, path, value);
+  if (location.format === 'toml') throw new Error('E_CONFIG_FORMAT');
+  return editJson(old, path, value, location.format);
+}
+
+/** Temporary file, fsync, freshness check against what was read, private backup, then rename (T3.3). */
+function commitFile(file: string, old: string | undefined, content: string, options: OnboardingOptions): void {
   mkdirSync(dirname(file), { recursive: true, mode: 0o700 });
   const temp = `${file}.drop-${randomUUID()}.tmp`;
   const mode = old === undefined ? 0o600 : statSync(file).mode & 0o777;
@@ -362,68 +358,61 @@ export async function applyOnboarding(
   selections: AgentSelection[],
   options: OnboardingOptions,
 ): Promise<AgentResult[]> {
-  const home = options.home ?? homedir();
   const seen = new Set<AgentKind>();
   const results: AgentResult[] = [];
-  for (const selection of selections) results.push(await applyOne(selection, options, home, seen));
+  for (const selection of selections) results.push(await applyOne(selection, options, seen));
   return results;
 }
 
 async function applyOne(
   selection: AgentSelection,
   options: OnboardingOptions,
-  home: string,
   seen: Set<AgentKind>,
 ): Promise<AgentResult> {
   const agent = selection.agent;
-  const result = (state: AgentResult['state'], detail: string, restartRequired = false): AgentResult => ({
-    agent,
-    state,
-    detail,
-    restartRequired,
-  });
+  const host = hostOf(options);
+  const location = AGENTS.includes(agent) ? clientConfigLocation(agent, host) : undefined;
+  const result = (state: AgentResult['state'], detail: string, restartRequired = false): AgentResult =>
+    withFallback({ agent, state, detail, restartRequired }, agent, options, location);
   if (!AGENTS.includes(agent) || seen.has(agent)) return result('error', 'E_AGENT_INVALID');
   seen.add(agent);
-  const file = agentConfigPath(agent, home);
   try {
-    const probe = options.probe ?? defaultProbe(home);
-    const present = detectAgents(home, probe).find((item) => item.agent === agent)?.installed ?? false;
+    const probe = options.probe ?? defaultProbe(host);
+    const present = detectAgents(host, probe).find((item) => item.agent === agent)?.installed ?? false;
     const fresh = inspect(agent, options, present);
-    if (fresh.state === 'absent' || fresh.state === 'error') return result('error', fresh.detail);
-    // A client drop does not write: never touched, whatever the selection says (D66).
-    if (CLIENT_SPECS[agent].connect === 'manual')
-      return { ...result('manual', 'E_MANUAL_ONLY'), manual: manualStep(agent, expected(agent, options)) };
+    if (fresh.state === 'absent' || fresh.state === 'error' || !location) return result('error', fresh.detail);
+    const file = location.path;
     const before = readConfig(file);
     if (digest(before) !== selection.fingerprint) return result('changed', 'E_CONFIG_CHANGED');
-    const current = existingDrop(agent, before, home);
+    const current = existingDrop(agent, before, location);
     const entry = expected(agent, options);
     if (selection.action === 'connect') {
       if (current !== undefined)
-        return sameEntry(current, entry)
+        return sameEntry(location, current, entry)
           ? result('already_connected', 'Déjà configuré')
           : result('conflict', 'E_DROP_CONFLICT');
       if (CLIENT_SPECS[agent].connect === 'cli' && !options.run && !cliPath(agent, probe))
         return result('error', 'E_CLI_MISSING');
       copyServer(options);
     } else if (current === undefined) return result('disconnected', 'Déjà retiré');
-    else if (!sameEntry(current, entry)) return result('conflict', 'E_DROP_CONFLICT');
+    else if (!sameEntry(location, current, entry)) return result('conflict', 'E_DROP_CONFLICT');
     if (CLIENT_SPECS[agent].connect === 'file') {
-      writeJsonEntry(file, before, selection.action === 'connect' ? entry : null, options);
+      const value = selection.action === 'connect' ? entryValue(agent, location.layout, entry, before) : undefined;
+      commitFile(file, before, editedText(location, before, value), options);
     } else {
       // Official CLIs own these files. Never remove an existing entry before a new add.
       if (digest(readConfig(file)) !== digest(before)) return result('changed', 'E_CONFIG_CHANGED');
-      const step = installSteps(agent, selection.action === 'connect' ? entry : null, home)[0];
-      if (step?.kind === 'manual') return { ...result('manual', 'E_MANUAL_ONLY'), manual: step };
+      const step = installSteps(agent, selection.action === 'connect' ? entry : null, host)[0];
       const argv = step?.kind === 'run' ? step.argv : undefined;
       if (!argv) return result('error', 'E_CLI_COMMAND');
-      // The official command, found on PATH or, for VS Code, inside its app bundle.
+      // The official command, found on PATH or at its installer's place.
       const binary = options.run ? argv[0] : cliPath(agent, probe);
       if (!binary) return result('error', 'E_CLI_MISSING');
       argv[0] = binary;
       if (before !== undefined) saveBackup(file, before, options.dropHome);
-      await (options.run ?? runOfficial)(argv);
-      const after = existingDrop(agent, readConfig(file), home);
-      if (selection.action === 'connect' ? !sameEntry(after, entry) : after !== undefined)
+      await (options.run ?? ((command: string[]) => runOfficial(command, host.platform)))(argv);
+      const after = existingDrop(agent, readConfig(file), location);
+      if (selection.action === 'connect' ? !sameEntry(location, after, entry) : after !== undefined)
         return result('error', 'E_CLI_UNVERIFIED');
     }
     return result(
@@ -432,10 +421,8 @@ async function applyOne(
       true,
     );
   } catch (error) {
-    if (error instanceof Error && error.message === 'E_CONFIG_CHANGED') return result('changed', 'E_CONFIG_CHANGED');
-    return result(
-      'error',
-      error instanceof Error && error.message.startsWith('E_') ? error.message : 'E_ONBOARDING_FAILED',
-    );
+    const code = failureCode(error);
+    if (code === 'E_CONFIG_CHANGED') return result('changed', code);
+    return result('error', code);
   }
 }
