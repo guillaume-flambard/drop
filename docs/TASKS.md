@@ -54,7 +54,9 @@ Adopté le 10 octobre 2026 (D47 à D58). Ces lignes s'ajoutent à la série T3 s
 | T4.7  | P2 : simulation complète (500 nœuds virtuels, 10 à 20 personnages sur modèles gratuits, carte interactive, traces, boucle d'amélioration bornée) | `simulation` | `t4-7-simulation-full` | T4.1 | todo |
 | T4.8  | P3 : agent inclus qui répond pour le propriétaire après accord, modèle choisi par lui | `runner`, `owner-app`, `node` | `t4-8-built-in-agent` | T4.3, T3.2 | todo |
 | T4.9  | P3 : petite question (niveau 2) sur un contexte déclaré, appel neuf sans outil | `runner`, `node`, `protocol` | `t4-9-declared-context-question` | T4.4 | todo |
-| T4.10 | P3 : pack entreprise (relais binaire, Docker, Helm ; politique signée appliquée au poste et au relais) | `relay`, `node`, `owner-app` | `t4-10-enterprise-pack` | T4.2 | todo |
+| T4.10 | P3 : pack entreprise (relais binaire, Docker, Helm ; politique signée appliquée au poste et au relais) | `relay`, `node`, `owner-app` | `t4-10-enterprise-pack` | T4.2 | done |
+| T4.10b | Relais d'entreprise en binaire autonome : exécutable unique Node (SEA, CommonJS, `postject` à ajouter avec sa décision), Linux x64 et arm64 puis macOS, signature et empreintes | `relay`, `deploy-mac-vps` | `t4-10b-relay-binary` | T4.10 | todo |
+| T4.10c | Pack entreprise, exploitation : Helm dans la CI (le test du chart s'ignore sans lui), rechargement du certificat TLS et de la politique sans redémarrage, garde du modèle prouvée de bout en bout par le daemon | `relay`, `node`, `deploy-mac-vps` | `t4-10c-enterprise-ops` | T4.10 | todo |
 | T4.11 | P4 : tâches déléguées (niveau 4) sur Task A2A avec jalons d'approbation | `a2a`, `runner`, `node`, `owner-app` | `t4-11-delegated-tasks` | T4.9 | todo |
 | T4.12 | P4 : contexte partagé décentralisé (catalogue de sujets, boîte de suggestions, invalidation) | `node`, `protocol`, `owner-app` | `t4-12-decentralized-context` | T4.4, T4.9 | todo |
 | T4.13 | P5 : revue concurrentielle refaite, nom du produit, offre et lancement public ; toute publication attend l'accord humain | `site`, `product-foundation` | `t4-13-launch` | T4.6, T3.6 | todo |

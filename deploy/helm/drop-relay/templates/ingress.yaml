@@ -1,0 +1,36 @@
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "drop-relay.name" . }}
+  labels:
+    {{- include "drop-relay.labels" . | nindent 4 }}
+  {{- if or .Values.ingress.annotations .Values.tls.enabled }}
+  annotations:
+    {{- with .Values.ingress.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+    {{- if .Values.tls.enabled }}
+    # The relay serves TLS itself: the ingress must speak HTTPS to it (ingress-nginx).
+    nginx.ingress.kubernetes.io/backend-protocol: HTTPS
+    {{- end }}
+  {{- end }}
+spec:
+  {{- if .Values.ingress.className }}
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- end }}
+  tls:
+    - hosts: [{{ .Values.ingress.host | quote }}]
+      secretName: {{ required "ingress.tlsSecretName is required: the relay is only reached over TLS" .Values.ingress.tlsSecretName }}
+  rules:
+    - host: {{ .Values.ingress.host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "drop-relay.name" . }}
+                port:
+                  name: relay
+{{- end }}

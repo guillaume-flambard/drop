@@ -106,6 +106,8 @@ export function openAiCompatible(
       const response = await fetchImpl(`${config.baseUrl.replace(/\/$/, '')}/chat/completions`, {
         method: 'POST',
         signal,
+        // Never followed: a redirect would carry the prompt to an origin the owner, or the policy, did not choose.
+        redirect: 'error',
         headers: { 'Content-Type': 'application/json', ...(key ? { Authorization: `Bearer ${key}` } : {}) },
         body: JSON.stringify({
           model: config.model,

@@ -17,7 +17,17 @@ export const ServerFrameSchema = z.discriminatedUnion('type', [
 export type ServerFrame = z.infer<typeof ServerFrameSchema>;
 
 export const ClientFrameSchema = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('auth'), nodeId: NodeIdSchema, sig: z.string(), admission: z.unknown().optional() }),
+  z.object({
+    type: z.literal('auth'),
+    nodeId: NodeIdSchema,
+    sig: z.string(),
+    admission: z.unknown().optional(),
+    /** The fingerprint of the organization policy this node runs under (T4.10, D81). */
+    policy: z
+      .string()
+      .regex(/^[a-f0-9]{64}$/)
+      .optional(),
+  }),
   z.object({ type: z.literal('envelope'), envelope: z.unknown() }),
 ]);
 export type ClientFrame = z.infer<typeof ClientFrameSchema>;

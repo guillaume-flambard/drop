@@ -1,0 +1,16 @@
+{
+  "phase": "READY_FOR_MANUAL_ACCEPTANCE",
+  "scope": "T4.10 : politique d'entreprise signée appliquée au poste et au relais, image Docker et chart Helm du relais",
+  "requirements": { "total": 6, "covered": 6 },
+  "acceptance": { "total": 6, "verified": 6, "pending": 0, "failed": 0 },
+  "todos": { "p0_open": 0, "p1_open": 0, "follow_up": ["T4.10b", "T4.10c"] },
+  "risks": { "critical_open": 0, "high_open": 0 },
+  "verification": {
+    "status": "PASS",
+    "evidence": "evidence.md",
+    "mutation": "39/39 killed",
+    "cso": "partial (binary assets unread), coverage recorded, no finding",
+    "helm": "Kubernetes Helm 4.3.0 locally; chart test skipped in CI (T4.10c)"
+  },
+  "ready_for_manual_acceptance": true
+}

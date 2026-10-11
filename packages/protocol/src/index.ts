@@ -7,6 +7,7 @@ export * from './envelope.ts';
 export * from './errors.ts';
 export * from './identity.ts';
 export * from './invite.ts';
+export * from './policy.ts';
 export * from './iroh.ts';
 export * from './lifecycle.ts';
 export * from './messages.ts';
