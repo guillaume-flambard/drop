@@ -8,6 +8,8 @@
 /** Where Claude and ChatGPT send their authorization codes back: the app names them, and warns about any other (D71). */
 export const KNOWN_ASSISTANT_HOSTS = ['claude.ai', 'chatgpt.com', 'chat.openai.com'];
 
+import { humanPanelStyles } from './panel-human.ts';
+
 export function renderPanel(): string {
   return `<!doctype html>
 <html lang="fr">
@@ -162,6 +164,7 @@ code { font: 11px/1.4 ui-monospace, SFMono-Regular, monospace; word-break: break
   .card.leaving, button.act:active, .switch:active span { transform: none; } .switch[aria-checked="true"] span { transform: translateX(13px); } }
 @media (prefers-reduced-transparency: reduce) { body { background: var(--ground); } header { background: var(--ground); -webkit-backdrop-filter: none; backdrop-filter: none; } }
 @media (prefers-contrast: more) { :root { --edge: #8C8981; --line: #B5B2AB; --mute: #4A4843; } .card, .list, button.act { border-width: 1px; } }
+${humanPanelStyles}
 </style>
 </head>
 <body>
@@ -427,7 +430,7 @@ code { font: 11px/1.4 ui-monospace, SFMono-Regular, monospace; word-break: break
     var cost = costLine(item.card, who);
     return el('article', { class: 'card ask' + fresh(item.dropId), 'aria-label': who + ' : ' + item.card.title },
       el('div', { class: 'who' }, el('span', { class: 'avatar', 'aria-hidden': 'true', text: initials(who) }),
-        el('div', { class: 'grow' }, el('div', {}, el('span', { class: 'name', text: who }), ' a besoin d’aide'),
+        el('div', { class: 'grow' }, el('div', {}, el('span', { class: 'name', text: who }), ' a une question pour toi'),
           el('div', { class: 'muted', text: 'via ' + agentName(item.requestedBy.agent) }))),
       el('div', { class: 'name', text: item.card.title }),
       el('p', { class: 'quote', text: '« ' + item.inputPreview + ' »' }),
@@ -485,7 +488,7 @@ code { font: 11px/1.4 ui-monospace, SFMono-Regular, monospace; word-break: break
     }
     return el('article', { class: 'card ask' + fresh(item.dropId), 'aria-label': 'À relire : ' + item.title },
       el('div', {}, el('div', { class: 'name', text: item.title }),
-        el('div', { class: 'muted', text: 'À relire avant envoi. Rien n’est parti : tu peux envoyer ou garder pour toi.' })),
+        el('div', { class: 'muted', text: 'Ta réponse est prête. Rien n’est parti. Relis les informations avant de choisir.' })),
       fields,
       el('div', { class: 'actions' },
         el('button', { class: 'act', 'aria-label': 'Ne pas envoyer : ' + item.title, onclick: function (event) { decide('/ui/review', item.dropId, 'discard', event.currentTarget); } }, 'Ne pas envoyer'),
@@ -495,6 +498,25 @@ code { font: 11px/1.4 ui-monospace, SFMono-Regular, monospace; word-break: break
   var STATES = { proposed: 'envoyée', awaiting_approval: 'en attente', approved: 'acceptée', running: 'en cours', in_review: 'relue',
     delivered: 'reçue', receipted: 'reçue', denied: 'refusée', not_now: 'pas maintenant', expired: 'expirée', failed: 'échouée' };
   var TONES = { delivered: 'ok', receipted: 'ok', denied: 'bad', failed: 'bad', expired: '', not_now: '' };
+
+  // A truthful, human explanation of the CURRENT state. The API does not expose
+  // historical milestones, so the UI must not draw a fictional progress timeline.
+  function outboundSentence(drop) {
+    var who = drop.ownerName || 'Cette personne';
+    if (drop.error || drop.state === 'failed') return 'La demande n’a pas abouti. Aucun accès n’a été donné.';
+    if (drop.state === 'awaiting_approval') return 'Tu attends ' + who + '. Cette personne doit encore donner son accord.';
+    if (drop.state === 'approved') return who + ' a accepté une fois. La réponse n’est pas encore prête.';
+    if (drop.state === 'running') return 'La réponse est en cours de préparation chez ' + who + '.';
+    if (drop.state === 'in_review') return who + ' relit la réponse avant de choisir ce qui peut partir.';
+    if (drop.state === 'delivered' || drop.state === 'receipted') return 'La réponse est arrivée. Retrouve-la dans ton assistant.';
+    if (drop.state === 'denied') return who + ' a refusé. Aucune réponse n’a été transmise.';
+    if (drop.state === 'not_now') return who + ' a choisi de répondre plus tard.';
+    if (drop.state === 'expired') return 'Cette demande a expiré sans accord.';
+    return 'La question a été envoyée. En attente de la prochaine étape.';
+  }
+
+  // Keep open activity details open when the local SSE feed updates.
+  var expandedOutbounds = {};
 
   function renderRequests(view) {
     return Promise.all([api('GET', '/ui/pending'), api('GET', '/ui/outbound')]).then(function (data) {
@@ -506,8 +528,8 @@ code { font: 11px/1.4 ui-monospace, SFMono-Regular, monospace; word-break: break
       badge.textContent = String(pending.length);
       view.appendChild(el('h2', { text: 'À décider' }));
       if (pending.length === 0) view.appendChild(el('div', { class: 'card empty' }, icon('calm'),
-        el('strong', { text: 'Rien à décider' }),
-        el('div', { class: 'muted', text: 'Quand un collègue aura besoin d’un de tes outils, sa question arrivera ici avec une notification.' })));
+        el('strong', { text: 'Tout est à jour' }),
+        el('div', { class: 'muted', text: 'Lorsqu’un collègue aura une question, tu pourras choisir ce qui lui sera transmis.' })));
       pending.forEach(function (item) { view.appendChild(item.kind === 'approval' ? approvalCard(item) : reviewCard(item)); });
       var drops = data[1].drops;
       if (drops.length > 0) {
@@ -515,10 +537,18 @@ code { font: 11px/1.4 ui-monospace, SFMono-Regular, monospace; word-break: break
         var rows = el('div', { class: 'list' });
         drops.slice(0, 10).forEach(function (drop) {
           var tone = drop.result ? 'ok' : drop.error ? 'bad' : drop.state in TONES ? TONES[drop.state] : 'wait';
-          rows.appendChild(el('div', { class: 'row' },
-            el('span', { class: 'dot ' + tone, 'aria-hidden': 'true' }),
-            el('div', { class: 'grow' }, el('div', { class: 'name', text: drop.ownerName }), el('div', { class: 'muted', text: drop.title })),
+          var detail = el('details', { class: 'activity-item' });
+          detail.open = Boolean(expandedOutbounds[drop.dropId]);
+          detail.appendChild(el('summary', { class: 'activity-summary', 'aria-label': 'Suivi de ' + drop.title + ' avec ' + drop.ownerName },
+            el('span', { class: 'avatar', 'aria-hidden': 'true', text: initials(drop.ownerName) }),
+            el('div', { class: 'grow' }, el('div', { class: 'name', text: drop.ownerName }),
+              el('div', { class: 'muted', text: drop.title })),
             el('span', { class: 'state ' + tone, text: STATES[drop.state] || drop.state })));
+          detail.appendChild(el('div', { class: 'activity-detail' },
+            el('div', { text: outboundSentence(drop) }),
+            el('div', { class: 'muted', text: 'État actuel : ' + (STATES[drop.state] || drop.state) })));
+          detail.addEventListener('toggle', function () { expandedOutbounds[drop.dropId] = detail.open; });
+          rows.appendChild(detail);
         });
         view.appendChild(rows);
       }
