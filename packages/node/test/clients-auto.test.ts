@@ -158,7 +158,12 @@ function pathEntry(dir: string, platform: ClientPlatform): string {
 
 /** A home laid out as on one system, with every client installed the way that system shows it. */
 function machine(platform: ClientPlatform) {
-  const root = realpathSync(mkdtempSync(join(tmpdir(), `clients-${platform}-`)));
+  // Simulating macOS or Linux on Windows, the tree must sit on the working directory's drive: a POSIX PATH entry
+  // cannot name a drive (see pathEntry), and the temporary folder may be on another one (C: and D: on CI runners).
+  const base =
+    process.platform === 'win32' && platform !== 'win32' ? join(process.cwd(), 'node_modules', '.cache') : tmpdir();
+  mkdirSync(base, { recursive: true });
+  const root = realpathSync(mkdtempSync(join(base, `clients-${platform}-`)));
   const home = join(root, 'home');
   const dropHome = join(home, '.drop');
   const source = join(root, 'drop-mcp.mjs');
