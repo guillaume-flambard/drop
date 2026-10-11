@@ -17,6 +17,8 @@ Cap adopté le 9 octobre 2026 : socle A2A/MCP privé et open source, app Mac Tau
 - `docs/TASKS.md` : l'index des tâches, seule source de l'ordre et des dépendances.
 - `openspec/changes/<change>/` : le travail en cours d'une tâche (proposal, design, tasks).
 - `docs/DECISIONS.md` : journal des décisions.
+- `docs/ARCHITECTURE.md` : où vit chaque partie du code (coque Tauri `apps/desktop`, interface `packages/desktop-ui`,
+  moteur `packages/node`) et d'où vient chaque build.
 
 ## Comment travailler dans ce repo
 

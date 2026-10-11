@@ -1,5 +1,7 @@
 @import 'tailwindcss';
 @source "./**/*.{ts,tsx}";
+/* Tailwind also scans the package folder on its own: words in the README must not become classes. */
+@source not "../README.md";
 
 /* Drop Human V2.2 — shadcn/Radix semantics, warm neutral surfaces.
    No remote fonts, illustrations or decorative model branding. */
