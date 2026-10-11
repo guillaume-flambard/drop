@@ -45,21 +45,6 @@ l'accès au socket Docker équivaut à root.
 - **WHEN** les journaux visés sont ceux de conteneurs Docker
 - **THEN** `docs/DECISIONS.md` décrit l'option retenue pour les lire et la justifie au regard de l'équivalence socket Docker = root
 
-### Requirement: Unités systemd durcies
-`deploy/vps/drop-relay.service` et `deploy/vps/drop-node.service` MUST déclarer `User=drop`, `NoNewPrivileges=yes`,
-`ProtectSystem=strict`, `ProtectHome=yes`, `PrivateTmp=yes` et `ReadWritePaths=/var/lib/drop`.
-
-#### Scenario: Directives présentes
-- **WHEN** on lit chacun des deux fichiers `.service`
-- **THEN** il contient `User=drop`, `NoNewPrivileges=yes`, `ProtectSystem=strict`, `ProtectHome=yes`, `PrivateTmp=yes` et `ReadWritePaths=/var/lib/drop`
-
-### Requirement: Exemple de Caddyfile
-`deploy/vps/Caddyfile.example` SHALL configurer un reverse proxy de `relay.<domaine>` vers `localhost:<port>`.
-
-#### Scenario: Reverse proxy
-- **WHEN** on lit `deploy/vps/Caddyfile.example`
-- **THEN** il déclare le site `relay.<domaine>` en reverse proxy vers `localhost:<port>`
-
 ### Requirement: Node VPS sans clé API
 Le Node du VPS MUST NOT avoir besoin de clé API, car `production.error_summary` est déterministe.
 
@@ -145,3 +130,30 @@ Le dépôt SHALL fournir une image du seul relais (`docker/relay.Dockerfile`, ut
 <!-- openspec-guard:test="enterprise policy (T4.10) > renders a hardened single-replica Helm chart for the relay" -->
 - **WHEN** le chart est rendu avec ses valeurs par défaut puis avec TLS et une politique
 - **THEN** il a un seul réplica, tourne en non root sans élévation ni écriture sur la racine, monte config et politique, et expose le port TLS ; une politique sans émetteur ou un ingress sans secret TLS sont refusés, une nouvelle politique change le gabarit du pod pour redémarrer le relais, et l'ingress parle HTTPS à un relais en TLS natif
+
+### Requirement: Le relais de l'essai déclare son identité de build
+
+Le relais que fait tourner le VPS sous `drop.memolabs.dev` (D84) MUST exposer son identité de build par sa sonde, et
+l'exploitation MUST pouvoir dire, sans accès au serveur, si le commit en marche est celui qu'elle entend servir.
+
+#### Scenario: AC: le relais de l'essai tourne le commit attendu
+
+<!-- openspec-guard:non-testable reason="déploiement réel sur le VPS, vérifié par curl contre drop.memolabs.dev" -->
+
+- **WHEN** on interroge `https://drop.memolabs.dev/health`
+- **THEN** l'identité de build annoncée n'est pas la valeur d'absence
+- **AND** elle est le commit que l'exploitation a l'intention de servir
+
+### Requirement: Le relais de l'essai révoque sans redémarrage
+
+La configuration du relais de l'essai MUST nommer un `revokedPath` posé sur le même volume persistant que
+`admittedPath` (D69), pour que `drop-relay revoke <nodeId>` s'applique à un relais en marche sans rien perdre au
+redéploiement suivant (T2.19, D75).
+
+#### Scenario: AC: le relais de l'essai garde ses révocations
+
+<!-- openspec-guard:non-testable reason="déploiement réel sur le VPS, vérifié dans la configuration de la pile" -->
+
+- **WHEN** on lit la configuration du relais déployé
+- **THEN** `revokedPath` est nommé et vit sur le volume persistant que le dépôt expose pour l'état du relais
+- **AND** un Node révoqué pendant que le relais tourne est refusé sans redémarrage
