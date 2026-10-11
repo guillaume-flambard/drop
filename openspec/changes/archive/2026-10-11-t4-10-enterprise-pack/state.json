@@ -10,7 +10,7 @@
     "evidence": "evidence.md",
     "mutation": "39/39 killed",
     "cso": "partial (binary assets unread), coverage recorded, no finding",
-    "helm": "Kubernetes Helm 4.3.0 locally; chart test skipped in CI (T4.10c)"
+    "helm": "Kubernetes Helm 4.3.0 locally; rendered in CI by the ubuntu-latest Helm (run 38095381461), required there"
   },
   "ready_for_manual_acceptance": true
 }
