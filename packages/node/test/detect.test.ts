@@ -71,7 +71,7 @@ describe('detecting agents and their MCP servers (T2.8)', () => {
       }),
     );
     const dropHome = join(home, '.drop');
-    const env = { ...process.env, HOME: home, DROP_HOME: dropHome };
+    const env = { ...process.env, HOME: home, USERPROFILE: home, DROP_HOME: dropHome };
     const run = (...args: string[]) => spawnSync(process.execPath, [cli, ...args], { env, encoding: 'utf8' });
     expect(
       run('init', '--profile', 'legacy', '--name', 'Julie', '--kind', 'human', '--relay', 'wss://relay.example/v1')
@@ -125,7 +125,7 @@ describe('detecting agents and their MCP servers (T2.8)', () => {
       }),
     );
     const dropHome = join(home, '.drop');
-    const env = { ...process.env, HOME: home, DROP_HOME: dropHome };
+    const env = { ...process.env, HOME: home, USERPROFILE: home, DROP_HOME: dropHome };
     // Asynchronous, so that the OAuth-only server above can answer while the CLI runs.
     const run = (...args: string[]) =>
       new Promise<{ status: number | null; stdout: string; stderr: string }>((done) => {
