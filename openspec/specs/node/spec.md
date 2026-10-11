@@ -611,6 +611,16 @@ Le Node MUST supprimer le fichier temporaire d'une écriture durable échouée, 
 - **WHEN** la synchronisation de l'horloge échoue plusieurs fois avant le renommage
 - **THEN** le Node refuse chaque demande sans laisser de fichier temporaire supplémentaire
 
+#### Scenario: AC: panne passagère après création du marqueur
+<!-- openspec-guard:test="replay clock write failures > rolls back a new marker whose durable digest could not be written, so admission keeps working" -->
+- **WHEN** l'écriture durable de l'empreinte échoue après la création du marqueur d'une nouvelle demande
+- **THEN** cette demande est refusée, son marqueur est retiré tant que l'empreinte durable désigne l'ancien jeu, et l'admission suivante réussit sans réparation manuelle
+
+#### Scenario: AC: empreinte déjà en place
+<!-- openspec-guard:test="replay clock write failures > keeps a new marker whose digest was already renamed into place when the folder sync fails" -->
+- **WHEN** seule la synchronisation du dossier échoue après le renommage de la nouvelle empreinte
+- **THEN** le marqueur et l'empreinte restent d'accord, le même identifiant est refusé comme doublon et une autre demande est admise
+
 ### Requirement: Mémoire des demandes exécutées bornée
 Le Node MUST limiter à 1 024 les demandes reçues encore actives en mémoire. Dès qu'une issue est envoyée, il MUST libérer l'entrée complète ; il MAY conserver pendant au plus 30 minutes un résumé borné du refus pour répondre au même demandeur. La suppression de mémoire MUST NOT supprimer le marqueur anti-rejeu durable ni relancer une demande.
 

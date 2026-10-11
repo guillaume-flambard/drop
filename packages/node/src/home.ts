@@ -216,6 +216,28 @@ function acquireReplayLock(lock: string): void {
   claimLock(lock);
 }
 
+/**
+ * A claim failed after creating its marker (T3.1b review): the request is refused, so the marker must not outlive the
+ * digest it is missing from, or every later admission would fail on `marker integrity` until a manual repair. While
+ * the durable digest still names the previous set, the marker is removed; once the new digest is in place (only its
+ * folder sync failed), marker and digest agree and both stay. If neither holds, the store fails closed as before.
+ */
+function rollBackMarker(
+  marker: string,
+  dir: string,
+  integrityPath: string,
+  previousDigest: string,
+  cause: unknown,
+): void {
+  try {
+    if (readFileSync(integrityPath, 'utf8') !== previousDigest) return;
+    unlinkSync(marker);
+    syncDirectory(dir);
+  } catch (rollbackError) {
+    throw new AggregateError([cause, rollbackError], 'E_REPLAY_STATE claim rollback failed', { cause: rollbackError });
+  }
+}
+
 /** Never removes a lock another process has since taken over. */
 function releaseReplayLock(lock: string): void {
   if (lockOwner(lock) === REPLAY_LOCK_OWNER) rmSync(lock, { recursive: true, force: true });
@@ -337,8 +359,16 @@ export class DropHome {
     if (timestamp < floor || timestamp > highWater + MAX_CLOCK_SKEW_MS) return 'expired';
     if (existsSync(join(dir, dropId))) return 'duplicate';
     if (count >= MAX_RECEIVED_DROPS) return 'capacity';
+    const marker = join(dir, dropId);
+    let fd: number;
     try {
-      const fd = openSync(join(dir, dropId), 'wx', 0o600);
+      fd = openSync(marker, 'wx', 0o600);
+    } catch (error) {
+      if (errorCode(error) === 'EEXIST') return 'duplicate';
+      throw error;
+    }
+    const previousDigest = `${sha256Hex([...retained].sort())}\n`;
+    try {
       try {
         fsyncSync(fd);
       } finally {
@@ -348,7 +378,7 @@ export class DropHome {
       writeDurablePrivate(integrityPath, `${sha256Hex([...retained, dropId].sort())}\n`);
       return 'claimed';
     } catch (error) {
-      if (errorCode(error) === 'EEXIST') return 'duplicate';
+      rollBackMarker(marker, dir, integrityPath, previousDigest, error);
       throw error;
     }
   }
