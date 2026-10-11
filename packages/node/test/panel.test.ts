@@ -5,6 +5,7 @@ import { generateIdentity } from '@drop/protocol';
 import { startLocalApi, type AdminHooks, type LocalApi } from '../src/api.ts';
 import { NodeEngine } from '../src/engine.ts';
 import { renderPanel } from '../src/panel.ts';
+import { renderWorkspace, WORKSPACE_CSP } from '../src/workspace.ts';
 import { MemoryStore } from './helpers.ts';
 
 const TOKEN = 'panel-token-0123456789abcdefghijklmn';
@@ -114,6 +115,7 @@ describe('menu bar panel and its admin routes (T2.4)', () => {
     const { port } = api;
 
     expect((await call(port, 'GET', '/app', undefined, false)).status).toBe(401);
+    expect((await call(port, 'GET', '/workspace', undefined, false)).status).toBe(401);
     expect(JSON.parse((await call(port, 'GET', '/_shell/health', undefined, false)).text)).toEqual({
       instance: 'shell-test-instance',
     });
@@ -122,6 +124,13 @@ describe('menu bar panel and its admin routes (T2.4)', () => {
     expect(page.headers['content-security-policy']).toBe(
       "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'",
     );
+    const workspace = await call(port, 'GET', `/workspace?token=${TOKEN}`, undefined, false);
+    expect(workspace.status).toBe(200);
+    expect(workspace.headers['content-security-policy']).toBe(WORKSPACE_CSP);
+    expect(WORKSPACE_CSP).toMatch(/script-src 'sha256-[^']+'/);
+    expect(WORKSPACE_CSP).not.toContain("script-src 'unsafe-inline'");
+    expect(workspace.headers['referrer-policy']).toBe('no-referrer');
+    expect(workspace.text).toContain('id="root"');
     expect(JSON.parse((await call(port, 'GET', '/ui/admin/status')).text)).toMatchObject({ relayConnected: true });
     expect((await call(port, 'POST', '/ui/admin/share', { agent: 'claude_code', server: 'figma' })).status).toBe(200);
     expect((await call(port, 'POST', '/ui/admin/share', { agent: 'claude_code' })).status).toBe(400);
@@ -179,7 +188,7 @@ describe('menu bar panel and its admin routes (T2.4)', () => {
     expect(html).toContain('2. Connecter les agents sélectionnés');
     expect(html).toContain('Configuration manuelle');
     expect(html).toContain('hors ligne');
-    const script = /<script>([\s\S]*?)<\/script>/.exec(html)?.[1];
+    const script = /<script>([\s\S]*?)<\/script>/i.exec(html)?.[1];
     expect(script).toBeDefined();
     expect(() => new Script(script ?? '')).not.toThrow();
   });
@@ -278,7 +287,7 @@ describe('menu bar panel and its admin routes (T4.14)', () => {
     expect(html).toContain(
       "removals.forEach(function (removal) { if (removal.box.checked) form.append('redact', removal.key); });",
     );
-    const script = /<script>([\s\S]*?)<\/script>/.exec(html)?.[1];
+    const script = /<script>([\s\S]*?)<\/script>/i.exec(html)?.[1];
     expect(() => new Script(script ?? '')).not.toThrow();
   });
 });
@@ -319,7 +328,7 @@ describe('menu bar panel (T4.3)', () => {
     expect(composer).toContain('drafts[item.dropId]');
     expect(html).toContain('E_SECRET_DETECTED:');
     expect(html).toContain('E_TOO_LARGE:');
-    const script = /<script>([\s\S]*?)<\/script>/.exec(html)?.[1];
+    const script = /<script>([\s\S]*?)<\/script>/i.exec(html)?.[1];
     expect(() => new Script(script ?? '')).not.toThrow();
   });
 });
@@ -354,7 +363,7 @@ describe('menu bar panel (T4.4)', () => {
     // Editing keeps the fact's own duration instead of resetting it.
     expect(section).toContain('validDays: Math.max(1, Math.round((fact.validTo - fact.publishedAt) / 86400000))');
     expect(html).toContain('.card.faded { opacity: .55; }');
-    const script = /<script>([\s\S]*?)<\/script>/.exec(html)?.[1];
+    const script = /<script>([\s\S]*?)<\/script>/i.exec(html)?.[1];
     expect(() => new Script(script ?? '')).not.toThrow();
   });
 });
@@ -392,7 +401,44 @@ describe('menu bar panel (T4.5)', () => {
       'JetBrains AI',
     ])
       expect(html).toContain(`'${label}'`);
-    const script = /<script>([\s\S]*?)<\/script>/.exec(html)?.[1];
+    const script = /<script>([\s\S]*?)<\/script>/i.exec(html)?.[1];
+    expect(() => new Script(script ?? '')).not.toThrow();
+  });
+});
+
+describe('Drop Human V2 panel (presentation, no protocol changes)', () => {
+  it('injects the human palette, preserves the system theme, and remains self-contained', () => {
+    const html = renderPanel();
+    expect(html).toContain('--ground: #fbfaf8');
+    expect(html).toContain('--accent: #5656a9');
+    expect(html).toContain('@media (prefers-color-scheme: dark)');
+    expect(html).not.toContain('fonts.googleapis.com');
+  });
+
+  it('describes only the outbound state that the Node actually exposes', () => {
+    const html = renderPanel();
+    expect(html).toContain('function outboundSentence(drop)');
+    expect(html).toContain('Tu attends ');
+    expect(html).toContain('La réponse est arrivée. Retrouve-la dans ton assistant.');
+    expect(html).toContain("el('details', { class: 'activity-item' })");
+    expect(html).toContain('expandedOutbounds[drop.dropId]');
+    // An expandable current status is honest; a historic timeline would require a new backend API.
+    expect(html).not.toContain('42 %');
+    const script = /<script>([\s\S]*?)<\/script>/i.exec(html)?.[1];
+    expect(() => new Script(script ?? '')).not.toThrow();
+  });
+});
+
+describe('workspace window — local management UI (Human V2)', () => {
+  it('uses real React/shadcn-Radix components without external scripts or Tauri IPC', () => {
+    const html = renderWorkspace();
+    expect(html).toContain('<div id="root">');
+    expect(html).toContain('<style>');
+    expect(html).toContain('<script>');
+    expect(html).not.toContain('window.__TAURI_INTERNALS__');
+    expect(html).not.toContain('fonts.googleapis.com');
+    expect(html).not.toContain('<script src=');
+    const script = /<script>([\s\S]*?)<\/script>/i.exec(html)?.[1];
     expect(() => new Script(script ?? '')).not.toThrow();
   });
 });
