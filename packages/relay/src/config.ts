@@ -1,5 +1,6 @@
-import { chmodSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { NodeIdSchema } from '@drop/protocol';
+import { writePrivate } from './private-file.ts';
 import { RelayConfigSchema, RevokedStateSchema } from './server.ts';
 
 /** `drop relay allow <nodeId>`: adds a node to relay.config.json (a restart applies it in v1). */
@@ -9,7 +10,7 @@ export function allowNode(configPath: string, nodeId: string): boolean {
   if (config.revokedNodeIds.includes(id)) throw new Error('E_DENIED node is revoked');
   if (config.allowedNodeIds.includes(id)) return false;
   config.allowedNodeIds.push(id);
-  writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
+  writePrivate(configPath, `${JSON.stringify(config, null, 2)}\n`);
   return true;
 }
 
@@ -23,7 +24,7 @@ export function revokeInConfig(configPath: string, nodeId: string): boolean {
   if (config.revokedNodeIds.includes(id)) return false;
   config.revokedNodeIds.push(id);
   config.allowedNodeIds = config.allowedNodeIds.filter((entry) => entry !== id);
-  writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 });
+  writePrivate(configPath, `${JSON.stringify(config, null, 2)}\n`);
   return true;
 }
 
@@ -44,7 +45,6 @@ export function revokeNode(revokedPath: string, nodeId: string, options: { withI
     ...state.revoked.filter((entry) => entry.nodeId !== id),
     { nodeId: id, withInvited, at: new Date().toISOString() },
   ];
-  writeFileSync(revokedPath, `${JSON.stringify({ revoked }, null, 2)}\n`, { mode: 0o600 });
-  chmodSync(revokedPath, 0o600);
+  writePrivate(revokedPath, `${JSON.stringify({ revoked }, null, 2)}\n`);
   return true;
 }
