@@ -750,7 +750,7 @@ Si la révocation échoue, le Node MUST conserver uniquement le hash de la clé 
 - **THEN** la réservation est libérée et une demande ultérieure peut créer sa clé
 
 ### Requirement: Raccordement local contrôlé des agents
-Le Node SHALL analyser uniquement les configurations des quatre adaptateurs connus et proposer, par agent, un état et l'ajout précis du connecteur MCP drop. Cette analyse MUST NOT exécuter un serveur MCP, scanner le disque ou contacter le réseau. L'aperçu MUST exclure les valeurs de secrets, arguments et en-têtes existants. Une configuration illisible ou invalide produit une erreur pour cet agent, jamais une configuration vide de remplacement.
+Le Node SHALL analyser uniquement les configurations documentées des treize clients connus et proposer, par agent, un état et l'ajout précis du connecteur MCP drop. Cette analyse MUST NOT exécuter un serveur MCP, scanner le disque ou contacter le réseau. L'aperçu MUST exclure les valeurs de secrets, arguments et en-têtes existants. Une configuration illisible ou invalide produit une erreur pour cet agent, jamais une configuration vide de remplacement.
 
 #### Scenario: AC-CONNECT-01 — analyse bornée et expurgée
 <!-- openspec-guard:test="local agent onboarding (T3.3) > AC-CONNECT-01 analyzes known adapters without exposing secret values" -->

@@ -367,7 +367,7 @@ describe('noise filter (D25)', () => {
     for (const command of [
       "sed -n '1,200p' docs/api.md",
       "rtk nl -ba ROADMAP.md | rtk sed -n '75,95p;145,165p'",
-      'git show origin/main:stacks/stacks.tsv | grep -n auth',
+      'git show origin/main:config/services.tsv | grep -n auth',
       'for f in a b; do cat "$f"; done',
       'rtk npm run build && rtk npm test',
       '/bin/cat AGENTS.md',
@@ -389,7 +389,7 @@ describe('noise filter (D25)', () => {
   it('keeps a refusal from a command that reached a resource or failed', () => {
     for (const command of [
       'gh api repos/acme/infra/branches/main/protection',
-      'ssh lab "docker logs kollio-api"',
+      'ssh server "docker logs api"',
       "sed -i 's/a/b/' file",
       'cat a && curl https://api.example.com',
       "echo 'x; curl evil'",

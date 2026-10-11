@@ -1,0 +1,69 @@
+# Weekly version updates. Minor and patch bumps are grouped into one pull request per ecosystem; majors stay
+# separate so each can be reviewed on its own. A cooldown keeps freshly published releases out for a week.
+version: 2
+
+updates:
+  # pnpm workspace: the root package.json and pnpm-lock.yaml cover every package under packages/.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
+    groups:
+      npm-minor-patch:
+        patterns: ['*']
+        update-types: [minor, patch]
+    commit-message:
+      prefix: deps
+
+  - package-ecosystem: cargo
+    directories:
+      - /apps/mac/src-tauri
+      - /crates/drop-iroh
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
+    groups:
+      cargo-minor-patch:
+        patterns: ['*']
+        update-types: [minor, patch]
+    commit-message:
+      prefix: deps
+
+  # Updates the SHA pins and their version comments in .github/workflows.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
+    groups:
+      actions-minor-patch:
+        patterns: ['*']
+        update-types: [minor, patch]
+    commit-message:
+      prefix: deps
+
+  # Root Dockerfile and docker/relay.Dockerfile: base images pinned by digest.
+  - package-ecosystem: docker
+    directories:
+      - /
+      - /docker
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    groups:
+      docker-minor-patch:
+        patterns: ['*']
+        update-types: [minor, patch]
+    commit-message:
+      prefix: deps
