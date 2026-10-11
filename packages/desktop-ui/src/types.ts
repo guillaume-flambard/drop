@@ -1,0 +1,90 @@
+export interface Person {
+  nodeId: string;
+  displayName: string;
+  self: boolean;
+  online: boolean;
+  agents: string[];
+  capabilities: Array<{ title: string }>;
+}
+export interface TeamData {
+  team: { name: string } | null;
+  members: Person[];
+}
+export interface ServerInfo {
+  name: string;
+  kind?: string;
+  where?: string;
+  shareable: boolean;
+}
+export interface AgentInfo {
+  agent: string;
+  label: string;
+  installed: boolean;
+  dropInstalled: boolean;
+  servers: ServerInfo[];
+}
+export interface ToolsData {
+  agents: AgentInfo[];
+  shared: Record<string, string>;
+  payer?: string;
+  links?: Array<{ clientName: string; gateway: string }>;
+}
+export interface DropStatus {
+  dropId: string;
+  title: string;
+  ownerName: string;
+  state: string;
+  createdAt: number;
+  result?: unknown;
+  error?: { code: string; message: string };
+}
+export interface Fact {
+  factId: string;
+  topic: string;
+  statement: string;
+  keywords: string[];
+  source: { label: string; url?: string };
+  validTo: number;
+  publishedAt: number;
+  status: string;
+  live: boolean;
+  served: number;
+  audience: { kind: 'team' } | { kind: 'peers'; nodeIds: string[] };
+}
+export interface FactsData {
+  facts: Fact[];
+  peers: Array<{ nodeId: string; displayName: string }>;
+}
+export type InternetMode = 'off' | 'direct' | 'relay' | 'n0';
+export interface InternetData {
+  settings: { mode: InternetMode; relay?: string };
+  state: string;
+  available?: boolean;
+  message?: string;
+}
+export interface StatusData {
+  displayName: string;
+  relayConnected: boolean;
+  internet?: string;
+  policy?: { policyId: string };
+}
+export interface OnboardingPlan {
+  agent: string;
+  label: string;
+  state: string;
+  fingerprint: string;
+  detail?: string;
+  manual?: { steps: string; snippet: string };
+}
+export interface OnboardingData {
+  agents: OnboardingPlan[];
+  manual?: { command: string; args: string[]; env: Record<string, string> };
+}
+export interface WorkspaceData {
+  status: StatusData | null;
+  team: TeamData | null;
+  tools: ToolsData | null;
+  facts: FactsData | null;
+  outbound: { drops: DropStatus[] } | null;
+  internet: InternetData | null;
+}

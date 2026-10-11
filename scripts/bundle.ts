@@ -12,6 +12,7 @@ import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build, type BuildOptions } from 'esbuild';
+import { buildDesktopUi } from './build-desktop-ui.ts';
 
 /** esbuild options shared by every Node bundle of the repo (this script and the proof builds). */
 export const NODE_BUNDLE_OPTIONS = {
@@ -58,6 +59,9 @@ async function main(): Promise<void> {
   const version = (
     JSON.parse(readFileSync(join(root, 'packages', 'node', 'package.json'), 'utf8')) as { version: string }
   ).version;
+
+  // Keep JSX source and single-file Node distribution in sync.
+  await buildDesktopUi(root);
 
   rmSync(dist, { recursive: true, force: true });
   mkdirSync(dist, { recursive: true });

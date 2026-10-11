@@ -81,7 +81,7 @@ Windows et Linux sont des cibles de design, pas des builds livrés par cette bra
 
 Le petit panneau 380 × 620 conserve les décisions rapides. Une **seconde fenêtre native Tauri** s'ouvre depuis le menu de l'icône, via « Ouvrir mon espace… ». Dimensions initiales : 980 × 720, fenêtre redimensionnable, minimale 720 × 560. Aucun élargissement automatique du popover et aucun accès Tauri IPC ajouté à l'origine locale distante.
 
-La page `GET /workspace` est servie par le même Node, protégée par le **même jeton local** et la même CSP restrictive que `/app`. La fenêtre lit et modifie uniquement les mêmes API déjà définies dans `packages/node/src/api.ts` :
+La page `GET /workspace` est servie par le même Node, protégée par le **même jeton local**. Sa CSP propre autorise un script à hash SHA-256 exact et les styles requis par Radix ; l'absence de ressources externes reste obligatoire. La fenêtre lit et modifie uniquement les mêmes API déjà définies dans `packages/node/src/api.ts` :
 
 - **Vue d'ensemble** : équipe, nombre d'outils partagés, derniers échanges, sans progression inventée.
 - **Équipe** : personnes, disponibilités, capacités, création d'une équipe et invitation en un geste explicite.
@@ -90,7 +90,7 @@ La page `GET /workspace` est servie par le même Node, protégée par le **même
 - **Faits publiés** : création, modification et retrait ; l'exception au consentement question-par-question est montrée *avant* publication.
 - **Connexion** : réseau local et paramètres Internet existants ; aucun relais activé sans action explicite.
 
-La page n'ajoute aucun index central, accès permanent, service tiers, police distante ou dépendance UI.
+La page n'ajoute aucun index central, accès permanent, service tiers ni police distante. Depuis l'itération 3, elle utilise des dépendances UI compilées et embarquées localement, détaillées dans D87.
 
 ### Captures de cette itération
 
@@ -116,3 +116,41 @@ Le test de rendu confirme l'absence d'erreur JavaScript dans ces scénarios, et 
 - Finalisation du partage par modèle et de l'administration d'entreprise (T4.16), sans l'inventer dans les écrans.
 
 La fusion reste conditionnée aux validations de sécurité, à la mise à jour explicite de D46 et à une recette humaine sur l'app Mac.
+
+
+## Itération 3 — bibliothèque de composants populaire (demande utilisateur)
+
+Cette version remplace les 600 lignes d'interface de gestion générée à la main par une **application React 19** utilisant des **primitives Radix UI**, des composants locaux inspirés de **shadcn/ui**, **Tailwind CSS v4**, **Lucide**, **CVA**, **clsx** et **tailwind-merge**. Il s'agit bien de composants React/Radix réels, pas d'une illustration visuelle.
+
+Code du frontend : `packages/desktop-ui/src/`, notamment `App.tsx`, `components/ui/` et `views/`. Les six vues (accueil, équipe, assistants, partages, faits et réseau) restent connectées aux API du Node. La partie décision/consentement du petit panneau `/app` demeure la source d'autorité de ces actions.
+
+### Construction locale et sécurité
+
+- `node scripts/build-desktop-ui.ts` produit le module `packages/node/src/workspace-assets.generated.ts` (ressources JS/CSS compilées, compressées et incluses **dans le repository et dans le bundle Node**).
+- `node scripts/bundle.ts` reconstruit les ressources avant de produire le `drop.mjs` autonome. Aucun CDN, aucune police externe, aucun serveur supplémentaire ne sont utilisés à l'exécution.
+- `GET /workspace` exige l'authentification locale et l'en-tête de sécurité. Le JavaScript n'est permis que par **hash SHA-256** ; les styles inline nécessaires à Radix sont autorisés. Aucune permission Tauri IPC n'est accordée à la fenêtre externe.
+- Toute opération de partage, invitation, publication ou déconnexion reste sous contrôle humain avec une confirmation avant les appels `POST` sensibles.
+- Les données de collègues sont affichées comme texte par React, jamais injectées sous forme de HTML distant.
+- Le thème suit le système, les composants sont accessibles au clavier et la préférence `prefers-reduced-motion` est respectée. La validation VoiceOver macOS reste ouverte.
+
+### Captures de cette itération
+
+Toutes proviennent de Chromium exécutant **le code compilé** alimenté par des réponses API fictives, pas de l'application native en fonctionnement réel. Les captures suivent le préfixe `screenshots/react-shadcn/` :
+
+- [Accueil](screenshots/react-shadcn/01-accueil.png)
+- [Équipe](screenshots/react-shadcn/02-equipe.png)
+- [Invitation dans une fenêtre Radix](screenshots/react-shadcn/03-invitation.png)
+- [Assistants](screenshots/react-shadcn/04-assistants.png)
+- [Analyse et sélection](screenshots/react-shadcn/05-analyse.png)
+- [Partages](screenshots/react-shadcn/06-partages.png)
+- [Confirmation d'un partage](screenshots/react-shadcn/07-confirmation-partage.png)
+- [Faits publiés](screenshots/react-shadcn/08-faits.png)
+- [Publication d'un fait](screenshots/react-shadcn/09-publier-fait.png)
+- [Réseau](screenshots/react-shadcn/10-reseau.png)
+- [Relais privé](screenshots/react-shadcn/11-reseau-relais.png)
+- [Mode sombre](screenshots/react-shadcn/12-accueil-sombre.png)
+- [Petite fenêtre](screenshots/react-shadcn/13-compact.png)
+
+L'expérience visualisée ici ne garantit pas le comportement natif Tauri avant une recette sur Mac. Pour ne pas risquer de régression, aucun réglage n'est automatiquement publié ni synchronisé à une autre machine.
+
+**Limites** : Windows et Linux ne sont pas encore distribués ; la chronologie détaillée du suivi n'existe pas dans l'API ; l'app native et VoiceOver restent à valider.
