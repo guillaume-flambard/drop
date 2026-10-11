@@ -1,28 +1,16 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { delimiter, join } from 'node:path';
+import { REQUESTER_AGENTS } from '@drop/protocol';
 
 /**
  * The thirteen MCP clients of D55 (T4.5, D66): where each keeps its servers, globally and per project, in which format,
  * how to tell it is installed, and how drop may connect to it. Locations come from each client's official docs,
  * re-checked on 2026-10-10 (docs/research/2026-10-10-repositionnement.md §4). Read-only except where `connect` says so.
  */
-export const CLIENTS = [
-  'claude_code',
-  'claude_desktop',
-  'cursor',
-  'codex',
-  'opencode',
-  'gemini_cli',
-  'devin_desktop',
-  'zed',
-  'goose',
-  'vscode',
-  'cline',
-  'roo_code',
-  'jetbrains',
-] as const;
-export type ClientId = (typeof CLIENTS)[number];
+export type ClientId = Exclude<(typeof REQUESTER_AGENTS)[number], 'other'>;
+/** The protocol's requester agents, in their order, without `other`: one list, so a new client is added once. */
+export const CLIENTS: readonly ClientId[] = REQUESTER_AGENTS.filter((agent): agent is ClientId => agent !== 'other');
 
 /** How the servers are laid out in a file. */
 export type ConfigLayout = 'mcpServers' | 'claude_code' | 'vscode' | 'opencode' | 'zed' | 'goose' | 'codex';
@@ -275,10 +263,6 @@ export const CLIENT_SPECS: Record<ClientId, ClientSpec> = {
     source: 'https://www.jetbrains.com/help/ai-assistant/mcp.html',
   },
 };
-
-export function isClientId(value: string): value is ClientId {
-  return (CLIENTS as readonly string[]).includes(value);
-}
 
 function listDir(dir: string): string[] {
   try {

@@ -5,6 +5,16 @@ import { canonical, DropError, isDropError, sha256Hex, type DropErrorCode, type 
 import { scanSecrets } from './secrets.ts';
 import type { CapabilityImpl, RunContext, RunResult, ToolCallCount } from './types.ts';
 
+/**
+ * Why a capability stopped on its own budget (E_BUDGET): it throws one of these fixed texts, which the result keeps.
+ * Any other text is replaced by the cost one, so a capability message never reaches a result.
+ */
+export const BUDGET_MESSAGES = {
+  cost: 'cost budget exceeded',
+  size: 'snapshot exceeds maxSnapshotBytes',
+} as const;
+const BUDGET_TEXTS: readonly string[] = Object.values(BUDGET_MESSAGES);
+
 // Every message below is fixed text: a result never carries input or output content.
 const MESSAGES = {
   inputSchema: 'input does not match the capability input schema',
@@ -16,7 +26,6 @@ const MESSAGES = {
   executeFailed: 'capability execution failed',
   timeBudget: 'time budget exceeded',
   toolBudget: 'tool call budget exceeded',
-  costBudget: 'cost budget exceeded',
   outputSchema: 'output does not match the capability output schema',
   outputAltered: 'output would be altered by its schema; outputs are never repaired',
   outputSize: 'serialized output exceeds maxOutputChars',
@@ -134,11 +143,12 @@ async function executeAndCheck(
   } catch (error) {
     if (state.stop !== undefined) return stopFailure(state.stop);
     // A capability may refuse with E_SCHEMA (input it rejects), E_OUTPUT_INVALID (its own post-checks) or E_BUDGET
-    // (cost); the message is always fixed text. Anything else stays opaque.
+    // (cost or size, BUDGET_MESSAGES); the message is always fixed text. Anything else stays opaque.
     if (isDropError(error, 'E_DENIED')) return failure('E_DENIED', 'destination or funding not authorized');
     if (isDropError(error, 'E_SCHEMA')) return failure('E_SCHEMA', MESSAGES.inputRejected);
     if (isDropError(error, 'E_OUTPUT_INVALID')) return failure('E_OUTPUT_INVALID', MESSAGES.outputSchema);
-    if (isDropError(error, 'E_BUDGET')) return failure('E_BUDGET', MESSAGES.costBudget);
+    if (isDropError(error, 'E_BUDGET'))
+      return failure('E_BUDGET', BUDGET_TEXTS.includes(error.message) ? error.message : BUDGET_MESSAGES.cost);
     return failure('E_RUNNER', MESSAGES.executeFailed);
   } finally {
     clearTimeout(timer);

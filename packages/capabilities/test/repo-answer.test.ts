@@ -8,10 +8,11 @@ import {
   frameQuestion,
   globToRegExp,
   looksLikeCode,
-  parseFinal,
+  parseFinalJson,
   takeSnapshot,
 } from '../src/index.ts';
 import type { ChatMessage, ChatProvider, ChatTurn } from '../src/llm.ts';
+import { RepoAnswerOutputSchema } from '../src/repo-answer.ts';
 
 const repo = mkdtempSync(join(tmpdir(), 'drop-repo-'));
 mkdirSync(join(repo, 'src'));
@@ -169,6 +170,13 @@ describe('repo.answer', () => {
     ).toMatchObject({ ok: false, code: 'E_BUDGET' });
   });
 
+  it('stops with E_BUDGET and says so when the allowed files exceed maxSnapshotBytes', async () => {
+    const { provider } = scripted([{ content: finalAnswer }]);
+    expect(
+      await runCapability(createRepoAnswer({ provider }), QUESTION, { config: { ...config, maxSnapshotBytes: 1 } }),
+    ).toMatchObject({ ok: false, code: 'E_BUDGET', message: 'snapshot exceeds maxSnapshotBytes' });
+  });
+
   it('declares its cost to the owner: free, capped or unmeasured', () => {
     const impl = createRepoAnswer();
     expect(impl.cost?.({ repoPath: repo })).toEqual({ kind: 'free' });
@@ -195,6 +203,8 @@ describe('repo.answer', () => {
     expect(globToRegExp('src/**').test('srcx/a.ts')).toBe(false);
     expect(globToRegExp('**/*.md').test('README.md')).toBe(true);
     expect(globToRegExp('package.json').test('a/package.json')).toBe(false);
-    expect(parseFinal('{"answer":"a","verdict":"maybe","referencedFiles":[]}')).toBeUndefined();
+    expect(
+      parseFinalJson(RepoAnswerOutputSchema, '{"answer":"a","verdict":"maybe","referencedFiles":[]}'),
+    ).toBeUndefined();
   });
 });
