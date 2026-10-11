@@ -8,6 +8,16 @@ réseau, pas de compte, pas de daemon.
 
 Prérequis : Node 22.18 ou plus, et ce dépôt cloné avec `pnpm install`.
 
+> **On clone, on n'installe pas le paquet à distance.** Node refuse d'exécuter les fichiers TypeScript placés
+> sous `node_modules` (doc Node 22.x, section « Type stripping in dependencies » : « Node.js refuses to handle
+> TypeScript files inside folders under a node_modules path »). Un `npm install` ou un `npx` poserait donc le
+> binaire là où Node refuse de le lire, et la commande échouerait sans message utile. Clone le dépôt, puis
+> `pnpm install` à sa racine.
+>
+> **D'où vient 22.18** : c'est la version où Node exécute le TypeScript sans option, et sans plus avertir (doc
+> Node 22.x, historique de « Modules: TypeScript », entrée v22.18.0). La CI de ce dépôt ne valide que Node 24,
+> donc ce plancher n'est pas couvert par elle : vérifie `node --version` avant de commencer.
+
 ```bash
 node packages/blocked-observer/src/cli.ts install
 ```
