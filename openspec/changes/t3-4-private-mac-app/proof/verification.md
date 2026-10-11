@@ -37,3 +37,53 @@ Construite par `node scripts/build-mac.ts --release --sign "Developer ID Applica
 - Node embarqué re-signé avec l'identité Developer ID, runtime renforcé, sans `get-task-allow`, et exécutable depuis l'app.
 
 Cela lève la partie « pas de DMG signé/notarisé » d'AC-MAC-01. Restent ouverts : installation sur un Mac propre sans Node de développement, matrice publiée macOS et architecture (arm64 seulement), recette VoiceOver. T3.4 reste `blocked` sur ces recettes humaines.
+
+## Revues formelles et gates (12 octobre 2026)
+
+La partie du libellé de l’index qui disait « Reste agent : archiver la preuve de notarisation » était périmée : cette preuve
+était déjà consignée ci-dessus le 10 octobre. Le travail agent restant était la revue formelle du diff et les gates.
+
+**Gates (tous verts sur `3ca7ce9`) :** `pnpm -r lint` (eslint `--max-warnings 0` + prettier) 0, `pnpm -r typecheck` 0,
+`openspec validate --specs --strict` 18/18, garde `openspec-guard` 0.3.0 en sortie 0 : 419 critères reliés par sélecteur,
+0 incertain, 141 gelés par la baseline. `pnpm -r test` : 609 réussis, 1 échoué puisque `packages/simulation/test/campaign.test.ts`
+(« AC stops every process it started when the bench receives SIGTERM mid-campaign », T4.1) dépasse son délai de 60 s en charge
+parallele. Rejouée seule : 4/4 en 12,4 s. Faux positif de charge, hors périmètre T3.4, signalé en ligne `todo` séparée.
+
+**Revue fonctionnelle du diff (PR #8, +427/-125 sur 7 fichiers, aucune revue avant ce passage).** Verdict : conforme.
+Le panneau redessiné ne crée aucun nœud dangereux : `el()` passe par `textContent` et `createTextNode`, toutes les clés
+d’attributs sont des littéraux de source (0 clé variable). La seule liaison `href` (`signInLink`, `ui`/`panel.ts`) est
+précédée d’un test `indexOf('https://') === 0` et porte `rel="noopener noreferrer"`. Contrat coque/écran vérifié de bout en
+bout : les seuls codes affichés sont `E_INIT`, `E_PORT`, `E_TOKEN` et `E_RESTART` (`E_START` étant réécrit en `E_RESTART`
+avant affichage), et chacun a un texte dans la carte de messages du splash ; `E_WORKSPACE` et `E_UPDATE_*` vont au journal
+seulement, ce qui est correct pour une mise à jour facultative (D70). Deux réserves ouvertes sur le diff d’origine —
+`navigator.clipboard.writeText` et le `unlink` sans gestionnaire d’échec — sont déjà corrigées depuis, avec un test de
+régression (`panel.test.ts`, « reports a failed invite, unlink or link copy instead of leaving its promise unhandled »).
+Reste une note sans impact de sécurité : `drop.state in TONES` interroge la chaîne d’héritage, donc un état nommé
+`toString` produirait une classe CSS incohérente — cosmétique, aucune injection possible car la valeur passe par
+`setAttribute`. Non corrigé volontairement : toucher à `panel.ts` pour cela n’apporte rien de matériel.
+
+**Revue de sécurité (`/cso`, exécution `1791760833297-b0a8d6b05a6b3097`, terminée).** Aucun constat soutenu dans le périmètre
+évalué, complétude `partial`. Le point de vigilance restant est l’entitlement `com.apple.security.cs.allow-unsigned-executable-memory`
+appliqué au Node embarqué : il affaiblit le runtime renforcé sans justification écrite dans `docs/` ni dans
+`docs/DECISIONS.md`. La notarisation acceptée du 10 octobre prouve qu’il est suffisant, pas qu’il est minimal ; faute de
+scénario d’échec concret il est consigné comme dette de durcissement, pas comme vulnérabilité. Deux limites de couverture
+à assumer : le profil `application-preparation` est absent (dépôt pnpm, pas de `package-lock.json`), donc aucune reproduction
+dynamique n’a été jouée, et la base de comparaison `7d26a04220` dépasse T3.4 — le diff audité est un sur-ensemble du périmètre
+de la tâche.
+
+**Ce que la coque fait réellement sur veille.** Elle ne s’abonne à aucun événement système : le sondeur de santé continue
+de tourner, et c’est le budget de reprise borné qui absorbe un moteur mort au réveil. La politique est couverte par des
+tests unitaires Rust (`a_user_retry_restarts_without_spending_the_restart_budget`, épuisement du budget en boucle, seuil
+`MIN_HEALTHY_RUN`), et la preuve du 10 octobre a déjà joué trois arrêts forcés successifs jusqu’à `E_RESTART`.
+
+**Obstacle matériel pour la recette veille.** Elle exige que le Mac dorme vraiment et se réveille de façon fiable. Or
+`pmset -g` montre le sommeil empêché par des assertions actives (Safari en lecture média, Claude, runningboardd) et la
+planification d’un réveil automatique demande les droits root, absents ici (`sudo` exige le mot de passe ; un
+`pmset relative wake 1` sans droits n’enregistre rien dans `pmset -g sched`). Sans réveil planifié garanti, dormir la machine
+risquerait de la laisser endormie jusqu’à une frappe physique. La recette veille part donc en recette humaine, aux côtés de
+VoiceOver et de l’installation sur un Mac propre. Le bouton « Réessayer » reste pour sa part non qualifié dans le vrai
+WebView : le chemin est présent (`index.html` + commande `retry_daemon` exposée à `generate_handler`), le budget est
+testé, mais une tentative d’automatisation de l’app native avait déjà expiré précédemment.
+
+**Ouvert après ce passage :** recette veille réelle, recette VoiceOver, installation du paquet notarisé sur un Mac propre,
+et justification écrite de l’entitlement du Node embarqué.
