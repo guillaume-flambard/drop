@@ -416,6 +416,14 @@ describe('published facts (T4.4)', () => {
     });
   });
 
+  it('keeps a bounded fact-rate window per peer however fast it asks', async () => {
+    const m = await setup();
+    const fact = await m.executor.engine.publishFact(DEPLOY);
+    // Direct paths bypass the relay quota: refused requests must not grow the window either.
+    for (let index = 0; index < 40; index += 1) await ask(m, fact.factId, '1.1.0');
+    expect(m.executor.engine.memoryStats().factRequests).toBeLessThanOrEqual(11);
+  });
+
   it('serves no fact from an unreadable store, keeps the catalog, and mints no capped key for a fact', async () => {
     let minted = 0;
     const funder = {

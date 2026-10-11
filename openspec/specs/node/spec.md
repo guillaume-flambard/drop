@@ -928,6 +928,11 @@ Le Node SHALL annoncer un fait seulement dans le catalogue des pairs de son publ
 - **WHEN** un pair du public demande un fait actif
 - **THEN** il le reçoit sans carte d'approbation chez le propriétaire, et le compteur de service augmente
 
+#### Scenario: AC: fenêtre de cadence bornée
+<!-- openspec-guard:test="published facts (T4.4) > keeps a bounded fact-rate window per peer however fast it asks" -->
+- **WHEN** un pair demande des faits bien plus vite que 10 par minute, par un chemin direct sans quota du relais
+- **THEN** les demandes en trop sont refusées sans être mémorisées, et la fenêtre gardée pour ce pair ne dépasse pas la limite
+
 #### Scenario: AC: fait indisponible
 <!-- openspec-guard:test="published facts (T4.4) > refuses a retired, expired, out-of-audience or outdated fact without saying which" -->
 - **WHEN** le fait demandé est retiré, expiré, hors public ou d'une ancienne révision

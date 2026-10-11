@@ -365,9 +365,11 @@ export class NodeEngine extends EventEmitter {
     outbox: number;
     replay: number;
     invites: number;
+    factRequests: number;
   } {
     return {
       invites: this.invites.size,
+      factRequests: [...this.factRequests.values()].reduce((total, window) => total + window.length, 0),
       replay: this.replay.size(),
       executing: this.executing.size,
       completedErrors: this.completedErrors.size,
@@ -1367,9 +1369,14 @@ export class NodeEngine extends EventEmitter {
   /** At most FACT_REQUESTS_PER_MINUTE per peer: served without a decision, facts must not drain the owner's sends. */
   private factRateExceeded(from: NodeId, now: number): boolean {
     const recent = (this.factRequests.get(from) ?? []).filter((at) => at > now - FACT_WINDOW_MS);
+    // A refused request is not recorded: the window stays at most the limit long, whatever the peer's rate.
+    if (recent.length >= FACT_REQUESTS_PER_MINUTE) {
+      this.factRequests.set(from, recent);
+      return true;
+    }
     recent.push(now);
     this.factRequests.set(from, recent);
-    return recent.length > FACT_REQUESTS_PER_MINUTE;
+    return false;
   }
 
   /** Served without a consent card: publishing was the owner's consent (D65). Same refusal whatever the reason. */
