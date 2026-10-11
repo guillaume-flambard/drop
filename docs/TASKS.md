@@ -17,21 +17,23 @@ relevés chez Guillaume, 107 ne sont pas classés et aucun n'est un blocage (D24
 
 **Tout de suite, sans attendre l'app : mesurer le besoin (T0.7, D83).** Seul blocked-observer est à installer.
 
-Le jalon suivant est **l'essai en binômes de collègues (T4.6)**. Il manque, dans l'ordre :
+Le jalon suivant est **l'essai en binômes de collègues (T4.6)**, précédé d'un **banc maison à quatre postes** (T4.6c : VPS, Mac, deux PC Windows). Exigences de Guillaume (D84) : une vraie app sur Mac, Windows et Linux, tous les agents raccordés automatiquement, un seul lien pour rejoindre l'équipe en deux clics, un design impeccable. Il manque, dans l'ordre :
 
-1. Fermer les revues de sécurité en attente (T3.1b, T3.1c).
-2. Finir l'app Mac : recette sur un Mac neuf et VoiceOver (T3.4).
-3. Hygiène de configuration (T4.15).
-4. Choisir et installer le chemin de connexion entre les binômes (T4.6a).
-5. Écrire le protocole de l'essai (T4.6b).
+1. Fermer les revues de sécurité en attente (T3.1b, T3.1c), finir l'app Mac (T3.4), hygiène de configuration (T4.15).
+2. Raccorder automatiquement les treize clients sur les trois systèmes (T4.22).
+3. Préparer le relais du VPS (T4.6a) et le lien unique pour rejoindre (T4.23).
+4. Construire l'app Windows (T3.7), puis le banc maison (T4.6c).
+5. Construire l'app Linux (T3.8) et finir le design (T4.24).
+6. Écrire le protocole de l'essai (T4.6b).
 
 **Ce qui attend Guillaume** (personne d'autre ne peut le faire) :
 
 - recruter 3 à 5 développeurs pour la mesure D24, conduire les entretiens et classer tes 107 événements en
   attente (T0.7) ;
 - installer l'app sur un Mac neuf et tester VoiceOver (T3.4) ;
-- choisir le relais de l'essai (T4.6a) et dire si l'essai inclut le partage par modèle (T3.2 et T4.16) ou seulement
-  les réponses à la main et les faits publiés ;
+- dire si l'essai inclut le partage par modèle (T3.2 et T4.16) ou seulement les réponses à la main et les faits
+  publiés ;
+- préparer les deux PC Windows du banc maison (T4.6c) et faire la recette visuelle du design (T4.24) ;
 - recruter au moins deux binômes de collègues qui travaillent vraiment ensemble, et noter leur Mac (les builds
   sont Apple silicon seulement) ;
 - accepter ou refuser les 22 changes archivées en `READY_FOR_MANUAL_ACCEPTANCE` ;
@@ -48,11 +50,17 @@ Le jalon suivant est **l'essai en binômes de collègues (T4.6)**. Il manque, da
 | T3.1c | Borner les états mémoire du Node et du cache anti-rejeu (`executing`, `outbound`, `inbox`, `outbox`, ReplayCache), empêcher l'écrasement d'une carte de consentement, traiter les refus du relais et les pannes de transport, réessayer les révocations de clés plafonnées sans accumulation ; corriger le constat CSO HIGH avant pilote. **Implémentée** (322 tests au 9/10) ; **reste** : `/review` et `/cso`, clore le risque HIGH | `node`, `protocol` | `t3-1c-replay-store-hardening` | T3.1b | todo |
 | T3.4 | App Mac : finir T2.4 avec bootstrap privé, cycle de vie, clavier/VoiceOver, Node embarqué, signature/notarisation et mise à jour facultative vérifiée. **Fait** : builds signées et notarisées (PR #8). **Reste agent** : archiver la preuve de notarisation, tester veille et « Réessayer ». **Reste Guillaume** : installation sur un Mac neuf et recette VoiceOver. Builds Apple silicon seulement | `owner-app` | `t3-4-private-mac-app` | T3.3 | todo |
 | T4.15 | Hygiène de configuration trouvée en T4.0 : défaut `profile: legacy` du schéma de config alors que `drop init` crée un profil privé ; mode 0600 pour peers.json, team.json et relay.config.json (y compris fichier existant) ; E_QUEUE_FULL dans ERROR_CODES ; commentaire D21 périmé dans messages.ts ; liste d’agents du protocole plus étroite que la détection ; imposer `payer: owner` par le schéma en profil privé | `node`, `protocol`, `relay` | `t4-15-config-hygiene` | T3.1b | todo |
-| T4.6a | Chemin de connexion de l'essai : deux collègues sur deux réseaux différents ne se joignent pas sans relais (D59, D68). Guillaume choisit entre un relais drop privé sur le VPS et un relais iroh auto-hébergé ; l'agent l'installe et prouve un échange entre deux réseaux | `relay`, `node`, `deploy-mac-vps` | `t4-6a-trial-connectivity` | T4.2b, T4.10, choix de Guillaume | todo |
+| T4.22 | Tous les agents raccordés automatiquement (D84, remplace la prudence de D66) : les treize clients, OpenCode, Zed, goose, Devin Desktop, Roo Code et JetBrains compris, se branchent sans copier-coller sur Mac, Windows et Linux, en gardant commentaires et mise en forme de leurs fichiers, avec sauvegarde, vérification et retrait propre ; la configuration à copier ne reste qu'en secours, expliquée | `node`, `owner-app`, `capability-mcp-answer` | `t4-22-all-clients-auto` | T4.5 | todo |
+| T4.6a | Relais de l'essai : le relais drop déjà en place sur le VPS (`wss://drop.memolabs.dev/v1`, choix de Guillaume, D84). Vérifier qu'il tourne la dernière version, ajouter `revokedPath`, admettre le Mac de Guillaume, et prouver un échange entre deux réseaux différents | `relay`, `node`, `deploy-mac-vps` | `t4-6a-trial-connectivity` | T4.2b, T4.10 | todo |
+| T4.23 | Un seul lien pour rejoindre (D84) : Guillaume crée l'équipe sur le Mac et copie un lien ; la page du lien reconnaît le système, télécharge l'app avec l'invitation et le relais inclus ; au premier lancement l'app affiche qui invite, un clic sur « Rejoindre » et la personne apparaît dans l'équipe ; un second clic détecte, raccorde et paramètre ses agents. Invitation à usage unique et datée, jamais de secret dans l'URL | `node`, `owner-app`, `relay`, `site` | `t4-23-one-link-join` | T4.22, T4.6a | todo |
+| T3.7 | App Windows (D84) : Windows 10 et 11, même app que sur Mac (Tauri 2, WebView2), icône de la barre des tâches, lien `drop://` enregistré à l'installation, démarrage automatique, notifications Windows, chemins et configurations des agents propres à Windows, installeur signé, tests du corpus commun sur Windows | `owner-app`, `node`, `requester-mcp` | `t3-7-windows-app` | T3.4, T4.15 | todo |
+| T4.6c | Banc maison avant l'essai (D84) : le VPS, le Mac de Guillaume et deux PC Windows (10 et 11) forment une équipe de quatre par le lien de T4.23 ; scénarios : résumé des erreurs du VPS sans modèle, question répondue à la main, fait publié, refus, expiration, onglet « Équipe » à quatre ; chaque accroc devient une correction | `node`, `owner-app`, `relay`, `deploy-mac-vps` | `t4-6c-home-bench` | T3.7, T4.22, T4.23, T4.6a | todo |
+| T3.8 | App Linux (D84) : paquets (AppImage, deb), WebKitGTK, GNOME et KDE, X11 et Wayland ; l'icône n'émet pas de clic sous Linux (doc Tauri 2), donc tout passe par son menu ; chemins des agents propres à Linux, tests du corpus commun | `owner-app`, `node`, `requester-mcp` | `t3-8-linux-app` | T3.7 | todo |
+| T4.24 | Design impeccable (D84) : audit puis refonte du panneau et du parcours d'arrivée sur Mac, Windows et Linux (hiérarchie, textes, états vides et d'erreur, clavier, lecteur d'écran, thèmes clair et sombre, petites et grandes fenêtres) ; recette visuelle de Guillaume | `owner-app`, `node` | `t4-24-impeccable-panel` | T3.7 | todo |
 | T4.6b | Protocole de l'essai en profil privé : fiche d'accord, installation et désinstallation, observation de l'usage (décisions dans la demi-heure, installation jusqu'à la première réponse, connexions directes H5), canal pour livrer une correction pendant l'essai ; la mesure D24 vient de T0.7 ; remplace le protocole historique `docs/essais/README.md` (T2.7) | Documentation, sans changement de contrat | `t4-6b-trial-protocol` | T4.6a | todo |
 | T3.2 | Modèles : réutilisation d'endpoint ou agent interne, choix local consenti, qualification Qwen3.5 4B/9B, mémoire/qualité/latence et erreurs | `runner`, `owner-app`, `capability-repo-answer`, `capability-mcp-answer` | `t3-2-local-model-qualification` | T3.1 | todo |
 | T4.16 | Partage depuis le panneau, écart trouvé en T4.0a : choisir outils, modèle et approbateur comme la CLI ; ne pas publier un partage sans modèle utilisable (aujourd’hui fournisseur local sans modèle, échec E_SCHEMA à l’exécution, lu dans `llm.ts`). Facultative pour l'essai si Guillaume le limite aux réponses à la main et aux faits publiés | `owner-app`, `node`, `capability-mcp-answer` | `t4-16-panel-sharing` | T3.2 | todo |
-| T4.6 | P1 : essai en binômes de collègues (D83) : chaque testeur vient avec une personne avec qui il travaille vraiment, pour que les questions posées par drop soient réelles ; au moins deux binômes dans des contextes différents ; protocole d'observation et mesures d'usage du PRD. Le besoin (D24) se mesure en T0.7 ; la compréhension par des non-techniciens (H3) demande un test séparé | `deploy-mac-vps` | `t4-6-friends-trial` | T0.7 (verdict GO ou à prolonger), T3.1b, T3.1c, T3.4, T4.15, T4.6a, T4.6b ; T4.16 si l'essai inclut le partage par modèle | todo |
+| T4.6 | P1 : essai en binômes de collègues (D83) : chaque testeur vient avec une personne avec qui il travaille vraiment, pour que les questions posées par drop soient réelles ; au moins deux binômes dans des contextes différents ; protocole d'observation et mesures d'usage du PRD. Le besoin (D24) se mesure en T0.7 ; la compréhension par des non-techniciens (H3) demande un test séparé | `deploy-mac-vps` | `t4-6-friends-trial` | T0.7 (verdict GO ou à prolonger), T3.1b, T3.1c, T3.4, T3.7, T3.8, T4.15, T4.22, T4.23, T4.24, T4.6c, T4.6b ; T4.16 si l'essai inclut le partage par modèle | todo |
 
 ## À faire : avant le lancement public
 
@@ -75,8 +83,6 @@ reste « sur demande écrite » (PRD, H6).
 | -- | ----------------- | ------------------ | ------ | --------- | ------ |
 | T3.1a | Évaluer Hermes Agent comme demandeur via MCP stdio : raccordement manuel isolé, consentement/résultat/refus, modèle local ou interne explicite, aucun accès élargi ; conclure sur un éventuel adaptateur de détection | `requester-mcp`, `node` | `t3-1a-hermes-mcp-evaluation` | T3.1b, T4.6 | todo |
 | T3.2a | Évaluer AI SDK en adaptateurs TypeScript directs et LiteLLM comme passerelle interne facultative : matrice fournisseurs/outils, erreurs, budgets, secrets, trafic, licences et packaging ; décision motivée avant toute adoption | `runner`, `capability-repo-answer`, `capability-mcp-answer` | `t3-2a-provider-adapter-evaluation` | T3.5, T4.6 | todo |
-| T3.7 | Port Windows : tray, WebView2, chemins/configs, packaging/signature, tests du corpus commun sur Windows | `owner-app`, `node`, `requester-mcp` | `t3-7-windows-app` | T3.5, T4.6 | todo |
-| T3.8 | Port Linux : paquets/WebKitGTK, GNOME/KDE, X11/Wayland, alternative au tray et tests du corpus commun | `owner-app`, `node`, `requester-mcp` | `t3-8-linux-app` | T3.7, T4.6 | todo |
 | T4.7 | P2 : simulation complète (500 nœuds virtuels, 10 à 20 personnages sur modèles gratuits, carte interactive, traces, boucle d'amélioration bornée) | `simulation` | `t4-7-simulation-full` | T4.1, T4.6 | todo |
 | T4.8 | P3 : agent inclus qui répond pour le propriétaire après accord, modèle choisi par lui | `runner`, `owner-app`, `node` | `t4-8-built-in-agent` | T4.3, T3.2, T4.6 | todo |
 | T4.9 | P3 : petite question (niveau 2) sur un contexte déclaré, appel neuf sans outil | `runner`, `node`, `protocol` | `t4-9-declared-context-question` | T4.4, T4.6 | todo |
