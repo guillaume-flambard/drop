@@ -280,17 +280,32 @@ async function connectsEverywhere(platform: ClientPlatform): Promise<void> {
 }
 
 describe('all thirteen clients connected automatically (T4.22)', () => {
-  it('connects every file client at its documented macOS path, keeps comments and layout, is idempotent, then removes only its entry', async () => {
-    await connectsEverywhere('darwin');
-  });
+  // Three passes over thirteen files each, with a backup per client: past 5 s on a busy Windows runner, the default.
+  const slowRunner = 30_000;
 
-  it('connects every file client at its documented Windows path, keeps comments and layout, is idempotent, then removes only its entry', async () => {
-    await connectsEverywhere('win32');
-  });
+  it(
+    'connects every file client at its documented macOS path, keeps comments and layout, is idempotent, then removes only its entry',
+    slowRunner,
+    async () => {
+      await connectsEverywhere('darwin');
+    },
+  );
 
-  it('connects every file client at its documented Linux path, keeps comments and layout, is idempotent, then removes only its entry', async () => {
-    await connectsEverywhere('linux');
-  });
+  it(
+    'connects every file client at its documented Windows path, keeps comments and layout, is idempotent, then removes only its entry',
+    slowRunner,
+    async () => {
+      await connectsEverywhere('win32');
+    },
+  );
+
+  it(
+    'connects every file client at its documented Linux path, keeps comments and layout, is idempotent, then removes only its entry',
+    slowRunner,
+    async () => {
+      await connectsEverywhere('linux');
+    },
+  );
 
   it('creates a missing file where each client documents it, and keeps a neighbour added after the connection', async () => {
     const m = machine('win32');
