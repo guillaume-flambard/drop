@@ -119,7 +119,7 @@ switch (command) {
     home.init(
       identity,
       values.profile === 'legacy'
-        ? NodeConfigSchema.parse({ relayUrl, ownerKind, apiPort: Number(values.port ?? 7781) })
+        ? NodeConfigSchema.parse({ profile: 'legacy', relayUrl, ownerKind, apiPort: Number(values.port ?? 7781) })
         : privateConfig(relayUrl, ownerKind, Number(values.port ?? 7781), network),
     );
     process.stdout.write(

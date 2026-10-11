@@ -87,7 +87,7 @@ node packages/node/src/cli.ts serve
 
 Pour revenir à la configuration précédente, arrêter le daemon puis lancer `rollback-private`. La restauration refuse une configuration modifiée depuis la migration. Une sauvegarde déjà présente n’est jamais écrasée. En cas d’arrêt brutal, consulter le PID dans `.private-migration.lock`, vérifier que ce processus et le daemon sont arrêtés, puis retirer uniquement ce verrou avant `rollback-private`. Si l’arrêt a précédé le remplacement, le retour arrière conserve simplement la configuration originale.
 
-`--profile legacy` à l’initialisation reste une option explicite pour reproduire le prototype ; elle n’apporte aucune garantie du profil privé. La restauration d’une config historique peut réactiver ses connexions externes.
+`--profile legacy` à l’initialisation reste une option explicite pour reproduire le prototype ; elle n’apporte aucune garantie du profil privé. Depuis T4.15, un `config.json` sans champ `profile` est lu comme privé : s’il n’en remplit pas les conditions, le Node refuse de démarrer (`E_DENIED invalid private profile`). Ajouter `"profile": "legacy"` pour garder un ancien fichier tel quel, ou lancer `drop migrate-private`, qui lit encore un fichier sans profil comme `legacy`. En profil privé, `payer` vaut `owner` s’il est omis et `requester` est refusé. `peers.json` et `team.json` sont en `0600` ; le daemon resserre au démarrage ceux qu’une version antérieure avait laissés lisibles. La restauration d’une config historique peut réactiver ses connexions externes.
 
 ## Exploiter le relais
 

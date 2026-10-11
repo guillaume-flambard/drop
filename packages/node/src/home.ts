@@ -6,6 +6,7 @@ import {
   appendFileSync,
   chmodSync,
   closeSync,
+  fchmodSync,
   fsyncSync,
   openSync,
   existsSync,
@@ -43,10 +44,21 @@ import {
 
 export const MAX_RECEIVED_DROPS = 16_384;
 
-export const NodeConfigSchema = z
+/**
+ * In the private profile the owner pays (D40): an omitted `payer` means the owner there, and `requester` is refused by
+ * the check below. The legacy profile keeps the requester-pays default of D27.
+ */
+function ownerPaysWhenPrivate(raw: unknown): unknown {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return raw;
+  const fields = raw as Record<string, unknown>;
+  return fields.profile !== 'legacy' && fields.payer === undefined ? { ...fields, payer: 'owner' } : raw;
+}
+
+const NodeConfigObject = z
   .object({
     relayUrl: z.string(),
-    profile: z.enum(['legacy', 'private']).default('legacy'),
+    /** What `drop init` creates (T4.15): a file without a profile is read as private and must pass its checks. */
+    profile: z.enum(['legacy', 'private']).default('private'),
     network: PrivateNetworkSchema.optional(),
     ownerKind: OwnerKindSchema,
     apiPort: z.number().int().min(0).max(65535).default(7781),
@@ -62,14 +74,16 @@ export const NodeConfigSchema = z
   .superRefine((config, ctx) => {
     if (config.profile !== 'private') return;
     try {
-      if (!config.network || config.funding || config.gateways.length) throw new Error('policy');
+      if (!config.network || config.funding || config.gateways.length || config.payer !== 'owner')
+        throw new Error('policy');
       assertPrivateDestination(config.relayUrl, config.network);
       if (!['ws:', 'wss:'].includes(new URL(config.relayUrl).protocol)) throw new Error('relay');
     } catch {
       ctx.addIssue({ code: 'custom', message: 'E_DENIED invalid private profile' });
     }
   });
-export type NodeConfig = z.infer<typeof NodeConfigSchema>;
+export const NodeConfigSchema = z.preprocess(ownerPaysWhenPrivate, NodeConfigObject);
+export type NodeConfig = z.infer<typeof NodeConfigObject>;
 
 export const PeerSchema = z.object({
   nodeId: NodeIdSchema,
@@ -119,10 +133,23 @@ export function defaultHome(): string {
   return process.env.DROP_HOME ?? join(homedir(), '.drop');
 }
 
+/**
+ * Writes `content` readable by its owner only. The mode of `writeFileSync` applies only when it creates the file, so an
+ * existing file is narrowed through its descriptor before the new content lands (T4.15), never shown with a wider mode.
+ * Windows keeps only the read-only bit; the profile's ACL protects the file there.
+ */
 function writePrivate(path: string, content: string): void {
-  writeFileSync(path, content, { mode: 0o600 });
-  chmodSync(path, 0o600);
+  const fd = openSync(path, 'w', 0o600);
+  try {
+    fchmodSync(fd, 0o600);
+    writeFileSync(fd, content);
+  } finally {
+    closeSync(fd);
+  }
 }
+
+/** Files that name the peers and the team: owner-only since T4.15, even when an older version left them wider. */
+const PRIVATE_STATE_FILES = ['peers.json', 'team.json'] as const;
 
 /**
  * Makes a rename or an unlink in `path` durable on macOS and Linux. Windows cannot flush a directory: it refuses
@@ -262,7 +289,7 @@ export class DropHome {
     chmodSync(this.root, 0o700);
     writePrivate(join(this.root, 'identity.json'), `${JSON.stringify(identity, null, 2)}\n`);
     writeFileSync(join(this.root, 'config.json'), `${JSON.stringify(config, null, 2)}\n`);
-    writeFileSync(join(this.root, 'peers.json'), '[]\n');
+    writePrivate(join(this.root, 'peers.json'), '[]\n');
     writePrivate(join(this.root, 'local-token'), randomBytes(32).toString('base64url'));
   }
 
@@ -383,6 +410,14 @@ export class DropHome {
     }
   }
 
+  /** Narrows the peer and team files left wider by a version before T4.15; called by the daemon at start. */
+  securePrivateFiles(): void {
+    for (const name of PRIVATE_STATE_FILES) {
+      const path = join(this.root, name);
+      if (existsSync(path)) chmodSync(path, 0o600);
+    }
+  }
+
   identity(): Identity {
     return IdentitySchema.parse(JSON.parse(readFileSync(join(this.root, 'identity.json'), 'utf8')));
   }
@@ -423,7 +458,7 @@ export class DropHome {
   savePeer(peer: Peer): void {
     const peers = this.peers().filter((existing) => existing.nodeId !== peer.nodeId);
     peers.push(peer);
-    writeFileSync(join(this.root, 'peers.json'), `${JSON.stringify(peers, null, 2)}\n`);
+    writePrivate(join(this.root, 'peers.json'), `${JSON.stringify(peers, null, 2)}\n`);
   }
 
   links(): AgentLink[] {
@@ -508,7 +543,7 @@ export class DropHome {
   }
 
   saveTeam(state: TeamState): void {
-    writeFileSync(join(this.root, 'team.json'), `${JSON.stringify(TeamStateSchema.parse(state), null, 2)}\n`);
+    writePrivate(join(this.root, 'team.json'), `${JSON.stringify(TeamStateSchema.parse(state), null, 2)}\n`);
   }
 
   published(): Published[] {

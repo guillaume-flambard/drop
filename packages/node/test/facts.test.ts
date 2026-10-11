@@ -117,7 +117,10 @@ describe('published facts (T4.4)', () => {
     // On disk: facts.json under DROP_HOME, owner-only, read back as written.
     const owner = await generateIdentity('Julie');
     const home = new DropHome(join(mkdtempSync(join(tmpdir(), 'facts-home-')), 'home'));
-    home.init(owner, NodeConfigSchema.parse({ relayUrl: 'ws://127.0.0.1:1/v1', ownerKind: 'human', apiPort: 0 }));
+    home.init(
+      owner,
+      NodeConfigSchema.parse({ profile: 'legacy', relayUrl: 'ws://127.0.0.1:1/v1', ownerKind: 'human', apiPort: 0 }),
+    );
     const signed = await signFact(owner, {
       ...fact,
       owner: { kind: 'human', displayName: 'Julie', nodeId: owner.nodeId },

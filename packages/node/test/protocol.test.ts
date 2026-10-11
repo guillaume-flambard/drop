@@ -81,7 +81,10 @@ async function openAs(recipient: Identity, envelope: Envelope): Promise<Message>
 
 function homeFor(identity: Identity): DropHome {
   const home = new DropHome(join(mkdtempSync(join(tmpdir(), 'drop-protocol-')), 'home'));
-  home.init(identity, NodeConfigSchema.parse({ relayUrl: 'ws://relay.example/v1', ownerKind: 'human', apiPort: 0 }));
+  home.init(
+    identity,
+    NodeConfigSchema.parse({ profile: 'legacy', relayUrl: 'ws://relay.example/v1', ownerKind: 'human', apiPort: 0 }),
+  );
   return home;
 }
 
