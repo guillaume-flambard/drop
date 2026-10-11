@@ -1,18 +1,10 @@
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  readdirSync,
-  statSync,
-  symlinkSync,
-  writeFileSync,
-} from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { applyOnboarding, manualOnboarding, previewOnboarding } from '../src/onboarding.ts';
 import { renderPanel } from '../src/panel.ts';
+import { expectPrivateMode } from '../../../test/private-mode.ts';
 
 function cursorPlan(options: Parameters<typeof previewOnboarding>[0]) {
   const plan = previewOnboarding(options).find((item) => item.agent === 'cursor');
@@ -312,7 +304,7 @@ describe('local agent onboarding (T3.3)', () => {
     const dir = join(f.dropHome, 'backups', 'onboarding');
     const files = readdirSync(dir);
     expect(files).toHaveLength(3);
-    expect(files.every((file) => (statSync(join(dir, file)).mode & 0o777) === 0o600)).toBe(true);
+    for (const file of files) expectPrivateMode(join(dir, file));
   });
 
   it('connects Claude Desktop without touching other MCP entries', async () => {

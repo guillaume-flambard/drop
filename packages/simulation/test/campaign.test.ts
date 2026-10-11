@@ -77,56 +77,61 @@ describe('simulation campaign (T4.1)', () => {
 });
 
 describe('simulation bench signals (T4.1)', () => {
-  it('AC stops every process it started when the bench receives SIGTERM mid-campaign', async () => {
-    const cli = fileURLToPath(new URL('../src/cli.ts', import.meta.url));
-    const dir = join(tmpdir(), `drop-sim-signal-${String(process.pid)}`);
-    const bench = spawn(
-      process.execPath,
-      [
-        cli,
-        'run',
-        '--nodes',
-        '3',
-        '--owners',
-        '1',
-        '--requests',
-        '20',
-        '--duration',
-        '60',
-        '--relay',
-        `ws://127.0.0.1:${String(port(2))}/v1`,
-        '--dir',
-        dir,
-      ],
-      { stdio: ['ignore', 'ignore', 'pipe'] },
-    );
-    try {
-      await new Promise<void>((resolve, reject) => {
-        const timer = setTimeout(() => {
-          reject(new Error('bench never reached the load phase'));
-        }, 60_000);
-        bench.stderr.on('data', (chunk: Buffer) => {
-          if (chunk.toString().includes('requesters paired')) {
-            clearTimeout(timer);
+  // Windows has no SIGTERM: Node's kill() ends the bench at once, with no handler to run, and pgrep does not exist.
+  it.skipIf(process.platform === 'win32')(
+    'AC stops every process it started when the bench receives SIGTERM mid-campaign',
+    async () => {
+      const cli = fileURLToPath(new URL('../src/cli.ts', import.meta.url));
+      const dir = join(tmpdir(), `drop-sim-signal-${String(process.pid)}`);
+      const bench = spawn(
+        process.execPath,
+        [
+          cli,
+          'run',
+          '--nodes',
+          '3',
+          '--owners',
+          '1',
+          '--requests',
+          '20',
+          '--duration',
+          '60',
+          '--relay',
+          `ws://127.0.0.1:${String(port(2))}/v1`,
+          '--dir',
+          dir,
+        ],
+        { stdio: ['ignore', 'ignore', 'pipe'] },
+      );
+      try {
+        await new Promise<void>((resolve, reject) => {
+          const timer = setTimeout(() => {
+            reject(new Error('bench never reached the load phase'));
+          }, 60_000);
+          bench.stderr.on('data', (chunk: Buffer) => {
+            if (chunk.toString().includes('requesters paired')) {
+              clearTimeout(timer);
+              resolve();
+            }
+          });
+        });
+        const children = execFileSync('pgrep', ['-P', String(bench.pid)], { encoding: 'utf8' })
+          .trim()
+          .split('\n')
+          .map(Number)
+          .filter((pid) => pid > 0);
+        expect(children.length).toBeGreaterThanOrEqual(4);
+        bench.kill('SIGTERM');
+        await new Promise<void>((resolve) => {
+          bench.once('exit', () => {
             resolve();
-          }
+          });
         });
-      });
-      const children = execFileSync('pgrep', ['-P', String(bench.pid)], { encoding: 'utf8' })
-        .trim()
-        .split('\n')
-        .map(Number)
-        .filter((pid) => pid > 0);
-      expect(children.length).toBeGreaterThanOrEqual(4);
-      bench.kill('SIGTERM');
-      await new Promise<void>((resolve) => {
-        bench.once('exit', () => {
-          resolve();
-        });
-      });
-      for (const pid of children) expect(alive(pid)).toBe(false);
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  }, 120_000);
+        for (const pid of children) expect(alive(pid)).toBe(false);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    },
+    120_000,
+  );
 });

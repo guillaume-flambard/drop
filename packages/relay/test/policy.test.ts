@@ -132,6 +132,7 @@ describe('enterprise policy (T4.10)', () => {
     await expect(startRelay(lateConfig, { logger: () => undefined, now: () => clock.now })).rejects.toThrow(/E_POLICY/);
   });
 
+  // openssl draws a 2048-bit RSA key: its time varies, and the Windows runner went past the default 5 s.
   it('serves wss itself when given a certificate', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'drop-relay-tls-'));
     chmodSync(dir, 0o700);
@@ -181,5 +182,5 @@ describe('enterprise policy (T4.10)', () => {
       req.end();
     });
     expect(health).toBe(200);
-  });
+  }, 30_000);
 });

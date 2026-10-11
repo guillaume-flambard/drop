@@ -124,7 +124,14 @@ function writePrivate(path: string, content: string): void {
   chmodSync(path, 0o600);
 }
 
-function syncDirectory(path: string): void {
+/**
+ * Makes a rename or an unlink in `path` durable on macOS and Linux. Windows cannot flush a directory: it refuses
+ * FlushFileBuffers on a directory handle (EPERM) and journals the entry change in NTFS itself, so only this call is
+ * skipped there. Every file is still flushed before its rename, and the replay store stays fail-closed: a marker set
+ * that disagrees with its durable digest, clock or version is refused at the next admission (E_REPLAY_STATE).
+ */
+export function syncDirectory(path: string, platform: NodeJS.Platform = process.platform): void {
+  if (platform === 'win32') return;
   const fd = openSync(path, 'r');
   try {
     fsyncSync(fd);
