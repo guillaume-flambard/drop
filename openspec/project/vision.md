@@ -10,7 +10,7 @@ Promesse publique (D52), toujours avec sa limite : les données restent sur la m
 
 ## Pour qui
 
-Décision D48. Premiers essais : Guillaume puis deux amis techniques dans des contextes différents. Conception selon les exigences d'une entreprise souveraine (A2A, aucune dépendance externe). Adoption visée par les petites équipes et les PME. Le demandeur est technique ; le propriétaire de la donnée peut ne pas l'être, et peut ne pas avoir d'agent (D49). Rien n'est encore validé avec de vrais utilisateurs ; D24 conditionne toujours le pilote.
+Décision D48. Premiers essais : Guillaume, une mesure du besoin auprès de 3 à 5 développeurs, puis des binômes de collègues dans des contextes différents (D83). Conception selon les exigences d'une entreprise souveraine (A2A, aucune dépendance externe). Adoption visée par les petites équipes et les PME. Le demandeur est technique ; le propriétaire de la donnée peut ne pas l'être, et peut ne pas avoir d'agent (D49). Rien n'est encore validé avec de vrais utilisateurs ; D24 conditionne toujours le pilote.
 
 ## Expérience cible
 
