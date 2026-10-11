@@ -10,33 +10,10 @@ L'app de bureau est la même sur macOS, Windows et Linux. Elle a trois couches.
 2. **Le Node local est le moteur** (`packages/node`). Tauri le démarre et l'arrête. Il écoute sur `127.0.0.1`, garde l'identité et les clés, parle au relais et sert l'interface.
 3. **React et shadcn/ui forment l'interface** (`packages/desktop-ui`). Elle est compilée hors ligne, embarquée dans le Node et affichée dans une fenêtre de Tauri.
 
-```mermaid
-flowchart LR
-  subgraph poste["Poste de l'utilisateur"]
-    tauri["apps/desktop<br/>coque Tauri (Rust)"]
-    ui["packages/desktop-ui<br/>React + shadcn/ui"]
-    node["packages/node<br/>moteur et API locale"]
-    runner["packages/runner"]
-    caps["packages/capabilities"]
-    mcp["packages/requester-mcp"]
-    iroh["crates/drop-iroh"]
-    agent["Agent local<br/>(Claude Code, Codex...)"]
-  end
-  relay["packages/relay"]
-  pair["Node d'un pair"]
-
-  tauri -- "démarre et arrête" --> node
-  tauri -- "affiche 127.0.0.1/workspace" --> ui
-  node -- "sert les fichiers compilés" --> ui
-  ui -- "API locale avec jeton" --> node
-  agent -- "MCP stdio" --> mcp
-  mcp -- "API locale" --> node
-  node --> runner
-  runner --> caps
-  node -- "WebSocket sortant" --> relay
-  node -. "Internet en option" .-> iroh
-  relay --> pair
-```
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="diagrams/architecture-dark.svg">
+  <img src="diagrams/architecture.svg" alt="Schéma de l'architecture : la coque Tauri démarre le Node local et affiche l'interface React qu'il sert ; l'agent local passe par requester-mcp ; le Node parle au relais et, en option, à Internet par drop-iroh.">
+</picture>
 
 ## Qui fait quoi
 
