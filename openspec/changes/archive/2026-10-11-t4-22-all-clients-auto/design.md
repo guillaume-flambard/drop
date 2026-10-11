@@ -2,7 +2,7 @@
 
 T4.5 (D66) détecte les treize clients et n'en raccorde que sept, avec des chemins macOS seulement : deux par commande officielle (Claude Code, Codex), deux autres par commande (Gemini CLI, VS Code), trois par JSON strict réécrit en entier (Claude Desktop, Cursor, Cline). D84 exige les treize, automatiques, sur les trois systèmes, en gardant commentaires et mise en forme. Les règles de T3.3 (D45) restent : aperçu, empreinte relue, fichier temporaire renommé, sauvegarde privée de trois versions, idempotence, conflit visible, retrait de notre seule entrée, lecture bornée d'un fichier régulier.
 
-Sources lues le 11 octobre 2026 pour chaque client et chaque système, avec les contradictions et leur arbitrage : [note de recherche](../../../docs/research/2026-10-11-clients-par-systeme.md). Bibliothèques : README et types de `jsonc-parser` 3.3.1 et `yaml` 2.9.1 dans les paquets installés ; Node : page `child_process` (« Spawning .bat and .cmd files on Windows ») et bulletin de sécurité d'avril 2024.
+Sources lues le 11 octobre 2026 pour chaque client et chaque système, avec les contradictions et leur arbitrage : [note de recherche](../../../../docs/research/2026-10-11-clients-par-systeme.md). Bibliothèques : README et types de `jsonc-parser` 3.3.1 et `yaml` 2.9.1 dans les paquets installés ; Node : page `child_process` (« Spawning .bat and .cmd files on Windows ») et bulletin de sécurité d'avril 2024.
 
 ## Goals / Non-Goals
 
