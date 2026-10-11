@@ -5,6 +5,7 @@ import { promisify } from 'node:util';
 import { DropError } from '@drop/protocol';
 import type { CapabilityImpl, RunContext } from '@drop/runner';
 import { z } from 'zod';
+import { UPPER_SNAKE_CASE } from './names.ts';
 
 /**
  * production.error_summary: deterministic, no LLM. It reads the configured log source of one service and returns
@@ -28,7 +29,6 @@ export const OTHER_ERROR = 'OTHER';
 export const DEFAULT_DEGRADED_THRESHOLD = 50;
 const MAX_TOP_ERRORS = 5;
 const MAX_LOG_BYTES = 64 * 1024 * 1024;
-const ERROR_NAME = /^[A-Z][A-Z0-9_]*$/;
 // A unit or container never starts with '-', so it can never be read as an option by journalctl or docker.
 const UNIT_NAME = /^[A-Za-z0-9@_][A-Za-z0-9@._:\\-]*$/;
 const CONTAINER_NAME = /^[A-Za-z0-9][A-Za-z0-9_.-]*$/;
@@ -58,7 +58,7 @@ export const ErrorSummaryConfigSchema = z.strictObject({
         name: z
           .string()
           .max(64)
-          .regex(ERROR_NAME, 'UPPER_SNAKE_CASE')
+          .regex(UPPER_SNAKE_CASE, 'UPPER_SNAKE_CASE')
           .refine((name) => name !== OTHER_ERROR, 'OTHER is reserved'),
         regex: RegexSourceSchema,
       }),
@@ -84,7 +84,7 @@ export const ErrorSummaryOutputSchema = z.object({
   topErrors: z
     .array(
       z.strictObject({
-        name: z.string().regex(ERROR_NAME),
+        name: z.string().regex(UPPER_SNAKE_CASE),
         count: z.number().int().positive(),
         share: z.number().min(0).max(1),
         firstSeen: z.iso.datetime(),

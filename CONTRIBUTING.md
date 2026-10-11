@@ -20,7 +20,7 @@ Les tests utilisent des fixtures et fournisseurs simulés, sans clé LLM ni acc�
 
 Lire [la vision](openspec/project/vision.md), [l'architecture](openspec/project/architecture.md), puis [TASKS](docs/TASKS.md). Une tâche correspond à une change OpenSpec. Les règles de travail détaillées sont dans [AGENTS.md](AGENTS.md). Le mainteneur valide le périmètre avant une nouvelle capacité ou dépendance. Les petites corrections de documentation peuvent rester proportionnées.
 
-Le [parcours de connexion](docs/ONBOARDING.md) définit les quatre adaptateurs initiaux. Les futurs adaptateurs doivent déclarer leurs chemins et versions, éviter l'exécution à la découverte, préserver la configuration et fournir des fixtures sans données personnelles. Ne pas confondre découverte, raccordement et publication d'outil.
+Le [parcours de connexion](docs/ONBOARDING.md) décrit les treize clients détectés : sept raccordés automatiquement, six par une configuration à copier. Un nouvel adaptateur doit déclarer ses chemins et versions, éviter l'exécution à la découverte, préserver la configuration et fournir des fixtures sans données personnelles. Ne pas confondre découverte, raccordement et publication d'outil.
 
 Pour une contribution de logique : contrats et scénarios avant implémentation, tests d'échec compris. Code et commits en anglais ; docs et specs en français. Pas de `any`, crypto maison, clé dans un log, ou décision d'autorisation confiée au LLM.
 

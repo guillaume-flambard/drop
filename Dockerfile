@@ -11,7 +11,7 @@ COPY docker ./docker
 RUN chmod 0755 docker/*.sh
 # The public site (T2.6): `node scripts/site.ts serve` renders it in memory from these sources, nothing is built here.
 COPY site ./site
-COPY scripts/site.ts ./scripts/site.ts
+COPY scripts/site.ts scripts/mac-updates.ts ./scripts/
 COPY docs ./docs
 USER node
 ENV NODE_ENV=production

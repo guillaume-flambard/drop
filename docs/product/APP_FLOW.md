@@ -34,20 +34,20 @@ Les personas viennent de D47 et D48. **Hypothèse** pour toutes : leurs besoins 
 
 | Parcours                                  | Statut global                                                           | Tâches               |
 | ----------------------------------------- | ----------------------------------------------------------------------- | -------------------- |
-| Installer et premier lancement            | Existant en paquet de développement ; distribution signée Visé          | T3.4                 |
-| Raccorder ses agents                      | Existant pour quatre clients ; treize clients Visé                      | T3.3, T4.5           |
+| Installer et premier lancement            | Existant, build notarisée ; recette sur Mac propre et VoiceOver Visé    | T3.4                 |
+| Raccorder ses agents                      | Existant : treize clients, sept automatiques, six à copier              | T3.3, T4.5           |
 | Créer l'équipe et inviter                 | Existant                                                                | T2.9                 |
 | Poser une question depuis un agent        | Existant                                                                | T2.10, T2.12         |
 | Décider puis relire avant envoi           | Existant                                                                | T1.8, T1.9, T2.4     |
-| Propriétaire sans agent                   | Visé                                                                    | T4.3, T4.8           |
-| Faits publiés et petite question          | Visé                                                                    | T4.4, T4.9           |
+| Propriétaire sans agent                   | Existant pour la réponse à la main ; agent inclus Visé                  | T4.3, T4.8           |
+| Faits publiés et petite question          | Existant pour les faits ; petite question Visé                          | T4.4, T4.9           |
 | Tâche déléguée avec jalons                | Visé                                                                    | T4.11                |
 | Contexte partagé décentralisé             | Visé                                                                    | T4.12                |
 | Vue d'avancée du responsable              | Existant en partie (questions multiples) ; vue dédiée Hypothèse         | T2.10                |
-| Administrateur d'entreprise               | Visé                                                                    | T4.10                |
-| ChatGPT par la passerelle                 | Code présent, tâche non livrée, refusé en profil privé                  | T2.13, T4.10         |
-| Échec de connexion sans relais de secours | Existant pour le relais seul ; modes et explication Visé                | T4.2                 |
-| Opérateur de simulation                   | Visé                                                                    | T4.1, T4.7           |
+| Administrateur d'entreprise               | Existant ; binaire autonome du relais Visé                              | T4.10, T4.10b        |
+| ChatGPT par la passerelle                 | Option cloud différée : code présent, non livrée, refusée en privé      | T2.13, T4.10         |
+| Échec de connexion sans relais de secours | Existant : réseau local, iroh, relais, sans relais de secours           | T4.2, T4.2b          |
+| Opérateur de simulation                   | Existant pour le banc minimal ; simulation complète Visé                | T4.1, T4.7           |
 
 ## 3. Les trois parcours principaux
 
@@ -118,14 +118,14 @@ flowchart TD
 
 ### 4.1 Installer et premier lancement
 
-1. **Existant** : la personne ouvre l'app. Seul un paquet de développement arm64 est prouvé ; une build signée et acceptée par Apple le 10 octobre 2026 n'est pas encore archivée comme preuve (`openspec/changes/t3-4-private-mac-app/proof/verification.md`). **Visé** : distribution signée et notarisée (T3.4).
+1. **Existant** : la personne ouvre l'app. Une build signée et notarisée pour Apple Silicon a été acceptée par Apple le 10 octobre 2026 (`openspec/changes/t3-4-private-mac-app/proof/verification.md`). **Visé** : installation sur un Mac propre et recette VoiceOver (T3.4).
 2. **Existant** : l'app n'a pas d'icône dans le Dock ; une icône apparaît dans la barre de menus. La fenêtre est créée cachée (`apps/mac/src-tauri/src/main.rs`, `ActivationPolicy::Accessory`, `.visible(false)`). **Hypothèse** : une personne qui découvre l'app trouve l'icône sans aide. Critère : chaque ami testeur de T4.6 ouvre le panneau seul.
 3. **Existant** : sans `identity.json`, le système lance `drop init --profile private` avec le prénom du compte macOS et le relais de `DROP_RELAY_URL`, sinon `ws://127.0.0.1:7780/v1` (`main.rs`, `ensure_identity`). Le profil privé fixe « le propriétaire paie » (`packages/node/src/private-config.ts`).
 4. **Existant** : la page de démarrage affiche « Démarrage local… » et « Préparation de ton espace » (`apps/mac/web/index.html`).
 5. **Existant** : le système lit le port dans `config.json`, refuse un port déjà occupé, lance le Node, puis attend jusqu'à 15 s une réponse portant son propre marqueur de session avant d'ouvrir l'URL qui contient le jeton (`main.rs`, `own_health`, D46).
 6. **Existant** : le panneau s'ouvre sur l'onglet Demandes. L'en-tête montre « Prénom · hors ligne » tant qu'aucun relais ne répond (`packages/node/src/panel.ts`).
 7. **Existant** : seule la version finale s'inscrit au démarrage de session (`main.rs`, `autolaunch`).
-8. **Visé** : au premier lancement, la personne choisit un mode de connexion (réseau local, Internet direct, relais d'entreprise), sans relais de secours par défaut (T4.2, D53).
+8. **Existant** : le réseau local est actif sauf désactivation (T4.2) ; la connexion par Internet se règle dans le panneau : désactivée, relais iroh choisi, ou relais de test n0 signalé comme tiers et refusé en profil privé (T4.2b, D68). Le mode Internet est désactivé par défaut. Aucun relais de secours par défaut (D53).
 
 Échecs :
 
@@ -139,20 +139,20 @@ flowchart TD
 Contrat : [owner-app](../../openspec/specs/owner-app/spec.md), exigence « Deux confirmations de raccordement » ; [node](../../openspec/specs/node/spec.md), « Raccordement local contrôlé des agents ».
 
 1. **Existant** : onglet Mes outils, carte « Connecter mes agents » avec deux étapes numérotées et le bouton « 1. Analyser ce Mac » (`panel.ts`).
-2. **Existant** : le système lit les seuls emplacements connus de Claude Code, Codex, Cursor et Claude Desktop, sans réseau ni exécution, et classe chaque agent : absent, prêt, déjà raccordé, en conflit, en erreur (`packages/node/src/onboarding.ts`, `docs/ONBOARDING.md`).
+2. **Existant** : le système lit les seuls emplacements connus des treize clients, sans réseau ni exécution, et classe chaque agent : absent, prêt, déjà raccordé, en conflit, en erreur (`packages/node/src/onboarding.ts`, `docs/ONBOARDING.md`).
 3. **Existant** : les agents prêts sont cochés par défaut ; un agent déjà raccordé propose « Retirer ce connecteur » ; un conflit ou une erreur s'affiche avec sa traduction et son code (`panel.ts`, fonction `explain`).
 4. **Existant** : « 2. Connecter les agents sélectionnés ». Le système relit chaque configuration et compare son empreinte ; Claude Code et Codex passent par leur CLI officielle, Cursor et Claude Desktop par un fichier temporaire renommé et une sauvegarde privée de trois versions (D45).
 5. **Existant** : le panneau affiche un résultat par agent puis « Connecteur utilisable : à vérifier après relance. L’état de l’équipe apparaît en haut. » Aucun outil n'est partagé par ce geste (`panel.ts`).
 6. **Existant** : voie manuelle. « Autre agent ? Ajoute manuellement un serveur MCP stdio nommé drop. » Après l'analyse, une entrée JSON à copier apparaît (`panel.ts`).
 7. **Existant** : parcours vérifié sur fixtures ; la recette humaine sur un Mac de test reste à faire (`docs/TASKS.md`, ligne T3.3).
-8. **Visé** : détection déterministe des treize clients de D55 avec leurs configurations globales et par projet (T4.5). Aucun modèle ne fouille la machine.
+8. **Existant** (T4.5) : détection déterministe des treize clients de D55 avec leurs configurations globales et par projet. Sept sont raccordés automatiquement ; pour les six autres, le panneau donne la configuration à copier. Aucun modèle ne fouille la machine.
 
 Échecs :
 
 - **Existant** : `E_CLI_MISSING`, `E_CONFIG_INVALID_OR_UNREADABLE`, `E_DROP_CONFLICT`, `E_CONFIG_CHANGED`, `E_CLI_COMMAND`, `E_CLI_UNVERIFIED`, `E_AGENT_INVALID`, chacun traduit en français avec le code entre parenthèses (`panel.ts`).
 - **Existant** : aucune case cochée : « Coche au moins un agent. » est annoncé.
 - **Existant** : agent à relancer. Le panneau ne déclare pas le parcours terminé (AC-CONNECT-07 dans la spec owner-app).
-- **Existant** : aucun agent détecté : « Aucun des quatre agents détecté » et la voie manuelle (AC-CONNECT-08).
+- **Existant** : aucun agent détecté : « Aucun des treize clients détecté » et la voie manuelle (AC-CONNECT-08).
 
 ### 4.3 Créer l'équipe et inviter
 
@@ -163,7 +163,7 @@ Contrat : [node](../../openspec/specs/node/spec.md), exigences « Équipe » et 
 3. **Existant** : « Inviter quelqu’un dans l’équipe » crée un lien `drop://pair?code=…` « valable 24 h, une seule fois », avec « Copier le lien » (`panel.ts`, `packages/protocol/src/invite.ts`).
 4. **Hypothèse** : la personne envoie ce lien par sa messagerie habituelle ; drop ne l'envoie pas. Critère : T4.6 observe si ce geste bloque.
 5. **Existant** : l'invité clique le lien. L'app le reçoit par le plugin de liens profonds ; avant que le Node soit prêt, jusqu'à huit liens attendent (`main.rs`, `open_links`).
-6. **Existant** : le panneau envoie le code au Node dès l'ouverture, sans clic de confirmation, puis affiche « Invitation acceptée : tu rejoins l’équipe dans quelques secondes. » (`panel.ts`). Voir l'écart E2 en section 6.
+6. **Existant** (T4.14) : le panneau montre qui invite et dans quelle équipe, puis attend « Rejoindre » ou « Refuser » ; rien n'est appairé avant ce clic (`panel.ts`).
 7. **Existant** : chaque membre envoie la liste des membres aux nouveaux pairs ; tout le monde finit appairé sans autre geste (spec node, scénario « Tout le monde se connaît »).
 
 Échecs :
@@ -196,12 +196,12 @@ Contrat : [requester-mcp](../../openspec/specs/requester-mcp/spec.md), exigences
 
 Contrat : [node](../../openspec/specs/node/spec.md), exigences « Contenu exact de la carte de consentement », « Écran de relecture champ par champ » ; [owner-app](../../openspec/specs/owner-app/spec.md), « Panneau servi par le Node ».
 
-1. **Existant** : sur macOS, une notification « Julie a besoin d'aide » avec le titre de la capacité en sous-titre ; elle ne contient pas l'URL du panneau (`packages/node/src/notify.ts`, `packages/node/src/daemon.ts`, D18). Le badge de l'onglet Demandes compte les décisions en attente.
+1. **Existant** : sur macOS, une notification « Julie a besoin d'aide » avec le titre de la capacité en sous-titre ; elle ne contient pas l'URL du panneau (D18). Dans l'app, elle porte l'icône de l'app et un clic ouvre le panneau (T4.14, `packages/node/src/notify.ts`). Le badge de l'onglet Demandes compte les décisions en attente.
 2. **Existant** : le propriétaire clique l'icône ; le panneau s'ouvre sous elle (`main.rs`, `toggle_panel`).
-3. **Existant** : la carte montre qui demande et par quel agent, la question entre guillemets, « Pourquoi », ce que le demandeur « recevra » et ce qu'il « ne recevra jamais », puis le coût s'il existe (`panel.ts`, `approvalCard`).
-4. **Existant** : trois choix : « Pas maintenant », « Refuser », « Autoriser une fois ». Le panneau annonce le résultat (« Demande autorisée une fois. ») et place le focus sur lui.
+3. **Existant** : la carte montre qui demande et par quel agent, la question entre guillemets, « Pourquoi », ce que le demandeur « recevra » et ce qu'il « ne recevra jamais », puis le coût s'il existe, « Expire dans mm:ss » et, si besoin, « Sensibilité haute » (T4.14, `panel.ts`, `approvalCard`).
+4. **Existant** : trois choix : « Pas maintenant » (par défaut au clavier, T4.14), « Refuser », « Autoriser une fois », plus « Répondre moi-même » (T4.3). Le panneau annonce le résultat (« Demande autorisée une fois. ») et place le focus sur lui.
 5. **Existant** : le runner exécute la capacité avec les seuls outils fixés à la publication. La sortie est validée par son schéma puis passée au scanner de secrets (`packages/runner/src/run.ts`).
-6. **Existant** : capacité sensible : notification « Résultat à relire avant envoi », puis une carte « À relire avant envoi. Rien n’est parti : tu peux envoyer ou garder pour toi. » avec chaque champ de la sortie.
+6. **Existant** : capacité sensible : notification « Résultat à relire avant envoi », puis une carte « À relire avant envoi. Rien n’est parti : tu peux envoyer ou garder pour toi. » avec chaque champ de la sortie ; une case par champ permet de le retirer avant l'envoi (T4.14).
 7. **Existant** : « Envoyer » livre la réponse et produit des reçus signés des deux côtés ; « Ne pas envoyer » renvoie `E_DENIED` avec « Le propriétaire a relu le résultat et choisi de ne pas l'envoyer. » (`engine.ts`).
 
 Échecs :
@@ -215,20 +215,20 @@ Contrat : [node](../../openspec/specs/node/spec.md), exigences « Contenu exact 
 
 Décision : D49.
 
-1. **Visé** (T4.3) : la carte de décision propose de répondre à la main, par un texte ou un fichier.
-2. **Visé** (T4.3) : la réponse humaine passe par le même consentement, la même validation de sortie et le même reçu qu'une capacité.
+1. **Existant** (T4.3) : la carte de décision propose « Répondre moi-même », par un texte ou un fichier texte.
+2. **Existant** (T4.3) : la réponse humaine passe par le même consentement, la même validation de sortie et le même reçu qu'une capacité.
 3. **Visé** (T4.8) : le propriétaire peut laisser un agent fourni par drop répondre après son accord, avec un modèle qu'il choisit.
 4. **Visé** (T3.2) : le choix d'un modèle local se fait avec consentement et téléchargement volontaire (D37).
 5. **Hypothèse** : un propriétaire non technique répond à une petite question en moins d'une minute. Critère : mesure pendant T4.6.
 
-Échecs, **Visé** (T4.3) : texte vide, fichier trop gros ou secret détecté dans la réponse humaine sont refusés avant l'envoi, avec la même traduction des codes que pour une capacité.
+Échecs, **Existant** (T4.3) : texte vide, fichier trop gros ou secret détecté dans la réponse humaine sont refusés avant l'envoi, avec la même traduction des codes que pour une capacité.
 
 ### 4.7 Faits publiés et petite question
 
 Décision : D50, niveaux 1 et 2. Ordre de livraison 3, 1, 2, 4.
 
-1. **Visé** (T4.4) : le propriétaire marque un fait signé comme partageable (énoncé, source, validité, public).
-2. **Visé** (T4.4) : une question qui correspond à un fait publié reçoit ce fait sans modèle ; un fait expiré n'est plus servi.
+1. **Existant** (T4.4) : le propriétaire marque un fait signé comme partageable (énoncé, source, validité, public).
+2. **Existant** (T4.4) : une question qui correspond à un fait publié reçoit ce fait sans modèle ; un fait expiré n'est plus servi.
 3. **Visé** (T4.9) : une petite question est traitée dans un appel neuf, sans outil, sur un contexte déclaré partageable, jamais depuis la session vivante d'un agent.
 4. **Hypothèse** : un fait publié évite une décision humaine sur les questions répétitives. Critère : part des demandes servies au niveau 1 pendant la simulation T4.7 puis l'essai T4.6.
 
@@ -265,16 +265,16 @@ Décision : D51.
 Décisions : D53, D54.
 
 1. **Existant** : le profil privé limite les destinations à une liste d'origines privées et refuse redirections et résolution DNS (D40, `packages/node/src/home.ts`, `packages/protocol/src/private-network.ts`).
-2. **Visé** (T4.10) : l'informatique déploie par MDM une politique signée : clients autorisés, passerelles publiques interdites, relais interne obligatoire, fournisseurs de modèles autorisés.
-3. **Visé** (T4.10) : le poste applique la politique et le relais interne la vérifie à nouveau.
-4. **Visé** (T4.10) : le relais interne est livré en binaire, image Docker et chart Helm, en TLS sur 443.
-5. **Visé** (T4.10) : le panneau indique qu'une politique d'entreprise s'applique (voir [UX_UI](UX_UI.md)).
+2. **Existant** (T4.10) : l'informatique déploie par MDM une politique signée : clients autorisés, passerelles publiques interdites, relais interne obligatoire, fournisseurs de modèles autorisés.
+3. **Existant** (T4.10) : le poste applique la politique et le relais interne la vérifie à nouveau.
+4. **Existant** (T4.10) : le relais interne est livré en image Docker et chart Helm, avec TLS facultatif. **Visé** (T4.10b) : le binaire autonome.
+5. **Existant** (T4.10) : l'état local du Node expose la politique en vigueur (`packages/node/src/api.ts`, `status`). Le panneau ne l'affiche pas encore ; la forme visée est dans [UX_UI](UX_UI.md).
 
-Échecs, **Visé** (T4.10) : politique à signature invalide, client non autorisé, relais différent de celui imposé. Le poste refuse et dit pourquoi.
+Échecs, **Existant** (T4.10) : politique à signature invalide, client non autorisé, relais différent de celui imposé. Le poste refuse et dit pourquoi.
 
 ### 4.12 ChatGPT par la passerelle
 
-Décisions : D31 (historique), D54. **Visé** : option, interdite par une politique d'entreprise (T4.10).
+Décisions : D31 (historique), D54. Option cloud différée, non livrée ; une politique d'entreprise peut l'interdire (T4.10, existant).
 
 1. **Existant** : le code de la passerelle existe : OAuth avec enregistrement dynamique, page « Relier … à ton équipe drop », serveur MCP distant avec `ask_team`, `get_drop_results` et `list_capabilities` (`packages/gateway/src/server.ts`). La tâche T2.13 reste `todo` ; aucune preuve de déploiement n'est archivée.
 2. **Existant** : la page ouvre `drop://link` ; le panneau demande « Autoriser … à demander à ton équipe ? » et avertit si la passerelle n'est pas reconnue (`panel.ts`, `linkCard`).
@@ -285,18 +285,18 @@ Décisions : D31 (historique), D54. **Visé** : option, interdite par une politi
 
 Décision : D53.
 
-1. **Existant** : aujourd'hui, la seule connexion entre Nodes passe par un relais configuré. Le démarrage ne choisit jamais le relais public (spec owner-app, « App de la barre de menus »).
+1. **Existant** : le Node essaie le réseau local, puis iroh s'il est activé, puis le relais configuré. Le démarrage ne choisit jamais le relais public (spec owner-app, « App de la barre de menus »).
 2. **Existant** : sans relais joignable, l'en-tête montre « hors ligne » avec un point ambre ; les demandes sortantes attendent dans une file locale bornée (`panel.ts`, `engine.ts`).
-3. **Visé** (T4.2) : trois modes : réseau local par mDNS, Internet par iroh embarqué, relais d'entreprise.
-4. **Visé** (T4.2) : si la connexion directe échoue, l'app l'explique et propose d'activer un relais : relais de test n0 signalé comme tiers, relais Memo Labs sur demande d'une équipe, ou relais auto-hébergé. Rien n'est activé sans choix explicite.
+3. **Existant** (T4.2, T4.2b, T4.10) : trois modes : réseau local par mDNS, Internet par iroh, relais d'entreprise.
+4. **Existant** (T4.2b) : le panneau propose d'activer un relais iroh : auto-hébergé ou d'équipe, ou relais de test n0 signalé comme tiers et refusé en profil privé (D68). Sans relais, deux pairs derrière un routeur ne se joignent pas. Rien n'est activé sans choix explicite. Un relais Memo Labs sur demande d'une équipe reste une **Hypothèse**.
 5. **Hypothèse** : la connexion directe réussit dans environ 9 cas sur 10 (chiffre annoncé par iroh, `docs/research/2026-10-10-repositionnement.md`). Critère : mesure en T4.1 et pendant T4.6.
 
 ### 4.14 Opérateur de simulation
 
-Décision : D56. Tout est **Visé**.
+Décision : D56. Le banc minimal existe (T4.1) ; le reste est **Visé** (T4.7).
 
-1. **Visé** (T4.1) : l'opérateur lance sur le Mac un banc local avec un relais dédié, 50 nœuds et de faux agents déterministes, jamais sur le VPS ni sur un relais de production.
-2. **Visé** (T4.1) : le banc mesure mémoire et latence et produit un rapport.
+1. **Existant** (T4.1) : l'opérateur lance sur le Mac un banc local avec un relais dédié, 50 nœuds et de faux agents déterministes, jamais sur le VPS ni sur un relais de production.
+2. **Existant** (T4.1) : le banc mesure mémoire et latence et produit un rapport.
 3. **Visé** (T4.7) : 500 nœuds virtuels et 10 à 20 personnages sur des modèles gratuits, via la passerelle LiteLLM du lab.
 4. **Visé** (T4.7) : l'opérateur suit la campagne sur une carte interactive : vue équipe regroupable, vue parcours par demande, lecture et pas à pas.
 5. **Visé** (T4.7) : il injecte des pannes et des sorties piégées, puis rejoue une demande.
@@ -318,11 +318,11 @@ Décision : D56. Tout est **Visé**.
 | Agent à relancer              | « Connecteur utilisable : à vérifier après relance »                          | Parcours non déclaré terminé                                   | **Existant**, `panel.ts`               |
 | Lien d'invitation périmé      | « Ce lien d’invitation n’est plus valable. »                                  | `E_INVITE`                                                     | **Existant**, `invite.ts`              |
 | Code d'erreur de demande brut | État traduit, sans code ni explication dans le panneau                        | Code visible seulement côté agent                              | **Existant**, `panel.ts` ; voir UX_UI  |
-| Pas de connexion directe      | Explication et choix d'un relais                                              | Aucun relais activé sans choix                                 | **Visé**, T4.2                         |
+| Pas de connexion directe      | Explication et choix d'un relais                                              | Aucun relais activé sans choix                                 | **Existant**, T4.2b                    |
 
 ## 6. Écarts relevés pendant la rédaction
 
-Les écarts de code E1 à E5 sont portés par T4.14 (conformité du panneau) ; les écarts de configuration (modes de fichiers, profil par défaut) par T4.15 ; les écarts de documentation par T4.0a. Ils ne changent aucun contrat ici.
+Relevés le 10 octobre 2026. Au 11 octobre : E1, E2, E3 et E5 sont corrigés par T4.14 ; E6 et E7 par T4.0a ; E4 reste, car le profil privé refuse la passerelle par choix. Les écarts de configuration (modes de fichiers, profil par défaut) restent portés par T4.15. Ils ne changent aucun contrat ici.
 
 - **E1, Existant** : la spec node demande sur la carte une ligne « Expire dans » et une ligne « Sensibilité haute », et « Pas maintenant » comme bouton par défaut au clavier. La page historique `/` (`packages/node/src/ui.ts`) les a ; le panneau `/app` n'affiche ni l'expiration ni la sensibilité et ne fixe pas de bouton par défaut.
 - **E2, Existant** : `PRODUCT.md` et le commentaire de `main.rs` disent que la personne décide dans le panneau après un lien `drop://pair` ; le panneau accepte l'invitation dès l'ouverture, sans clic.

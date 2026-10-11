@@ -1,4 +1,3 @@
-import { randomBytes } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import {
   createAdmission,
@@ -105,6 +104,15 @@ const CLAIM_ERRORS: Record<Exclude<DropClaim, 'claimed'>, { code: DropErrorCode;
   capacity: { code: 'E_RATE', message: 'Trop de demandes reçues ; réessayez plus tard.' },
 };
 
+/** What a requester learns when the transport refuses its drop request for good, by the transport's outcome. */
+function sendRefusal(outcome: string): { code: DropErrorCode; message: string } {
+  if (outcome === 'E_SCHEMA')
+    return { code: 'E_SCHEMA', message: 'Le relais a refusé la demande : destinataire inconnu ou enveloppe invalide.' };
+  if (outcome === 'E_TOO_LARGE')
+    return { code: 'E_SCHEMA', message: 'Le relais a refusé la demande : enveloppe trop grande.' };
+  return { code: 'E_RUNNER', message: 'La demande n’a pas pu être transmise.' };
+}
+
 /** Stable log reason for a replay-store failure: our own E_REPLAY_STATE text or the fs error code, never a path. */
 function replayFailureReason(error: unknown): string {
   const prefix = 'E_REPLAY_STATE ';
@@ -113,10 +121,26 @@ function replayFailureReason(error: unknown): string {
   return 'unknown';
 }
 
-/** Executor states in which a drop has not sent its outcome yet; only these are echoed to a duplicate request. */
 /** Facts are served without a decision: a peer may ask for this many per minute, no more (T4.4 review). */
 const FACT_REQUESTS_PER_MINUTE = 10;
+/** The window FACT_REQUESTS_PER_MINUTE counts over. */
+const FACT_WINDOW_MS = 60_000;
+/** How long peers' local-network keys and iroh addresses read from the store are reused before reading it again. */
+const STORE_CACHE_MS = 2000;
+/** The longest input preview put on a consent card. */
+const PREVIEW_MAX_CHARS = 2000;
+/** The longest reply sent back to a linked assistant (T2.13). */
+const AGENT_REPLY_MAX_CHARS = 60_000;
+/** Executor states in which a drop has not sent its outcome yet; only these are echoed to a duplicate request. */
 const UNSETTLED_STATES: readonly DropState[] = ['awaiting_approval', 'approved', 'running', 'in_review'];
+/** Requester states after which a drop will not change any more: such a drop may make room for a new one. */
+const TERMINAL_STATES: readonly DropState[] = ['denied', 'expired', 'not_now', 'failed', 'delivered', 'receipted'];
+/** The requester state an executor's error code leaves a drop in; any other code is a failure. */
+const ERROR_STATE: Partial<Record<DropErrorCode, DropState>> = {
+  E_EXPIRED: 'expired',
+  E_DENIED: 'denied',
+  E_NOT_NOW: 'not_now',
+};
 
 export interface NodeStore {
   /**
@@ -219,6 +243,13 @@ export interface CatalogEntry {
   online: boolean;
 }
 
+/** No paired peer publishes this capability id, or not the named owner: nothing was sent. */
+export class UnknownCapabilityError extends DropError {
+  constructor() {
+    super('E_SCHEMA', 'Aucun pair ne publie cette capacité.');
+  }
+}
+
 /** Several peers publish this capability id and the request named none of them (T4.17, D80): nothing was sent. */
 export class AmbiguousCapabilityError extends Error {
   readonly owners: { ownerNodeId: NodeId; ownerName: string }[];
@@ -279,6 +310,7 @@ export class NodeEngine extends EventEmitter {
   private readonly invites = new Map<string, number>();
   /** This node's local-network discovery key (T4.2c): from DROP_HOME, or one per process in tests. */
   private readonly lanKey: string;
+  private readonly lanKeyBytes: Uint8Array;
   private lanKeysCache: { at: number; keys: Record<string, string> } | undefined;
   /** Recent fact requests per peer (T4.4), for FACT_REQUESTS_PER_MINUTE. */
   private readonly factRequests = new Map<NodeId, number[]>();
@@ -305,8 +337,10 @@ export class NodeEngine extends EventEmitter {
   constructor(options: EngineOptions) {
     super();
     this.lanKey = options.lanKey ?? newLanKey();
+    const lanKeyBytes = decodeLanKey(this.lanKey);
     // A predictable key would let anyone recognize and knock: refuse it rather than fall back.
-    if (!decodeLanKey(this.lanKey)) throw new DropError('E_SCHEMA', 'E_LAN_KEY invalid local-network key');
+    if (!lanKeyBytes) throw new DropError('E_SCHEMA', 'E_LAN_KEY invalid local-network key');
+    this.lanKeyBytes = lanKeyBytes;
     this.options = options;
     this.identity = options.identity;
     this.now = options.now ?? Date.now;
@@ -330,8 +364,10 @@ export class NodeEngine extends EventEmitter {
     inbox: number;
     outbox: number;
     replay: number;
+    invites: number;
   } {
     return {
+      invites: this.invites.size,
       replay: this.replay.size(),
       executing: this.executing.size,
       completedErrors: this.completedErrors.size,
@@ -466,7 +502,7 @@ export class NodeEngine extends EventEmitter {
     await this.send(from, {
       type: 'agent_reply',
       callId: message.callId,
-      text: reply.text.slice(0, 60_000),
+      text: reply.text.slice(0, AGENT_REPLY_MAX_CHARS),
       isError: reply.isError,
     });
   }
@@ -477,12 +513,8 @@ export class NodeEngine extends EventEmitter {
   lanAnnouncement(): LanAnnouncement {
     const now = this.now();
     const epoch = lanEpoch(now);
-    const key = decodeLanKey(this.lanKey) ?? new Uint8Array(randomBytes(32));
-    const invites = [...this.invites]
-      .filter(([, expiresAt]) => expiresAt > now)
-      .slice(-MAX_INVITE_TAGS)
-      .map(([token]) => inviteTag(token, epoch));
-    return { tag: lanTag(key, epoch), invites };
+    const invites = [...this.liveInvites(now).keys()].slice(-MAX_INVITE_TAGS).map((token) => inviteTag(token, epoch));
+    return { tag: lanTag(this.lanKeyBytes, epoch), invites };
   }
 
   /** Whether an announcement is that peer's: from the key it shared, or from the invite this node is using. */
@@ -497,8 +529,7 @@ export class NodeEngine extends EventEmitter {
 
   /** Secrets a dialer may knock with to reach this node: its own key and the tokens of live invites. */
   lanKnockSecrets(): string[] {
-    const now = this.now();
-    return [this.lanKey, ...[...this.invites].filter(([, expiresAt]) => expiresAt > now).map(([token]) => token)];
+    return [this.lanKey, ...this.liveInvites(this.now()).keys()];
   }
 
   /** The secret to knock with toward a peer: its shared key, or the token of the invite this node is using. */
@@ -509,7 +540,7 @@ export class NodeEngine extends EventEmitter {
   /** Peers' keys, read from the store at most every 2 s: recognition runs for every announcement and every send. */
   private peerLanKeys(): Record<string, string> {
     const now = this.now();
-    if (this.lanKeysCache && now - this.lanKeysCache.at < 2000) return this.lanKeysCache.keys;
+    if (this.lanKeysCache && now - this.lanKeysCache.at < STORE_CACHE_MS) return this.lanKeysCache.keys;
     let keys: Record<string, string> = {};
     try {
       keys = this.options.store.lanKeys?.() ?? {};
@@ -531,6 +562,17 @@ export class NodeEngine extends EventEmitter {
     if (this.irohAddress) await this.send(nodeId, { type: 'iroh_addr', ...this.irohAddress });
   }
 
+  /** Only a known peer, for itself: an unknown sender's key would only let it be recognized, never trusted. */
+  private onLanKey(from: NodeId, message: MessageOf<'lan_key'>): void {
+    if (!this.isPeer(from)) return;
+    try {
+      this.options.store.saveLanKey?.(from, message.key);
+    } catch {
+      this.log({ event: 'lan_key_not_saved', code: 'E_SCHEMA', peer: from });
+    }
+    this.lanKeysCache = undefined;
+  }
+
   // ---- Internet (T4.2b, D68) ---------------------------------------------------------------------------------
 
   /** Records this node's iroh addresses; when they change, every peer learns them, queued like any message. */
@@ -548,6 +590,27 @@ export class NodeEngine extends EventEmitter {
     }
   }
 
+  /** Only a known peer, for itself, with a relay this node would accept: https, or http on loopback for tests. */
+  private onIrohAddr(from: NodeId, message: MessageOf<'iroh_addr'>): void {
+    if (!this.isPeer(from)) return;
+    // The schema keeps the address fields only; the message type is dropped.
+    const address = IrohAddrSchema.safeParse(message);
+    const relay = address.success ? address.data.relay : undefined;
+    if (
+      !address.success ||
+      (relay !== undefined && (!irohRelayAllowed(relay) || this.options.irohRelayAllowed?.(relay) === false))
+    ) {
+      this.log({ event: 'iroh_addr_refused', code: 'E_SCHEMA', peer: from });
+      return;
+    }
+    try {
+      this.options.store.saveIrohAddr?.(from, address.data);
+    } catch {
+      this.log({ event: 'iroh_addr_not_saved', code: 'E_SCHEMA', peer: from });
+    }
+    this.irohAddrsCache = undefined;
+  }
+
   /** Where a peer, or the node an invite is being used for, said it can be reached by iroh. */
   irohAddressOf(nodeId: string): IrohAddr | undefined {
     return this.peerIrohAddrs()[nodeId] ?? this.pairing.get(nodeId)?.iroh;
@@ -562,7 +625,7 @@ export class NodeEngine extends EventEmitter {
 
   private peerIrohAddrs(): Record<string, IrohAddr> {
     const now = this.now();
-    if (this.irohAddrsCache && now - this.irohAddrsCache.at < 2000) return this.irohAddrsCache.addrs;
+    if (this.irohAddrsCache && now - this.irohAddrsCache.at < STORE_CACHE_MS) return this.irohAddrsCache.addrs;
     let addrs: Record<string, IrohAddr> = {};
     try {
       addrs = this.options.store.irohAddrs?.() ?? {};
@@ -580,7 +643,7 @@ export class NodeEngine extends EventEmitter {
   }
 
   createTeam(name: string): TeamState {
-    if (this.team()) throw new Error('this node already belongs to a team');
+    if (this.team()) throw new DropError('E_DENIED', 'Ce Node fait déjà partie d’une équipe.');
     const state: TeamState = { team: createTeam(name), members: [this.selfMember()] };
     this.options.store.saveTeam(state);
     this.changed();
@@ -648,7 +711,7 @@ export class NodeEngine extends EventEmitter {
       if (!known) {
         members.set(member.nodeId, member);
         changed = true;
-        if (!this.peers().some((peer) => peer.nodeId === member.nodeId)) {
+        if (!this.isPeer(member.nodeId)) {
           this.options.store.savePeer({
             nodeId: member.nodeId,
             displayName: member.displayName,
@@ -696,7 +759,7 @@ export class NodeEngine extends EventEmitter {
         (request.ownerNodeId === undefined || candidate.ownerNodeId === request.ownerNodeId),
     );
     const [entry] = matches;
-    if (!entry) throw new Error(`unknown capability: ${request.capabilityId}`);
+    if (!entry) throw new UnknownCapabilityError();
     // Never the first one found: a share is called the same on every machine (mcp.answer.figma).
     if (matches.length > 1)
       throw new AmbiguousCapabilityError(
@@ -747,30 +810,36 @@ export class NodeEngine extends EventEmitter {
       await this.abandonOutbound(dropId, funding);
       throw new DropError('E_RATE', 'Le relais a refusé la demande.');
     }
+    if (outcome !== 'delivered' && outcome !== 'queued') {
+      // A refusal for good, e.g. a relay that does not admit this owner: the drop fails now instead of waiting in
+      // silence until it expires. It stays listed, with its code, like any other failure.
+      outbound.state = 'failed';
+      outbound.error = sendRefusal(outcome);
+      await this.releaseFunding(dropId, funding);
+    }
     this.changed();
     return outbound;
   }
 
   private async abandonOutbound(dropId: string, funding: Funding | undefined): Promise<void> {
     this.outbound.delete(dropId);
-    if (funding && this.options.funder) {
-      try {
-        await this.options.funder.release(dropId);
-      } catch {
-        this.log({ event: 'funding', code: 'E_FUNDING_RELEASE', dropId });
-      }
-    }
+    await this.releaseFunding(dropId, funding);
     this.changed();
+  }
+
+  private async releaseFunding(dropId: string, funding: Funding | undefined): Promise<void> {
+    if (!funding || !this.options.funder) return;
+    try {
+      await this.options.funder.release(dropId);
+    } catch {
+      this.log({ event: 'funding', code: 'E_FUNDING_RELEASE', dropId });
+    }
   }
 
   private reserveOutboundSlot(): void {
     if (this.outbound.size < MAX_OUTBOUND_DROPS) return;
     for (const [dropId, drop] of this.outbound) {
-      if (
-        drop.result ||
-        drop.error ||
-        ['denied', 'expired', 'not_now', 'failed', 'delivered', 'receipted'].includes(drop.state)
-      ) {
+      if (drop.result || drop.error || TERMINAL_STATES.includes(drop.state)) {
         this.outbound.delete(dropId);
         break;
       }
@@ -878,10 +947,11 @@ export class NodeEngine extends EventEmitter {
     }
   }
 
-  /** Expires undecided approvals and reviews. Called every second by the daemon, or with a simulated clock in tests. */
+  /** Expires undecided approvals, reviews and invites. Called every second by the daemon, or with a simulated clock in tests. */
   async tick(): Promise<void> {
     const now = this.now();
     this.pruneCompletedErrors(now);
+    this.liveInvites(now);
     for (const [dropId, item] of this.inbox) if (item.expiresAt <= now) this.inbox.delete(dropId);
     for (const drop of this.executing.values()) {
       if (drop.state === 'awaiting_approval' && drop.expiresAt <= now) {
@@ -918,37 +988,11 @@ export class NodeEngine extends EventEmitter {
         // Addressed to a gateway, never to a node.
         return;
       case 'lan_key':
-        // Only a known peer, for itself: an unknown sender's key would only let it be recognized, never trusted.
-        if (this.peers().some((peer) => peer.nodeId === from)) {
-          try {
-            this.options.store.saveLanKey?.(from, message.key);
-          } catch {
-            this.log({ event: 'lan_key_not_saved', code: 'E_SCHEMA', peer: from });
-          }
-          this.lanKeysCache = undefined;
-        }
+        this.onLanKey(from, message);
         return;
-      case 'iroh_addr': {
-        // Only a known peer, for itself, with a relay this node would accept: https, or http on loopback for tests.
-        if (!this.peers().some((peer) => peer.nodeId === from)) return;
-        // The schema keeps the address fields only; the message type is dropped.
-        const address = IrohAddrSchema.safeParse(message);
-        const relay = address.success ? address.data.relay : undefined;
-        if (
-          !address.success ||
-          (relay !== undefined && (!irohRelayAllowed(relay) || this.options.irohRelayAllowed?.(relay) === false))
-        ) {
-          this.log({ event: 'iroh_addr_refused', code: 'E_SCHEMA', peer: from });
-          return;
-        }
-        try {
-          this.options.store.saveIrohAddr?.(from, address.data);
-        } catch {
-          this.log({ event: 'iroh_addr_not_saved', code: 'E_SCHEMA', peer: from });
-        }
-        this.irohAddrsCache = undefined;
+      case 'iroh_addr':
+        this.onIrohAddr(from, message);
         return;
-      }
       case 'catalog_request':
         await this.send(from, {
           type: 'catalog',
@@ -1058,11 +1102,8 @@ export class NodeEngine extends EventEmitter {
     }
     const finished = this.completedErrors.get(message.dropId);
     if (finished) {
-      await this.send(from, {
-        type: 'drop_error',
-        dropId: message.dropId,
-        ...(finished.requester === from && finished.error ? finished.error : CLAIM_ERRORS.duplicate),
-      });
+      const error = finished.requester === from && finished.error ? finished.error : CLAIM_ERRORS.duplicate;
+      await this.refuse(from, message.dropId, error.code, error.message);
       return;
     }
     const requestTime = uuidv7Timestamp(message.dropId);
@@ -1075,7 +1116,7 @@ export class NodeEngine extends EventEmitter {
         dropId: message.dropId,
         peer: from,
       });
-      await this.send(from, { type: 'drop_error', dropId: message.dropId, ...CLAIM_ERRORS.expired });
+      await this.refuse(from, message.dropId, CLAIM_ERRORS.expired.code, CLAIM_ERRORS.expired.message);
       return;
     }
     if (isFactCapabilityId(message.capabilityId)) {
@@ -1083,33 +1124,18 @@ export class NodeEngine extends EventEmitter {
       return;
     }
     if (this.options.privateProfile && this.options.payer === 'owner' && message.funding) {
-      await this.send(from, {
-        type: 'drop_error',
-        dropId: message.dropId,
-        code: 'E_DENIED',
-        message: 'Financement non accepté par le propriétaire.',
-      });
+      await this.refuse(from, message.dropId, 'E_DENIED', 'Financement non accepté par le propriétaire.');
       return;
     }
     const published = this.options.store.published().find((entry) => entry.capabilityId === message.capabilityId);
     const built = published ? this.cardFor(published) : undefined;
     if (!published || !built || built.card.version !== message.capabilityVersion) {
-      await this.send(from, {
-        type: 'drop_error',
-        dropId: message.dropId,
-        code: 'E_SCHEMA',
-        message: 'Capacité inconnue.',
-      });
+      await this.refuse(from, message.dropId, 'E_SCHEMA', 'Capacité inconnue.');
       return;
     }
     const validated = validateInput(built.impl, message.input);
     if (!validated.ok) {
-      await this.send(from, {
-        type: 'drop_error',
-        dropId: message.dropId,
-        code: 'E_SCHEMA',
-        message: 'Entrée invalide.',
-      });
+      await this.refuse(from, message.dropId, 'E_SCHEMA', 'Entrée invalide.');
       return;
     }
     if (!(await this.admit(from, message.dropId, now))) return;
@@ -1121,7 +1147,7 @@ export class NodeEngine extends EventEmitter {
       config: published.config,
       input: validated.input,
       purpose: message.purpose,
-      requestedBy: { ...message.requestedBy, nodeId: from },
+      requestedBy: this.requesterOf(from, message.requestedBy),
       state: 'awaiting_approval',
       approver: undefined,
       expiresAt: now + APPROVAL_TTL_MS,
@@ -1146,7 +1172,7 @@ export class NodeEngine extends EventEmitter {
         executorName: this.identity.displayName,
         ...(cost ? { cost, paidBy: drop.funding ? ('requester' as const) : ('owner' as const) } : {}),
       },
-      inputPreview: built.impl.preview(validated.input).slice(0, 2000),
+      inputPreview: built.impl.preview(validated.input).slice(0, PREVIEW_MAX_CHARS),
       purpose: drop.purpose,
       requestedBy: drop.requestedBy,
       expiresAt: drop.expiresAt,
@@ -1168,7 +1194,7 @@ export class NodeEngine extends EventEmitter {
       card: message.card,
       inputPreview: message.inputPreview,
       purpose: message.purpose,
-      requestedBy: message.requestedBy,
+      requestedBy: this.requesterOf(message.requestedBy.nodeId, message.requestedBy),
       expiresAt: message.expiresAt,
     });
     this.emit('approval', this.inbox.get(message.dropId));
@@ -1202,7 +1228,7 @@ export class NodeEngine extends EventEmitter {
         });
       }
       if (claim !== 'claimed') {
-        await this.send(from, { type: 'drop_error', dropId, ...CLAIM_ERRORS[claim] });
+        await this.refuse(from, dropId, CLAIM_ERRORS[claim].code, CLAIM_ERRORS[claim].message);
         return false;
       }
     }
@@ -1214,7 +1240,7 @@ export class NodeEngine extends EventEmitter {
         dropId,
         peer: from,
       });
-      await this.send(from, { type: 'drop_error', dropId, ...CLAIM_ERRORS.capacity });
+      await this.refuse(from, dropId, CLAIM_ERRORS.capacity.code, CLAIM_ERRORS.capacity.message);
       return false;
     }
     return true;
@@ -1335,7 +1361,7 @@ export class NodeEngine extends EventEmitter {
 
   /** At most FACT_REQUESTS_PER_MINUTE per peer: served without a decision, facts must not drain the owner's sends. */
   private factRateExceeded(from: NodeId, now: number): boolean {
-    const recent = (this.factRequests.get(from) ?? []).filter((at) => at > now - 60_000);
+    const recent = (this.factRequests.get(from) ?? []).filter((at) => at > now - FACT_WINDOW_MS);
     recent.push(now);
     this.factRequests.set(from, recent);
     return recent.length > FACT_REQUESTS_PER_MINUTE;
@@ -1343,17 +1369,16 @@ export class NodeEngine extends EventEmitter {
 
   /** Served without a consent card: publishing was the owner's consent (D65). Same refusal whatever the reason. */
   private async serveFact(from: NodeId, message: MessageOf<'drop_request'>, now: number): Promise<void> {
-    const refuse = async (code: 'E_SCHEMA' | 'E_RATE', text: string): Promise<void> => {
-      await this.send(from, { type: 'drop_error', dropId: message.dropId, code, message: text });
-    };
-    if (!this.servableFact(from, message, now)) return refuse('E_SCHEMA', 'Fait indisponible.');
-    if (!FACT_IMPL.input.safeParse(message.input).success) return refuse('E_SCHEMA', 'Entrée invalide.');
+    const { dropId } = message;
+    if (!this.servableFact(from, message, now)) return this.refuse(from, dropId, 'E_SCHEMA', 'Fait indisponible.');
+    if (!FACT_IMPL.input.safeParse(message.input).success)
+      return this.refuse(from, dropId, 'E_SCHEMA', 'Entrée invalide.');
     if (this.factRateExceeded(from, now))
-      return refuse('E_RATE', 'Trop de demandes de faits : réessaie dans une minute.');
-    if (!(await this.admit(from, message.dropId, now))) return;
+      return this.refuse(from, dropId, 'E_RATE', 'Trop de demandes de faits : réessaie dans une minute.');
+    if (!(await this.admit(from, dropId, now))) return;
     // Read again after the await: a retire or an edit made meanwhile wins.
     const entry = this.servableFact(from, message, this.now());
-    if (!entry) return refuse('E_SCHEMA', 'Fait indisponible.');
+    if (!entry) return this.refuse(from, dropId, 'E_SCHEMA', 'Fait indisponible.');
     const { fact } = entry.signed;
     const drop: ExecutorDrop = {
       dropId: message.dropId,
@@ -1363,7 +1388,7 @@ export class NodeEngine extends EventEmitter {
       config: {},
       input: {},
       purpose: message.purpose,
-      requestedBy: { ...message.requestedBy, nodeId: from },
+      requestedBy: this.requesterOf(from, message.requestedBy),
       state: 'approved',
       approver: this.identity.nodeId,
       expiresAt: now,
@@ -1554,14 +1579,7 @@ export class NodeEngine extends EventEmitter {
       delete drop.error;
     }
     if (message.type === 'drop_error') {
-      drop.state =
-        message.code === 'E_EXPIRED'
-          ? 'expired'
-          : message.code === 'E_DENIED'
-            ? 'denied'
-            : message.code === 'E_NOT_NOW'
-              ? 'not_now'
-              : 'failed';
+      drop.state = ERROR_STATE[message.code] ?? 'failed';
       drop.error = { code: message.code, message: message.message };
     }
     this.changed();
@@ -1674,7 +1692,12 @@ export class NodeEngine extends EventEmitter {
   private async answerDuplicate(from: NodeId, drop: ExecutorDrop): Promise<void> {
     if (drop.requester === from && UNSETTLED_STATES.includes(drop.state)) return this.status(drop);
     const error = drop.requester === from && drop.error ? drop.error : CLAIM_ERRORS.duplicate;
-    await this.send(from, { type: 'drop_error', dropId: drop.dropId, ...error });
+    await this.refuse(from, drop.dropId, error.code, error.message);
+  }
+
+  /** Answers a drop request with an error: a refusal before anything runs, or an outcome replayed to a duplicate. */
+  private async refuse(to: NodeId, dropId: string, code: DropErrorCode, message: string): Promise<void> {
+    await this.send(to, { type: 'drop_error', dropId, code, message });
   }
 
   private async status(drop: ExecutorDrop): Promise<void> {
@@ -1778,10 +1801,7 @@ export class NodeEngine extends EventEmitter {
 
   /** Local network (T4.2, D60): a direct session may only be opened toward a paired peer or the inviter being joined. */
   canReachDirectly(nodeId: string): boolean {
-    return (
-      nodeId !== this.identity.nodeId &&
-      (this.pairing.has(nodeId) || this.peers().some((peer) => peer.nodeId === nodeId))
-    );
+    return nodeId !== this.identity.nodeId && (this.pairing.has(nodeId) || this.isPeer(nodeId));
   }
 
   /** Local network (T4.2, D60): a direct session may only come from a paired peer, a pairing in progress, or anyone while an invite is live. */
@@ -1789,11 +1809,24 @@ export class NodeEngine extends EventEmitter {
     return nodeId !== this.identity.nodeId && (this.canReachDirectly(nodeId) || this.hasLiveInvite());
   }
 
+  /**
+   * Who asked, as the owner will see it on the consent card. A paired peer is shown under the name this node
+   * stored at pairing, never under the name its request claims: a peer could otherwise sign as "Alice (CTO)".
+   */
+  private requesterOf(nodeId: NodeId, claimed: RequestedBy): RequestedBy {
+    const known = this.peers().find((peer) => peer.nodeId === nodeId);
+    return { ...claimed, nodeId, displayName: known?.displayName ?? claimed.displayName };
+  }
+
+  private isPeer(nodeId: NodeId): boolean {
+    return this.peers().some((peer) => peer.nodeId === nodeId);
+  }
+
   private isKnown(nodeId: NodeId): boolean {
     return (
       nodeId === this.identity.nodeId ||
       this.pairing.has(nodeId) ||
-      this.peers().some((peer) => peer.nodeId === nodeId) ||
+      this.isPeer(nodeId) ||
       this.links().some((link) => link.gateway === nodeId)
     );
   }
@@ -1803,7 +1836,13 @@ export class NodeEngine extends EventEmitter {
   }
 
   private hasLiveInvite(): boolean {
-    return [...this.invites.values()].some((expiresAt) => expiresAt > this.now());
+    return this.liveInvites(this.now()).size > 0;
+  }
+
+  /** The invites still valid at `now`, by token; expired ones are forgotten on the way. */
+  private liveInvites(now: number): Map<string, number> {
+    for (const [token, expiresAt] of this.invites) if (expiresAt <= now) this.invites.delete(token);
+    return this.invites;
   }
 
   private changed(): void {

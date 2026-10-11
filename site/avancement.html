@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       name="description"
-      content="État de drop au 10 octobre 2026 : repositionnement, socle existant, chantiers en cours et phases suivantes. Rien n’est encore validé avec de vrais utilisateurs."
+      content="État de drop au 11 octobre 2026 : ce qui est livré, ce qui est en vérification, ce qui reste avant l’essai avec deux amis et avant le lancement. Rien n’est encore validé avec de vrais utilisateurs."
     />
     <meta name="theme-color" content="#2548ed" />
     <title>Où en est le projet ? · drop</title>
@@ -29,293 +29,135 @@
     </header>
     <main id="contenu" class="wrap">
       <div class="page-title">
-        <span class="pill">État du 10 octobre 2026</span>
+        <span class="pill">État au 11 octobre 2026</span>
         <h1>Le socle existe.<br />Le besoin reste à mesurer.</h1>
         <p>
-          Le 10 octobre 2026, le projet s’est repositionné : la réponse, pas l’accès, comme couche de consentement
-          au-dessus d’A2A et MCP. Rien n’a encore été validé avec de vrais utilisateurs.
+          drop est un prototype. Rien n’a encore été validé avec de vrais utilisateurs. Julie et Natha sont des
+          personnages de scénario ; toutes les démonstrations ont tourné sur les machines de Guillaume.
         </p>
       </div>
       <div class="doc-layout">
         <nav class="toc" aria-label="Sommaire du bilan">
-          <a href="#cap">Le repositionnement</a><a href="#maintenant">Les chantiers en cours</a
-          ><a href="#preuves">Les preuves existantes</a><a href="#suite">Les phases suivantes</a
-          ><a href="#vigilance">Les points ouverts</a><a href="#methode">Les sources</a>
+          <a href="#livre">Livré</a><a href="#verification">En vérification</a><a href="#essai">Avant l’essai</a
+          ><a href="#lancement">Avant le lancement</a><a href="#vigilance">Ce qui n’est pas acquis</a
+          ><a href="#methode">Les sources</a>
         </nav>
         <article class="article">
-          <section id="cap">
-            <h2>Ce qui a changé le 10 octobre.</h2>
+          <section id="livre">
+            <h2>Livré.</h2>
             <ul>
               <li>
-                <strong>Positionnement.</strong> La réponse, pas l’accès. Le propriétaire valide le contenu qui sort ;
-                drop implémente A2A et s’y place comme couche de consentement humain, sans le concurrencer.
+                <strong>Profil privé (T3.1).</strong> Relais interne, destinations réseau explicites, aucun repli cloud.
+                Le propriétaire utilise son propre modèle ; une clé envoyée par le demandeur est refusée.
               </li>
               <li>
-                <strong>Cible.</strong> Guillaume, puis deux amis techniques dans des contextes différents. Conçu selon
-                les exigences d’une entreprise souveraine ; adoption visée par les petites équipes.
+                <strong>Raccordement des agents (T3.3, T4.5).</strong> Treize clients MCP détectés ; sept raccordés
+                automatiquement, six par une configuration à copier.
               </li>
               <li>
-                <strong>Échanges.</strong> Quatre niveaux : fait publié, petite question, capacité, tâche déléguée. La
-                conversation libre entre agents est exclue. La délégation et un contexte partagé décentralisé, exclus
-                jusque-là, deviennent des chantiers.
+                <strong>Connexion (T4.2 à T4.2e).</strong> Réseau local, et Internet par iroh, désactivé par défaut :
+                entre deux réseaux, il faut un relais choisi.
               </li>
               <li>
-                <strong>Connexion.</strong> Réseau local, Internet en direct, relais d’entreprise. Aucun relais de
-                secours par défaut.
+                <strong>Réponse à la main (T4.3) et faits publiés (T4.4).</strong> Le propriétaire peut répondre
+                lui-même ou publier une information servie sans modèle, jusqu’à une date de fin.
               </li>
               <li>
-                <strong>Simulation.</strong> Faire vivre drop dans une entreprise fictive avant de le confier à de
-                vraies personnes.
+                <strong>Panneau conforme (T4.14).</strong> Expiration, sensibilité, « Pas maintenant » par défaut,
+                retrait de champs à la relecture, invitation confirmée, notifications à l’icône de l’app.
               </li>
               <li>
-                <strong>Argent.</strong> Rien de payant avant d’avoir des utilisateurs. « drop » reste un nom de code.
+                <strong>Pack entreprise (T4.10).</strong> Politique signée appliquée au poste et au relais ; image
+                Docker et chart Helm du relais.
+              </li>
+              <li><strong>Relais.</strong> Révocation sans redémarrage (T2.19).</li>
+              <li>
+                <strong>Simulation minimale (T4.1).</strong> 50 nœuds sur un Mac : 124 demandes livrées, aucune fuite.
+                Un propriétaire très sollicité bute sur la limite de débit du relais (à corriger en T3.1d).
               </li>
             </ul>
-            <div class="note">
-              <p>
-                <strong>Le cap du 9 octobre reste valable.</strong> Profil privé, app Mac en barre de menus et socle
-                sous Apache-2.0 sont conservés. Le 10 octobre les précise : la souveraineté reste la référence de
-                conception.
-              </p>
-            </div>
           </section>
-          <section id="maintenant">
-            <h2>Les chantiers en cours.</h2>
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th scope="col">Tâche</th>
-                    <th scope="col">État</th>
-                    <th scope="col">Ce qu’il reste</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td>T4.0 Documents produit</td>
-                    <td>Terminée</td>
-                    <td>Référence descriptive dans <code>docs/product/</code> du dépôt.</td>
-                  </tr>
-                  <tr>
-                    <td>T4.0a Mise en vérité</td>
-                    <td>Faite</td>
-                    <td>Aligner la vision, le README, le guide, ce site et les specs sur le repositionnement.</td>
-                  </tr>
-                  <tr>
-                    <td>T4.1 Simulation minimale</td>
-                    <td>Faite</td>
-                    <td>
-                      50 nœuds sur un Mac, graine 1 : 124 livrées, 14 refusées, 14 reportées, aucune fuite, latence
-                      médiane 100 ms. Les 8 délais dépassés viennent d’un propriétaire bloqué par la limite de débit du
-                      relais (T3.1d).
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>T4.14 Panneau conforme</td>
-                    <td>Faite</td>
-                    <td>
-                      Notifications à l’icône de l’app et clic qui ouvre le panneau, vérifiés sur la build notarisée ;
-                      invitation confirmée avant de rejoindre (sur test) ; carte avec expiration en direct. VoiceOver et
-                      une vraie invitation restent à tester.
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>T4.18 Arrêt du moteur</td>
-                    <td>Faite</td>
-                    <td>
-                      Le moteur s’arrête de lui-même si l’app meurt sans quitter, vérifié sur la build notarisée avec un
-                      kill -9.
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>T3.1b Bornes anti-rejeu</td>
-                    <td>En cours</td>
-                    <td>Corrections implémentées et testées ; revue formelle à terminer.</td>
-                  </tr>
-                  <tr>
-                    <td>T3.1c Clôture du risque élevé</td>
-                    <td>Bloquée</td>
-                    <td>Attend la revue de T3.1b. Condition avant tout essai avec de vraies personnes.</td>
-                  </tr>
-                  <tr>
-                    <td>T3.4 App Mac distribuable</td>
-                    <td>Bloquée</td>
-                    <td>
-                      Build signée et notarisée, preuve consignée le 10 octobre (Apple Silicon seulement). Recette
-                      VoiceOver et installation sur un Mac de test restent humaines.
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+          <section id="verification">
+            <h2>En vérification.</h2>
+            <ul>
+              <li>
+                <strong>App Mac (T3.4).</strong> Signée et notarisée pour Apple Silicon : la notarisation est prouvée.
+                Restent la recette humaine sur un Mac neuf et VoiceOver.
+              </li>
+              <li>
+                <strong>Revues de sécurité (T3.1b, T3.1c).</strong> Corrections anti-rejeu implémentées et testées ; la
+                revue formelle et la clôture du risque élevé restent à faire.
+              </li>
+              <li><strong>Recettes humaines.</strong> Les tâches archivées attendent l’acceptation de Guillaume.</li>
+            </ul>
           </section>
-          <section id="preuves">
-            <h2>Ce que l’on peut déjà examiner.</h2>
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th scope="col">Partie</th>
-                    <th scope="col">État</th>
-                    <th scope="col">Limite de la preuve</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td>Protocole, relais et consentement</td>
-                    <td>Implémentés dans le prototype</td>
-                    <td>
-                      Code et tests ; aucune certification de sécurité indépendante. Le panneau de l’app n’affiche pas
-                      encore l’expiration et ne permet pas de retirer des champs à la relecture (T4.14).
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>Capacités (niveau 3)</td>
-                    <td>Implémentées</td>
-                    <td>Résumé d’erreurs, dépôt, source MCP, agent A2A ; modèles réels à qualifier (T3.2).</td>
-                  </tr>
-                  <tr>
-                    <td>Résumé d’erreurs et question sur un dépôt</td>
-                    <td>Démonstration conservée</td>
-                    <td>Parcours historique Mac + VPS avec Claude Code et Codex, pas une preuve du profil privé.</td>
-                  </tr>
-                  <tr>
-                    <td>Ponts A2A entrants et sortants</td>
-                    <td>Implémentés</td>
-                    <td>L’agent A2A joint conserve ses propres outils, modèles et règles de sortie.</td>
-                  </tr>
-                  <tr>
-                    <td>Profil privé (T3.1)</td>
-                    <td>Recette vérifiée</td>
-                    <td>Deux Nodes, un relais et des fixtures dans un conteneur sans Internet ; pas de vrai modèle.</td>
-                  </tr>
-                  <tr>
-                    <td>Raccordement en deux confirmations (T3.3)</td>
-                    <td>Quatre adaptateurs, tests sur fixtures</td>
-                    <td>Recette humaine sur Mac à faire ; neuf autres clients visés (T4.5).</td>
-                  </tr>
-                  <tr>
-                    <td>App Mac en barre de menus</td>
-                    <td>Tauri, Node embarqué, panneau</td>
-                    <td>Distribution signée et notarisée : preuve à archiver (T3.4).</td>
-                  </tr>
-                  <tr>
-                    <td>Annuaire d’équipe et questions à plusieurs</td>
-                    <td>Code et tests présents</td>
-                    <td>Jamais utilisés en vrai par une équipe.</td>
-                  </tr>
-                  <tr>
-                    <td>Documentation et kit open source</td>
-                    <td>Préparés</td>
-                    <td>Dépôt encore privé ; publication et installateurs publics non réalisés (T3.6).</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-            <p>
-              Le Node nommé Julie et son dépôt de démonstration tournaient sur le Mac de Guillaume. Cette preuve montre
-              le circuit technique ; elle ne remplace pas un essai autonome chez une autre personne.
-            </p>
+          <section id="essai">
+            <h2>Reste avant l’essai avec deux amis (T4.6).</h2>
+            <ul>
+              <li>Fermer les revues de sécurité (T3.1b, T3.1c).</li>
+              <li>Finir l’app Mac (T3.4).</li>
+              <li>Hygiène de configuration (T4.15).</li>
+              <li>Choisir et installer le chemin de connexion entre les deux amis (T4.6a).</li>
+              <li>Écrire le protocole de l’essai et de la mesure du besoin (T4.6b).</li>
+              <li>
+                Si l’essai inclut le partage par modèle : qualifier un modèle (T3.2) et choisir outils, modèle et
+                approbateur depuis l’app (T4.16).
+              </li>
+            </ul>
           </section>
-          <section id="suite">
-            <h2>Les phases suivantes.</h2>
+          <section id="lancement">
+            <h2>Reste avant le lancement.</h2>
+            <ul>
+              <li>Résilience du protocole et du stockage anti-rejeu (T3.1d, T3.1e).</li>
+              <li>Preuve privée d’ensemble avec Internet bloqué (T3.5).</li>
+              <li>Préparation de la publication : audit, licences, signalement privé, paquets (T3.6).</li>
+              <li>Nom du produit, offre et lancement public (T4.13), avec l’accord de Guillaume.</li>
+            </ul>
             <p>
-              Le chemin de sécurité T3 reste prioritaire. L’essai avec de vraies personnes ne démarre pas avant la
-              clôture du risque élevé (T3.1c). Aucune date de lancement n’est engagée.
+              Après l’essai seulement : Windows, Linux, simulation complète, agent inclus, petite question, tâches
+              déléguées et contexte partagé. La passerelle pour Claude et ChatGPT sur le web est mise de côté : le
+              profil privé la refuse. Aucune date de lancement n’est engagée.
             </p>
-            <ol>
-              <li>
-                <strong>P0, documents et mise en vérité (T4.0, T4.0a).</strong> Aucun document ni page ne contredit le
-                repositionnement.
-              </li>
-              <li>
-                <strong>Simulation minimale (T4.1).</strong> 50 nœuds sur le Mac, un relais dédié et de faux agents ;
-                mesure de la mémoire et de la latence. Jamais le relais de production.
-              </li>
-              <li>
-                <strong>P1, essai avec deux amis (T4.2 à T4.6, T4.14, T4.15).</strong> Connexion directe, réponse à la
-                main, faits publiés, treize clients MCP, panneau conforme, puis mesure du besoin.
-              </li>
-              <li>
-                <strong>P2, simulation complète (T4.7).</strong> 500 nœuds virtuels, 10 à 20 personnages joués par des
-                modèles gratuits, carte interactive, pannes et sorties piégées. Elle valide la robustesse, pas le
-                besoin.
-              </li>
-              <li>
-                <strong>P3, sans agent et en entreprise (T4.8 à T4.10).</strong> Agent inclus, petite question, relais
-                interne et politique signée.
-              </li>
-              <li>
-                <strong>P4, délégation et contexte (T4.11, T4.12).</strong> Tâches déléguées avec jalons d’approbation,
-                contexte partagé décentralisé.
-              </li>
-              <li>
-                <strong>P5, nom, offre et lancement (T3.6, T4.13).</strong> Chaque étape attend l’accord de Guillaume.
-              </li>
-            </ol>
-            <p>
-              Hermes a passé un essai MCP isolé (T3.1a, revue encore ouverte) : accord, refus, expiration et panne du
-              fournisseur local simulé. Aucun adaptateur automatique ni vrai modèle n’est qualifié par cet essai. AI SDK
-              et LiteLLM restent à évaluer en T3.2a.
-            </p>
-            <p><a class="text-link" href="downloads/HERMES.md" download>Lire la recette Hermes et ses limites</a></p>
-            <a class="text-link" href="downloads/ACCEPTANCE.md" download
-              >Voir les critères reliés aux prochains chantiers</a
-            >
           </section>
           <section id="vigilance">
-            <h2>Les points qui ne sont pas encore acquis.</h2>
-            <h3>Le besoin n’est pas mesuré.</h3>
-            <p>
-              Le seuil reste : au moins trois développeurs, dix jours actifs chacun, au moins 0,5 blocage qualifié par
-              développeur et par jour, et une médiane d’au moins dix minutes perdues. La seule base observée, celle de
-              Guillaume, compte quatre événements, aucun classé comme blocage. Le repositionnement ne vaut pas
-              validation du marché.
-            </p>
-            <h3>La carte de décision n’a pas été testée.</h3>
-            <p>
-              Sa compréhension par un propriétaire non technique n’a jamais été mesurée. Elle le sera pendant l’essai
-              (T4.6).
-            </p>
-            <h3>Une installation locale ne prouve pas la souveraineté.</h3>
-            <p>
-              Modèles, connecteurs, agents A2A, mises à jour et télémétrie doivent respecter les destinations
-              autorisées. Le mode privé exige une observation réseau et des tests de refus, en plus du chiffrement et
-              des validations de sortie.
-            </p>
-            <h3>Les modèles candidats ne sont pas des modèles recommandés.</h3>
-            <p>
-              Ollama avec Qwen3.5 4B ou 9B est une piste documentée. Aucune mesure drop ne permet encore d’annoncer une
-              latence, un minimum de RAM ou une qualité suffisante. Un téléchargement doit rester choisi explicitement.
-            </p>
-            <h3>L’ouverture du code demande ses propres contrôles.</h3>
-            <p>
-              La licence et les documents de contribution préparent l’ouverture. L’audit de l’historique, les secrets,
-              les licences tierces, la CI et la distribution publique restent un chantier explicite (T3.6). Les
-              protections essentielles restent dans le socle gratuit.
-            </p>
+            <h2>Ce qui n’est pas encore acquis.</h2>
+            <ul>
+              <li>
+                <strong>Le besoin n’est pas mesuré.</strong> Seuil retenu : au moins trois développeurs, dix jours
+                actifs chacun, au moins 0,5 blocage par développeur et par jour, une médiane d’au moins dix minutes
+                perdues.
+              </li>
+              <li>
+                <strong>La carte de décision n’a pas été testée</strong> par un propriétaire non technique. Elle le sera
+                pendant l’essai.
+              </li>
+              <li>
+                <strong>Une installation locale ne prouve pas la souveraineté.</strong> Modèles, connecteurs et agents
+                joints ont leurs propres flux. Le chiffrement et le scanner ne prouvent pas l’absence de toute fuite.
+              </li>
+              <li>
+                <strong>Aucun modèle n’est recommandé.</strong> Qwen3.5 4B ou 9B avec Ollama restent des candidats à
+                mesurer (T3.2).
+              </li>
+            </ul>
             <a class="text-link" href="guide.html#confidentialite">Lire les frontières de confidentialité</a>
           </section>
           <section id="methode">
-            <h2>Un état daté, pas un compteur de progrès.</h2>
+            <h2>Un état daté, pas un compteur.</h2>
             <p>
-              L’index des tâches du dépôt fixe l’ordre et les dépendances. La référence produit vit dans
-              <code>docs/product/</code> ; les décisions du 10 octobre y sont citées. Le bilan téléchargeable renvoie
-              aux implémentations et aux preuves ; il porte sa propre date.
-            </p>
-            <p>
-              Les nombres de tâches ou de tests ne mesurent pas à eux seuls la maturité du produit. Les critères
-              d’acceptation et leurs preuves déterminent ce que l’on peut annoncer.
+              L’index des tâches du dépôt fixe l’ordre et les statuts. Les preuves de chaque tâche sont archivées avec
+              elle. Le bilan téléchargeable donne les mêmes faits avec leurs liens.
             </p>
             <div class="download-row">
               <a href="downloads/PRIVATE_PROFILE.md" download>Installer le profil privé</a
-              ><a href="downloads/AVANCEMENT.md" download>Télécharger le bilan sourcé</a
+              ><a href="downloads/AVANCEMENT.md" download>Télécharger le bilan</a
               ><a href="downloads/ACCEPTANCE.md" download>Critères d’acceptation</a
+              ><a href="downloads/HERMES.md" download>Recette Hermes</a
               ><a href="downloads/OPEN_SOURCE.md" download>Plan d’ouverture</a>
             </div>
             <p class="date">
-              Photographie du 10 octobre 2026, non recalculée à l’ouverture. Aucun état de serveur distant n’est
-              certifié par cette page.
+              État au 11 octobre 2026, non recalculé à l’ouverture. Aucun état de serveur distant n’est certifié par
+              cette page.
             </p>
           </section>
         </article>

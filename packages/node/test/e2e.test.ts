@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { openEnvelope, ReplayCache, sealEnvelope } from '@drop/protocol';
+import { openEnvelope, ReplayCache, sealEnvelope, uuidv7 } from '@drop/protocol';
 import { allReceiptsValid, fakeCapability, startMesh, until, type Mesh } from './helpers.ts';
 
 const LOW = 'test.service_state';
@@ -259,5 +259,61 @@ describe('end to end, in memory: relay and three nodes', () => {
     // The real approver still decides.
     await m.approver.engine.decide(dropId, 'allow_once');
     await until(() => m.requester.engine.drop(dropId)?.result !== undefined);
+  });
+
+  it('shows a paired requester under the name stored at pairing, not the name its request claims', async () => {
+    const m = await setup();
+    const dropId = uuidv7(m.clock.now);
+    // The requester signs its own drop_request but claims someone else's name.
+    await m.executor.engine.handleEnvelope(
+      await sealEnvelope(
+        m.requester.identity,
+        m.executor.identity.nodeId,
+        {
+          type: 'drop_request',
+          dropId,
+          capabilityId: LOW,
+          capabilityVersion: '1.0.0',
+          input: { mode: 'ok' },
+          purpose: 'Comprendre un incident en prod',
+          requestedBy: { nodeId: m.requester.identity.nodeId, displayName: 'Alice (CTO)', agent: 'claude_code' },
+        },
+        { now: m.clock.now },
+      ),
+    );
+    await until(() => m.approver.engine.pending().some((item) => item.dropId === dropId));
+    expect(m.approver.engine.pending()[0]).toMatchObject({
+      kind: 'approval',
+      requestedBy: { nodeId: m.requester.identity.nodeId, displayName: 'Guillaume', agent: 'claude_code' },
+    });
+
+    // The approver applies the same rule to an approval request naming one of its own peers.
+    const forgedId = uuidv7(m.clock.now + 1);
+    await m.approver.engine.handleEnvelope(
+      await sealEnvelope(
+        m.executor.identity,
+        m.approver.identity.nodeId,
+        {
+          type: 'approval_request',
+          dropId: forgedId,
+          card: {
+            capabilityId: LOW,
+            title: 'Donner un état de service',
+            receives: ['Un état'],
+            neverReceives: [],
+            sensitivity: 'low',
+            executorName: 'VPS',
+          },
+          inputPreview: 'mode ok',
+          purpose: 'Comprendre un incident en prod',
+          requestedBy: { nodeId: m.executor.identity.nodeId, displayName: 'Alice (CTO)', agent: 'codex' },
+          expiresAt: m.clock.now + 60_000,
+        },
+        { now: m.clock.now },
+      ),
+    );
+    const forged = m.approver.engine.pending().find((item) => item.dropId === forgedId);
+    expect(forged).toMatchObject({ requestedBy: { displayName: 'VPS' } });
+    expect(JSON.stringify(m.approver.engine.pending())).not.toContain('Alice (CTO)');
   });
 });

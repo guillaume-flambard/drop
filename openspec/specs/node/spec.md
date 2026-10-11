@@ -711,6 +711,11 @@ Le Node MUST traiter `E_RATE`, `E_QUEUE_FULL` ou l'indisponibilité du relais à
 - **WHEN** le relais répond `E_RATE` ou `E_QUEUE_FULL` à une enveloppe déjà en file
 - **THEN** le Node garde l'enveloppe jusqu'à son expiration et journalise le refus, sans la perdre silencieusement
 
+#### Scenario: AC: relais refuse une destination inconnue
+<!-- openspec-guard:test="bounded requester memory > fails a drop at once, with E_SCHEMA, when the relay refuses its envelope for an owner it does not admit" -->
+- **WHEN** le relais refuse définitivement la demande initiale avec `E_SCHEMA`, par exemple pour un propriétaire qu'il n'admet pas
+- **THEN** la demande passe aussitôt à l'état `failed` avec `E_SCHEMA`, la clé plafonnée est libérée une fois et la demande n'attend pas son expiration
+
 #### Scenario: AC: enveloppe initiale trop grande
 <!-- openspec-guard:test="bounded requester memory > releases funding and active memory when the initial envelope is too large" -->
 - **WHEN** la demande initiale dépasse la taille maximale de l'enveloppe avant envoi au relais

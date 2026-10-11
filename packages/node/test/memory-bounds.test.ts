@@ -115,6 +115,33 @@ describe('bounded requester memory', () => {
     expect(mesh?.requester.engine.memoryStats().outbox).toBe(0);
   });
 
+  it('fails a drop at once, with E_SCHEMA, when the relay refuses its envelope for an owner it does not admit', async () => {
+    const released: string[] = [];
+    const m = (mesh = await startMesh([fakeCapability(CAPABILITY, 'low')], {
+      requester: {
+        funder: {
+          mint: () =>
+            Promise.resolve({
+              kind: 'capped_key',
+              baseUrl: 'https://example.test/v1',
+              apiKey: 'sk-test-0123456789abcdef',
+              maxUsd: 0.1,
+            }),
+          release: (dropId) => {
+            released.push(dropId);
+            return Promise.resolve();
+          },
+        },
+      },
+    }));
+    vi.spyOn(m.requester.transport, 'send').mockResolvedValue('E_SCHEMA');
+    const dropId = await ask(m);
+    expect(m.requester.engine.drop(dropId)).toMatchObject({ state: 'failed', error: { code: 'E_SCHEMA' } });
+    expect(released).toEqual([dropId]);
+    expect(m.requester.engine.memoryStats().outbox).toBe(0);
+    expect(m.executor.engine.memoryStats().executing).toBe(0);
+  });
+
   it('releases funding and active memory when the initial envelope is too large', async () => {
     const released: string[] = [];
     const m = (mesh = await startMesh([fakeCapability(CAPABILITY, 'low')], {
@@ -396,4 +423,29 @@ describe('bounded transient node memory', () => {
     await Promise.all([first, second]);
     expect(engine.memoryStats().outbox).toBeLessThanOrEqual(1_024);
   }, 60_000);
+
+  it('forgets expired invites when checking them and on tick', async () => {
+    const clock = { now: Date.now() };
+    const engine = new NodeEngine({
+      identity: await generateIdentity('Julie'),
+      ownerKind: 'human',
+      store: new MemoryStore(),
+      capabilities: [],
+      transport: { send: () => Promise.resolve('offline') },
+      now: () => clock.now,
+    });
+    await engine.invite('ws://127.0.0.1:1/v1');
+    await engine.invite('ws://127.0.0.1:1/v1');
+    expect(engine.memoryStats().invites).toBe(2);
+    expect(engine.lanKnockSecrets()).toHaveLength(3);
+    clock.now += 25 * 60 * 60_000;
+    expect(engine.lanKnockSecrets()).toHaveLength(1);
+    expect(engine.memoryStats().invites).toBe(0);
+    expect(engine.irohAccess().open).toBe(false);
+
+    await engine.invite('ws://127.0.0.1:1/v1');
+    clock.now += 25 * 60 * 60_000;
+    await engine.tick();
+    expect(engine.memoryStats().invites).toBe(0);
+  });
 });

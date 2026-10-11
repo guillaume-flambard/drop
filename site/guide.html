@@ -28,11 +28,11 @@
     </header>
     <main id="contenu" class="wrap">
       <div class="page-title">
-        <span class="pill">Guide · Existant et visé</span>
+        <span class="pill">Guide · Ce qui existe, ce qui reste</span>
         <h1>Vos agents collaborent.<br />Vous gardez la main.</h1>
         <p>
-          Repositionnement du 10 octobre 2026 : une couche de consentement au-dessus d’A2A et MCP. Chaque section sépare
-          ce qui existe dans le prototype de ce qui est visé, avec sa tâche.
+          Une couche de consentement au-dessus d’A2A et MCP. Chaque section sépare ce qui existe dans le prototype de ce
+          qui reste à faire, avec sa tâche.
         </p>
       </div>
       <div class="doc-layout">
@@ -113,7 +113,7 @@
                       Le propriétaire marque une information comme partageable ; elle est servie telle quelle, sans
                       modèle, jusqu’à son expiration.
                     </td>
-                    <td>Visé (T4.4)</td>
+                    <td>Existant (T4.4)</td>
                   </tr>
                   <tr>
                     <td>2. Petite question</td>
@@ -150,15 +150,15 @@
             </div>
             <h3>Un propriétaire sans agent</h3>
             <p>
-              Deux voies sont visées. Répondre à la main dans le panneau, par un texte ou un fichier, avec le même
-              consentement et le même reçu (T4.3). Ou laisser un agent inclus répondre après accord, avec un modèle
-              choisi par le propriétaire (T4.8).
+              Il peut répondre à la main dans le panneau, par un texte ou un fichier texte, avec le même consentement et
+              le même reçu (existant, T4.3). Laisser un agent inclus répondre après accord, avec un modèle choisi par le
+              propriétaire, reste à faire (T4.8).
             </p>
             <h3>Un contexte partagé, sans index central</h3>
             <p>
-              Visé (T4.12) : chaque fait reste chez son propriétaire, signé, daté, avec son public. Seul un catalogue de
-              sujets sans contenu circule, pour savoir à qui demander. Personne n’écrit chez un autre : une proposition
-              passe par une boîte de suggestions que l’humain valide.
+              Chaque fait publié reste chez son propriétaire, signé, daté, avec son public (existant, T4.4). Reste à
+              faire (T4.12) : un catalogue de sujets sans contenu, pour savoir à qui demander, et une boîte de
+              suggestions que l’humain valide. Personne n’écrit chez un autre.
             </p>
             <div class="note">
               <p>
@@ -170,9 +170,9 @@
           <section id="connexion">
             <h2>Deux confirmations pour les agents compatibles.</h2>
             <p>
-              <strong>Ce parcours existe dans le panneau local (T3.3).</strong> Il passe ses tests sur fixtures ; la
-              recette humaine sur un Mac et l’app distribuée restent à faire (T3.4). Aucun modèle ni abonnement n’est
-              nécessaire pour raccorder un agent ou consulter l’équipe.
+              <strong>Ce parcours existe dans le panneau local (T3.3, T4.5).</strong> Il passe ses tests sur fixtures ;
+              la recette humaine sur un Mac neuf reste à faire (T3.4). Aucun modèle ni abonnement n’est nécessaire pour
+              raccorder un agent ou consulter l’équipe.
             </p>
             <ol>
               <li>
@@ -187,20 +187,23 @@
               </li>
             </ol>
             <p>
-              Les adaptateurs livrés concernent <strong>Claude Code, Codex, Cursor et Claude Desktop</strong>. Neuf
-              autres clients MCP sont visés, avec leurs configurations globales et par projet (T4.5) : OpenCode, Gemini
-              CLI, Windsurf, Zed, goose, VS Code Copilot, Cline, Roo Code et JetBrains AI. Les autres agents reçoivent
-              une configuration à copier. La détection est déterministe : aucun modèle ne fouille la machine.
+              Treize clients MCP sont détectés, avec leurs configurations globales et par projet (T4.5). Sept sont
+              raccordés automatiquement :
+              <strong>Claude Code, Claude Desktop, Cursor, Codex, Gemini CLI, VS Code et Cline</strong>. Pour OpenCode,
+              Devin Desktop (ex-Windsurf), Zed, goose, Roo Code et JetBrains AI, le panneau donne la configuration à
+              copier. La détection est déterministe : aucun modèle ne fouille la machine.
             </p>
             <p>
-              ChatGPT n’accepte qu’un serveur MCP distant en HTTPS. Il passera, en option, par une passerelle publique
-              exploitée par Guillaume (T2.13, non livrée) ; une entreprise pourra l’interdire par sa politique (T4.10).
+              ChatGPT n’accepte qu’un serveur MCP distant en HTTPS. La passerelle publique qu’il lui faudrait n’est pas
+              livrée (T2.13) : c’est une option cloud mise de côté, que le profil privé refuse. Une entreprise peut
+              aussi interdire toute passerelle par sa politique (T4.10).
             </p>
             <div class="note">
               <p>
                 <strong>Connecter ne publie rien.</strong> Le raccordement donne à votre agent les outils pour demander
                 des réponses. Partager une source avec l’équipe reste un geste séparé : dans le panneau, un interrupteur
-                la partage avec ses outils en lecture seule par défaut.
+                la partage avec les outils que le serveur déclare en lecture seule. Choisir les outils, le modèle et
+                l’approbateur depuis le panneau reste à faire (T4.16).
               </p>
             </div>
             <h3>Ce qui reste une étape séparée</h3>
@@ -242,28 +245,32 @@
                   <tr>
                     <td>Réseau local</td>
                     <td>Même bureau : découverte automatique, aucun serveur.</td>
-                    <td>Visé (T4.2)</td>
+                    <td>Existant (T4.2)</td>
                   </tr>
                   <tr>
                     <td>Internet</td>
-                    <td>Amis, petite équipe : connexion directe pair à pair (iroh), taux de réussite à mesurer.</td>
-                    <td>Visé (T4.2)</td>
+                    <td>
+                      Amis, petite équipe : connexion pair à pair (iroh), désactivée par défaut. Entre deux réseaux, il
+                      faut un relais iroh choisi.
+                    </td>
+                    <td>Existant (T4.2b)</td>
                   </tr>
                   <tr>
                     <td>Entreprise</td>
                     <td>Informatique interne : relais drop exploité par l’équipe, connexions sortantes des Nodes.</td>
                     <td>
-                      Relais et image Docker de laboratoire existants ; paquet entreprise (binaire, Docker, Helm) et
-                      politique visés (T4.10)
+                      Existant : relais, image Docker, chart Helm et politique signée (T4.10). Binaire autonome à faire
+                      (T4.10b)
                     </td>
                   </tr>
                 </tbody>
               </table>
             </div>
             <p>
-              Par défaut, aucun relais de secours. Si la connexion directe échoue, l’app expliquera pourquoi et
-              proposera d’en activer un : relais de test d’un tiers, relais Memo Labs sur demande d’une équipe, ou
-              relais auto-hébergé. Le chiffrement de bout en bout reste actif dans tous les modes.
+              Par défaut, aucun relais de secours. Le panneau permet de choisir un relais iroh : le vôtre, celui de
+              l’équipe, ou un relais de test d’un tiers, refusé en profil privé. Sans relais, deux pairs derrière un
+              routeur ne se joignent pas, et l’app le dit. Le chiffrement de bout en bout reste actif dans tous les
+              modes.
             </p>
             <figure>
               <img
@@ -273,7 +280,7 @@
                 alt="Mode relais : l’agent demandeur, le relais exploité par l’équipe, le Node du propriétaire et son modèle restent dans le périmètre de l’organisation."
               />
               <figcaption>
-                Le mode relais, celui du prototype actuel, vérifié sur fixtures. Les modes sans serveur sont visés.
+                Le mode relais, vérifié sur fixtures. Le réseau local et iroh n’apparaissent pas sur ce schéma.
                 <a href="diagrams/architecture.svg">Ouvrir le schéma en grand</a>.
               </figcaption>
             </figure>
@@ -292,10 +299,10 @@
             <h3>Aucun service externe obligatoire</h3>
             <p>
               L’organisation garde la maîtrise du relais et des destinations autorisées. Un déploiement entièrement
-              interne inclut aussi les modèles, les connecteurs et les agents A2A joints. Visé (T4.10) : une politique
-              signée, déployée par l’informatique, fixe les clients et les fournisseurs de modèles autorisés, impose le
-              relais interne et interdit les passerelles publiques. Le poste l’applique et le relais la vérifie à
-              nouveau.
+              interne inclut aussi les modèles, les connecteurs et les agents A2A joints. Existant (T4.10) : une
+              politique signée, déployée par l’informatique, fixe les clients et les fournisseurs de modèles autorisés,
+              impose le relais interne et interdit les passerelles publiques. Le poste l’applique et le relais la
+              vérifie à nouveau.
             </p>
           </section>
           <section id="modeles">
@@ -384,7 +391,7 @@
               promettre « zéro fuite ».
             </p>
             <a class="text-link" href="downloads/ACCEPTANCE.md" download
-              >Lire les preuves exigées avant de déclarer le profil privé livré</a
+              >Lire les critères d’acceptation du profil privé et des tâches suivantes</a
             >
           </section>
           <section id="essayer">
@@ -404,9 +411,8 @@ pnpm -r test</code></pre>
             <div class="note">
               <p>
                 <strong>Le bootstrap Mac choisit un relais privé.</strong> Le modèle doit être choisi explicitement,
-                sans téléchargement automatique. Une build signée a été acceptée par la notarisation d’Apple le 10
-                octobre 2026 sur le Mac de Guillaume ; sa preuve n’est pas encore archivée (T3.4). Aucun installateur
-                public n’est proposé.
+                sans téléchargement automatique. L’app est signée et notarisée : la notarisation est prouvée, la recette
+                humaine sur un Mac neuf reste à faire (T3.4). Aucun installateur public n’est proposé.
               </p>
             </div>
             <h3>Rejouer la démonstration historique</h3>
@@ -455,7 +461,7 @@ pnpm -r test</code></pre>
               ><a href="downloads/ACCEPTANCE.md" download>Critères d’acceptation</a>
             </div>
             <p class="date">
-              Page mise à jour le 10 octobre 2026. <a href="avancement.html">Lire l’état du projet</a>.
+              Page mise à jour le 11 octobre 2026. <a href="avancement.html">Lire l’état du projet</a>.
             </p>
           </section>
         </article>

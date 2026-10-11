@@ -1,3 +1,4 @@
+import { createServer } from 'node:http';
 import { resolve } from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
@@ -7,12 +8,14 @@ import {
   capabilities,
   connectMcp,
   createMcpAnswer,
-  parseMcpFinal,
+  McpConnectError,
+  parseFinalJson,
   ProviderConfigSchema,
   providerFor,
   toolResultText,
 } from '../src/index.ts';
 import type { ChatMessage, ChatProvider, ChatTurn } from '../src/llm.ts';
+import { McpAnswerOutputSchema } from '../src/mcp-answer.ts';
 import { createFakeDesignServer } from './fixtures/fake-design-mcp.ts';
 
 const QUESTION = { question: 'Quelle est la hauteur du bouton de paiement dans la maquette actuelle ?' };
@@ -140,8 +143,8 @@ describe('mcp.answer (T2.2)', () => {
       }),
     ).toBe('a');
     expect(toolResultText({ content: [], isError: true })).toBe('erreur : aucun contenu texte');
-    expect(parseMcpFinal(`<think>x</think>${finalAnswer}`)?.verdict).toBe('yes');
-    expect(parseMcpFinal('{"answer": "x"}')).toBeUndefined();
+    expect(parseFinalJson(McpAnswerOutputSchema, `<think>x</think>${finalAnswer}`)?.verdict).toBe('yes');
+    expect(parseFinalJson(McpAnswerOutputSchema, '{"answer": "x"}')).toBeUndefined();
     const never = scripted([{ content: 'pas de JSON' }]);
     const invalid = await runCapability(
       createMcpAnswer({ provider: never.provider, connect: () => inMemory([]) }),
@@ -168,6 +171,30 @@ describe('mcp.answer (T2.2)', () => {
       expect(toolResultText(result)).toContain('with token');
     } finally {
       await client.close();
+    }
+  });
+
+  it('points an owner whose server needs OAuth to drop own sign-in (T2.17)', async () => {
+    const server = createServer((_req, res) => {
+      res.writeHead(401).end();
+    });
+    await new Promise<void>((done) => server.listen(0, '127.0.0.1', done));
+    const address = server.address();
+    const url = `http://127.0.0.1:${String(typeof address === 'object' && address ? address.port : 0)}/mcp`;
+    try {
+      const refused = await connectMcp({ transport: 'http', url, headersFromEnv: {} }, {}).catch(
+        (error: unknown) => error,
+      );
+      expect(refused).toBeInstanceOf(McpConnectError);
+      expect(refused).toMatchObject({ reason: 'oauth', code: 'E_RUNNER' });
+      expect((refused as McpConnectError).message).toMatch(/drop connect <agent>\/<server>/);
+      expect((refused as McpConnectError).message).not.toMatch(/cannot/);
+    } finally {
+      await new Promise<void>((done) =>
+        server.close(() => {
+          done();
+        }),
+      );
     }
   });
 

@@ -35,6 +35,8 @@ export type ClientFrame = z.infer<typeof ClientFrameSchema>;
 export const CLOSE_UNAUTHORIZED = 4401;
 export const CLOSE_SPOOFED_FROM = 4403;
 export const CLOSE_REPLACED = 4409;
+/** RFC 6455 "Try Again Later": the node spent its rate quota (E_RATE). */
+export const CLOSE_RATE = 1013;
 
 export function parseFrame<T>(schema: z.ZodType<T>, data: unknown): T | undefined {
   try {

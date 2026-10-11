@@ -11,9 +11,9 @@ import { z } from 'zod';
 import { AGENTS, CLIENT_SPECS, projectServers, readConfigText, type AgentKind } from '@drop/capabilities';
 import { presentServer, type DetectedServer } from './detect.ts';
 
-export const MAX_ADDED_PROJECTS = 50;
+const MAX_ADDED_PROJECTS = 50;
 /** Known projects come from the agents' own lists; past this many, the oldest entries are not read. */
-export const MAX_KNOWN_PROJECTS = 200;
+const MAX_KNOWN_PROJECTS = 200;
 
 export interface ProjectView {
   dir: string;
@@ -32,7 +32,7 @@ function isDirectory(path: string): boolean {
 }
 
 /** Folders the owner added from the panel, kept under DROP_HOME. */
-export function addedProjects(dropHome: string): string[] {
+function addedProjects(dropHome: string): string[] {
   const path = join(dropHome, 'projects.json');
   try {
     return AddedSchema.parse(JSON.parse(readConfigText(path, 64 * 1024) ?? '[]'));
@@ -76,7 +76,7 @@ export function removeProject(dropHome: string, dir: string): boolean {
 }
 
 /** The project folders Claude Code and Codex already list in their own global configuration. */
-export function knownProjects(home: string = homedir()): { dir: string; source: 'claude_code' | 'codex' }[] {
+function knownProjects(home: string = homedir()): { dir: string; source: 'claude_code' | 'codex' }[] {
   const found: { dir: string; source: 'claude_code' | 'codex' }[] = [];
   try {
     const claude = JSON.parse(readConfigText(CLIENT_SPECS.claude_code.global(home)[0]?.path ?? '') ?? '{}') as {

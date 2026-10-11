@@ -2,7 +2,7 @@
 
 Document descriptif. Les contrats normatifs vivent dans openspec/specs ; l'ordre dans docs/TASKS.md ; les décisions dans docs/DECISIONS.md.
 
-Rédigé le 10 octobre 2026 dans la change `t4-0-product-docs` (T4.0), à partir de D47 à D58. Ce TRD remplacera [`openspec/project/architecture.md`](../../openspec/project/architecture.md) en T4.0a ; d'ici là, les deux coexistent et ce document fait foi pour la cible technique décrite par D47 à D58.
+Rédigé le 10 octobre 2026 dans la change `t4-0-product-docs` (T4.0), à partir de D47 à D58. Depuis T4.0a, [`openspec/project/architecture.md`](../../openspec/project/architecture.md) en est le résumé ; ce document fait foi pour la cible technique décrite par D47 à D58. Statuts mis à jour le 11 octobre 2026 pour les tâches livrées depuis ; les références de ligne datent de la rédaction.
 
 ## 1. Objet et lecture
 
@@ -45,7 +45,7 @@ Tous **Existant**, dans un monorepo pnpm sans étape de build en développement 
 | Runner                | Aucune écoute : bibliothèque appelée par le moteur du Node.                                 | Destinations des capacités.   | **Existant** : appel `runCapability` dans `packages/node/src/engine.ts:933` ; aucun `listen` ni `createServer` dans `packages/runner/src`.                                            |
 | `requester-mcp`       | Aucune : stdio, lancé par l'agent.                                                          | HTTP vers l'API locale.       | **Existant** : `packages/requester-mcp/src/client.ts:77-86`.                                                                                                                         |
 | Passerelle `gateway`  | `127.0.0.1:7790` derrière un proxy inverse public.                                          | Relais public historique.     | **Existant** hors profil privé : `packages/gateway/src/cli.ts:5-17`, `packages/gateway/src/server.ts:248`.                                                                            |
-| App Mac               | Aucune en propre ; affiche `/app` du Node qu'elle a démarré (D46).                         | Aucun.                        | **Existant** en paquet de développement ; distribution signée **Visé** T3.4 (ligne `blocked` dans [l'index][tasks]).                                                                  |
+| App Mac               | Aucune en propre ; affiche `/app` du Node qu'elle a démarré (D46).                         | Aucun.                        | **Existant** : build signée et notarisée pour Apple Silicon ([preuve](../../openspec/changes/t3-4-private-mac-app/proof/verification.md)) ; recette sur Mac propre et VoiceOver **Visé** T3.4 (`blocked`).                                                                  |
 
 Le processus Node qui héberge le runner écoute sur la boucle locale pour son API : la règle « le runner n'écoute aucun port » porte sur le runner, pas sur l'API du Node (**Existant**, [spec runner](../../openspec/specs/runner/spec.md#requirement-aucun-port-en-écoute) et [spec node](../../openspec/specs/node/spec.md#requirement-écoute-de-lapi-locale)).
 
@@ -63,14 +63,14 @@ Chaque étape est **Existant** ; le test « end to end, in memory: relay and thr
 
 ### 2.4 Écarts connus entre l'existant et la cible
 
-- **Existant** : seuls quatre agents sont reconnus (`packages/capabilities/src/agents.ts:13`) ; D55 en vise treize, **Visé** T4.5.
+- **Existant** : treize clients détectés (`packages/capabilities/src/clients.ts`), sept raccordés automatiquement et six par configuration à copier (T4.5).
 - **Existant** : la file du relais vit en mémoire et se perd au redémarrage (`packages/relay/src/server.ts:134`) ; la file hors ligne du Node est volatile (`docs/PRIVATE_PROFILE.md`, section « Exploiter le relais »).
-- **Existant** : un seul relais configuré par Node (`packages/node/src/home.ts:43`) ; aucun mode LAN ni pair à pair, **Visé** T4.2.
+- **Existant** : un seul relais configuré par Node ; réseau local (T4.2) et iroh (T4.2b) passent avant lui.
 - **Existant** : T3.1b est implémentée avec revue formelle en attente (`openspec/changes/t3-1b-replay-storage-bounds/proof/state.json`) ; T3.1c est `blocked` par un constat CSO HIGH ([index][tasks]). Ces deux lignes restent des prérequis de sécurité avant tout pilote.
 
 ## 3. Architecture visée par phase
 
-Les phases P0 à P5 viennent de D58 ; leur détail et leurs critères de sortie sont dans [le plan d'implémentation](IMPLEMENTATION_PLAN.md), leur ordre dans [l'index][tasks]. Tout ce tableau est **Visé**.
+Les phases P0 à P5 viennent de D58 ; leur détail et leurs critères de sortie sont dans [le plan d'implémentation](IMPLEMENTATION_PLAN.md), leur ordre et leurs statuts dans [l'index][tasks]. Au 11 octobre 2026, T4.0, T4.0a, T4.1, T4.2 à T4.5 et T4.10 sont livrées ; le reste est **Visé**.
 
 | Phase                  | Apport technique                                                                                      | Tâches                         |
 | ---------------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------ |
@@ -82,12 +82,12 @@ Les phases P0 à P5 viennent de D58 ; leur détail et leurs critères de sortie 
 | P4                     | Tâches déléguées (niveau 4) et contexte partagé décentralisé.                                         | T4.11, T4.12                   |
 | P5                     | Nom, offre, lancement public, après accord humain.                                                    | T4.13                          |
 
-Forme cible des composants (**Visé**, chaque bloc renvoie à sa tâche) :
+Forme cible des composants (chaque bloc renvoie à sa tâche ; T4.2 à T4.5 et T4.10 existent, T4.8, T4.9 et T4.11 sont **Visé**) :
 
 ```text
 Agent (13 clients MCP, T4.5) ── stdio ──> requester-mcp ──> API locale ──> Node
 Client A2A interne ─────────────────────────────────────> /a2a ──────────> Node
-Node <── connexion : mDNS local | iroh embarqué | relais d'entreprise (T4.2, T4.10)
+Node <── connexion : mDNS local | iroh (drop-iroh) | relais d'entreprise (T4.2, T4.2b, T4.10)
 Node ──> runner ──> capacité (niveau 3) | fait publié (niveau 1, T4.4)
                    | petite question (niveau 2, T4.9) | tâche déléguée (niveau 4, T4.11)
 Node ──> réponse humaine (T4.3) | agent inclus (T4.8)
@@ -101,16 +101,16 @@ Politique signée par MDM ──> appliquée par le Node, revérifiée par le re
 | Mode                      | Mécanisme                                                                    | Statut                                                                                                                                                            |
 | ------------------------- | ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Relais interne actuel     | WebSocket `ws` ou `wss`, défi signé, admission.                              | **Existant** : `packages/relay/src/server.ts` ; TLS testé par « connects to the internal relay through trusted TLS and rejects an untrusted certificate ».          |
-| Réseau local              | Découverte mDNS des Nodes du même lien.                                      | **Visé** T4.2.                                                                                                                                                    |
-| Internet                  | iroh embarqué, connexion QUIC directe avec traversée de NAT.                 | **Visé** T4.2.                                                                                                                                                    |
-| Entreprise                | Relais drop interne en binaire, image Docker et chart Helm, TLS sur 443.     | **Visé** T4.10. Le bundle JS `dist/drop-relay.mjs`, qui exige Node, est **Existant** (`scripts/bundle.ts:50`) ; le binaire autonome reste **Visé** T4.10 ; l'image de `scripts/private-proof/` sert la preuve, pas la livraison. |
+| Réseau local              | Découverte mDNS des Nodes du même lien.                                      | **Existant** T4.2 (`packages/node/src/lan.ts`, `bonjour-service`, D61).                                                                                                                                                    |
+| Internet                  | iroh dans un programme Rust séparé, connexion QUIC directe avec traversée de NAT. | **Existant** T4.2b (`crates/drop-iroh`, `packages/node/src/iroh.ts`, D68).                                                                                                                                                    |
+| Entreprise                | Relais drop interne en binaire, image Docker et chart Helm, TLS sur 443.     | **Existant** T4.10 : image (`docker/relay.Dockerfile`), chart (`deploy/helm/drop-relay`), TLS natif facultatif. Binaire autonome **Visé** T4.10b. |
 
-- **Visé** T4.2 : aucun relais de secours par défaut. Si la connexion directe échoue, l'app l'explique et propose d'en activer un : relais de test n0 signalé comme tiers, relais Memo Labs sur demande d'une équipe, ou relais auto-hébergé. L'activation est explicite et réversible.
-- **Existant** : aujourd'hui aucun repli n'existe dans le code ; le profil privé valide l'unique `relayUrl` contre la liste d'origines (`packages/node/src/home.ts:55-64`).
-- **Existant** pour le relais, **Visé** T4.2 pour les autres modes : le chiffrement de bout en bout reste celui de l'enveloppe (`envelope.ts:50-80`), quel que soit le transport.
+- **Existant** T4.2b : aucun relais iroh par défaut. Le panneau propose : désactivé, relais auto-hébergé ou d'équipe, relais de test n0 signalé comme tiers et refusé en profil privé (D68). Sans relais, deux pairs derrière un routeur ne se joignent pas. L'activation est explicite et réversible. Un relais Memo Labs sur demande d'une équipe reste une **Hypothèse**.
+- **Existant** : aucun repli silencieux ; l'ordre est réseau local, iroh, relais drop, puis file d'attente. Le profil privé valide l'unique `relayUrl` contre la liste d'origines.
+- **Existant** : le chiffrement de bout en bout reste celui de l'enveloppe (`envelope.ts:50-80`), quel que soit le transport.
 - **Hypothèse** : iroh connecte directement environ 9 cas sur 10 ([connexion][r2]) ; libp2p mesure 70 % ± 7,1 %. Critère : taux mesuré dans T4.1 ou T4.6 sur les réseaux réels des testeurs.
 - **Hypothèse** : l'UDP sortant est souvent bloqué en entreprise, d'où un besoin de repli TCP sur 443 ([connexion][r2], inférence). Critère : essai T4.10 derrière un pare-feu d'entreprise.
-- **Hypothèse** : les liaisons Node.js d'iroh fonctionnent dans le Node embarqué par l'app Tauri. Critère : prototype T4.2 qui relie deux Nodes sur deux réseaux NAT distincts, tests inclus.
+- **Existant** (décision D68, D61) : iroh tourne dans un programme Rust séparé, `crates/drop-iroh`, piloté par l'entrée et la sortie standard, et non par les liaisons Node.js d'iroh, écartées.
 
 ## 5. Modèle de sécurité
 
@@ -127,7 +127,7 @@ Les contrats sont dans les specs [protocol](../../openspec/specs/protocol/spec.m
 | Anti-rejeu des demandes (T3.1b) | `dropId` UUIDv7 obligatoire ; marqueurs durables avec horloge monotone, version, empreinte et verrou ; plafond de 16 384.                                                        | **Existant**, revue formelle en attente : `packages/protocol/src/messages.ts:10`, `packages/node/src/home.ts:39`, `:221-327` ; test « fails closed if one recent marker disappears while the directory remains ». |
 | États mémoire bornés (T3.1c)    | 1 024 demandes reçues, émises, cartes et enveloppes hors ligne ; 8 192 clés plafonnées suivies.                                                                                 | **Existant**, ligne `blocked` (CSO HIGH) : `packages/node/src/engine.ts:46-50`, `packages/node/src/funding.ts:35`.                                     |
 | Suite anti-rejeu                | Quotas par pair, récupération après crash, compatibilité `E_RATE`, durabilité des révocations.                                                                                  | **Visé** T3.1e et T3.1d.                                                                                                                                 |
-| Consentement                    | Carte sans identifiant technique, bouton par défaut « Pas maintenant », décision signée.                                                                                        | **Existant** sur la page historique `/` seulement : `packages/protocol/src/messages.ts:42-52`, `packages/node/src/ui.ts:63` ; test « consent UI > shows no technical identifier and defaults to « Pas maintenant » ». Absent du panneau `/app` servi par l'app Mac (écart E1, **Visé** T4.14).       |
+| Consentement                    | Carte sans identifiant technique, bouton par défaut « Pas maintenant », décision signée.                                                                                        | **Existant** dans le panneau `/app` depuis T4.14 et sur la page historique `/` : `packages/protocol/src/messages.ts:42-52`, `packages/node/src/ui.ts:63` ; test « consent UI > shows no technical identifier and defaults to « Pas maintenant » ». Absent du panneau `/app` servi par l'app Mac (écart E1, **Visé** T4.14).       |
 | Requête d'un pair = donnée      | La question est encadrée et échappée avant tout modèle ou agent joint.                                                                                                          | **Existant** : `frameForAgent` dans `packages/capabilities/src/a2a-answer.ts` ; [spec runner](../../openspec/specs/runner/spec.md#requirement-requête-dun-pair-traitée-comme-donnée-non-fiable). |
 | Outils fixés par la capacité    | Le propriétaire choisit les outils à la publication ; le modèle ne voit que cette liste.                                                                                        | **Existant** : `packages/capabilities/src/mcp-answer.ts:54-64` (`tools`) ; [spec runner](../../openspec/specs/runner/spec.md#requirement-outils-figés-par-la-capacité). |
 | Sortie validée                  | Schéma strict sans réparation, taille maximale, scanner de secrets ; refus plutôt que réparation.                                                                              | **Existant** : `packages/runner/src/run.ts:57-74`, `packages/runner/src/secrets.ts` ; tests « rejects an unexpected nested field instead of stripping it », « fails with E_SECRET_DETECTED for a secret in a nested array and returns no output ». |
@@ -149,18 +149,18 @@ La promesse adoptée : « Tes données restent sur ta machine. Seule une répons
 ## 6. Politique d'entreprise (D54)
 
 - **Existant** : chaque Node porte sa liste d'origines privées (`packages/node/src/home.ts:45`) et sa liste de passerelles de confiance (`:49`) ; le profil privé refuse passerelles et financement reçu (`:58`).
-- **Visé** T4.10 : une politique signée, déployée par l'informatique via MDM, fixe les clients autorisés, les fournisseurs de modèles, les relais permis, l'interdiction des passerelles publiques et le relais interne obligatoire. Le poste l'applique avant toute connexion ; le relais interne la vérifie à nouveau. Forme proposée dans [le schéma backend](BACKEND_SCHEMA.md#politique-dentreprise).
-- **Visé** T4.10 : une entreprise peut interdire un client précis ou un fournisseur précis.
+- **Existant** T4.10 (`packages/node/src/policy.ts`, D81) : une politique signée, déployée par l'informatique via MDM, fixe les clients autorisés, les fournisseurs de modèles, les relais permis, l'interdiction des passerelles publiques et le relais interne obligatoire. Le poste l'applique avant toute connexion ; le relais interne la vérifie à nouveau. Forme proposée dans [le schéma backend](BACKEND_SCHEMA.md#politique-dentreprise).
+- **Existant** T4.10 : une entreprise peut interdire un client précis ou un fournisseur précis.
 - **Hypothèse** : un client interdit n'est simplement pas proposé au raccordement, car l'API locale ne peut pas identifier de façon fiable le client qui l'appelle (`requester-mcp` déclare lui-même `DROP_AGENT`, `packages/node/src/onboarding.ts:58`). Critère : spec T4.10 qui fixe le point d'application.
 - **Existant** (source secondaire) : ChatGPT n'accepte qu'un serveur MCP distant en HTTPS ([clients MCP][r4]) ; d'où la passerelle facultative de D31 (`packages/gateway`). **Hypothèse** à revérifier dans l'aide officielle avant T4.10.
-- **Visé** T4.10 : la passerelle reste optionnelle et interdictible, avec la garantie qu'aucun flux ne touche ce serveur quand la politique l'interdit.
+- **Existant** T4.10 (`gatewayAllowed`) : la passerelle reste optionnelle et interdictible, avec la garantie qu'aucun flux ne touche ce serveur quand la politique l'interdit.
 - **Hypothèse** : le relais peut revérifier la politique à partir d'une empreinte présentée à l'authentification. Critère : scénario T4.10 où un Node à politique absente ou périmée est refusé par le relais.
 
 ## 7. Échelle des échanges et A2A (D50)
 
 | Niveau | Échange                                                                          | Forme A2A                                                                    | Statut                                                                              |
 | ------ | -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| 1      | Fait publié, servi sans modèle.                                                  | `Message` direct, sans `Task`.                                               | **Visé** T4.4.                                                                      |
+| 1      | Fait publié, servi sans modèle.                                                  | `Message` direct, sans `Task`.                                               | **Existant** T4.4 côté drop (carte `fact.f<hex>`) ; forme A2A non vérifiée ici.                                                                      |
 | 2      | Petite question, appel neuf sans outil, sur un contexte déclaré partageable.     | `Message` si la réponse est immédiate, sinon `Task` courte.                  | **Visé** T4.9 ; le choix `Message` ou `Task` est une **Hypothèse** tranchée en T4.9. |
 | 3      | Capacité publiée.                                                                | `Task` : `WORKING` pendant l'accord, puis `COMPLETED`, `REJECTED`, `FAILED` ou `INPUT_REQUIRED`, une réponse par artifact. | **Existant** : `packages/node/src/a2a-inbound.ts:48-120`, `packages/a2a/src/tasks.ts:45-99`. |
 | 4      | Tâche déléguée longue.                                                           | `Task` avec jalons `INPUT_REQUIRED`, ré-approbation si le périmètre s'élargit, budget, expiration. | **Visé** T4.11.                                                                     |
@@ -174,10 +174,10 @@ La promesse adoptée : « Tes données restent sur ta machine. Seule une répons
 
 ## 8. Contexte partagé décentralisé (D51)
 
-Tout est **Visé** : T4.4 pour les faits, T4.12 pour le catalogue, les suggestions et l'invalidation. Les formes de données sont dans [le schéma backend](BACKEND_SCHEMA.md#schémas-cibles-propositions-non-normatives).
+Les faits publiés sont **Existant** (T4.4, D65) ; le catalogue, les suggestions et l'invalidation sont **Visé** (T4.12). Les formes de données sont dans [le schéma backend](BACKEND_SCHEMA.md#schémas-cibles-propositions-non-normatives).
 
-- **Visé** T4.4 : un fait est signé par l'identité Ed25519 de son propriétaire et reste sur son Node, sous `DROP_HOME`.
-- **Visé** T4.4 : le Node sert un fait sans modèle, seulement à son public déclaré, et plus du tout après sa date de fin.
+- **Existant** T4.4 : un fait est signé par l'identité Ed25519 de son propriétaire et reste sur son Node, sous `DROP_HOME`.
+- **Existant** T4.4 : le Node sert un fait sans modèle, seulement à son public déclaré, et plus du tout après sa date de fin.
 - **Visé** T4.12 : seul un catalogue de sujets sans contenu circule entre Nodes.
 - **Visé** T4.12 : aucun agent n'écrit chez un autre : une proposition entre dans une boîte de suggestions validée par l'humain.
 - **Visé** T4.12 : un fait contredit est invalidé, pas effacé, pour garder la trace.
@@ -199,20 +199,20 @@ Tout est **Visé** : T4.4 pour les faits, T4.12 pour le catalogue, les suggestio
 
 ## 10. Adaptateurs des clients MCP (D55)
 
-- **Existant** : quatre adaptateurs (Claude Code, Claude Desktop, Cursor, Codex) aux chemins fixes (`packages/capabilities/src/agents.ts:13`, `:27-41`).
+- **Existant** T4.5 : treize clients (`packages/capabilities/src/clients.ts`). Sept raccordés automatiquement : Claude Code, Claude Desktop, Cursor, Codex, Gemini CLI, VS Code, Cline. Six par configuration à copier : OpenCode, Devin Desktop, Zed, goose, Roo Code, JetBrains AI.
 - **Existant** : raccordement en deux confirmations (T3.3), relecture d'empreinte, sauvegarde privée limitée à trois versions (`packages/node/src/onboarding.ts:208-222`) ; CLI officielles pour Claude Code et Codex (D45) ; tests « local agent onboarding (T3.3) » dans `packages/node/test/onboarding.test.ts`.
 - **Existant** : la détection lit des chemins connus et n'affiche jamais une valeur secrète (`packages/node/src/detect.ts:5-11`) ; test « lists each agent, whether drop is installed, and what each server is, without any secret value ».
-- **Visé** T4.5 : treize clients avec leurs configurations globales et par projet (liste et emplacements dans [clients MCP][r4]), configuration copiable pour les autres. Aucun modèle ne fouille la machine ni ne décide de ce qui est branché.
-- **Visé** T4.5 : chaque emplacement est revérifié dans la doc de la version installée avant d'écrire l'adaptateur.
-- **Existant** : le champ `requestedBy.agent` du protocole n'accepte que `claude_code`, `codex`, `cursor` et `other` (`packages/protocol/src/messages.ts:16`). **Visé** T4.5 : décider s'il s'étend aux treize clients (changement de protocole).
+- **Existant** T4.5 : treize clients avec leurs configurations globales et par projet (liste et emplacements dans [clients MCP][r4]), configuration copiable pour les autres. Aucun modèle ne fouille la machine ni ne décide de ce qui est branché.
+- **Existant** T4.5 : chaque emplacement a été revérifié dans la doc de la version installée avant d'écrire l'adaptateur.
+- **Existant** T4.5 : le champ `requestedBy.agent` du protocole accepte les treize clients et `other` (`packages/protocol/src/messages.ts`).
 
 ## 11. Banc de simulation (D56)
 
-Tout est **Visé**. Une nouvelle capacité OpenSpec `simulation` naît en T4.1 ([index][tasks]).
+Le banc minimal est **Existant** (T4.1, capacité OpenSpec `simulation`, [rapport](../../openspec/changes/archive/2026-10-10-t4-1-simulation-baseline/proof/report.md)) ; la simulation complète est **Visé** (T4.7).
 
-- **Visé** T4.1 : banc local, relais dédié, 50 nœuds en processus séparés, faux agents déterministes, mesures mémoire et latence, rapport.
+- **Existant** T4.1 : banc local, relais dédié, 50 nœuds en processus séparés, faux agents déterministes, mesures mémoire et latence, rapport.
 - **Visé** T4.7 : 500 nœuds virtuels regroupés, 10 à 20 personnages dans une entreprise fictive sur modèles gratuits, carte interactive, traces, rapport par campagne.
-- **Visé** T4.1 et T4.7, lieu : le Mac, avec un relais dédié ; jamais le VPS ni le relais de production. **Existant** (mesure) : le VPS lab avait 5,6 Gio de swap occupés sur 8 ([simulation][r5]).
+- **Existant** T4.1, **Visé** T4.7, lieu : le Mac, avec un relais dédié ; jamais le VPS ni le relais de production. **Existant** (mesure) : le VPS lab avait 5,6 Gio de swap occupés sur 8 ([simulation][r5]).
 - **Visé** T4.7, carte : vue équipe regroupable, vue parcours par demande, lecture et pas à pas, injection de pannes et de sorties piégées. React Flow (xyflow, MIT) est candidat, limité au paquet de simulation.
 - **Visé** T4.7, traces : Langfuse et un rapport par campagne. Les événements ne portent que des hash et des métadonnées ; forme proposée dans [le schéma backend](BACKEND_SCHEMA.md#événement-de-simulation).
 - **Visé** T4.7, boucle d'amélioration : elle produit des rapports et ajuste seule, en versionnant, les textes, le routage et les consignes des personnages ; jamais le code ni la sécurité.
@@ -224,7 +224,7 @@ Tout est **Visé**. Une nouvelle capacité OpenSpec `simulation` naît en T4.1 (
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | Bornes         | Enveloppe 256 Kio, TTL 15 min, décalage 5 min, fenêtre de rejeu 30 min.                                                                                  | **Existant** : `packages/protocol/src/envelope.ts:17-20`.                                                                    |
 | Bornes relais  | 60 envois par minute et par Node, file de 100 enveloppes par destinataire, 20 admissions par parrain et par jour.                                      | **Existant** : `packages/relay/src/server.ts:30-34`.                                                                         |
-| Performance    | Latence de bout en bout d'un Drop, débit du relais, temps de connexion par mode.                                                                        | **Visé** T4.1 (mesure), T4.2 (par mode). Aucun chiffre n'est promis avant mesure.                                            |
+| Performance    | Latence de bout en bout d'un Drop, débit du relais, temps de connexion par mode.                                                                        | Mesure de référence **Existant** T4.1 ([rapport](../../openspec/changes/archive/2026-10-10-t4-1-simulation-baseline/proof/report.md)) ; par mode, à mesurer. Aucun chiffre n'est promis avant mesure.                                            |
 | Mémoire        | Node v24 vide : 44 Mo de RSS ; 67 Mo avec libsodium et zod.                                                                                              | **Existant** (mesure, [simulation][r5]).                                                                                     |
 | Mémoire        | Nœud complet avec faux agent : 130 à 180 Mo ; 50 processus tiennent sur le Mac, 500 exigent des nœuds regroupés.                                         | **Hypothèse** (inférence). Critère : mesure T4.1.                                                                            |
 | Disponibilité  | Reconnexion exponentielle au relais ; file du relais et file hors ligne non durables ; échec visible, sans repli silencieux.                            | **Existant** : [spec node](../../openspec/specs/node/spec.md#requirement-reconnexion-exponentielle-au-relais), `server.ts:134`. Échec expliqué par mode : **Visé** T4.2. |
@@ -235,27 +235,27 @@ Tout est **Visé**. Une nouvelle capacité OpenSpec `simulation` naît en T4.1 (
 
 ## 13. Dépendances candidates
 
-**Existant** : la stack imposée et la règle d'ajout sont dans [AGENTS.md](../../AGENTS.md#stack-imposée) ; T4.0 n'ajoute aucune dépendance ([proposal](../../openspec/changes/t4-0-product-docs/proposal.md)).
+**Existant** : la stack imposée et la règle d'ajout sont dans [AGENTS.md](../../AGENTS.md#stack-imposée) ; T4.0 n'ajoute aucune dépendance ([proposal](../../openspec/changes/archive/2026-10-10-t4-0-product-docs/proposal.md)).
 
 | Candidat                | Licence           | Usage envisagé                                                   | Statut                                                                       |
 | ----------------------- | ----------------- | ---------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| iroh (1.3.0 au 28 septembre 2026, liaisons Node.js) | MIT ou Apache-2.0 | Connexion directe et traversée de NAT ([connexion][r2]).         | **Visé** T4.2, avec entrée dans `docs/DECISIONS.md` dans la change qui l'ajoute. |
+| iroh 1.3.0, dans le programme Rust séparé `crates/drop-iroh` | MIT ou Apache-2.0 | Connexion directe et traversée de NAT ([connexion][r2]).         | **Existant** T4.2b, D68. |
 | React Flow (xyflow)     | MIT               | Carte de simulation, limitée au paquet de simulation.            | **Visé** T4.7, même règle.                                                    |
-| Bibliothèque mDNS       | À choisir         | Découverte locale.                                               | **Hypothèse** : aucune bibliothèque évaluée. Critère : choix motivé en T4.2. |
-| Outillage Helm          | À choisir         | Chart du relais d'entreprise.                                    | **Visé** T4.10, même règle.                                                   |
+| `bonjour-service` 1.4.4 | MIT               | Découverte locale.                                               | **Existant** T4.2, D61. |
+| Helm                    | Apache-2.0        | Chart du relais d'entreprise (`deploy/helm/drop-relay`).         | **Existant** T4.10 ; Helm dans la CI **Visé** T4.10c. |
 
 ## 14. Questions techniques ouvertes
 
-Chacune est une **Hypothèse** à trancher dans la tâche citée.
+Chacune est une **Hypothèse** à trancher dans la tâche citée, sauf celles marquées tranchées.
 
-1. Identité iroh : réutiliser la clé Ed25519 du Node ou garder deux clés liées par signature ? Critère : décision consignée en T4.2.
+1. Identité iroh : tranchée par D68, la clé iroh est la graine de la clé drop.
 2. mDNS sur macOS : permission « réseau local » et comportement en arrière-plan à vérifier dans la doc Apple de la version ciblée. Critère : test T4.2 sur Mac réel.
-3. Revérification de la politique par le relais : par empreinte présentée à l'authentification ou par document complet ? Critère : spec T4.10.
-4. Réponse humaine avec fichier : limite de taille compatible avec l'enveloppe de 256 Kio, ou découpage. Critère : spec T4.3.
+3. Revérification de la politique par le relais : tranchée par D81, par l'empreinte présentée à l'authentification.
+4. Réponse humaine avec fichier : tranchée par D64, 128 Kio au plus, sans découpage.
 5. Niveau 2 : `Message` ou `Task` courte selon le délai de consentement. Critère : spec T4.9.
 6. Magasin durable des tâches A2A pour le niveau 4. Critère : spec T4.11.
 7. Hébergement des traces Langfuse de la simulation, sans toucher au VPS ni au relais de production. Critère : rapport T4.1.
-8. Extension de `requestedBy.agent` aux treize clients. Critère : spec T4.5.
+8. Extension de `requestedBy.agent` aux treize clients : faite en T4.5.
 
 [tasks]: ../TASKS.md
 [r0]: ../research/2026-10-10-repositionnement.md

@@ -176,8 +176,9 @@
             </div>
           </div>
           <p class="source-link">
-            Aujourd’hui, seul l’échange par capacité existe. Les faits publiés (T4.4), les petites questions (T4.9) et
-            les tâches déléguées (T4.11) sont visés ; la conversation libre entre agents est exclue.
+            Aujourd’hui, trois échanges existent : la capacité, le fait publié, servi sans modèle (T4.4), et la réponse
+            écrite à la main par le propriétaire (T4.3). Les petites questions (T4.9) et les tâches déléguées (T4.11)
+            restent à faire ; la conversation libre entre agents est exclue.
             <a href="guide.html#echelle">Voir l’échelle des échanges</a>.
           </p>
           <a class="source-link" href="guide.html#parcours">Voir le parcours complet et ses limites</a>
@@ -187,8 +188,8 @@
         <div class="section-head">
           <h2>Deux confirmations.<br />Puis drop reste à portée de main.</h2>
           <p>
-            Ce raccordement existe dans le panneau local (T3.3) et passe ses tests sur fixtures. La recette humaine sur
-            un Mac reste à faire. Aucun modèle ne fouille votre machine.
+            Ce raccordement existe dans le panneau local (T3.3, T4.5) et passe ses tests sur fixtures. La recette
+            humaine sur un Mac reste à faire. Aucun modèle ne fouille votre machine.
           </p>
         </div>
         <div class="setup-layout">
@@ -244,10 +245,11 @@
         </div>
         <div class="setup-foot">
           <p>
-            Quatre adaptateurs existent : Claude Code, Codex, Cursor et Claude Desktop, avec un aperçu sans secret, un
-            résultat par agent et une voie manuelle. Neuf autres clients MCP sont visés (T4.5). ChatGPT n’accepte qu’un
-            serveur distant : il passera par une passerelle publique facultative (T2.13, non livrée), qu’une entreprise
-            pourra interdire (T4.10).
+            Treize clients MCP sont détectés. Sept sont raccordés automatiquement : Claude Code, Claude Desktop, Cursor,
+            Codex, Gemini CLI, VS Code et Cline, avec un aperçu sans secret et un résultat par agent. Pour les six
+            autres, l’app donne la configuration à copier. ChatGPT n’accepte qu’un serveur distant : la passerelle
+            publique qu’il lui faudrait n’est pas livrée (T2.13). C’est une option cloud remise à plus tard, que le
+            profil privé refuse et qu’une politique d’entreprise peut interdire.
           </p>
           <a class="text-link" href="guide.html#connexion">Prérequis, restauration et étapes séparées</a>
         </div>
@@ -289,7 +291,7 @@
             </figure>
           </div>
           <p class="source-link">
-            La vidéo de démonstration sera tournée pendant les premiers essais chez nos testeurs.
+            La vidéo de démonstration sera tournée pendant l’essai avec deux amis (T4.6).
             <a href="guide.html#parcours">Le parcours en détail</a>
           </p>
         </div>
@@ -316,15 +318,15 @@
           <div class="privacy-points">
             <h3>Sans serveur, quand c’est possible.</h3>
             <p>
-              Visé (T4.2) : découverte sur le réseau local et connexion directe par Internet. Par défaut, aucun relais
-              de secours : si la connexion directe échoue, l’app l’explique et vous laisse en choisir un.
+              Existant : découverte sur le réseau local (T4.2) et connexion par Internet avec iroh (T4.2b), désactivée
+              par défaut. Aucun relais n’est imposé ; entre deux réseaux, iroh demande un relais que vous choisissez.
             </p>
             <h3>Un relais exploité chez vous.</h3>
             <p>
               Existant : le relais transmet les enveloppes chiffrées et voit seulement les métadonnées de routage et
-              d’admission (identités, parrain, horodatages, adresses de connexion). Visé (T4.10) : paquet entreprise du
-              relais (binaire, Docker, Helm) avec une politique signée par l’informatique. Une image Docker de
-              laboratoire existe déjà.
+              d’admission (identités, parrain, horodatages, adresses de connexion). Existant (T4.10) : image Docker et
+              chart Helm du relais, avec une politique signée par l’informatique, appliquée au poste et revérifiée par
+              le relais. Le binaire autonome reste à faire (T4.10b).
             </p>
             <h3>Une frontière que l’on doit prouver.</h3>
             <p>
@@ -339,8 +341,8 @@
         <div class="section-head">
           <h2>Une bêta privée,<br />en petites équipes.</h2>
           <p>
-            drop s'installe pour l'instant avec nous, équipe par équipe : l'app Mac attend sa signature Apple et le
-            paquet public son nom définitif.
+            drop s'installe pour l'instant avec nous, équipe par équipe : l'app Mac est signée et notarisée, mais doit
+            encore être testée sur un Mac neuf, et le paquet public attend son nom définitif.
           </p>
         </div>
         <div class="install-grid">
@@ -358,9 +360,9 @@
             <h3>Ce qui arrive</h3>
             <ul class="milestone-list">
               <li><span>App Mac, dans la barre de menus</span><span class="tag">Bientôt</span></li>
-              <li><span>Claude Code, Codex, Cursor</span><span class="tag">Bientôt</span></li>
-              <li><span>Claude Desktop</span><span class="tag">Bientôt</span></li>
-              <li><span>Claude et ChatGPT, par un connecteur</span><span class="tag">Bientôt</span></li>
+              <li><span>Claude Code, Claude Desktop, Cursor, Codex</span><span class="tag">Bientôt</span></li>
+              <li><span>Gemini CLI, VS Code, Cline</span><span class="tag">Bientôt</span></li>
+              <li><span>Claude et ChatGPT sur le web</span><span class="tag">Option différée</span></li>
             </ul>
             <a class="text-link" href="demarrer.html">Voir comment ça se passera</a>
           </div>
@@ -369,10 +371,7 @@
         <!-- if:open -->
         <div class="section-head">
           <h2>Installer drop.</h2>
-          <p>
-            Pour répondre, l'app Mac. Pour demander, votre agent ou votre assistant habituel. Le pas à pas tient en cinq
-            minutes.
-          </p>
+          <p>Pour répondre, l'app Mac. Pour demander, votre agent habituel. Le pas à pas tient en cinq minutes.</p>
         </div>
         <div class="install-grid">
           <div class="install-card">
@@ -382,9 +381,9 @@
           </div>
           <div class="install-card">
             <h3>Pour demander</h3>
-            <p>Depuis Claude Desktop, Claude Code, Codex, Cursor, Claude ou ChatGPT.</p>
+            <p>Depuis Claude Desktop, Claude Code, Codex, Cursor, Gemini CLI, VS Code, Cline ou un autre client MCP.</p>
             <a class="button" href="downloads/drop.mcpb">Claude Desktop</a>
-            <a class="text-link" href="demarrer.html#agents">Les autres agents et assistants</a>
+            <a class="text-link" href="demarrer.html#agents">Les autres agents</a>
           </div>
         </div>
         <!-- /if:open -->
@@ -432,13 +431,14 @@
       <section class="section wrap">
         <div class="progress-callout">
           <div>
-            <span class="pill">État au 10 octobre 2026</span>
+            <span class="pill">État au 11 octobre 2026</span>
             <h2>Un socle vérifié.<br />Aucun essai réel encore.</h2>
             <p>
-              Protocole, consentement, capacités, ponts A2A, profil privé et raccordement de quatre agents existent dans
-              le prototype. Une entreprise fictive de 50 nœuds a tourné sur un Mac : 124 demandes livrées, aucune fuite,
-              et une limite de débit du relais qui bloque un propriétaire très sollicité, à corriger avant tout essai.
-              Toutes les démonstrations ont tourné sur les machines de Guillaume.
+              Protocole, consentement, capacités, ponts A2A, profil privé, réseau local, iroh, pack entreprise et
+              raccordement de treize clients MCP existent dans le prototype. Une entreprise fictive de 50 nœuds a tourné
+              sur un Mac : 124 demandes livrées, aucune fuite, et une limite de débit du relais qui bloque un
+              propriétaire très sollicité, à corriger avant le lancement. Toutes les démonstrations ont tourné sur les
+              machines de Guillaume.
             </p>
             <a class="button" href="avancement.html">Voir l’avancement réel</a>
           </div>
@@ -451,7 +451,7 @@
             <li><span>Invitation confirmée avant de rejoindre</span><span class="tag yes">Sur test (T4.14)</span></li>
             <li><span>App Mac signée et notarisée</span><span class="tag">Recette humaine à finir (T3.4)</span></li>
             <li><span>Limite de débit du relais sous charge</span><span class="tag">À corriger (T3.1d)</span></li>
-            <li><span>Essai avec deux amis</span><span class="tag">Visé (T4.6)</span></li>
+            <li><span>Essai avec deux amis</span><span class="tag">À venir (T4.6)</span></li>
           </ul>
         </div>
       </section>

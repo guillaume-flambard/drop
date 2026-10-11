@@ -51,8 +51,9 @@
             <h2>Chiffré de bout en bout.</h2>
             <p>
               Chaque Node a sa paire de clés. Les messages sont signés (Ed25519) et chiffrés pour leur destinataire
-              (X25519). Le relais les transporte sans pouvoir les lire ; il voit l'expéditeur, le destinataire, la
-              taille et l'heure. Un message ne vit pas plus de 15 minutes et ne peut pas être rejoué.
+              (X25519). Ils passent par le réseau local, par iroh sur Internet, ou par un relais. Un relais les
+              transporte sans pouvoir les lire ; il voit l'expéditeur, le destinataire, la taille et l'heure. Un message
+              ne vit pas plus de 15 minutes et ne peut pas être rejoué.
             </p>
           </section>
           <section id="consentement">
@@ -82,22 +83,22 @@
           <section id="cles">
             <h2>Les clés restent sur votre Mac.</h2>
             <p>
-              Votre identité vit dans <code>~/.drop</code>, lisible par vous seul. Le Node n'écoute que sur votre propre
-              machine, derrière un jeton ; il se connecte au relais en sortie. Les reçus et les journaux gardent des
-              empreintes et des métadonnées, jamais le contenu ni un secret.
+              Votre identité vit dans <code>~/.drop</code>, lisible par vous seul. L'API du Node n'écoute que sur votre
+              propre machine, derrière un jeton. Sur le réseau local, il accepte aussi des connexions directes, mais
+              seulement de pairs déjà appairés, qui prouvent leur identité. Il se connecte au relais en sortie. Les
+              reçus et les journaux gardent des empreintes et des métadonnées, jamais le contenu ni un secret.
             </p>
           </section>
           <section id="assistants">
-            <h2>Avec Claude et ChatGPT.</h2>
+            <h2>Avec Claude et ChatGPT : pas dans le profil privé.</h2>
             <p>
-              Ces assistants n'acceptent que des connecteurs en ligne : le leur passe par la passerelle de drop. Elle
-              voit les questions et les réponses en clair, comme Claude ou ChatGPT eux-mêmes, et n'en garde rien. Elle
-              ne détient aucune clé d'équipe : chaque appel est transmis à votre Mac, qui décide.
+              Ces assistants n'acceptent que des connecteurs en ligne. Une passerelle pour eux existe dans le code, mais
+              elle n'est pas livrée : c'est une option cloud remise à plus tard. Elle verrait les questions et les
+              réponses en clair, comme Claude ou ChatGPT eux-mêmes.
             </p>
             <p>
-              La liaison se confirme dans votre app, qui affiche le domaine où partira l'autorisation. Une liaison
-              truquée, qui se ferait passer pour Claude en renvoyant ailleurs, est refusée. Un assistant relié se retire
-              d'un clic, et lui seul est coupé.
+              Le profil privé, celui que crée l'app, refuse de s'y relier. Une entreprise peut aussi interdire toute
+              passerelle par sa politique signée.
             </p>
           </section>
           <section id="modele">
@@ -105,15 +106,16 @@
             <p>
               Quand une réponse demande un modèle, il tourne chez le propriétaire, avec le fournisseur qu'il a choisi.
               Un modèle distant reçoit ce qui est nécessaire à ses appels : exécution chez soi ne veut pas dire
-              traitement entièrement local. Par défaut, le demandeur paie avec une clé plafonnée, créée pour sa seule
-              demande et jetée ensuite.
+              traitement entièrement local. Par défaut, le propriétaire utilise son propre modèle et le profil privé
+              refuse toute clé envoyée par le demandeur. Le paiement par le demandeur n'existe que dans l'ancien profil
+              du prototype.
             </p>
           </section>
           <section id="limites">
             <h2>Ce que drop ne garantit pas.</h2>
             <ul>
               <li>Le détecteur de secrets est un filtre, pas une preuve : le jugement du propriétaire compte.</li>
-              <li>Le relais voit qui parle à qui, et quand.</li>
+              <li>Un relais, quand il sert, voit qui parle à qui, et quand.</li>
               <li>drop est un prototype : il n'a pas encore été audité par un tiers.</li>
             </ul>
             <!-- if:contact -->

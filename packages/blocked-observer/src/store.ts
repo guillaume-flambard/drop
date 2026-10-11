@@ -1,4 +1,4 @@
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { z } from 'zod';
 
@@ -46,16 +46,22 @@ export const ActivitySchema = z.record(
 );
 export type Activity = z.infer<typeof ActivitySchema>;
 
-import { observerHome } from './light.ts';
+import { observerHome, readIfPresent, writeFileAtomic } from './light.ts';
 
 export { newId, observerHome, shortHash } from './light.ts';
+
+/** Called with a stable code when the store skips something it could not read (W_EVENTS_INVALID). */
+export type StoreWarning = (code: string, detail: string) => void;
 
 /** Local files only: events.jsonl, activity.json, errors.log. Nothing here ever touches the network. */
 export class ObserverStore {
   readonly root: string;
+  private readonly warn: StoreWarning | undefined;
+  private skipped = 0;
 
-  constructor(root: string = observerHome()) {
+  constructor(root: string = observerHome(), options: { warn?: StoreWarning } = {}) {
     this.root = root;
+    this.warn = options.warn;
   }
 
   private ensure(): void {
@@ -66,33 +72,68 @@ export class ObserverStore {
     return join(this.root, 'events.jsonl');
   }
 
+  /** Lines of events.jsonl the last events() call could not read (torn write, hand edit, older schema). */
+  get skippedLines(): number {
+    return this.skipped;
+  }
+
   append(event: ObservedEvent): void {
     this.ensure();
     appendFileSync(this.eventsPath, `${JSON.stringify(EventSchema.parse(event))}\n`, { mode: 0o600 });
   }
 
+  /** Every readable event. An invalid line is skipped and counted, never fatal: one torn line must not stop the tools. */
   events(): ObservedEvent[] {
-    if (!existsSync(this.eventsPath)) return [];
-    return readFileSync(this.eventsPath, 'utf8')
+    const text = readIfPresent(this.eventsPath);
+    this.skipped = 0;
+    if (text === undefined) return [];
+    const events = text
       .split('\n')
       .filter((line) => line.trim() !== '')
       .flatMap((line) => {
-        const parsed = EventSchema.safeParse(JSON.parse(line));
+        let raw: unknown;
+        try {
+          raw = JSON.parse(line);
+        } catch {
+          this.skipped += 1;
+          return [];
+        }
+        const parsed = EventSchema.safeParse(raw);
+        if (!parsed.success) this.skipped += 1;
         return parsed.success ? [parsed.data] : [];
       });
+    if (this.skipped > 0) {
+      const detail = `${String(this.skipped)} invalid lines skipped in ${this.eventsPath}`;
+      this.logError('W_EVENTS_INVALID', detail);
+      this.warn?.('W_EVENTS_INVALID', detail);
+    }
+    return events;
   }
 
-  /** Rewrites the whole file: used by classify and linking, never by the hook. */
+  /** Rewrites the whole file by an atomic rename: used by classify and linking, never by the hook. */
   replaceEvents(events: ObservedEvent[]): void {
     this.ensure();
-    writeFileSync(this.eventsPath, events.map((event) => `${JSON.stringify(event)}\n`).join(''), { mode: 0o600 });
+    writeFileAtomic(this.eventsPath, events.map((event) => `${JSON.stringify(event)}\n`).join(''));
   }
 
+  /**
+   * Active days. An activity.json that does not parse is an error (E_ACTIVITY_CORRUPT), never an empty map: the report
+   * would show no active day, and the next touch() would overwrite every day measured so far.
+   */
   activity(): Activity {
     const path = join(this.root, 'activity.json');
-    if (!existsSync(path)) return {};
-    const parsed = ActivitySchema.safeParse(JSON.parse(readFileSync(path, 'utf8')));
-    return parsed.success ? parsed.data : {};
+    const text = readIfPresent(path);
+    if (text === undefined) return {};
+    let raw: unknown;
+    try {
+      raw = JSON.parse(text);
+    } catch (error) {
+      throw new Error(`E_ACTIVITY_CORRUPT: ${path} is not valid JSON; fix or move it`, { cause: error });
+    }
+    const parsed = ActivitySchema.safeParse(raw);
+    if (!parsed.success)
+      throw new Error(`E_ACTIVITY_CORRUPT: ${path} is not a map of days to sessions; fix or move it`);
+    return parsed.data;
   }
 
   /** Marks a session as active on a day; cheap enough for the hook (one small file). */
@@ -103,7 +144,7 @@ export class ObserverStore {
     entry[agent].push(session);
     activity[day] = entry;
     this.ensure();
-    writeFileSync(join(this.root, 'activity.json'), `${JSON.stringify(activity)}\n`, { mode: 0o600 });
+    writeFileAtomic(join(this.root, 'activity.json'), `${JSON.stringify(activity)}\n`);
   }
 
   logError(code: string, detail: string): void {

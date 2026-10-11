@@ -22,10 +22,13 @@ function kubernetesHelm(): string | undefined {
 }
 
 const helm = kubernetesHelm();
+// GitHub's ubuntu runner ships Helm: in CI the chart is always rendered, never silently skipped.
+const required = process.env.CI === 'true';
 
 describe('enterprise policy (T4.10)', () => {
-  it.skipIf(!helm)('renders a hardened single-replica Helm chart for the relay', () => {
-    const run = (...args: string[]) => execFileSync(helm ?? 'helm', args, { encoding: 'utf8' });
+  it.skipIf(!helm && !required)('renders a hardened single-replica Helm chart for the relay', () => {
+    if (!helm) throw new Error('Kubernetes Helm 3 or 4 is required in CI (set HELM_BIN or put helm on the PATH)');
+    const run = (...args: string[]) => execFileSync(helm, args, { encoding: 'utf8' });
     run('lint', '--strict', chart);
     const plain = run('template', 'atlas', chart);
     expect(plain).toContain('replicas: 1');

@@ -1,8 +1,9 @@
 import { spawn, spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { homedir, tmpdir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { bundleOutDir } from '../scripts/bundle.ts';
 
 const root = resolve(import.meta.dirname, '..');
 
@@ -74,4 +75,47 @@ describe('the bundled files that ship outside the repo (D29, T2.18)', () => {
     });
     expect(JSON.parse(reply)).toMatchObject({ id: 1, result: { serverInfo: { name: 'drop' } } });
   }, 30_000);
+});
+
+describe('the bundle output directory, which the build empties first (B2)', () => {
+  it('refuses --out without a value instead of emptying the working directory', () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'drop-bundle-cwd-'));
+    const sentinel = join(cwd, 'keep.txt');
+    writeFileSync(sentinel, 'must survive');
+    try {
+      const run = spawnSync(process.execPath, [join(root, 'scripts', 'bundle.ts'), '--out'], {
+        cwd,
+        encoding: 'utf8',
+        timeout: 60_000,
+      });
+      expect(run.status).not.toBe(0);
+      expect(run.stderr).toContain('E_BUNDLE_OUT');
+      expect(existsSync(sentinel)).toBe(true);
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  }, 60_000);
+
+  it('refuses an empty value, the repository, its ancestors and the home directory', () => {
+    const home = homedir();
+    for (const args of [
+      ['--out'],
+      ['--out', ''],
+      ['--out', '--mcpb'],
+      ['--out', root],
+      ['--out', dirname(root)],
+      ['--out', '/'],
+      ['--out', home],
+    ]) {
+      expect(() => bundleOutDir(args, root, home), args.join(' ')).toThrow(/E_BUNDLE_OUT/);
+    }
+  });
+
+  it('defaults to dist/ in the repository and accepts a separate directory', () => {
+    const out = join(tmpdir(), 'drop-bundle-elsewhere');
+    expect(bundleOutDir([], root, homedir())).toBe(join(root, 'dist'));
+    expect(bundleOutDir(['--mcpb'], root, homedir())).toBe(join(root, 'dist'));
+    expect(bundleOutDir(['--out', out], root, homedir())).toBe(out);
+    expect(bundleOutDir(['--out', 'build/out'], root, homedir(), '/work')).toBe('/work/build/out');
+  });
 });

@@ -393,6 +393,8 @@ describe('internet (T4.2b)', () => {
     });
     for (const bad of [{ mode: 'relay', relay: 'http://relay.example.com' }, { mode: 'relay' }, { mode: 'everything' }])
       expect((await call(port, token, 'POST', '/ui/admin/internet', bad)).status).toBe(400);
+    for (const method of ['PUT', 'DELETE', 'PATCH'])
+      expect((await call(port, token, method, '/ui/admin/internet', { mode: 'off' })).status).toBe(405);
     expect(saved).toEqual({ mode: 'n0' });
     expect(InternetSettingsSchema.parse({ mode: 'relay', relay: 'http://127.0.0.1:3340' })).toBeTruthy();
 
