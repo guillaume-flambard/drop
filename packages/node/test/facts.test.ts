@@ -117,7 +117,10 @@ describe('published facts (T4.4)', () => {
     // On disk: facts.json under DROP_HOME, owner-only, read back as written.
     const owner = await generateIdentity('Julie');
     const home = new DropHome(join(mkdtempSync(join(tmpdir(), 'facts-home-')), 'home'));
-    home.init(owner, NodeConfigSchema.parse({ relayUrl: 'ws://127.0.0.1:1/v1', ownerKind: 'human', apiPort: 0 }));
+    home.init(
+      owner,
+      NodeConfigSchema.parse({ profile: 'legacy', relayUrl: 'ws://127.0.0.1:1/v1', ownerKind: 'human', apiPort: 0 }),
+    );
     const signed = await signFact(owner, {
       ...fact,
       owner: { kind: 'human', displayName: 'Julie', nodeId: owner.nodeId },
@@ -411,6 +414,14 @@ describe('published facts (T4.4)', () => {
       type: 'drop_error',
       code: 'E_RATE',
     });
+  });
+
+  it('keeps a bounded fact-rate window per peer however fast it asks', async () => {
+    const m = await setup();
+    const fact = await m.executor.engine.publishFact(DEPLOY);
+    // Direct paths bypass the relay quota: refused requests must not grow the window either.
+    for (let index = 0; index < 40; index += 1) await ask(m, fact.factId, '1.1.0');
+    expect(m.executor.engine.memoryStats().factRequests).toBeLessThanOrEqual(11);
   });
 
   it('serves no fact from an unreadable store, keeps the catalog, and mints no capped key for a fact', async () => {

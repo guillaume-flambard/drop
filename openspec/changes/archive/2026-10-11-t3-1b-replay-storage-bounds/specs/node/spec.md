@@ -137,3 +137,31 @@ Le Node MUST supprimer le fichier temporaire d'une écriture durable échouée, 
 <!-- openspec-guard:test="replay clock write failures > does not accumulate temporary files when durable writes repeatedly fail" -->
 - **WHEN** la synchronisation de l'horloge échoue plusieurs fois avant le renommage
 - **THEN** le Node refuse chaque demande sans laisser de fichier temporaire supplémentaire
+
+### Requirement: Panne passagère sans blocage de l'admission
+Une erreur passagère d'écriture ou de synchronisation MUST refuser seulement la demande en cours, sans laisser le stockage anti-rejeu refuser les suivantes. L'empreinte durable porte le plancher de fraîcheur auquel elle a été calculée et ne compte que les marqueurs vivants ; elle est écrite avant toute purge. Une première migration interrompue reprend grâce à un journal écrit en premier et retiré en dernier.
+
+#### Scenario: AC: panne passagère après création du marqueur
+<!-- openspec-guard:test="replay clock write failures > rolls back a new marker whose durable digest could not be written, so admission keeps working" -->
+- **WHEN** l'écriture durable de l'empreinte échoue après la création du marqueur d'une nouvelle demande
+- **THEN** cette demande est refusée, son marqueur est retiré tant que l'empreinte durable désigne l'ancien jeu, et l'admission suivante réussit sans réparation manuelle
+
+#### Scenario: AC: empreinte déjà en place
+<!-- openspec-guard:test="replay clock write failures > keeps a new marker whose digest was already renamed into place when the folder sync fails" -->
+- **WHEN** seule la synchronisation du dossier échoue après le renommage de la nouvelle empreinte
+- **THEN** le marqueur et l'empreinte restent d'accord, le même identifiant est refusé comme doublon et une autre demande est admise
+
+#### Scenario: AC: panne passagère pendant la purge
+<!-- openspec-guard:test="replay clock write failures > keeps admitting after a transient sync failure at any step of a claim that prunes expired markers" -->
+- **WHEN** une synchronisation échoue à n'importe quelle étape d'une admission qui purge des marqueurs expirés
+- **THEN** cette demande est refusée, puis le même identifiant est admis au plus une fois et une autre demande est admise, sans réparation manuelle
+
+#### Scenario: AC: panne passagère pendant la première admission
+<!-- openspec-guard:test="replay clock write failures > keeps admitting after a transient sync failure at any step of the first claim on a fresh home" -->
+- **WHEN** une synchronisation échoue pendant la première admission d'un `DROP_HOME` neuf ou antérieur à T3.1b
+- **THEN** la migration reprend à l'admission suivante au lieu de refuser toute demande
+
+#### Scenario: AC: empreinte antérieure aux planchers
+<!-- openspec-guard:test="bounded received drops > verifies a digest written before floors, then rewrites it with its floor and keeps detecting a lost marker" -->
+- **WHEN** l'empreinte durable a été écrite par une version qui ne portait pas de plancher
+- **THEN** elle est vérifiée sur tout le jeu, réécrite avec son plancher, et la perte d'un marqueur récent reste refusée

@@ -36,7 +36,7 @@ async function until(check: () => boolean, timeoutMs = 8000): Promise<void> {
 
 async function daemonFor(identity: Identity, relayUrl: string): Promise<{ home: DropHome; daemon: Daemon }> {
   const home = new DropHome(join(mkdtempSync(join(tmpdir(), 'a2a-home-')), 'home'));
-  home.init(identity, NodeConfigSchema.parse({ relayUrl, ownerKind: 'human', apiPort: 0 }));
+  home.init(identity, NodeConfigSchema.parse({ profile: 'legacy', relayUrl, ownerKind: 'human', apiPort: 0 }));
   const daemon = await startDaemon(home, { apiPort: 0, notifications: false, log: () => undefined });
   cleanups.push(() => daemon.stop());
   return { home, daemon };

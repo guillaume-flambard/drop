@@ -123,7 +123,7 @@ describe('local network privacy (T4.2c)', () => {
     const home = new DropHome(join(mkdtempSync(join(tmpdir(), 'lan-home-')), 'home'));
     home.init(
       await generateIdentity('Julie'),
-      NodeConfigSchema.parse({ relayUrl: 'ws://127.0.0.1:1/v1', ownerKind: 'human' }),
+      NodeConfigSchema.parse({ profile: 'legacy', relayUrl: 'ws://127.0.0.1:1/v1', ownerKind: 'human' }),
     );
     const key = home.lanKey();
     expect(home.lanKey()).toBe(key);

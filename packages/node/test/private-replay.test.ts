@@ -8,6 +8,7 @@ import {
   openEnvelope,
   ReplayCache,
   sealEnvelope,
+  sha256Hex,
   uuidv7,
   type Envelope,
   type Message,
@@ -314,6 +315,24 @@ describe('bounded received drops', () => {
       unlinkSync(join(root, 'received-drops-version'));
       unlinkSync(join(root, 'received-drops-clock'));
       expect(() => new DropHome(root).claimDrop(dropId, NOW)).toThrow('E_REPLAY_STATE missing version');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('verifies a digest written before floors, then rewrites it with its floor and keeps detecting a lost marker', () => {
+    const root = mkdtempSync(join(tmpdir(), 'drop-replay-legacy-digest-'));
+    try {
+      const home = new DropHome(root);
+      const first = uuidv7(NOW);
+      expect(home.claimDrop(first, NOW)).toBe('claimed');
+      const markers = readdirSync(join(root, 'received-drops')).sort();
+      writeFileSync(join(root, 'received-drops-integrity'), `${sha256Hex(markers)}\n`);
+      const second = uuidv7(NOW + 1);
+      expect(home.claimDrop(second, NOW + 1)).toBe('claimed');
+      expect(home.claimDrop(first, NOW + 2)).toBe('duplicate');
+      unlinkSync(join(root, 'received-drops', second));
+      expect(() => home.claimDrop(second, NOW + 3)).toThrow('E_REPLAY_STATE marker integrity');
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

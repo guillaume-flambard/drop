@@ -67,6 +67,8 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
   const identity = home.identity();
   const config = home.config();
   const token = home.localToken();
+  // peers.json and team.json written by a version before T4.15 may still be readable by others.
+  home.securePrivateFiles();
   const log = options.log ?? ((line: string) => process.stderr.write(`${line}\n`));
   /** A structured log line: a timestamp, an event and a stable code, never a payload. */
   const logEntry = (entry: object): void => {

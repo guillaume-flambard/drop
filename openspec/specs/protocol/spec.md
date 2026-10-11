@@ -677,3 +677,11 @@ Une politique SHALL porter `v`, `policyId`, `version`, `issuer`, `issuedAt`, `ex
 <!-- openspec-guard:test="enterprise policy (T4.10) > signs a policy, verifies it against its issuer and refuses any change" -->
 - **WHEN** une politique est signée, puis vérifiée avec son émetteur, avec un autre émetteur, et après la modification d'un champ
 - **THEN** seule la première vérification réussit, et l'empreinte change avec la politique
+
+### Requirement: Codes d'erreur stables partagés
+`ERROR_CODES` SHALL lister chaque code stable qu'un package peut produire ou recevoir, dont `E_QUEUE_FULL`, que le relais renvoie quand la file différée d'un destinataire est pleine.
+
+#### Scenario: AC: file pleine dans la liste
+<!-- openspec-guard:test="configuration hygiene (T4.15) > lists E_QUEUE_FULL among the stable error codes" -->
+- **WHEN** on lit `ERROR_CODES`
+- **THEN** la liste contient `E_QUEUE_FULL`
