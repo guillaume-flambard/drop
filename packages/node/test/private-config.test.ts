@@ -25,7 +25,7 @@ describe('private configuration', () => {
     const home = new DropHome(root);
     home.init(
       await generateIdentity('Owner'),
-      NodeConfigSchema.parse({ relayUrl: 'wss://drop.memolabs.dev/v1', ownerKind: 'human' }),
+      NodeConfigSchema.parse({ profile: 'legacy', relayUrl: 'wss://drop.memolabs.dev/v1', ownerKind: 'human' }),
     );
     const before = readFileSync(join(root, 'config.json'), 'utf8');
     writeFileSync(join(root, 'private-migration.json'), JSON.stringify({ before, after: 'not committed' }), {
@@ -46,7 +46,7 @@ describe('private configuration', () => {
     const home = new DropHome(root);
     home.init(
       await generateIdentity('Owner'),
-      NodeConfigSchema.parse({ relayUrl: 'wss://drop.memolabs.dev/v1', ownerKind: 'human' }),
+      NodeConfigSchema.parse({ profile: 'legacy', relayUrl: 'wss://drop.memolabs.dev/v1', ownerKind: 'human' }),
     );
     home.publish({
       capabilityId: 'repo.answer',

@@ -6,6 +6,7 @@ import {
   appendFileSync,
   chmodSync,
   closeSync,
+  fchmodSync,
   fsyncSync,
   openSync,
   existsSync,
@@ -43,10 +44,21 @@ import {
 
 export const MAX_RECEIVED_DROPS = 16_384;
 
-export const NodeConfigSchema = z
+/**
+ * In the private profile the owner pays (D40): an omitted `payer` means the owner there, and `requester` is refused by
+ * the check below. The legacy profile keeps the requester-pays default of D27.
+ */
+function ownerPaysWhenPrivate(raw: unknown): unknown {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return raw;
+  const fields = raw as Record<string, unknown>;
+  return fields.profile !== 'legacy' && fields.payer === undefined ? { ...fields, payer: 'owner' } : raw;
+}
+
+const NodeConfigObject = z
   .object({
     relayUrl: z.string(),
-    profile: z.enum(['legacy', 'private']).default('legacy'),
+    /** What `drop init` creates (T4.15): a file without a profile is read as private and must pass its checks. */
+    profile: z.enum(['legacy', 'private']).default('private'),
     network: PrivateNetworkSchema.optional(),
     ownerKind: OwnerKindSchema,
     apiPort: z.number().int().min(0).max(65535).default(7781),
@@ -62,14 +74,16 @@ export const NodeConfigSchema = z
   .superRefine((config, ctx) => {
     if (config.profile !== 'private') return;
     try {
-      if (!config.network || config.funding || config.gateways.length) throw new Error('policy');
+      if (!config.network || config.funding || config.gateways.length || config.payer !== 'owner')
+        throw new Error('policy');
       assertPrivateDestination(config.relayUrl, config.network);
       if (!['ws:', 'wss:'].includes(new URL(config.relayUrl).protocol)) throw new Error('relay');
     } catch {
       ctx.addIssue({ code: 'custom', message: 'E_DENIED invalid private profile' });
     }
   });
-export type NodeConfig = z.infer<typeof NodeConfigSchema>;
+export const NodeConfigSchema = z.preprocess(ownerPaysWhenPrivate, NodeConfigObject);
+export type NodeConfig = z.infer<typeof NodeConfigObject>;
 
 export const PeerSchema = z.object({
   nodeId: NodeIdSchema,
@@ -119,10 +133,23 @@ export function defaultHome(): string {
   return process.env.DROP_HOME ?? join(homedir(), '.drop');
 }
 
+/**
+ * Writes `content` readable by its owner only. The mode of `writeFileSync` applies only when it creates the file, so an
+ * existing file is narrowed through its descriptor before the new content lands (T4.15), never shown with a wider mode.
+ * Windows keeps only the read-only bit; the profile's ACL protects the file there.
+ */
 function writePrivate(path: string, content: string): void {
-  writeFileSync(path, content, { mode: 0o600 });
-  chmodSync(path, 0o600);
+  const fd = openSync(path, 'w', 0o600);
+  try {
+    fchmodSync(fd, 0o600);
+    writeFileSync(fd, content);
+  } finally {
+    closeSync(fd);
+  }
 }
+
+/** Files that name the peers and the team: owner-only since T4.15, even when an older version left them wider. */
+const PRIVATE_STATE_FILES = ['peers.json', 'team.json'] as const;
 
 /**
  * Makes a rename or an unlink in `path` durable on macOS and Linux. Windows cannot flush a directory: it refuses
@@ -216,6 +243,50 @@ function acquireReplayLock(lock: string): void {
   claimLock(lock);
 }
 
+/**
+ * A claim failed after creating its marker (T3.1b review): the request is refused, so the marker must not outlive the
+ * digest it is missing from, or every later admission would fail on `marker integrity` until a manual repair. While
+ * the durable digest still names the previous set, the marker is removed; once the new digest is in place (only its
+ * folder sync failed), marker and digest agree and both stay. If neither holds, the store fails closed as before.
+ */
+function rollBackMarker(
+  marker: string,
+  dir: string,
+  integrityPath: string,
+  previousDigest: string,
+  cause: unknown,
+): void {
+  try {
+    if (readFileSync(integrityPath, 'utf8') !== previousDigest) return;
+    unlinkSync(marker);
+    syncDirectory(dir);
+  } catch (rollbackError) {
+    throw new AggregateError([cause, rollbackError], 'E_REPLAY_STATE claim rollback failed', { cause: rollbackError });
+  }
+}
+
+/**
+ * The durable digest of the live markers: the UUIDv7 names, lowercased, at or after `floor`. Only they can refuse a
+ * request, so a marker below the floor (expired), a legacy name or a second casing never makes the store disagree.
+ */
+function floorDigest(floor: number, names: Iterable<string>): string {
+  return `${String(floor)} ${sha256Hex([...new Set(names)].sort())}\n`;
+}
+
+const FLOORED_DIGEST = /^(-?(?:0|[1-9][0-9]*)) ([0-9a-f]{64})\n$/;
+
+/** What the marker directory must hash to for the stored digest: by its floor, or every name for a pre-floor digest. */
+function expectedDigest(stored: string, markerNames: string[]): string {
+  const floored = FLOORED_DIGEST.exec(stored);
+  if (!floored) return `${sha256Hex([...markerNames].sort())}\n`;
+  const floor = Number(floored[1]);
+  const live = markerNames.flatMap((name) => {
+    const time = uuidv7Timestamp(name);
+    return time !== undefined && time >= floor ? [name.toLowerCase()] : [];
+  });
+  return floorDigest(floor, live);
+}
+
 /** Never removes a lock another process has since taken over. */
 function releaseReplayLock(lock: string): void {
   if (lockOwner(lock) === REPLAY_LOCK_OWNER) rmSync(lock, { recursive: true, force: true });
@@ -240,7 +311,7 @@ export class DropHome {
     chmodSync(this.root, 0o700);
     writePrivate(join(this.root, 'identity.json'), `${JSON.stringify(identity, null, 2)}\n`);
     writeFileSync(join(this.root, 'config.json'), `${JSON.stringify(config, null, 2)}\n`);
-    writeFileSync(join(this.root, 'peers.json'), '[]\n');
+    writePrivate(join(this.root, 'peers.json'), '[]\n');
     writePrivate(join(this.root, 'local-token'), randomBytes(32).toString('base64url'));
   }
 
@@ -263,13 +334,24 @@ export class DropHome {
     const clockPath = join(this.root, 'received-drops-clock');
     const versionPath = join(this.root, 'received-drops-version');
     const integrityPath = join(this.root, 'received-drops-integrity');
+    const journalPath = join(this.root, 'received-drops-migrating');
     const clockExists = existsSync(clockPath);
     const versionExists = existsSync(versionPath);
-    const integrityExists = existsSync(integrityPath);
-    if (!versionExists && (clockExists || integrityExists)) throw new Error('E_REPLAY_STATE missing version');
+    // A first migration (fresh or pre-T3.1b home) writes clock, digest and version in turn. Its journal, written first
+    // and removed last, lets an interrupted one start again instead of refusing every later admission (T3.1b review).
+    let migrating = !versionExists && existsSync(journalPath);
+    const integrityFound = existsSync(integrityPath);
+    if (!versionExists && !migrating && (clockExists || integrityFound))
+      throw new Error('E_REPLAY_STATE missing version');
     // The clock/version prove that this home has admitted requests. Recreating a lost marker directory would
     // silently reopen consent for a recent request whose tombstone was in that directory.
     if (!existsSync(dir) && (clockExists || versionExists)) throw new Error('E_REPLAY_STATE missing markers');
+    if (!versionExists && !migrating) {
+      writeDurablePrivate(journalPath, '');
+      migrating = true;
+    }
+    // A digest left by an interrupted first migration is recomputed: nothing before it could be verified anyway.
+    const integrityExists = integrityFound && !migrating;
     mkdirSync(dir, { recursive: true, mode: 0o700 });
     const version = versionExists ? readFileSync(versionPath, 'utf8') : undefined;
     if (versionExists) {
@@ -289,18 +371,18 @@ export class DropHome {
       writeDurablePrivate(clockPath, `${String(highWater)}\n`);
     }
     const floor = highWater - REPLAY_WINDOW_MS;
-    let count = 0;
-    let removed = false;
     const entries = readdirSync(dir, { withFileTypes: true });
-    const markerNames = entries
-      .filter((entry) => UUID_SHAPE.test(entry.name))
-      .map((entry) => entry.name)
-      .sort();
-    if (integrityExists && readFileSync(integrityPath, 'utf8') !== `${sha256Hex(markerNames)}\n`) {
+    const markerNames = entries.filter((entry) => UUID_SHAPE.test(entry.name)).map((entry) => entry.name);
+    let digest = integrityExists ? readFileSync(integrityPath, 'utf8') : undefined;
+    if (digest !== undefined && digest !== expectedDigest(digest, markerNames)) {
       throw new Error('E_REPLAY_STATE marker integrity');
     }
+    // Plan the pruning before touching anything: the digest of what remains is made durable first, so a failure or a
+    // crash part-way leaves only expired, legacy or differently cased names behind, which the digest ignores.
     const names = new Set(entries.map((entry) => entry.name));
     const retained = new Set<string>();
+    const removals: string[] = [];
+    const renames: [string, string][] = [];
     for (const entry of entries) {
       // Finder, backup and sync tools may drop their own files here; only UUID-shaped names are markers.
       if (!UUID_SHAPE.test(entry.name)) continue;
@@ -309,47 +391,65 @@ export class DropHome {
       if (markerTime === undefined) {
         // Pre-T3.1b claims (anything z.uuid() accepted, nil and max included) cannot be admitted by the new protocol.
         if (!LEGACY_MARKER.test(entry.name)) throw new Error('E_REPLAY_STATE unexpected marker');
-        unlinkSync(join(dir, entry.name));
-        removed = true;
+        removals.push(entry.name);
       } else if (markerTime < floor) {
-        unlinkSync(join(dir, entry.name));
-        removed = true;
+        removals.push(entry.name);
       } else {
         const canonicalName = entry.name.toLowerCase();
         if (retained.has(canonicalName) || (entry.name !== canonicalName && names.has(canonicalName))) {
-          unlinkSync(join(dir, entry.name));
-          removed = true;
+          removals.push(entry.name);
           continue;
         }
         retained.add(canonicalName);
-        if (entry.name !== canonicalName) {
-          renameSync(join(dir, entry.name), join(dir, canonicalName));
-          removed = true;
-        }
-        count += 1;
+        if (entry.name !== canonicalName) renames.push([entry.name, canonicalName]);
       }
     }
-    if (removed) syncDirectory(dir);
-    if (removed || !integrityExists) writeDurablePrivate(integrityPath, `${sha256Hex([...retained].sort())}\n`);
+    const pruning = removals.length > 0 || renames.length > 0;
+    if (pruning || digest === undefined || !FLOORED_DIGEST.test(digest)) {
+      digest = floorDigest(floor, retained);
+      writeDurablePrivate(integrityPath, digest);
+    }
+    for (const name of removals) unlinkSync(join(dir, name));
+    for (const [from, to] of renames) renameSync(join(dir, from), join(dir, to));
+    if (pruning) syncDirectory(dir);
     // Version 1 is upgraded only after the marker-set digest is durable. A crash between the two writes is safe:
     // the next admission verifies the digest even while the version still says 1.
     if (version !== '2\n') writeDurablePrivate(versionPath, '2\n');
+    if (existsSync(journalPath)) {
+      unlinkSync(journalPath);
+      syncDirectory(this.root);
+    }
     if (timestamp < floor || timestamp > highWater + MAX_CLOCK_SKEW_MS) return 'expired';
     if (existsSync(join(dir, dropId))) return 'duplicate';
-    if (count >= MAX_RECEIVED_DROPS) return 'capacity';
+    if (retained.size >= MAX_RECEIVED_DROPS) return 'capacity';
+    const marker = join(dir, dropId);
+    let fd: number;
     try {
-      const fd = openSync(join(dir, dropId), 'wx', 0o600);
+      fd = openSync(marker, 'wx', 0o600);
+    } catch (error) {
+      if (errorCode(error) === 'EEXIST') return 'duplicate';
+      throw error;
+    }
+    try {
       try {
         fsyncSync(fd);
       } finally {
         closeSync(fd);
       }
       syncDirectory(dir);
-      writeDurablePrivate(integrityPath, `${sha256Hex([...retained, dropId].sort())}\n`);
+      writeDurablePrivate(integrityPath, floorDigest(floor, [...retained, dropId]));
       return 'claimed';
     } catch (error) {
-      if (errorCode(error) === 'EEXIST') return 'duplicate';
+      rollBackMarker(marker, dir, integrityPath, digest, error);
       throw error;
+    }
+  }
+
+  /** Narrows the peer and team files left wider by a version before T4.15; called by the daemon at start. */
+  securePrivateFiles(): void {
+    for (const name of PRIVATE_STATE_FILES) {
+      const path = join(this.root, name);
+      if (existsSync(path)) chmodSync(path, 0o600);
     }
   }
 
@@ -393,7 +493,7 @@ export class DropHome {
   savePeer(peer: Peer): void {
     const peers = this.peers().filter((existing) => existing.nodeId !== peer.nodeId);
     peers.push(peer);
-    writeFileSync(join(this.root, 'peers.json'), `${JSON.stringify(peers, null, 2)}\n`);
+    writePrivate(join(this.root, 'peers.json'), `${JSON.stringify(peers, null, 2)}\n`);
   }
 
   links(): AgentLink[] {
@@ -478,7 +578,7 @@ export class DropHome {
   }
 
   saveTeam(state: TeamState): void {
-    writeFileSync(join(this.root, 'team.json'), `${JSON.stringify(TeamStateSchema.parse(state), null, 2)}\n`);
+    writePrivate(join(this.root, 'team.json'), `${JSON.stringify(TeamStateSchema.parse(state), null, 2)}\n`);
   }
 
   published(): Published[] {
