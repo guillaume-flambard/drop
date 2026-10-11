@@ -41,7 +41,7 @@ Rien de payant avant d'avoir des utilisateurs (D57). Contrats d'installation et 
 
 L'ordre unique est [TASKS](../../docs/TASKS.md) ; les phases sont décrites dans le [plan](../../docs/product/IMPLEMENTATION_PLAN.md). La série T3 reste le chemin de sécurité avant tout pilote.
 
-Hors cible : conversation libre entre agents, index central ou RAG d'entreprise, relais de secours actif par défaut, partage d'identifiants, remplacement des agents existants. Le dépôt reste privé tant que la préparation de publication n'est pas validée. Le nom du produit reste à choisir ; « drop » est un nom de code.
+Hors cible : conversation libre entre agents, index central ou RAG d'entreprise, relais de secours actif par défaut, partage d'identifiants, remplacement des agents existants. Le dépôt est public et open source (Apache-2.0) depuis le 11 octobre 2026 ; aucun téléchargement n'est encore publié. Le nom du produit reste à choisir ; « drop » est un nom de code.
 
 ## Vocabulaire
 
