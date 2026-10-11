@@ -1,19 +1,39 @@
-name: Proposer une amélioration
-description: Décrire le besoin et une solution bornée.
+name: Feature request
+description: Describe a need and a bounded proposal.
+labels: ['enhancement']
 body:
+  - type: markdown
+    attributes:
+      value: |
+        Open questions and early ideas are welcome in [Discussions](https://github.com/guillaume-flambard/drop/discussions/categories/ideas) first.
+        The order of work lives in docs/TASKS.md; a proposal may become a new task there.
   - type: textarea
     id: need
     attributes:
-      label: Qui est bloqué et quelle réponse lui manque ?
+      label: Who is blocked, and what answer are they missing?
+      description: The person, the situation, and what they cannot get today.
     validations:
       required: true
   - type: textarea
     id: proposal
     attributes:
-      label: Proposition, alternatives et périmètre de données
+      label: Proposal
+      description: What should drop do? Keep it bounded.
     validations:
       required: true
+  - type: textarea
+    id: data
+    attributes:
+      label: Data boundary
+      description: What would leave the owner's machine, to whom, and with whose approval? What must never leave?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
   - type: input
     id: task
     attributes:
-      label: Tâche ou critère lié, si connu
+      label: Related task, decision or spec, if known
+      placeholder: T4.22, D84, openspec/specs/node/spec.md

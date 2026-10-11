@@ -1,49 +1,172 @@
 # drop
 
-**La réponse, pas l'accès.** Votre agent pose une question précise à l'environnement d'un collègue. Le collègue autorise une fois. Seule la réponse validée revient.
+**Get the answer, not the access.**
 
-Promesse (D52) : vos données restent sur votre machine ; seule une réponse que vous avez approuvée en sort, chiffrée, vers la personne qui l'a demandée. Limite : drop contrôle ce qui passe par drop, pas les flux propres d'un connecteur ou d'un modèle que vous choisissez.
+[Français](README.fr.md)
 
-`drop` est un nom de code. Le dépôt est privé, sous [Apache-2.0](LICENSE). Rien n'a encore été validé avec de vrais utilisateurs.
+[![test](https://github.com/guillaume-flambard/drop/actions/workflows/test.yml/badge.svg)](https://github.com/guillaume-flambard/drop/actions/workflows/test.yml)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/guillaume-flambard/drop/badge)](https://scorecard.dev/viewer/?uri=github.com/guillaume-flambard/drop)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-## Ce qui existe
+drop is a consent layer for questions between AI agents. Your agent needs something that lives in a colleague's tools: a repository, a design file, production logs. Instead of asking for access, it sends a bounded question over MCP or A2A. The colleague who owns the source sees who asks and why, and approves that one answer. The work runs on the owner's machine, and only the approved answer goes back.
 
-- Le profil privé, créé par `drop init` et par l'app : relais interne, destinations réseau explicites, aucun repli cloud. Le propriétaire paie son propre modèle et refuse les clés reçues (T3.1).
-- Trois chemins de connexion : réseau local (mDNS), Internet par iroh, relais interne (T4.2, T4.2b). Aucun relais n'est imposé ; entre deux réseaux, iroh demande un relais choisi par l'équipe.
-- Treize clients MCP détectés et raccordés automatiquement sur macOS, Windows et Linux, commentaires et mise en forme de leurs fichiers gardés ; la configuration à copier ne reste qu'en secours, expliquée (T3.3, T4.5, T4.22).
-- Une carte de consentement conforme, la relecture champ par champ et l'invitation confirmée (T4.14).
-- La réponse à la main du propriétaire (T4.3) et les faits publiés, servis sans modèle (T4.4).
-- Le pack entreprise : politique signée appliquée au poste et au relais, image Docker et chart Helm du relais (T4.10).
-- L'app Mac de barre de menus, signée et notarisée pour Apple Silicon (T3.4).
+**The promise.** Your data stays on your machine. Only an answer you approved leaves it, encrypted, to the person who asked for it.
 
-## Ce qui reste
+**Its limit.** drop controls what goes through drop. An MCP connector or a model that the owner chooses can have its own data flows, and drop does not see them.
 
-- Revues de sécurité des corrections anti-rejeu (T3.1b, T3.1c).
-- Recette de l'app sur un Mac neuf, et VoiceOver (T3.4).
-- Hygiène de configuration (T4.15).
-- Une vraie app sur Windows (T3.7) et Linux (T3.8), tous les agents raccordés automatiquement (T4.22), un seul lien
-  pour rejoindre l'équipe en deux clics (T4.23) et un design impeccable (T4.24) (D84).
-- Le relais de l'essai sur le VPS, un banc maison à quatre postes, puis le protocole de l'essai (T4.6a, T4.6c, T4.6b).
-- La mesure du besoin, sans l'app (T0.7, D24), puis l'essai en binômes de collègues (T4.6, D83).
-- Si l'essai inclut le partage par modèle : qualifier un modèle (T3.2) et choisir outils, modèle et approbateur depuis le panneau (T4.16).
-- Avant le lancement : preuve privée avec Internet bloqué (T3.5), préparation de la publication (T3.6, T4.13).
+`drop` is a code name; the product name is not chosen yet.
 
-L'ordre et les statuts sont dans [docs/TASKS.md](docs/TASKS.md) ; le bilan daté dans [docs/AVANCEMENT.md](docs/AVANCEMENT.md).
+## Status
 
-## Essayer
+drop is an early prototype. Read this before you evaluate it.
 
-Avec Node 22.18 ou plus récent et pnpm 11.27.0 :
+- **No real users yet.** Every demo ran on the maintainer's machines. The need itself is still being measured.
+- **The Mac app** (menu bar, Apple Silicon) builds signed and notarized, but there is no public release or download yet. Acceptance on a clean Mac and VoiceOver testing are still open.
+- **Windows and Linux apps** are in progress and not available.
+- **No independent security audit.** Two anti-replay hardening changes still wait for their formal review.
+- No stable version, no npm package, no compatibility promise. `main` moves fast.
 
-```bash
-pnpm install --frozen-lockfile
-pnpm -r test
-pnpm site:preview
+The dated progress report is [docs/AVANCEMENT.md](docs/AVANCEMENT.md) (in French) and the ordered task index is [docs/TASKS.md](docs/TASKS.md) (in French).
+
+## How it works
+
+```mermaid
+sequenceDiagram
+    participant A as Requester's agent
+    participant RN as Requester's node
+    participant OW as Owner's node
+    actor O as Owner
+    A->>RN: request_drop(capability, input, purpose) over MCP
+    RN->>OW: signed and encrypted request (LAN, iroh or your relay)
+    OW->>O: consent card: who asks, why, what can leave
+    O->>OW: allow once, deny or not now
+    Note over OW: runs only the tools the capability fixed,<br/>validates the output schema, scans for secrets
+    opt sensitive capability
+        OW->>O: review the answer, remove fields, send or discard
+    end
+    OW->>RN: encrypted answer and signed receipt
+    RN->>A: result, framed as untrusted data
 ```
 
-Les tests n'utilisent aucune clé LLM. La démonstration, le panneau et la ligne de commande sont expliqués dans le guide.
+1. The owner publishes a **capability**: a contract that fixes the input, the output schema, the tools allowed, the budget and who approves. Nothing is shared by default.
+2. The requester's agent picks a capability from the team catalog and asks a question with a stated purpose.
+3. The owner decides once: allow once, deny or not now. No answer before expiry means no run.
+4. The owner's node runs the capability with the tools fixed in advance. The model never decides permissions.
+5. The output is validated against its schema and passed through a secret scanner. Invalid output is rejected, not repaired.
+6. The requester receives the answer. Both sides keep a signed receipt with hashes and metadata, never the content.
 
-## Lire ensuite
+A longer walkthrough with diagrams is in [the guide](docs/GUIDE.md) (in French).
 
-- [Le guide](docs/GUIDE.md) : le parcours, la démonstration, la confidentialité.
-- [Le profil privé](docs/PRIVATE_PROFILE.md) : démarrer, et ses limites.
-- [Contribuer](CONTRIBUTING.md), avec [SECURITY.md](SECURITY.md) et [AGENTS.md](AGENTS.md).
+## What exists today
+
+Everything below is on `main` and covered by tests. Task IDs refer to [docs/TASKS.md](docs/TASKS.md).
+
+- **Protocol.** Ed25519 identities and signatures, X25519 encryption (`crypto_box` from libsodium), zod schemas for every message, anti-replay checks, signed receipts (T1.1, T1.2).
+- **Capabilities.** `production.error_summary` summarizes logs without any model. `repo.answer` answers about a repository from an allowlisted temporary copy. `mcp.answer` answers from an MCP server the owner already uses, with read-only tools chosen at publish time. `a2a.answer` relays to an approved internal A2A agent (T1.7, T1.13, T2.2, T2.15).
+- **Two exchanges without a model.** The owner can answer by hand, with text or a text file, under the same consent and receipt (T4.3). The owner can publish signed facts with an audience and an end date, served without a new decision (T4.4).
+- **Requester side.** A stdio MCP server with six tools, including `ask_team` for plain-language questions to the team and `request_drops` for several owners at once (T1.10, T2.10, T2.12). The team is also reachable as an A2A v1.0 agent, and every A2A task goes through consent (T2.14).
+- **Agent onboarding.** Thirteen MCP clients are detected and connected automatically on macOS, Windows and Linux, keeping the comments and layout of their config files. A configuration to copy only appears as an explained fallback when drop cannot write (T3.3, T4.5, T4.22).
+- **Private profile.** Created by `drop init` and by the app: explicit network destinations, no cloud fallback, a local model endpoint with no model preselected, and the owner pays for their own model (T3.1).
+- **Three ways to connect, none imposed.** Local network discovery over mDNS, internet through iroh (a separate Rust program, off by default), or a relay your team runs (T4.2, T4.2b). The relay only sees encrypted envelopes and routing metadata.
+- **Enterprise pack.** A signed organization policy enforced on each workstation and on the relay, plus a Docker image and a Helm chart for the relay (T4.10).
+- **Mac menu bar app.** Tauri 2, consent cards, field-by-field review, confirmed invitations (T4.14). Signed and notarized builds exist for Apple Silicon; there is no public download (T3.4).
+- **blocked-observer.** A small local tool that measures how often coding agents get blocked by something another person owns. It is how the need is being measured (T0.1 to T0.6).
+
+The consumer gateway in `packages/gateway` (remote MCP for hosted assistants) is deferred and refused by the private profile.
+
+## Quick start for developers
+
+You need Node 22.18 or later (CI uses Node 24) and pnpm 11.27.0, the version pinned in `package.json`.
+
+```bash
+git clone https://github.com/guillaume-flambard/drop.git
+cd drop
+pnpm install --frozen-lockfile
+pnpm -r lint
+pnpm -r typecheck
+pnpm -r test
+```
+
+The tests use fixtures and simulated model providers. They need no API key and no network service.
+
+### Local demo
+
+```bash
+bash scripts/demo-local.sh
+```
+
+The script starts a relay and three nodes on `127.0.0.1` (ports 7790 to 7793) in a temporary directory, then plays two scenarios through the requester's MCP server:
+
+- **Production error summary.** Runs without any model or key: request, approval, result, receipts and a leak check.
+- **A question about a colleague's repository** (`repo.answer`). This part calls a remote model through OpenRouter and needs `OPENROUTER_API_KEY`. Without a key, it stops after the approval step.
+
+The demo nodes use the historical profile (`--profile legacy`), so it does not demonstrate the private profile. The script output is in French. To run a private setup by hand, follow [the private profile guide](docs/PRIVATE_PROFILE.md) (in French).
+
+### Connect your own agent
+
+```bash
+node packages/node/src/cli.ts init --name Alice --relay ws://127.0.0.1:7780/v1
+node packages/node/src/cli.ts serve
+node packages/node/src/cli.ts help
+```
+
+Agent setup, manual MCP configuration and the thirteen supported clients are described in [docs/ONBOARDING.md](docs/ONBOARDING.md) and [packages/requester-mcp/README.md](packages/requester-mcp/README.md) (both in French).
+
+## Repository layout
+
+| Path                        | What it holds                                                                  |
+| --------------------------- | ------------------------------------------------------------------------------ |
+| `packages/protocol`         | zod schemas, identity, signatures, encryption, receipts                        |
+| `packages/relay`            | WebSocket routing and admission                                                |
+| `packages/node`             | Identity, CLI, orchestration, local API and panel, agent detection and install |
+| `packages/runner`           | Execution pipeline, budgets and output checks                                  |
+| `packages/capabilities`     | Deterministic, repository, MCP and A2A capabilities                            |
+| `packages/requester-mcp`    | Stdio MCP server that talks to the local node API                              |
+| `packages/a2a`              | Inbound A2A adapter                                                            |
+| `packages/blocked-observer` | Local measurement of the need                                                  |
+| `packages/simulation`       | Local bench with simulated nodes                                               |
+| `packages/gateway`          | Optional consumer gateway, deferred                                            |
+| `apps/mac`                  | Tauri 2 menu bar app                                                           |
+| `crates/drop-iroh`          | Internet connectivity through iroh                                             |
+| `deploy/helm`               | Helm chart for the relay                                                       |
+| `openspec/`                 | Specifications (the contract) and change history                               |
+| `docs/`                     | Guide, decisions, task index, product documents                                |
+
+## Security model
+
+These rules hold in the code and in every contribution:
+
+- A request from a peer is untrusted data. It is validated with zod and passed to the model as framed data, never as instructions.
+- The capability fixes the tools before the model is called. The model never widens the authorization boundary.
+- File reads use an allowlist, inside a temporary copy.
+- Every output is validated against the capability's schema and scanned for secrets before it leaves.
+- Logs, receipts and telemetry hold hashes and metadata, never secrets or content.
+- The runner listens on no port. Nodes connect out to the relay; the local API and panel listen on loopback.
+- Private keys live in `~/.drop/` with mode `0600`.
+
+Known limits: encryption and the secret scanner do not prove that nothing can leak. A delivered answer cannot be recalled. The catalog reveals who knows what. Several partial answers can add up. Owners may start approving by reflex. Connectors, models and A2A agents the owner chooses are part of the boundary to review.
+
+Report vulnerabilities privately, as described in [SECURITY.md](SECURITY.md).
+
+## Documentation
+
+Internal documentation is written in French.
+
+- [Guide](docs/GUIDE.md): the journey, the demo, what stays private (in French)
+- [Product requirements](docs/product/PRD.md): target, promise and its limit, hypotheses (in French)
+- [Vision](openspec/project/vision.md) and [architecture](openspec/project/architecture.md) (in French)
+- [Specifications](openspec/specs/): the normative contract, with acceptance scenarios (in French)
+- [Decisions](docs/DECISIONS.md): every product and technical decision with its reason (in French)
+- [Open source and business model](docs/OPEN_SOURCE.md) (in French)
+
+## Roadmap
+
+[docs/TASKS.md](docs/TASKS.md) (in French) is the single source for order and dependencies. Next steps, in short: close the pending security reviews, finish the Mac app, ship Windows and Linux apps, a one-link invitation to join a team, then a trial with pairs of colleagues who actually work together. Public launch, packages and the product name come after.
+
+## Contributing
+
+Contributions are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md) and the [Code of Conduct](CODE_OF_CONDUCT.md). Questions go to [GitHub Discussions](https://github.com/guillaume-flambard/drop/discussions); see [SUPPORT.md](SUPPORT.md).
+
+## License
+
+Copyright 2026 Guillaume Flambard. Licensed under the [Apache License, Version 2.0](LICENSE). See [NOTICE](NOTICE). Third-party components and model weights keep their own licenses.

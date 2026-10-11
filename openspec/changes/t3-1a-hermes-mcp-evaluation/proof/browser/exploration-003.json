@@ -1,6 +1,6 @@
 {
-  "observationCommand": "rtk bun /Users/memo/.claude/skills/gstack/bin/gstack-qa-deadline run .gstack/qa-reports/t3-1a-hermes-20261009/browser/deadline.json -- rtk sh -c 'rtk /Users/memo/.claude/skills/gstack/browse/dist/browse click @e12 && rtk /Users/memo/.claude/skills/gstack/browse/dist/browse url && rtk /Users/memo/.claude/skills/gstack/browse/dist/browse snapshot -i && rtk /Users/memo/.claude/skills/gstack/browse/dist/browse console --errors'",
+  "observationCommand": "rtk bun ~/.claude/skills/gstack/bin/gstack-qa-deadline run .gstack/qa-reports/t3-1a-hermes-20261009/browser/deadline.json -- rtk sh -c 'rtk ~/.claude/skills/gstack/browse/dist/browse click @e12 && rtk ~/.claude/skills/gstack/browse/dist/browse url && rtk ~/.claude/skills/gstack/browse/dist/browse snapshot -i && rtk ~/.claude/skills/gstack/browse/dist/browse console --errors'",
   "observed": {"click": "@e12 clicked; page remained at /avancement.html", "consoleErrors": []},
   "hypothesis": "Le lien pourrait être un téléchargement ou un lien vers un fichier servi sans navigation standard. Lire son href et ses attributs, puis vérifier la route par GET.",
-  "nextCommand": "rtk bun /Users/memo/.claude/skills/gstack/bin/gstack-qa-deadline run .gstack/qa-reports/t3-1a-hermes-20261009/browser/deadline.json -- rtk sh -c 'rtk /Users/memo/.claude/skills/gstack/browse/dist/browse attrs @e12 && rtk /Users/memo/.claude/skills/gstack/browse/dist/browse links'"
+  "nextCommand": "rtk bun ~/.claude/skills/gstack/bin/gstack-qa-deadline run .gstack/qa-reports/t3-1a-hermes-20261009/browser/deadline.json -- rtk sh -c 'rtk ~/.claude/skills/gstack/browse/dist/browse attrs @e12 && rtk ~/.claude/skills/gstack/browse/dist/browse links'"
 }
