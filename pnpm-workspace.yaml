@@ -3,6 +3,8 @@ packages:
 
 allowBuilds:
   # esbuild finds its platform binary in its optional dependency; its install script is not needed (D29).
+  # @parcel/watcher has optional native binaries and does not need a postinstall script for a one-shot CSS build.
+  '@parcel/watcher': false
   esbuild: false
 
 # Root scripts lint, typecheck and test cover the whole repo; including the root
