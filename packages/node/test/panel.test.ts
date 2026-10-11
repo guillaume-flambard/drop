@@ -188,7 +188,7 @@ describe('menu bar panel and its admin routes (T2.4)', () => {
     expect(html).toContain('2. Connecter les agents sélectionnés');
     expect(html).toContain('Configuration manuelle');
     expect(html).toContain('hors ligne');
-    const script = /<script>([\s\S]*?)<\/script>/.exec(html)?.[1];
+    const script = /<script>([\s\S]*?)<\/script>/i.exec(html)?.[1];
     expect(script).toBeDefined();
     expect(() => new Script(script ?? '')).not.toThrow();
   });
@@ -287,7 +287,7 @@ describe('menu bar panel and its admin routes (T4.14)', () => {
     expect(html).toContain(
       "removals.forEach(function (removal) { if (removal.box.checked) form.append('redact', removal.key); });",
     );
-    const script = /<script>([\s\S]*?)<\/script>/.exec(html)?.[1];
+    const script = /<script>([\s\S]*?)<\/script>/i.exec(html)?.[1];
     expect(() => new Script(script ?? '')).not.toThrow();
   });
 });
@@ -328,7 +328,7 @@ describe('menu bar panel (T4.3)', () => {
     expect(composer).toContain('drafts[item.dropId]');
     expect(html).toContain('E_SECRET_DETECTED:');
     expect(html).toContain('E_TOO_LARGE:');
-    const script = /<script>([\s\S]*?)<\/script>/.exec(html)?.[1];
+    const script = /<script>([\s\S]*?)<\/script>/i.exec(html)?.[1];
     expect(() => new Script(script ?? '')).not.toThrow();
   });
 });
@@ -363,7 +363,7 @@ describe('menu bar panel (T4.4)', () => {
     // Editing keeps the fact's own duration instead of resetting it.
     expect(section).toContain('validDays: Math.max(1, Math.round((fact.validTo - fact.publishedAt) / 86400000))');
     expect(html).toContain('.card.faded { opacity: .55; }');
-    const script = /<script>([\s\S]*?)<\/script>/.exec(html)?.[1];
+    const script = /<script>([\s\S]*?)<\/script>/i.exec(html)?.[1];
     expect(() => new Script(script ?? '')).not.toThrow();
   });
 });
@@ -401,7 +401,7 @@ describe('menu bar panel (T4.5)', () => {
       'JetBrains AI',
     ])
       expect(html).toContain(`'${label}'`);
-    const script = /<script>([\s\S]*?)<\/script>/.exec(html)?.[1];
+    const script = /<script>([\s\S]*?)<\/script>/i.exec(html)?.[1];
     expect(() => new Script(script ?? '')).not.toThrow();
   });
 });
@@ -424,7 +424,7 @@ describe('Drop Human V2 panel (presentation, no protocol changes)', () => {
     expect(html).toContain('expandedOutbounds[drop.dropId]');
     // An expandable current status is honest; a historic timeline would require a new backend API.
     expect(html).not.toContain('42 %');
-    const script = /<script>([\s\S]*?)<\/script>/.exec(html)?.[1];
+    const script = /<script>([\s\S]*?)<\/script>/i.exec(html)?.[1];
     expect(() => new Script(script ?? '')).not.toThrow();
   });
 });
@@ -438,7 +438,7 @@ describe('workspace window — local management UI (Human V2)', () => {
     expect(html).not.toContain('window.__TAURI_INTERNALS__');
     expect(html).not.toContain('fonts.googleapis.com');
     expect(html).not.toContain('<script src=');
-    const script = /<script>([\s\S]*?)<\/script>/.exec(html)?.[1];
+    const script = /<script>([\s\S]*?)<\/script>/i.exec(html)?.[1];
     expect(() => new Script(script ?? '')).not.toThrow();
   });
 });

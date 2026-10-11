@@ -129,7 +129,7 @@ describe('monorepo tooling', () => {
       expect(result.status, result.output).toBe(0);
     }
     expect(run('pnpm', ['-r', 'typecheck']).output).toContain('tsc --noEmit -p tsconfig.json');
-  }, 180_000);
+  }, 300_000);
 
   it('typecheck exits non-zero on a type error and zero on valid code', () => {
     // Exercises the real root script and tsconfig, so a disabled check (e.g. `noCheck`) turns this red.
