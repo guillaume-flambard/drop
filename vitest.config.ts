@@ -13,6 +13,11 @@ export default defineConfig({
       '.claude/**',
       '.agents/**',
       'docs/demo/julie-repo/**',
+      // Build output of the Mac app and the Rust crates, the same folders eslint.config.js ignores.
+      'apps/mac/src-tauri/target/**',
+      'crates/*/target/**',
+      'apps/mac/src-tauri/gen/**',
+      'apps/mac/src-tauri/resources/**',
     ],
   },
 });

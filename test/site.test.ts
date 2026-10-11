@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { request } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -124,6 +124,7 @@ describe('documentation site', () => {
     const releases = await mkdtemp(join(tmpdir(), 'drop-releases-'));
     await writeFile(join(releases, 'latest.json'), '{"version":"0.2.0"}');
     await writeFile(join(releases, 'drop-0.2.0-darwin-aarch64.app.tar.gz'), 'archive');
+    await writeFile(join(releases, 'drop-0.3.0-rc-1-darwin-x86_64.app.tar.gz'), 'intel archive');
     await writeFile(join(releases, 'drop.dmg'), 'disk image');
     await writeFile(join(releases, 'secret.txt'), 'never served');
     await mkdir(join(releases, 'nested'));
@@ -156,6 +157,8 @@ describe('documentation site', () => {
       expect(latest.headers['content-type']).toBe('application/json');
       expect(latest.headers['cache-control']).toBe('no-cache');
       expect((await get('/updates/drop-0.2.0-darwin-aarch64.app.tar.gz')).body).toBe('archive');
+      // Every archive name scripts/mac-updates.ts can publish: Intel builds and prerelease versions with a hyphen (B6, B9).
+      expect((await get('/updates/drop-0.3.0-rc-1-darwin-x86_64.app.tar.gz')).body).toBe('intel archive');
       expect((await get('/downloads/drop.dmg')).body).toBe('disk image');
       expect((await get('/downloads/drop.mcpb')).status).toBe(404);
       for (const path of [
@@ -172,4 +175,44 @@ describe('documentation site', () => {
       await rm(releases, { recursive: true, force: true });
     }
   });
+
+  // root reads any file whatever its mode: the unreadable release cannot be staged then.
+  it.skipIf(process.getuid?.() === 0)(
+    'answers 500 for a release file it cannot read and keeps serving (B8)',
+    async () => {
+      const releases = await mkdtemp(join(tmpdir(), 'drop-releases-'));
+      const unreadable = join(releases, 'drop-0.4.0-darwin-aarch64.app.tar.gz');
+      await writeFile(unreadable, 'archive');
+      await chmod(unreadable, 0o000);
+      await writeFile(join(releases, 'latest.json'), '{"version":"0.4.0"}');
+      const site = await startPublicSite(await collectSite({ installs: 'beta', contact: '' }), {
+        port: 0,
+        host: '127.0.0.1',
+        publicHost: 'drop.example',
+        releasesDir: releases,
+      });
+      const get = (path: string) =>
+        new Promise<{ status: number; body: string }>((resolve, reject) => {
+          const req = request(`${site.url}${path}`, { headers: { Host: 'drop.example' } }, (res) => {
+            let body = '';
+            res.on('data', (chunk: Buffer) => (body += chunk.toString()));
+            res.on('end', () => {
+              resolve({ status: res.statusCode ?? 0, body });
+            });
+          });
+          req.on('error', reject);
+          req.end();
+        });
+      try {
+        const failed = await get('/updates/drop-0.4.0-darwin-aarch64.app.tar.gz');
+        expect(failed.status).toBe(500);
+        expect(failed.body).toBe('E_SITE_RELEASE');
+        expect((await get('/updates/latest.json')).body).toBe('{"version":"0.4.0"}');
+      } finally {
+        await site.stop();
+        await chmod(unreadable, 0o600);
+        await rm(releases, { recursive: true, force: true });
+      }
+    },
+  );
 });

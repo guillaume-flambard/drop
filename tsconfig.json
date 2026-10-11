@@ -4,5 +4,17 @@
     "noEmit": true
   },
   "include": ["**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts"],
-  "exclude": ["**/node_modules", "**/dist", "**/coverage", "openspec", ".claude", ".agents", "docs/demo/julie-repo"]
+  "exclude": [
+    "**/node_modules",
+    "**/dist",
+    "**/coverage",
+    "openspec",
+    ".claude",
+    ".agents",
+    "docs/demo/julie-repo",
+    "apps/mac/src-tauri/target",
+    "crates/*/target",
+    "apps/mac/src-tauri/gen",
+    "apps/mac/src-tauri/resources"
+  ]
 }
