@@ -24,7 +24,6 @@ Le prochain jalon est **l'essai avec deux amis (T4.6)**. Il manque, dans l'ordre
 
 **Ce qui attend Guillaume** (personne d'autre ne peut le faire) :
 
-- relire et fusionner la PR #25 (Helm en CI) et celle de l'audit T4.19 ;
 - installer l'app sur un Mac neuf et tester VoiceOver (T3.4) ;
 - choisir le relais de l'essai (T4.6a) et dire si l'essai inclut le partage par modèle (T3.2 et T4.16) ou seulement
   les réponses à la main et les faits publiés ;
@@ -37,7 +36,7 @@ Le prochain jalon est **l'essai avec deux amis (T4.6)**. Il manque, dans l'ordre
 
 | ID | Tâche (périmètre) | Capacités OpenSpec | Change | Dépend de | Statut |
 | -- | ----------------- | ------------------ | ------ | --------- | ------ |
-| T4.19 | Audit du 11 octobre 2026 : branches ramenées sur main, revue de tout le code avec les règles d'open-code-review (Alibaba), corrections des défauts trouvés avec tests, docs et site remis en vérité, index réordonné selon l'essai (D82) | `node`, `relay`, `protocol`, `capabilities`, `requester-mcp`, `a2a`, `site` | `t4-19-audit-cleanup` (branche `chore/audit-2026-10-11`) | Demande humaine explicite | doing |
+| T4.19 | Audit du 11 octobre 2026 : branches ramenées sur main, revue de tout le code avec les règles d'open-code-review (Alibaba), corrections des défauts trouvés avec tests, docs et site remis en vérité, index réordonné selon l'essai (D82) | `node`, `relay`, `protocol`, `capabilities`, `requester-mcp`, `a2a`, `site` | `t4-19-audit-cleanup` (archivée, PR #26) | Demande humaine explicite | done |
 | T3.1b | Borner la persistance des identifiants de demandes reçues sans rouvrir le rejeu après redémarrage ; limiter aussi la cadence par identité de pair à travers les reconnexions et tester la saturation disque. **Reste** : une revue formelle `/review` sur le diff stabilisé, puis archive | `node`, `relay`, `protocol` | `t3-1b-replay-storage-bounds` | T3.1 | doing |
 | T3.1c | Borner les états mémoire du Node et du cache anti-rejeu (`executing`, `outbound`, `inbox`, `outbox`, ReplayCache), empêcher l'écrasement d'une carte de consentement, traiter les refus du relais et les pannes de transport, réessayer les révocations de clés plafonnées sans accumulation ; corriger le constat CSO HIGH avant pilote. **Implémentée** (322 tests au 9/10) ; **reste** : `/review` et `/cso`, clore le risque HIGH | `node`, `protocol` | `t3-1c-replay-store-hardening` | T3.1b | todo |
 | T3.4 | App Mac : finir T2.4 avec bootstrap privé, cycle de vie, clavier/VoiceOver, Node embarqué, signature/notarisation et mise à jour facultative vérifiée. **Fait** : builds signées et notarisées (PR #8). **Reste agent** : archiver la preuve de notarisation, tester veille et « Réessayer ». **Reste Guillaume** : installation sur un Mac neuf et recette VoiceOver. Builds Apple silicon seulement | `owner-app` | `t3-4-private-mac-app` | T3.3 | todo |

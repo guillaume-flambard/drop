@@ -10,8 +10,6 @@
     "openspec_validate": "pass",
     "openspec_guard": "pass, baseline only shrinks"
   },
-  "remaining": [
-    "Guillaume reviews and merges the audit PR and PR #25",
-    "Guillaume authorises deleting obsolete branches and worktrees"
-  ]
+  "remaining": [],
+  "closed": "PR #26 and PR #25 merged into main on 2026-10-11; obsolete branches and worktrees deleted by Guillaume"
 }
