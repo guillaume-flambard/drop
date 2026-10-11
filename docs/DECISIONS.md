@@ -99,21 +99,17 @@ Format : `D<n> — date — décision — raison`. Les agents ajoutent ici toute
   modèle absents de la config). La ligne est absente pour une capacité qui ne coûte rien (`production.error_summary`).
   Le coût réel est ensuite inscrit dans le reçu signé. Une capacité déclare son coût par `CapabilityImpl.cost(config)`.
 - **D22** — Déploiement réel sur le VPS lab (2026-10-08), adapté à l'infrastructure qui tourne au lieu du Caddy et
-  des unités systemd de la spec 08 : la stack `stacks/drop` de `lab-infra` (PR #97 et #98) suit les conventions du lab,
-  soit Traefik v3, docker compose, une image privée construite par le runner `lab-drop` dans `127.0.0.1:5000/drop`,
-  et la sonde `url:https://drop.memolabs.dev/health` pour `autodeploy`. Le relais public est
-  `wss://drop.memolabs.dev/v1` ; `relay.memolabs.dev` était déjà pris par une autre app. Le Node du lab est sortant
-  uniquement (`ws://drop-relay:7780/v1` par le réseau interne), uid 1000, identité dans `/opt/drop/home` en 0700, et
-  n'a aucune clé LLM. Un Node s'autorise par PR sur `stacks/drop/relay.config.json`, jamais par `drop-relay allow`
-  sur le serveur : le rsync du déploiement l'écraserait. Logs résumés (choix de Guillaume, même jour) : ceux de
-  Traefik, qui n'écrit que sur sa sortie standard. Le conteneur `drop-logs` (`docker:28-cli` épinglé, sans réseau) est
-  le seul à voir le socket Docker, l'option que la spec 08 demande de documenter puisque ce socket équivaut à root. Sa
-  commande est fixe : chaque minute, il exporte `docker logs --since 24h --timestamps traefik` vers
-  `/opt/drop/logs/traefik.log`, que `drop-node` lit en lecture seule (source `file`). Les erreurs sont les codes 5xx
-  et `level=error`, nommées dans `stacks/drop/error-summary.json` (PR #99). Premier drop réel le 2026-10-08 : sur 24 h,
-  4 erreurs `NOT_IMPLEMENTED` (501), statut `ok`, aucune ligne de log transmise, reçus signés des deux côtés. Moniteur Uptime Kuma `drop` (id 26) sur
-  `https://drop.memolabs.dev/health`, notification e-mail liée, premier battement `200 - OK`. Carte `docs/architecture.md` de `lab-infra`
-  régénérée par `make map` (PR #100).
+  des unités systemd de la spec 08 : relais derrière un reverse proxy sur un VPS, déployé depuis un dépôt
+  d'infrastructure privé, en conteneurs construits depuis ce dépôt. Le relais public est `wss://drop.memolabs.dev/v1`,
+  sa sonde `https://drop.memolabs.dev/health`. Le Node du lab est sortant uniquement, sans privilèges, avec son
+  identité dans un dossier en 0700, et n'a aucune clé LLM. Un Node s'autorise par la configuration versionnée du
+  relais, jamais par `drop-relay allow` sur le serveur : le redéploiement suivant l'écraserait. Logs résumés (choix de
+  Guillaume, même jour) : ceux du reverse proxy, qui n'écrit que sur sa sortie standard. Option retenue, que la spec 08
+  demande de documenter puisque l'accès au socket Docker équivaut à root : un seul conteneur dédié, sans réseau et à
+  commande fixe, voit ce socket ; il exporte périodiquement les logs du proxy vers un fichier que le Node lit en lecture
+  seule (source `file`). Le Node n'a aucun accès à Docker. Les erreurs sont les codes 5xx et `level=error`. Premier
+  drop réel le 2026-10-08 : sur 24 h, 4 erreurs `NOT_IMPLEMENTED` (501), statut `ok`, aucune ligne de log transmise,
+  reçus signés des deux côtés. Une sonde externe surveille `/health` et alerte par e-mail.
 - **D23** — `blocked-observer` (T0.1 à T0.5, 2026-10-08). Points « à vérifier » tranchés par lecture :
   - Hook Claude Code (https://code.claude.com/docs/en/hooks) : `PostToolUse` porte `tool_response`, mais un outil en
     échec déclenche `PostToolUseFailure`, avec un champ `error`. Les 401 et 403 arrivent souvent par là, donc le hook
@@ -257,9 +253,9 @@ temps que D34 à D46 sur la branche du profil privé. Elles ont été renumérot
   synchrone), le `nonce` n'est jamais journalisé. Un trou corrigé : le relais acceptait un ticket au `expiresAt`
   arbitrairement lointain, alors que la spec le borne à 24 h ; un ticket qui dépasse 24 h et 5 min (même dérive
   d'horloge que les enveloppes) est désormais refusé (`too_long`). Deux points restent ouverts, ci-dessous. Hors de ce
-  dépôt : `lab-infra/stacks/drop/relay.config.json` doit fixer `admittedPath` sur un volume persistant, sinon le relais
+  dépôt : la configuration du relais déployé doit fixer `admittedPath` sur un volume persistant, sinon le relais
   oublie les Nodes admis à chaque redéploiement.
-- **D70** — Mises à jour signées de l'app Mac (2026-10-09, T2.4, choix de Guillaume). Le dépôt est privé, donc l'app
+- **D70** : Mises à jour signées de l'app Mac (2026-10-09, T2.4, choix de Guillaume). Le dépôt était alors privé, donc l'app
   ne peut pas lire les Releases GitHub sans jeton : les mises à jour sont servies en statique sous
   `https://drop.memolabs.dev/updates/` (`latest.json` et une archive nommée par version). L'app vérifie au lancement
   puis toutes les 6 h et propose la version dans le menu de son icône ; rien ne s'installe sans clic. Plugin updater
@@ -267,7 +263,7 @@ temps que D34 à D46 sur la branche du profil privé. Elles ont été renumérot
   `requireSignedVersion` : la CLI Tauri 2.12.1 inscrit la version dans le commentaire signé, ce qui empêche de
   ressortir une ancienne archive signée sous un numéro plus récent. La clé privée est générée et gardée par Guillaume
   (procédure dans `apps/mac/README.md`) ; seule la clé publique, `apps/mac/updater.pub`, entre dans le dépôt. Hors de
-  ce dépôt : une route statique `/updates` dans `lab-infra/stacks/drop`. Le manifeste est validé sans zod pour ne pas
+  ce dépôt : une route statique `/updates` dans le déploiement du lab. Le manifeste est validé sans zod pour ne pas
   ajouter de dépendance à la racine.
 - **D71** — Durcissement de la passerelle (2026-10-09, T2.13, plan accepté par Guillaume). Trois trous relevés en
   revue. (1) Hameçonnage du consentement : le nom de l'assistant vient de l'enregistrement dynamique, ouvert à tous ;
@@ -293,12 +289,12 @@ temps que D34 à D46 sur la branche du profil privé. Elles ont été renumérot
   `.mcpb` et les guides, sans autre changement. `contact` reste vide tant que Guillaume n'a pas choisi l'adresse à
   publier. Le site est servi par l'image drop (`node scripts/site.ts serve`, rendu en mémoire, aucune écriture),
   sur l'hôte public seulement, avec HSTS et la politique de contenu sans script ; il sert aussi les fichiers de
-  mise à jour de l'app (D70) depuis `SITE_RELEASES_DIR`, par nom exact. Hors de ce dépôt, dans
-  `lab-infra/stacks/drop` : un service `drop-site` (même image, cette commande, le dossier des releases en volume)
-  et les routes Traefik de `drop.memolabs.dev` : `/v1` et `/health` vers le relais ; `/oauth`, `/mcp`,
+  mise à jour de l'app (D70) depuis `SITE_RELEASES_DIR`, par nom exact. Hors de ce dépôt, dans le
+  déploiement du lab : un service du site (même image, cette commande, le dossier des releases en volume)
+  et le routage de `drop.memolabs.dev` : `/v1` et `/health` vers le relais ; `/oauth`, `/mcp`,
   `/.well-known/oauth-*` et `/gateway` vers la passerelle ; tout le reste vers le site. La vidéo n'est pas tournée :
   l'accueil montre les captures de la démo du 8 octobre et l'annonce pour les premiers essais (T2.7). Les exports
-  Markdown pointent vers le dépôt, qui est privé : à revoir avant la mise en ligne.
+  Markdown pointent vers le dépôt, alors privé, public depuis le 11 octobre 2026.
 - **D73** — Préparation des essais réels (2026-10-09, T2.7). Protocole dans `docs/essais/README.md`. Ce que la
   confrontation aux vrais serveurs a montré, sources lues ce jour : Figma se branche par le serveur local de l'app de
   bureau (`127.0.0.1:3845/mcp`, sans jeton), mais exige un siège Dev ou Full (sinon 6 appels d'outil par mois) et lit
@@ -322,7 +318,7 @@ temps que D34 à D46 sur la branche du profil privé. Elles ont été renumérot
   révoqué est coupé, refusé même avec un nouveau ticket ou dans l'allowlist, et ses tickets ne valent plus rien. Par
   défaut, ses invités gardent leur place (un membre qui part ne doit pas couper ceux qu'il a fait venir) ;
   `--with-invited` les révoque de proche en proche, pour un parrain malveillant. `maxAdmissionsPerDay` (100) borne la
-  croissance que le quota par sponsor ne bornait pas. Dans `lab-infra/stacks/drop/relay.config.json` : ajouter
+  croissance que le quota par sponsor ne bornait pas. Dans la configuration du relais déployé : ajouter
   `revokedPath` sur le même volume que `admittedPath`.
 
 ## À décider par l'humain
@@ -400,7 +396,7 @@ temps que D34 à D46 sur la branche du profil privé. Elles ont été renumérot
 Ces décisions viennent d'un grilling mené le 10 octobre 2026 et des recherches qui l'ont nourri (sources dans `docs/research/2026-10-10-repositionnement.md`). Elles précisent D34 à D38 sans les annuler : la souveraineté reste la référence de conception. Rien n'est encore validé avec de vrais utilisateurs ; chaque hypothèse porte son critère de validation dans le PRD.
 
 - **D47 : problème et positionnement (2026-10-10, choix de Guillaume).** Le premier problème traité : un agent a besoin d'une information qui vit dans les outils d'un collègue. Suivent l'avancée réelle pour un responsable, puis les non-techniciens passant par ChatGPT ou Claude, puis les agents de deux organisations. Positionnement : « la réponse, pas l'accès ». Le marché étudié (Glean, agentgateway, Preloop, Kong, Agent 365) contrôle des accès ; drop fait valider par le propriétaire la réponse qui sort et se place comme couche de consentement humain au-dessus d'A2A, sans le concurrencer.
-- **D48 : cible (2026-10-10, choix de Guillaume).** Premiers utilisateurs : Guillaume puis deux amis techniques dans des contextes différents. Ouvert à tous, mais conçu selon les exigences d'une grande entreprise souveraine (A2A, zéro dépendance externe, cas rapporté par un ingénieur de Synopsys). Adoption par les petites équipes et PME ; aucun revenu attendu des grands comptes au départ. Le demandeur est technique ; le propriétaire de la donnée peut ne pas l'être. D31 n'est plus une cible de départ.
+- **D48 : cible (2026-10-10, choix de Guillaume).** Premiers utilisateurs : Guillaume puis deux amis techniques dans des contextes différents. Ouvert à tous, mais conçu selon les exigences d'une grande entreprise souveraine (A2A, zéro dépendance externe, cas rapporté par un ingénieur d'un grand compte industriel). Adoption par les petites équipes et PME ; aucun revenu attendu des grands comptes au départ. Le demandeur est technique ; le propriétaire de la donnée peut ne pas l'être. D31 n'est plus une cible de départ.
 - **D49 : propriétaire sans agent (2026-10-10).** Deux voies dès maintenant : répondre à la main dans le panneau (texte ou fichier, même consentement et même reçu), ou laisser un agent fourni par drop répondre après accord, avec un modèle choisi par le propriétaire.
 - **D50 : échelle des échanges (2026-10-10, tranché par l'agent à la demande de Guillaume).** Cinq niveaux : 1 fait publié servi sans modèle ; 2 petite question traitée dans un appel neuf, sans outil, sur un contexte déclaré partageable, jamais depuis la session vivante de l'agent ; 3 capacité (existant) ; 4 tâche déléguée (Task A2A longue, jalons INPUT_REQUIRED, ré-approbation si le périmètre s'élargit, budget et expiration) ; 5 conversation libre exclue. Raison : fuites mesurées dans les échanges entre agents (AgentLeak 2026 : 68,8 % dans les messages intermédiaires ; ConVerse 2025 : jusqu'à 88 % d'attaques de confidentialité réussies). Ordre de livraison : 3, 1, 2, 4. Ceci remplace l'exclusion de la délégation dans la vision.
 - **D51 : contexte partagé décentralisé (2026-10-10, tranché par l'agent).** Un fait signé (énoncé, propriétaire, source, validité, public) reste sur le nœud de son propriétaire. Seul un catalogue de sujets sans contenu circule. Aucun agent n'écrit chez un autre : une proposition passe par une boîte de suggestions validée par l'humain. Un fait expiré n'est plus servi ; un fait contredit est invalidé, pas effacé. Limites écrites : une réponse livrée ne se rappelle pas, le catalogue révèle qui sait quoi, des réponses partielles peuvent s'agréger. Ceci remplace l'exclusion du contexte partagé dans la vision ; le RAG central reste exclu.

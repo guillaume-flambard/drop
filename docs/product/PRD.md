@@ -64,13 +64,13 @@ Décision D48.
 | Responsable | veut l'avancée de l'équipe | pose des questions à plusieurs | Existant en code (T2.10, T2.12), jamais utilisé en vrai |
 | Administrateur | informatique d'une grande entreprise | déploie le relais interne et la politique | Existant en code (T4.10), jamais utilisé en vrai |
 
-**Référence de conception.** Une grande entreprise souveraine : un ingénieur de Synopsys rapporte qu'ils utilisent A2A et veulent zéro dépendance externe, un outil installé en interne, avec protection des données. Chaque choix technique doit rester acceptable pour une telle équipe informatique.
+**Référence de conception.** Une grande entreprise souveraine : un ingénieur d'un grand compte industriel rapporte que son entreprise utilise A2A et veut zéro dépendance externe, un outil installé en interne, avec protection des données. Chaque choix technique doit rester acceptable pour une telle équipe informatique.
 
 **Adoption.** Par les petites équipes et les PME, qui décident vite. Aucun revenu n'est attendu des grands comptes au départ.
 
 **Hypothèse H3.** Un propriétaire non technique comprend la carte de décision et décide correctement sans documentation. Critère proposé : sur cinq personnes non techniques, au moins quatre expliquent sans aide ce qui partira et ce qui ne partira jamais (T4.6). Statut : non testé ; la compréhension humaine manque déjà dans T1.14.
 
-**Hypothèse H4.** Le cas Synopsys représente une demande réelle des grandes entreprises. Critère proposé : au moins une équipe informatique d'un grand compte accepte une démonstration du mode entreprise et formule des exigences écrites. Statut : un seul témoignage, rapporté.
+**Hypothèse H4.** Le cas rapporté par cet ingénieur représente une demande réelle des grandes entreprises. Critère proposé : au moins une équipe informatique d'un grand compte accepte une démonstration du mode entreprise et formule des exigences écrites. Statut : un seul témoignage, rapporté.
 
 ## 5. Ce que fait le produit
 
