@@ -265,6 +265,28 @@ function rollBackMarker(
   }
 }
 
+/**
+ * The durable digest of the live markers: the UUIDv7 names, lowercased, at or after `floor`. Only they can refuse a
+ * request, so a marker below the floor (expired), a legacy name or a second casing never makes the store disagree.
+ */
+function floorDigest(floor: number, names: Iterable<string>): string {
+  return `${String(floor)} ${sha256Hex([...new Set(names)].sort())}\n`;
+}
+
+const FLOORED_DIGEST = /^(-?(?:0|[1-9][0-9]*)) ([0-9a-f]{64})\n$/;
+
+/** What the marker directory must hash to for the stored digest: by its floor, or every name for a pre-floor digest. */
+function expectedDigest(stored: string, markerNames: string[]): string {
+  const floored = FLOORED_DIGEST.exec(stored);
+  if (!floored) return `${sha256Hex([...markerNames].sort())}\n`;
+  const floor = Number(floored[1]);
+  const live = markerNames.flatMap((name) => {
+    const time = uuidv7Timestamp(name);
+    return time !== undefined && time >= floor ? [name.toLowerCase()] : [];
+  });
+  return floorDigest(floor, live);
+}
+
 /** Never removes a lock another process has since taken over. */
 function releaseReplayLock(lock: string): void {
   if (lockOwner(lock) === REPLAY_LOCK_OWNER) rmSync(lock, { recursive: true, force: true });
@@ -312,13 +334,24 @@ export class DropHome {
     const clockPath = join(this.root, 'received-drops-clock');
     const versionPath = join(this.root, 'received-drops-version');
     const integrityPath = join(this.root, 'received-drops-integrity');
+    const journalPath = join(this.root, 'received-drops-migrating');
     const clockExists = existsSync(clockPath);
     const versionExists = existsSync(versionPath);
-    const integrityExists = existsSync(integrityPath);
-    if (!versionExists && (clockExists || integrityExists)) throw new Error('E_REPLAY_STATE missing version');
+    // A first migration (fresh or pre-T3.1b home) writes clock, digest and version in turn. Its journal, written first
+    // and removed last, lets an interrupted one start again instead of refusing every later admission (T3.1b review).
+    let migrating = !versionExists && existsSync(journalPath);
+    const integrityFound = existsSync(integrityPath);
+    if (!versionExists && !migrating && (clockExists || integrityFound))
+      throw new Error('E_REPLAY_STATE missing version');
     // The clock/version prove that this home has admitted requests. Recreating a lost marker directory would
     // silently reopen consent for a recent request whose tombstone was in that directory.
     if (!existsSync(dir) && (clockExists || versionExists)) throw new Error('E_REPLAY_STATE missing markers');
+    if (!versionExists && !migrating) {
+      writeDurablePrivate(journalPath, '');
+      migrating = true;
+    }
+    // A digest left by an interrupted first migration is recomputed: nothing before it could be verified anyway.
+    const integrityExists = integrityFound && !migrating;
     mkdirSync(dir, { recursive: true, mode: 0o700 });
     const version = versionExists ? readFileSync(versionPath, 'utf8') : undefined;
     if (versionExists) {
@@ -338,18 +371,18 @@ export class DropHome {
       writeDurablePrivate(clockPath, `${String(highWater)}\n`);
     }
     const floor = highWater - REPLAY_WINDOW_MS;
-    let count = 0;
-    let removed = false;
     const entries = readdirSync(dir, { withFileTypes: true });
-    const markerNames = entries
-      .filter((entry) => UUID_SHAPE.test(entry.name))
-      .map((entry) => entry.name)
-      .sort();
-    if (integrityExists && readFileSync(integrityPath, 'utf8') !== `${sha256Hex(markerNames)}\n`) {
+    const markerNames = entries.filter((entry) => UUID_SHAPE.test(entry.name)).map((entry) => entry.name);
+    let digest = integrityExists ? readFileSync(integrityPath, 'utf8') : undefined;
+    if (digest !== undefined && digest !== expectedDigest(digest, markerNames)) {
       throw new Error('E_REPLAY_STATE marker integrity');
     }
+    // Plan the pruning before touching anything: the digest of what remains is made durable first, so a failure or a
+    // crash part-way leaves only expired, legacy or differently cased names behind, which the digest ignores.
     const names = new Set(entries.map((entry) => entry.name));
     const retained = new Set<string>();
+    const removals: string[] = [];
+    const renames: [string, string][] = [];
     for (const entry of entries) {
       // Finder, backup and sync tools may drop their own files here; only UUID-shaped names are markers.
       if (!UUID_SHAPE.test(entry.name)) continue;
@@ -358,34 +391,37 @@ export class DropHome {
       if (markerTime === undefined) {
         // Pre-T3.1b claims (anything z.uuid() accepted, nil and max included) cannot be admitted by the new protocol.
         if (!LEGACY_MARKER.test(entry.name)) throw new Error('E_REPLAY_STATE unexpected marker');
-        unlinkSync(join(dir, entry.name));
-        removed = true;
+        removals.push(entry.name);
       } else if (markerTime < floor) {
-        unlinkSync(join(dir, entry.name));
-        removed = true;
+        removals.push(entry.name);
       } else {
         const canonicalName = entry.name.toLowerCase();
         if (retained.has(canonicalName) || (entry.name !== canonicalName && names.has(canonicalName))) {
-          unlinkSync(join(dir, entry.name));
-          removed = true;
+          removals.push(entry.name);
           continue;
         }
         retained.add(canonicalName);
-        if (entry.name !== canonicalName) {
-          renameSync(join(dir, entry.name), join(dir, canonicalName));
-          removed = true;
-        }
-        count += 1;
+        if (entry.name !== canonicalName) renames.push([entry.name, canonicalName]);
       }
     }
-    if (removed) syncDirectory(dir);
-    if (removed || !integrityExists) writeDurablePrivate(integrityPath, `${sha256Hex([...retained].sort())}\n`);
+    const pruning = removals.length > 0 || renames.length > 0;
+    if (pruning || digest === undefined || !FLOORED_DIGEST.test(digest)) {
+      digest = floorDigest(floor, retained);
+      writeDurablePrivate(integrityPath, digest);
+    }
+    for (const name of removals) unlinkSync(join(dir, name));
+    for (const [from, to] of renames) renameSync(join(dir, from), join(dir, to));
+    if (pruning) syncDirectory(dir);
     // Version 1 is upgraded only after the marker-set digest is durable. A crash between the two writes is safe:
     // the next admission verifies the digest even while the version still says 1.
     if (version !== '2\n') writeDurablePrivate(versionPath, '2\n');
+    if (existsSync(journalPath)) {
+      unlinkSync(journalPath);
+      syncDirectory(this.root);
+    }
     if (timestamp < floor || timestamp > highWater + MAX_CLOCK_SKEW_MS) return 'expired';
     if (existsSync(join(dir, dropId))) return 'duplicate';
-    if (count >= MAX_RECEIVED_DROPS) return 'capacity';
+    if (retained.size >= MAX_RECEIVED_DROPS) return 'capacity';
     const marker = join(dir, dropId);
     let fd: number;
     try {
@@ -394,7 +430,6 @@ export class DropHome {
       if (errorCode(error) === 'EEXIST') return 'duplicate';
       throw error;
     }
-    const previousDigest = `${sha256Hex([...retained].sort())}\n`;
     try {
       try {
         fsyncSync(fd);
@@ -402,10 +437,10 @@ export class DropHome {
         closeSync(fd);
       }
       syncDirectory(dir);
-      writeDurablePrivate(integrityPath, `${sha256Hex([...retained, dropId].sort())}\n`);
+      writeDurablePrivate(integrityPath, floorDigest(floor, [...retained, dropId]));
       return 'claimed';
     } catch (error) {
-      rollBackMarker(marker, dir, integrityPath, previousDigest, error);
+      rollBackMarker(marker, dir, integrityPath, digest, error);
       throw error;
     }
   }
