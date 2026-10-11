@@ -1,5 +1,7 @@
 import { z } from 'zod';
-import { DropError, type Funding } from '@drop/protocol';
+import { DropError, type ConsentCost, type Funding, type PrivateNetwork } from '@drop/protocol';
+import { EnvNameSchema } from './names.ts';
+import { privateFetch } from './private-network.ts';
 
 /**
  * Provider-agnostic chat client over the OpenAI-compatible `/chat/completions` API, spoken by Ollama, OpenRouter,
@@ -11,11 +13,7 @@ export const ProviderConfigSchema = z.object({
   // Local default only; no model download or fallback. Model qualification belongs to T3.2.
   baseUrl: z.url().default('http://127.0.0.1:11434/v1'),
   model: z.string().trim().default(''),
-  apiKeyEnv: z
-    .string()
-    .regex(/^[A-Z][A-Z0-9_]*$/)
-    .nullable()
-    .default(null),
+  apiKeyEnv: EnvNameSchema.nullable().default(null),
   inputUsdPerMTok: z.number().nonnegative().default(0),
   outputUsdPerMTok: z.number().nonnegative().default(0),
 });
@@ -136,4 +134,38 @@ export function openAiCompatible(
       };
     },
   };
+}
+
+/** A model on this machine, or reached at no charge, is free; one with a price is capped; any other is unmeasured. */
+export function providerCost(provider: ProviderConfig, maxUsd: number): ConsentCost {
+  if (provider.inputUsdPerMTok > 0 || provider.outputUsdPerMTok > 0) return { kind: 'capped', maxUsd };
+  const local = /^https?:\/\/(127\.0\.0\.1|localhost)(:|\/)/.test(provider.baseUrl);
+  return local || provider.model.endsWith(':free') ? { kind: 'free' } : { kind: 'unmeasured' };
+}
+
+/** What a capability that calls a model may be given: the private network, the policy guard, a test provider. */
+export interface ModelDeps {
+  network?: PrivateNetwork;
+  /** False for a model endpoint the organization policy does not allow (T4.10). */
+  allowModel?: (baseUrl: string) => boolean;
+  provider?: (config: ProviderConfig) => ChatProvider;
+}
+
+/**
+ * The model a run talks to and its cost cap: the funding decides the key (D27), the organization policy may refuse the
+ * endpoint before any call (T4.10, D81), and the private profile reaches it through the allowed destinations only.
+ */
+export function modelFor(
+  config: ProviderConfig,
+  maxUsd: number,
+  funding: Funding | undefined,
+  deps: ModelDeps,
+): { provider: ChatProvider; maxUsd: number } {
+  const run = providerFor(config, maxUsd, funding);
+  if (deps.allowModel && !deps.allowModel(run.config.baseUrl))
+    throw new DropError('E_DENIED', 'E_DENIED model provider not allowed by policy');
+  const provider = deps.provider
+    ? deps.provider(run.config)
+    : openAiCompatible(run.config, run.env, deps.network ? privateFetch(deps.network, run.config.baseUrl) : fetch);
+  return { provider, maxUsd: run.maxUsd };
 }

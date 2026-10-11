@@ -3,6 +3,9 @@ import { request as httpsRequest } from 'node:https';
 import { Readable } from 'node:stream';
 import { assertPrivateDestination, DropError, type PrivateNetwork } from '@drop/protocol';
 
+/** The largest request body sent to a private destination. */
+const MAX_REQUEST_BODY_BYTES = 4 * 1024 * 1024;
+
 /** Direct sockets only: no environment proxy, redirects, DNS or global fetch dispatcher. */
 export function privateFetch(policy: PrivateNetwork, source: string): typeof fetch {
   return async (input, init) => {
@@ -13,7 +16,7 @@ export function privateFetch(policy: PrivateNetwork, source: string): typeof fet
     const request = new Request(input, init);
     request.signal.throwIfAborted();
     const body = request.body ? Buffer.from(await request.arrayBuffer()) : undefined;
-    if (body && body.length > 4 * 1024 * 1024) throw new DropError('E_TOO_LARGE');
+    if (body && body.length > MAX_REQUEST_BODY_BYTES) throw new DropError('E_TOO_LARGE');
     const headers = Object.fromEntries(request.headers);
     delete headers.host;
     headers['accept-encoding'] = 'identity';

@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { askAgent } from '@drop/a2a';
 import { DropError } from '@drop/protocol';
 import type { CapabilityImpl, ImplCard, RunContext } from '@drop/runner';
+import { EnvNameSchema } from './names.ts';
 
 /**
  * `a2a.answer` (T2.15, D33): a company plugs its own A2A v1.0 agent into drop as a source of answers. Published once per
@@ -12,7 +13,7 @@ import type { CapabilityImpl, ImplCard, RunContext } from '@drop/runner';
  * and questions back from the agent end the drop with a fixed message: the agent's own words never reach the requester
  * unreviewed. Credentials come from the owner's environment, by header name.
  */
-const EnvNameSchema = z.string().regex(/^[A-Z][A-Z0-9_]*$/);
+const MAX_ANSWER_CHARS = 3000;
 
 export const A2aAnswerConfigSchema = z.object({
   label: z.string().trim().min(2).max(60),
@@ -27,7 +28,7 @@ export const A2aAnswerInputSchema = z.object({ question: z.string().trim().min(1
 export type A2aAnswerInput = z.infer<typeof A2aAnswerInputSchema>;
 
 export const A2aAnswerOutputSchema = z.object({
-  answer: z.string().max(3000),
+  answer: z.string().max(MAX_ANSWER_CHARS),
   verdict: z.enum(['yes', 'no', 'partial', 'unknown']),
   sources: z.array(z.string().max(120)).max(10),
 });
@@ -93,7 +94,8 @@ export function createA2aAnswer(deps: A2aAnswerDeps = {}): CapabilityImpl<A2aAns
         throw new DropError('E_RUNNER', `${config.label} demande une précision : reformule la question.`);
       if (result.outcome !== 'completed' || result.text.trim() === '')
         throw new DropError('E_RUNNER', `${config.label} n'a pas répondu.`);
-      if (result.text.length > 3000) throw new DropError('E_OUTPUT_INVALID', 'answer longer than 3000 characters');
+      if (result.text.length > MAX_ANSWER_CHARS)
+        throw new DropError('E_OUTPUT_INVALID', `answer longer than ${String(MAX_ANSWER_CHARS)} characters`);
       return { answer: result.text.trim(), verdict: 'unknown', sources: [result.agentName.slice(0, 120)] };
     },
   };
