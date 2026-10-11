@@ -529,13 +529,40 @@ describe('relay', () => {
   });
 
   it('answers GET /health for probes, and nothing else over plain HTTP', async () => {
+    delete process.env.DROP_BUILD;
     const alice = await generateIdentity('Alice');
     const { relay } = await relayFor([alice]);
     const base = relay.url.replace('ws://', 'http://').replace('/v1', '');
     const health = await fetch(`${base}/health`);
     expect(health.status).toBe(200);
-    expect(await health.json()).toEqual({ ok: true, nodes: 0 });
+    expect(await health.json()).toEqual({ ok: true, nodes: 0, build: 'unknown' });
     expect((await fetch(`${base}/peers`)).status).toBe(404);
+  });
+
+  it('reports the build identity alongside the connection count', async () => {
+    const build = '76cfb890ced3e256921e42bb20bdf11c11a7c1b9';
+    process.env.DROP_BUILD = build;
+    try {
+      const alice = await generateIdentity('Alice');
+      const { relay } = await relayFor([alice]);
+      const base = relay.url.replace('ws://', 'http://').replace('/v1', '');
+      const health = await fetch(`${base}/health`);
+      expect(health.status).toBe(200);
+      expect(await health.json()).toEqual({ ok: true, nodes: 0, build });
+    } finally {
+      delete process.env.DROP_BUILD;
+    }
+  });
+
+  it('falls back to an explicit absence instead of failing the probe', async () => {
+    delete process.env.DROP_BUILD;
+    const alice = await generateIdentity('Alice');
+    const { relay } = await relayFor([alice]);
+    const base = relay.url.replace('ws://', 'http://').replace('/v1', '');
+    const health = await fetch(`${base}/health`);
+    expect(health.status).toBe(200);
+    const body = (await health.json()) as { ok: boolean; nodes: number; build: string };
+    expect(body.build).toBe('unknown');
   });
 
   it('client reconnects after the relay restarts', async () => {
