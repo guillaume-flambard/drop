@@ -622,7 +622,7 @@ Le Node MUST supprimer le fichier temporaire d'une écriture durable échouée, 
 - **THEN** le marqueur et l'empreinte restent d'accord, le même identifiant est refusé comme doublon et une autre demande est admise
 
 ### Requirement: Mémoire des demandes exécutées bornée
-Le Node MUST limiter à 1 024 les demandes reçues encore actives en mémoire. Dès qu'une issue est envoyée, il MUST libérer l'entrée complète ; il MAY conserver pendant au plus 30 minutes un résumé borné du refus pour répondre au même demandeur. La suppression de mémoire MUST NOT supprimer le marqueur anti-rejeu durable ni relancer une demande.
+Le Node MUST limiter à 1 024 les demandes reçues encore actives en mémoire, y compris quand plusieurs demandes sont traitées en même temps. Dès qu'une issue est envoyée, il MUST libérer l'entrée complète ; il MAY conserver pendant au plus 30 minutes un résumé borné du refus pour répondre au même demandeur. La suppression de mémoire MUST NOT supprimer le marqueur anti-rejeu durable ni relancer une demande.
 
 #### Scenario: AC: libération après issue
 <!-- openspec-guard:test="replay admission through the engine > frees a delivered request without reopening its durable replay marker" -->
@@ -643,6 +643,11 @@ Le Node MUST limiter à 1 024 les demandes reçues encore actives en mémoire. D
 <!-- openspec-guard:test="replay admission through the engine > refuses another request before consent when active execution memory is full" -->
 - **WHEN** 1 024 demandes reçues sont encore actives
 - **THEN** une demande supplémentaire reçoit `E_RATE` avant accord ou exécution, sans évincer une demande active
+
+#### Scenario: AC: plafond sous livraison concurrente
+<!-- openspec-guard:test="bounded executor memory under concurrent delivery > never exceeds the active execution cap when requests are admitted concurrently" -->
+- **WHEN** plusieurs demandes valides arrivent ensemble alors qu'il ne reste qu'une place active
+- **THEN** une seule est admise et les autres reçoivent `E_RATE`, sans dépasser 1 024 demandes actives
 
 ### Requirement: Mémoire des demandes émises bornée
 Le Node MUST conserver au plus 1 024 demandes émises en mémoire. Il MUST évincer d'abord les plus anciennes demandes terminées ; si toutes les places sont actives, il MUST refuser la nouvelle demande avec une erreur de capacité explicite sans créer de financement ni envoyer d'enveloppe. L'API locale MUST exposer cette saturation par HTTP 429.

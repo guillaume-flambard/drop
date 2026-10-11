@@ -1138,7 +1138,12 @@ export class NodeEngine extends EventEmitter {
       await this.refuse(from, message.dropId, 'E_SCHEMA', 'Entrée invalide.');
       return;
     }
-    if (!(await this.admit(from, message.dropId, now))) return;
+    const refusal = this.admission(from, message.dropId, now);
+    if (refusal) {
+      await this.refuse(from, message.dropId, refusal.code, refusal.message);
+      return;
+    }
+    // No await between the admission above and this insertion: see admission().
     const drop: ExecutorDrop = {
       dropId: message.dropId,
       requester: from,
@@ -1201,8 +1206,12 @@ export class NodeEngine extends EventEmitter {
     this.changed();
   }
 
-  /** Anti-replay claim and execution capacity, shared by capabilities and facts; false once a refusal was sent. */
-  private async admit(from: NodeId, dropId: string, now: number): Promise<boolean> {
+  /**
+   * Anti-replay claim and execution capacity, shared by capabilities and facts: the refusal to send, or undefined when
+   * admitted. Synchronous on purpose: the caller must put the drop in `executing` before its next await, so that
+   * envelopes handled concurrently can never all pass the capacity check and overshoot the cap (T3.1c review).
+   */
+  private admission(from: NodeId, dropId: string, now: number): { code: DropErrorCode; message: string } | undefined {
     if (this.options.store.claimDrop) {
       let claim: DropClaim;
       try {
@@ -1227,10 +1236,7 @@ export class NodeEngine extends EventEmitter {
           peer: from,
         });
       }
-      if (claim !== 'claimed') {
-        await this.refuse(from, dropId, CLAIM_ERRORS[claim].code, CLAIM_ERRORS[claim].message);
-        return false;
-      }
+      if (claim !== 'claimed') return CLAIM_ERRORS[claim];
     }
     if (this.executing.size >= MAX_ACTIVE_EXECUTING_DROPS) {
       this.log({
@@ -1240,10 +1246,9 @@ export class NodeEngine extends EventEmitter {
         dropId,
         peer: from,
       });
-      await this.refuse(from, dropId, CLAIM_ERRORS.capacity.code, CLAIM_ERRORS.capacity.message);
-      return false;
+      return CLAIM_ERRORS.capacity;
     }
-    return true;
+    return undefined;
   }
 
   // ---- published facts (T4.4, D65) ---------------------------------------------------------------------------
@@ -1375,8 +1380,9 @@ export class NodeEngine extends EventEmitter {
       return this.refuse(from, dropId, 'E_SCHEMA', 'Entrée invalide.');
     if (this.factRateExceeded(from, now))
       return this.refuse(from, dropId, 'E_RATE', 'Trop de demandes de faits : réessaie dans une minute.');
-    if (!(await this.admit(from, dropId, now))) return;
-    // Read again after the await: a retire or an edit made meanwhile wins.
+    const refusal = this.admission(from, dropId, now);
+    if (refusal) return this.refuse(from, dropId, refusal.code, refusal.message);
+    // Read again after the claim, still before any await: a retire or an edit already stored wins.
     const entry = this.servableFact(from, message, this.now());
     if (!entry) return this.refuse(from, dropId, 'E_SCHEMA', 'Fait indisponible.');
     const { fact } = entry.signed;
