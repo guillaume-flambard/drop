@@ -34,7 +34,10 @@ L'ordre et les statuts font foi dans [TASKS](TASKS.md). Les preuves de chaque t�
 - Fermer les revues de sécurité T3.1b et T3.1c.
 - Finir l'app Mac (T3.4).
 - Hygiène de configuration (T4.15).
-- Choisir et installer le chemin de connexion entre les binômes : relais drop privé ou relais iroh auto-hébergé (T4.6a).
+- Raccorder automatiquement les treize clients sur Mac, Windows et Linux (T4.22, D84).
+- Préparer le relais déjà en place sur le VPS (T4.6a) et le lien unique pour rejoindre l'équipe en deux clics (T4.23).
+- Construire l'app Windows (T3.7), puis tester à quatre : VPS, Mac et deux PC Windows (T4.6c).
+- Construire l'app Linux (T3.8) et mener le design au niveau impeccable (T4.24).
 - Écrire le protocole de l'essai en profil privé (T4.6b). L'ancien protocole des [essais](essais/README.md) est historique.
 - Si l'essai inclut le partage par modèle : qualifier un modèle (T3.2) et choisir outils, modèle et approbateur depuis le panneau (T4.16).
 
@@ -46,7 +49,7 @@ L'ordre et les statuts font foi dans [TASKS](TASKS.md). Les preuves de chaque t�
 - Préparer la publication : audit, licences, signalement privé, paquets (T3.6).
 - Nom du produit, offre et lancement public (T4.13), avec l'accord de Guillaume.
 
-Après l'essai seulement : Windows (T3.7) et Linux (T3.8), simulation complète (T4.7), agent inclus (T4.8), petite question (T4.9), relais d'entreprise en binaire (T4.10b), tâches déléguées (T4.11), contexte partagé (T4.12). La passerelle grand public pour Claude et ChatGPT (T2.13) est mise de côté : le profil privé la refuse.
+Après l'essai seulement : simulation complète (T4.7), agent inclus (T4.8), petite question (T4.9), relais d'entreprise en binaire (T4.10b), tâches déléguées (T4.11), contexte partagé (T4.12). La passerelle grand public pour Claude et ChatGPT (T2.13) est mise de côté : le profil privé la refuse.
 
 ## Reproduire la vérification
 
