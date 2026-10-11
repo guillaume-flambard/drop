@@ -15,8 +15,12 @@ interface RunResult {
 
 // Runs a command and keeps its output so a failing assertion shows the diagnostics.
 // A command that cannot start at all throws instead of passing for a failure.
+// On Windows pnpm and tsc are .cmd shims, which Node only starts through cmd.exe; the arguments here hold no spaces.
 function run(cmd: string, args: string[], cwd = root): RunResult {
-  const result = spawnSync(cmd, args, { cwd, encoding: 'utf8' });
+  const result =
+    process.platform === 'win32'
+      ? spawnSync([`"${cmd}"`, ...args].join(' '), { cwd, encoding: 'utf8', shell: true })
+      : spawnSync(cmd, args, { cwd, encoding: 'utf8' });
   if (result.error) throw result.error;
   return { status: result.status ?? 1, output: `${result.stdout}${result.stderr}` };
 }
@@ -147,8 +151,15 @@ describe('monorepo tooling', () => {
     const tsFiles = trackedFiles(/\.(ts|tsx|mts|cts)$/);
     const listed = run(tscBin, ['-p', 'tsconfig.json', '--listFilesOnly']);
     expect(listed.status, listed.output).toBe(0);
-    const typechecked = new Set(listed.output.split('\n').map((file) => file.trim()));
-    expect(tsFiles.filter((file) => !typechecked.has(join(root, file)))).toEqual([]);
+    // tsc lists `D:/a/…` with forward slashes on Windows: both sides are compared as resolved paths of this system.
+    const typechecked = new Set(
+      listed.output
+        .split('\n')
+        .map((file) => file.trim())
+        .filter((file) => file !== '')
+        .map((file) => resolve(file)),
+    );
+    expect(tsFiles.filter((file) => !typechecked.has(resolve(root, file)))).toEqual([]);
 
     const javascript = trackedFiles(/\.(js|mjs|cjs|jsx)$/).filter((file) => !/^[^/]+\.config\.js$/.test(file));
     expect(javascript).toEqual([]);
