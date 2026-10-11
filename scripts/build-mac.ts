@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { updateManifest, updatePlatform, updaterConfig } from './mac-updates.ts';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const tauriDir = join(root, 'apps', 'mac', 'src-tauri');
+const tauriDir = join(root, 'apps', 'desktop', 'src-tauri');
 const resources = join(tauriDir, 'resources');
 const args = process.argv.slice(2);
 const release = args.includes('--release');
@@ -46,7 +46,7 @@ if (!expectedNodeArch || process.arch !== expectedNodeArch) {
 }
 if (Number(process.versions.node.split('.')[0]) < 22) throw new Error('Node 22 or newer is required for the bundle');
 
-const publicKeyPath = join(root, 'apps', 'mac', 'updater.pub');
+const publicKeyPath = join(root, 'apps', 'desktop', 'updater.pub');
 const updates = args.includes('--updates');
 const notesIndex = args.indexOf('--notes');
 if (updates && !existsSync(publicKeyPath)) {

@@ -8,7 +8,7 @@ L'app contient son propre runtime Node, le programme `drop-iroh` et les deux bun
 
 - Une build signée et notarisée pour Apple Silicon a été acceptée par Apple le 10 octobre 2026 (`spctl` : `Notarized Developer ID`, ticket agrafé).
 - Restent à faire à la main : installer le DMG sur un Mac propre sans Node de développement, tester VoiceOver, publier la matrice macOS et architecture. T3.4 reste `blocked` sur ces recettes.
-- Aucune clé de mise à jour n'existe encore (`apps/mac/updater.pub` est absent). Aucune build distribuée ne cherche donc de mise à jour.
+- Aucune clé de mise à jour n'existe encore (`apps/desktop/updater.pub` est absent). Aucune build distribuée ne cherche donc de mise à jour.
 
 ## Construire
 
@@ -52,11 +52,11 @@ Ensuite, quitter drop, faire une sauvegarde **cohérente** de `~/.drop` daemon a
 Pour l'activer, une seule fois, sur le Mac qui publie :
 
 1. `npx --yes @tauri-apps/cli@2.12.1 signer generate -w ~/.tauri/drop-updater.key`, avec un mot de passe. La clé privée ne quitte pas ce Mac et sa sauvegarde : la perdre empêche toute mise à jour des apps installées.
-2. Copier `~/.tauri/drop-updater.key.pub` dans `apps/mac/updater.pub` et le committer. C'est la clé publique.
+2. Copier `~/.tauri/drop-updater.key.pub` dans `apps/desktop/updater.pub` et le committer. C'est la clé publique.
 
 À chaque version :
 
-1. Monter `version` dans `apps/mac/src-tauri/tauri.conf.json` (semver, toujours croissante).
+1. Monter `version` dans `apps/desktop/src-tauri/tauri.conf.json` (semver, toujours croissante).
 2. Construire avec la clé privée dans l'environnement :
    ```sh
    export TAURI_SIGNING_PRIVATE_KEY="$(cat ~/.tauri/drop-updater.key)"

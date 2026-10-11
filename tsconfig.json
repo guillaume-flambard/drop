@@ -14,9 +14,9 @@
     ".claude",
     ".agents",
     "docs/demo/julie-repo",
-    "apps/mac/src-tauri/target",
+    "apps/desktop/src-tauri/target",
     "crates/*/target",
-    "apps/mac/src-tauri/gen",
-    "apps/mac/src-tauri/resources"
+    "apps/desktop/src-tauri/gen",
+    "apps/desktop/src-tauri/resources"
   ]
 }
