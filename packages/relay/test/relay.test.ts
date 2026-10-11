@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import WebSocket, { WebSocketServer } from 'ws';
 import { execFileSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdtempSync, readFileSync, statSync, writeFileSync, rmSync } from 'node:fs';
+import { chmodSync, existsSync, mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -30,6 +30,7 @@ import {
   type RelayLogEntry,
 } from '../src/index.ts';
 import { writePrivate } from '../src/private-file.ts';
+import { expectPrivateMode } from '../../../test/private-mode.ts';
 
 const CLI = fileURLToPath(new URL('../src/cli.ts', import.meta.url));
 
@@ -565,7 +566,7 @@ describe('relay', () => {
       expect.objectContaining({ event: 'admission', outcome: 'admitted', nodeId: natha.nodeId, sponsor: julie.nodeId }),
     );
     expect(readFileSync(admittedPath, 'utf8')).toContain(natha.nodeId);
-    expect(statSync(admittedPath).mode & 0o777).toBe(0o600);
+    expectPrivateMode(admittedPath);
 
     const s = client(relay, stranger, ticket);
     await until(() => s.statuses.includes('unauthorized'));
@@ -612,7 +613,7 @@ describe('relay', () => {
     await n.instance.waitReady();
 
     revokeNode(revokedPath, natha.nodeId);
-    expect(statSync(revokedPath).mode & 0o777).toBe(0o600);
+    expectPrivateMode(revokedPath);
     await until(() => n.statuses.includes('unauthorized'));
     expect(logs).toContainEqual(
       expect.objectContaining({ event: 'revocation', outcome: 'revoked', nodeId: natha.nodeId }),
@@ -938,22 +939,22 @@ describe('relay hardening', () => {
     chmodSync(plain, 0o644);
     writePrivate(plain, 'new');
     expect(readFileSync(plain, 'utf8')).toBe('new');
-    expect(statSync(plain).mode & 0o777).toBe(0o600);
+    expectPrivateMode(plain);
 
     const configPath = join(dir, 'relay.config.json');
     writeFileSync(configPath, JSON.stringify({ port: 0, allowedNodeIds: [] }), { mode: 0o644 });
     chmodSync(configPath, 0o644);
     allowNode(configPath, julie.nodeId);
-    expect(statSync(configPath).mode & 0o777).toBe(0o600);
+    expectPrivateMode(configPath);
     chmodSync(configPath, 0o644);
     revokeInConfig(configPath, natha.nodeId);
-    expect(statSync(configPath).mode & 0o777).toBe(0o600);
+    expectPrivateMode(configPath);
 
     const admittedPath = join(dir, 'admitted.json');
     writeFileSync(admittedPath, JSON.stringify({ admitted: [], spentNonces: [] }), { mode: 0o644 });
     chmodSync(admittedPath, 0o644);
     const { relay } = await relayFor([julie], { admittedPath });
     await client(relay, natha, await createAdmission(julie)).instance.waitReady();
-    expect(statSync(admittedPath).mode & 0o777).toBe(0o600);
+    expectPrivateMode(admittedPath);
   });
 });

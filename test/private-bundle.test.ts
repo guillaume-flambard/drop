@@ -1,10 +1,11 @@
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { build } from 'esbuild';
 import { describe, expect, it } from 'vitest';
 import { NODE_BUNDLE_OPTIONS } from '../scripts/bundle.ts';
+import { expectPrivateMode } from './private-mode.ts';
 
 describe('private bundled bootstrap', () => {
   it('initializes a fresh private home without starting the imported MCP executable', async () => {
@@ -31,7 +32,7 @@ describe('private bundled bootstrap', () => {
         payer: 'owner',
         gateways: [],
       });
-      expect(statSync(join(home, 'identity.json')).mode & 0o777).toBe(0o600);
+      expectPrivateMode(join(home, 'identity.json'));
       expect(initialized.stdout).not.toContain('jsonrpc');
     } finally {
       rmSync(root, { recursive: true, force: true });

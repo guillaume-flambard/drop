@@ -22,6 +22,7 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { z } from 'zod';
 import { assertLoopbackRelay, buildPlan, type Decision, type Plan, type Policy } from './plan.ts';
+import { residentKb } from './memory.ts';
 import { renderMarkdown, summarize, type MemorySeries, type OutcomeRecord, type Report } from './report.ts';
 
 const run = promisify(execFile);
@@ -341,9 +342,8 @@ export async function runCampaign(options: CampaignOptions): Promise<CampaignRes
         const pid = index === -1 ? relay.pid : nodes[index]?.process?.pid;
         if (!pid) continue;
         try {
-          const { stdout } = await run('ps', ['-o', 'rss=', '-p', String(pid)]);
-          const rss = Number(stdout.trim());
-          if (rss > 0) {
+          const rss = await residentKb(pid);
+          if (rss !== undefined) {
             series.rssKb.push(rss);
             emit({ kind: 'sample', node: index, rssKb: rss });
           }

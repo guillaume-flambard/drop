@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { agentServers, codexServers, connectMcp, toolResultText } from '../src/index.ts';
 
 const FIXTURE = resolve(import.meta.dirname, 'fixtures', 'fake-design-mcp-stdio.ts');
@@ -85,8 +85,9 @@ describe('MCP servers declared by the coding agents (T2.8)', () => {
 
   it('starts a server as its agent declares it, with the secrets read from the agent file at run time', async () => {
     const home = fakeHome();
-    const previous = process.env.HOME;
-    process.env.HOME = home;
+    // os.homedir() reads HOME on macOS and Linux, USERPROFILE on Windows.
+    vi.stubEnv('HOME', home);
+    vi.stubEnv('USERPROFILE', home);
     try {
       const client = await connectMcp({ transport: 'agent', agent: 'claude_code', name: 'figma' }, {});
       try {
@@ -97,7 +98,7 @@ describe('MCP servers declared by the coding agents (T2.8)', () => {
       }
       await expect(connectMcp({ transport: 'agent', agent: 'claude_code', name: 'gone' }, {})).rejects.toThrow(/gone/);
     } finally {
-      process.env.HOME = previous;
+      vi.unstubAllEnvs();
     }
   });
 });

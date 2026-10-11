@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, statSync } from 'node:fs';
+import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -20,6 +20,7 @@ import type { CapabilityImpl } from '@drop/runner';
 import { NodeEngine } from '../src/engine.ts';
 import { DropHome, NodeConfigSchema } from '../src/home.ts';
 import { fakeCapability, startMesh, until, type Mesh } from './helpers.ts';
+import { expectPrivateMode } from '../../../test/private-mode.ts';
 
 const LOW = 'test.service_state';
 const HIGH = 'test.private_answer';
@@ -96,7 +97,7 @@ describe('the protocol as the nodes play it', () => {
       'publicKey',
       'secretKey',
     ]);
-    expect(statSync(path).mode & 0o777).toBe(0o600);
+    expectPrivateMode(path);
   });
 
   it('pairs with a signed pair_request carrying the token, answered by pair_accept, and both sides write peers.json', async () => {

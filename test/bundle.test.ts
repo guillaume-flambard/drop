@@ -116,6 +116,8 @@ describe('the bundle output directory, which the build empties first (B2)', () =
     expect(bundleOutDir([], root, homedir())).toBe(join(root, 'dist'));
     expect(bundleOutDir(['--mcpb'], root, homedir())).toBe(join(root, 'dist'));
     expect(bundleOutDir(['--out', out], root, homedir())).toBe(out);
-    expect(bundleOutDir(['--out', 'build/out'], root, homedir(), '/work')).toBe('/work/build/out');
+    // Resolved against the working directory: `/work` is `D:\work` on Windows, on the current drive.
+    const cwd = resolve('/work');
+    expect(bundleOutDir(['--out', 'build/out'], root, homedir(), cwd)).toBe(join(cwd, 'build', 'out'));
   });
 });

@@ -34,13 +34,12 @@ jobs:
       # Every covered AC scenario keeps its test (AGENTS.md step 6); the baseline only shrinks.
       - run: npx --yes openspec-guard@0.3.0 check --require-selector --baseline .openspec-guard-baseline.json --fail-on fail
 
-  # Not required yet: these jobs give contributors and T3.7 (Windows) visibility on other platforms. They become
-  # required checks, without continue-on-error, when the Windows (T3.7) and cross-platform work lands.
+  # The shared suite also gates Windows (D84) and macOS: the job names `test-windows` and `test-macos` are required
+  # status checks next to `test`, so do not rename them.
   test-cross:
     name: test-${{ matrix.label }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
-    continue-on-error: true
     strategy:
       fail-fast: false
       matrix:
@@ -61,8 +60,9 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
-      # The Helm chart test fails in CI without Helm (D81); unlike Ubuntu, the macOS image does not ship it.
-      - if: matrix.label == 'macos'
+      # The Helm chart test fails in CI without Helm (D81): the same pinned Helm on macOS, whose image lacks it, and on
+      # Windows, whose image version may drift.
+      - if: matrix.label == 'macos' || matrix.label == 'windows'
         uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
       - run: pnpm install --frozen-lockfile
       - run: pnpm -r lint

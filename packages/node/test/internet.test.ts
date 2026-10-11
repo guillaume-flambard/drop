@@ -20,6 +20,8 @@ import {
   IROH_NO_PATH_MESSAGE,
   IrohService,
   assertInternetAllowed,
+  irohEnvironment,
+  irohProgramName,
   privateSocket,
   InternetSettingsSchema,
   sendInOrder,
@@ -29,7 +31,7 @@ import { renderPanel } from '../src/panel.ts';
 import { MemoryStore, startMesh, until } from './helpers.ts';
 
 const root = join(fileURLToPath(import.meta.url), '..', '..', '..', '..');
-const BINARY = join(root, 'crates', 'drop-iroh', 'target', 'release', 'drop-iroh');
+const BINARY = join(root, 'crates', 'drop-iroh', 'target', 'release', irohProgramName());
 
 beforeAll(() => {
   execFileSync('cargo', ['build', '--release', '--manifest-path', join(root, 'crates', 'drop-iroh', 'Cargo.toml')], {
@@ -67,7 +69,7 @@ function envelope(from: Identity, to: Identity): Envelope {
 
 /** drop-iroh driven by hand, to play a peer that answers whatever the test wants. */
 async function rawIroh(identity: Identity, peers: string[]) {
-  const child = spawn(BINARY, [], { stdio: ['pipe', 'pipe', 'pipe'], env: {} });
+  const child = spawn(BINARY, [], { stdio: ['pipe', 'pipe', 'pipe'], env: irohEnvironment() });
   raws.push(child);
   const lines: Record<string, unknown>[] = [];
   createInterface({ input: child.stdout }).on('line', (line) => {
