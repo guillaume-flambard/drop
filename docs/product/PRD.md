@@ -58,7 +58,7 @@ Décision D48.
 | Rôle | Qui | Ce qu'il fait | Statut |
 |---|---|---|---|
 | Premier utilisateur | Guillaume | utilise drop au quotidien | Existant (démos sur ses machines) |
-| Testeurs | deux amis techniques, contextes différents | essai réel en P1 | Visé (T4.6) |
+| Testeurs | 3 à 5 développeurs pour la mesure D24, puis au moins deux binômes de collègues dans des contextes différents (D83) | mesure du besoin, puis essai réel en P1 | Visé (T0.7, T4.6) |
 | Demandeur | développeur avec un ou plusieurs agents | pose les questions | Visé en usage réel |
 | Propriétaire | technique ou non, avec ou sans agent | décide et répond | Visé en usage réel |
 | Responsable | veut l'avancée de l'équipe | pose des questions à plusieurs | Existant en code (T2.10, T2.12), jamais utilisé en vrai |

@@ -42,7 +42,7 @@ L'essai avec de vraies personnes (T4.6) ne démarre pas avant la clôture CSO de
 
 **Sortie.** Une campagne de 50 nœuds tourne sans erreur sur le Mac ; la mémoire par nœud et la latence de bout en bout sont mesurées et deviennent la référence de régression. Le relais de production `drop.memolabs.dev` et le VPS ne sont jamais utilisés.
 
-## P1 : essai avec deux amis
+## P1 : mesure du besoin, puis essai en binômes de collègues
 
 | Tâche | Contenu |
 |---|---|
@@ -52,13 +52,14 @@ L'essai avec de vraies personnes (T4.6) ne démarre pas avant la clôture CSO de
 | T4.5 | Détection des treize clients MCP |
 | T4.14 | Panneau conforme à la spec : expiration et bouton par défaut sur la carte, retrait de champs à la relecture, confirmation avant d’accepter une invitation |
 | T4.15 | Hygiène de configuration : profil privé par défaut, modes de fichiers 0600 |
-| T4.6 | Essai réel, protocole d'observation, mesure D24 |
+| T0.7 | Mesure D24 sans l'app : 3 à 5 développeurs, blocked-observer seul, entretiens de classement |
+| T4.6 | Essai réel en binômes de collègues, protocole d'observation, mesures d'usage |
 
 **Sortie.**
 
-- Deux amis, dans deux contextes différents, ont installé l'app, échangé des demandes réelles et répondu au protocole.
-- Le seuil D24 est mesuré, qu'il soit atteint ou non : un résultat négatif est un résultat, et il oriente la suite.
-- H3 (compréhension) et H5 (connexions directes) ont une mesure.
+- Le seuil D24 est mesuré (T0.7), qu'il soit atteint ou non : un résultat négatif est un résultat, et il oriente la suite.
+- Au moins deux binômes de collègues, dans deux contextes différents, ont installé l'app, échangé des demandes réelles et répondu au protocole.
+- H5 (connexions directes) a une mesure. H3 (compréhension par des non-techniciens) demande un test séparé (D83).
 
 ## P2 : simulation complète
 
@@ -115,6 +116,7 @@ Voir [`docs/TASKS.md`](../TASKS.md). Ce plan n'en garde aucune copie.
 ## Ce qui reste humain
 
 - Recette T3.4 sur un Mac de test sans Node, avec VoiceOver.
-- Recrutement et suivi des deux amis (T4.6).
+- Recrutement des développeurs de la mesure D24 et entretiens de classement (T0.7).
+- Recrutement et suivi des binômes de collègues (T4.6).
 - Choix du nom (T4.13, D57).
 - Toute publication, tout envoi à un tiers, toute création de clé sur la passerelle LiteLLM partagée.
