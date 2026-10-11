@@ -1,10 +1,11 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync, statSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { generateIdentity } from '@drop/protocol';
 import { DropHome, NodeConfigSchema } from '../src/home.ts';
 import { privateConfig, migratePrivate, rollbackPrivate } from '../src/private-config.ts';
+import { expectPrivateMode } from '../../../test/private-mode.ts';
 
 const roots: string[] = [];
 afterEach(() => {
@@ -58,7 +59,7 @@ describe('private configuration', () => {
     const publication = readFileSync(join(root, 'capabilities/repo.answer.json'), 'utf8');
     migratePrivate(home, 'ws://127.0.0.1:7780/v1');
     expect(home.config().profile).toBe('private');
-    expect(statSync(join(root, 'private-migration.json')).mode & 0o777).toBe(0o600);
+    expectPrivateMode(join(root, 'private-migration.json'));
     expect(readFileSync(join(root, 'identity.json'), 'utf8')).toBe(identity);
     expect(readFileSync(join(root, 'capabilities/repo.answer.json'), 'utf8')).toBe(publication);
     expect(() => {
