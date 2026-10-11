@@ -1,13 +1,14 @@
 # Builds the root Dockerfile (relay, node, gateway and site share one image) on GitHub-hosted runners.
 #
 # - pull_request: build only, never pushed, never logged in to a registry.
-# - push to main: pushed to ghcr.io/guillaume-flambard/drop as `<full sha>` and `main`.
-# - push of a `v*` tag: pushed as `<full sha>` and the semver tags (`1.2.3`, `1.2`, `1` from 1.0 on).
+# - push to main: pushed to ghcr.io/guillaume-flambard/drop as `<full sha>`, `main` and `latest`.
+# - push of a `v*` tag: pushed as `<full sha>` and the semver tags (`1.2.3`, `1.2`, `1` from 1.0 on), never `latest`.
 # Pushed images carry a BuildKit SBOM and provenance, plus a GitHub-signed SLSA provenance attestation
 # (`gh attestation verify oci://ghcr.io/guillaume-flambard/drop:<tag> -R guillaume-flambard/drop`).
 #
-# The VPS no longer gets its image from a self-hosted runner and 127.0.0.1:5000: the `drop` stack must now pull
-# ghcr.io/guillaume-flambard/drop:<sha> (or :main). That change lives in lab-infra, not in this repository.
+# The VPS no longer gets its image from a self-hosted runner and 127.0.0.1:5000: the `drop` stack must now use
+# ghcr.io/guillaume-flambard/drop:latest, which the lab autodeploy agent pulls like the other public apps. `latest`
+# therefore only ever comes from main. That change lives in lab-infra, not in this repository.
 name: build drop
 
 on:
@@ -86,12 +87,13 @@ jobs:
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: ${{ env.IMAGE }}
-          # No `latest`: deployments name an exact sha (or follow `main`).
+          # `latest` is what the lab autodeploy pulls: set explicitly from main only, never derived from a tag.
           flavor: |
             latest=false
           tags: |
             type=sha,format=long,prefix=
             type=raw,value=main,enable=${{ github.ref == 'refs/heads/main' }}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}},enable=${{ !startsWith(github.ref, 'refs/tags/v0.') }}
