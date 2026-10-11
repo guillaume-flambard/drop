@@ -168,9 +168,10 @@ function cliPath(agent: AgentKind, probe: InstallProbe): string | undefined {
 function readConfig(path: string): string | undefined {
   let fd: number | undefined;
   try {
-    if (lstatSync(path).isSymbolicLink()) throw new Error('E_CONFIG_SYMLINK');
-    // Windows has no O_NOFOLLOW; the lstat above is the check there.
+    // Opened first, then checked through the descriptor: no window between a check and the read.
     fd = openSync(path, constants.O_RDONLY | ('O_NOFOLLOW' in constants ? constants.O_NOFOLLOW : 0));
+    // Windows has no O_NOFOLLOW: a link there is refused once the file is open, before anything is read.
+    if (!('O_NOFOLLOW' in constants) && lstatSync(path).isSymbolicLink()) throw new Error('E_CONFIG_SYMLINK');
     const stats = fstatSync(fd);
     if (!stats.isFile()) throw new Error('E_CONFIG_TYPE');
     if (stats.size > MAX_GLOBAL_CONFIG_BYTES) throw new Error('E_CONFIG_TOO_LARGE');
