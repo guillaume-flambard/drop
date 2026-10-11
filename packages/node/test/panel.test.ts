@@ -183,6 +183,19 @@ describe('menu bar panel and its admin routes (T2.4)', () => {
     expect(script).toBeDefined();
     expect(() => new Script(script ?? '')).not.toThrow();
   });
+
+  it('reports a failed invite, unlink or link copy instead of leaving its promise unhandled', () => {
+    const html = renderPanel();
+    const between = (start: string, end: string) =>
+      html.slice(html.indexOf(start), html.indexOf(end, html.indexOf(start)));
+    expect(between("api('POST', '/ui/invite')", "'Inviter quelqu’un dans l’équipe'")).toContain(
+      "function (error) { notice = error.message; announce('Action impossible. ' + notice); render(true); }",
+    );
+    expect(between("api('POST', '/ui/admin/unlink'", "'Retirer')")).toContain(
+      "function (error) { notice = error.message; announce('Action impossible. ' + notice); render(true); }",
+    );
+    expect(between('navigator.clipboard.writeText(link)', "'Copier le lien'")).toContain("class: 'notice error'");
+  });
 });
 
 describe('menu bar panel and its admin routes (T4.14)', () => {

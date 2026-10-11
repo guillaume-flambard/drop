@@ -1,9 +1,9 @@
 import { request } from 'node:http';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DropError, generateIdentity } from '@drop/protocol';
-import { startLocalApi, type LocalApi } from '../src/api.ts';
+import { startLocalApi, type ApiLogEntry, type LocalApi } from '../src/api.ts';
 import { NodeEngine, type CatalogEntry, type OutboundDrop } from '../src/engine.ts';
-import { renderConsentCard, renderReview } from '../src/ui.ts';
+import { renderConsentCard, renderReview, terminalText } from '../src/ui.ts';
 import { MemoryStore } from './helpers.ts';
 
 const TOKEN = 'test-token-0123456789abcdefghijklmnop';
@@ -132,6 +132,106 @@ describe('local API', () => {
       asked: [{ dropId: '0199c5a0-0000-7000-8000-000000000001' }],
     });
   });
+  it('refuses malformed and oversized bodies on /drops and /ask with a stable code', async () => {
+    const { port } = await startApi();
+    const post = async (path: string, body: string) => {
+      const response = await fetch(`http://127.0.0.1:${String(port)}${path}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
+        body,
+      });
+      return { status: response.status, body: await response.json() };
+    };
+    for (const path of ['/drops', '/ask']) {
+      expect(await post(path, '{"capabilityId": ')).toMatchObject({ status: 400, body: { error: 'E_SCHEMA' } });
+      expect(await post(path, JSON.stringify({ question: 'x'.repeat(130 * 1024) }))).toMatchObject({
+        status: 413,
+        body: { error: 'E_TOO_LARGE' },
+      });
+    }
+  });
+
+  it('answers 404 only for an unknown capability and logs any other failure as a 500 without its details', async () => {
+    const engine = new NodeEngine({
+      identity: await generateIdentity('Guillaume'),
+      ownerKind: 'human',
+      store: new MemoryStore(),
+      capabilities: [],
+      transport: { send: () => Promise.resolve('offline') },
+    });
+    await expect(
+      engine.requestDrop({ capabilityId: 'mcp.answer.github', input: {}, purpose: 'Test', agent: 'other' }),
+    ).rejects.toMatchObject({ code: 'E_SCHEMA' });
+    const logged: ApiLogEntry[] = [];
+    api = await startLocalApi({
+      engine,
+      token: TOKEN,
+      port: 0,
+      relayUrl: 'ws://127.0.0.1:1/v1',
+      refreshCatalogs: () => Promise.resolve(),
+      log: (entry) => logged.push(entry),
+    });
+    const drops = async () => {
+      const response = await fetch(`http://127.0.0.1:${String(api?.port ?? 0)}/drops`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ capabilityId: 'mcp.answer.github', input: {}, purpose: 'Test' }),
+      });
+      return { status: response.status, body: await response.json() };
+    };
+    expect(await drops()).toMatchObject({ status: 404, body: { error: 'E_UNKNOWN_CAPABILITY' } });
+    expect(logged).toEqual([]);
+    vi.spyOn(engine, 'requestDrop').mockRejectedValue(new Error('boom sk-ant-api03-secret'));
+    expect(await drops()).toMatchObject({ status: 500, body: { error: 'internal' } });
+    expect(logged).toEqual([{ event: 'api_request_failed', code: 'E_INTERNAL', reason: 'Error', path: '/drops' }]);
+    expect(JSON.stringify(logged)).not.toContain('boom');
+  });
+
+  it('shares one engine listener among concurrent long polls and removes it on timeout and close', async () => {
+    const engine = new NodeEngine({
+      identity: await generateIdentity('Guillaume'),
+      ownerKind: 'human',
+      store: new MemoryStore(),
+      capabilities: [],
+      transport: { send: () => Promise.resolve('offline') },
+    });
+    vi.spyOn(engine, 'drop').mockReturnValue({ dropId: 'x', state: 'awaiting_approval' } as OutboundDrop);
+    const warnings: string[] = [];
+    const onWarning = (warning: Error): void => {
+      warnings.push(warning.name);
+    };
+    process.on('warning', onWarning);
+    try {
+      const { port } = await startApi(engine);
+      const poll = (signal?: AbortSignal) =>
+        fetch(`http://127.0.0.1:${String(port)}/drops/0199c5a0-0000-7000-8000-000000000001?wait=1`, {
+          headers: { Authorization: `Bearer ${TOKEN}` },
+          ...(signal ? { signal } : {}),
+        });
+      const before = engine.listenerCount('change');
+      const polls = Array.from({ length: 15 }, () => poll());
+      await vi.waitFor(() => {
+        expect(engine.listenerCount('change')).toBe(before + 1);
+      });
+      for (const response of await Promise.all(polls)) expect(response.status).toBe(200);
+      expect(engine.listenerCount('change')).toBe(before);
+
+      const aborted = new AbortController();
+      const closing = poll(aborted.signal).catch(() => undefined);
+      await vi.waitFor(() => {
+        expect(engine.listenerCount('change')).toBe(before + 1);
+      });
+      aborted.abort();
+      await closing;
+      await vi.waitFor(() => {
+        expect(engine.listenerCount('change')).toBe(before);
+      });
+      expect(warnings).not.toContain('MaxListenersExceededWarning');
+    } finally {
+      process.off('warning', onWarning);
+    }
+  });
+
   it('refuses a request without the token', async () => {
     const { port } = await startApi();
     expect(await get(port, '/peers', { Host: `127.0.0.1:${String(port)}` })).toBe(401);
@@ -190,6 +290,14 @@ describe('consent UI', () => {
     requestedBy: { nodeId: 'y'.repeat(43), displayName: 'Guillaume <i>', agent: 'claude_code' as const },
     expiresAt: Date.now() + 600_000,
   };
+
+  it('strips control and bidi override characters from peer text printed in the terminal', () => {
+    expect(terminalText('Julie\u001b[2J\u001b]0;pwned\u0007\u009b31m \u202Eevil\u2066x\u2069\u007f')).toBe(
+      'Julie[2J]0;pwned31m evilx',
+    );
+    expect(terminalText('ligne 1\r\nligne 2\tfin')).toBe('ligne 1 ligne 2 fin');
+    expect(terminalText('Résumé : café ✓')).toBe('Résumé : café ✓');
+  });
 
   it('escapes an input containing a script tag', () => {
     const html = renderConsentCard(card, Date.now());

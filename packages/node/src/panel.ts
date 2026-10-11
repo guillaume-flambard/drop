@@ -255,10 +255,6 @@ code { font: 11px/1.4 ui-monospace, SFMono-Regular, monospace; word-break: break
     return node;
   }
 
-  function firstName(name) {
-    return name.split(/\\s+/)[0] || name;
-  }
-
   function agentName(agent) {
     var names = { claude_code: 'Claude Code', claude_desktop: 'Claude Desktop', cursor: 'Cursor', codex: 'Codex', opencode: 'OpenCode', gemini_cli: 'Gemini CLI',
       devin_desktop: 'Devin Desktop', zed: 'Zed', goose: 'goose', vscode: 'VS Code', cline: 'Cline', roo_code: 'Roo Code', jetbrains: 'JetBrains AI', other: 'un autre agent' };
@@ -429,7 +425,6 @@ code { font: 11px/1.4 ui-monospace, SFMono-Regular, monospace; word-break: break
   function approvalCard(item) {
     var who = item.requestedBy.displayName;
     var cost = costLine(item.card, who);
-    var first = firstName(who);
     return el('article', { class: 'card ask' + fresh(item.dropId), 'aria-label': who + ' : ' + item.card.title },
       el('div', { class: 'who' }, el('span', { class: 'avatar', 'aria-hidden': 'true', text: initials(who) }),
         el('div', { class: 'grow' }, el('div', {}, el('span', { class: 'name', text: who }), ' a besoin d’aide'),
@@ -565,8 +560,15 @@ code { font: 11px/1.4 ui-monospace, SFMono-Regular, monospace; word-break: break
           var link = 'drop://pair?code=' + encodeURIComponent(data.code);
           code.textContent = '';
           code.appendChild(el('div', { class: 'card' }, el('div', { class: 'muted', text: 'Envoie ce lien, valable 24 h, une seule fois :' }), el('code', { text: link }),
-            el('div', { class: 'actions' }, el('button', { class: 'act accent', onclick: function () { navigator.clipboard.writeText(link).then(function () { announce('Lien copié.'); }); } }, 'Copier le lien'))));
-        });
+            el('div', { class: 'actions' }, el('button', { class: 'act accent', onclick: function (event) {
+              var card = event.currentTarget.closest('.card');
+              navigator.clipboard.writeText(link).then(function () { announce('Lien copié.'); }, function () {
+                var failed = 'Copie impossible : sélectionne le lien et copie-le à la main.';
+                if (!card.querySelector('.notice.error')) card.appendChild(el('div', { class: 'notice error', role: 'alert', text: failed }));
+                announce(failed);
+              });
+            } }, 'Copier le lien'))));
+        }, function (error) { notice = error.message; announce('Action impossible. ' + notice); render(true); });
       } }, 'Inviter quelqu’un dans l’équipe'));
       view.appendChild(code);
     });
@@ -713,7 +715,7 @@ code { font: 11px/1.4 ui-monospace, SFMono-Regular, monospace; word-break: break
   // Internet by iroh (T4.2b, D68): off by default; no relay unless the owner picks one; n0's relays flagged as a third party.
   function internetSection(view, internet) {
     var settings = internet.settings || { mode: 'off' };
-    var STATES = {
+    var INTERNET_STATES = {
       off: 'Désactivée.',
       starting: 'Démarrage…',
       on: 'Active : tes collègues appairés peuvent te joindre par Internet.',
@@ -722,7 +724,7 @@ code { font: 11px/1.4 ui-monospace, SFMono-Regular, monospace; word-break: break
     };
     view.appendChild(el('h2', { text: 'Connexion par Internet' }));
     view.appendChild(el('div', { class: 'lead', text: 'Pour joindre un collègue hors de ton réseau, sans serveur drop. Le contenu reste chiffré de bout en bout.' }));
-    view.appendChild(el('div', { class: internet.message ? 'error' : 'muted', role: 'status', text: (STATES[internet.state] || '') + (internet.message ? ' ' + internet.message : '') }));
+    view.appendChild(el('div', { class: internet.message ? 'error' : 'muted', role: 'status', text: (INTERNET_STATES[internet.state] || '') + (internet.message ? ' ' + internet.message : '') }));
     var relay = el('input', { type: 'url', autocomplete: 'off', spellcheck: 'false', placeholder: 'https://relais.mon-equipe.fr', 'aria-label': 'Adresse du relais iroh', 'data-focus': 'internet:relay' });
     relay.value = settings.mode === 'relay' ? settings.relay : '';
     var CHOICES = [
@@ -848,7 +850,8 @@ code { font: 11px/1.4 ui-monospace, SFMono-Regular, monospace; word-break: break
           linked.appendChild(el('div', { class: 'row' },
             el('div', { class: 'grow' }, el('div', { class: 'name', text: link.clientName + (link.redirectHost ? ' (' + link.redirectHost + ')' : '') }), el('div', { class: 'muted', text: 'peut demander à ton équipe en ton nom' })),
             el('button', { class: 'act', 'aria-label': 'Retirer ' + link.clientName, onclick: function () {
-              api('POST', '/ui/admin/unlink', { gateway: link.gateway, client: link.clientName }).then(function () { render(true); });
+              api('POST', '/ui/admin/unlink', { gateway: link.gateway, client: link.clientName }).then(function () { render(true); },
+                function (error) { notice = error.message; announce('Action impossible. ' + notice); render(true); });
             } }, 'Retirer')));
         });
         view.appendChild(linked);

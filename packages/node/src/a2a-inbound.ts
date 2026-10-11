@@ -9,7 +9,7 @@ import { kindOf, routeQuestion, takesQuestion } from './route.ts';
  * Microsoft Agent Framework…) sends a question to `/a2a` with the node's token; the node routes it like « Demander à mon
  * équipe » (D32), and every colleague still accepts or refuses. The task stays working while they decide, then
  * completes with each answer as an artifact, or is rejected when everyone said no. No question is sent when nothing
- * matches: the task then asks for more input.
+ * matches, or when every match is shared by several colleagues: the task then asks for more input.
  */
 export const A2A_WAIT_MS = 10 * 60_000;
 
@@ -67,6 +67,7 @@ export function teamAgent(options: { engine: NodeEngine; refreshCatalogs: () => 
         return;
       }
       const drops: OutboundDrop[] = [];
+      const sharedBy = new Set<string>();
       for (const route of routes) {
         try {
           drops.push(
@@ -81,7 +82,18 @@ export function teamAgent(options: { engine: NodeEngine; refreshCatalogs: () => 
         } catch (error) {
           // Routes name their owner; should one still be ambiguous, the others are asked all the same (T4.17).
           if (!(error instanceof AmbiguousCapabilityError)) throw error;
+          for (const owner of error.owners) sharedBy.add(owner.ownerName);
         }
+      }
+      // Every route was ambiguous: nothing was sent, so nobody refused. The spec's answer is a request for input.
+      if (drops.length === 0) {
+        finishTask(
+          context,
+          bus,
+          TaskState.TASK_STATE_INPUT_REQUIRED,
+          `Plusieurs collègues partagent cet outil ; cite celui ou celle à qui poser la question : ${[...sharedBy].join(', ')}.`,
+        );
+        return;
       }
       await new Promise<void>((resolve) => {
         const done = (): void => {

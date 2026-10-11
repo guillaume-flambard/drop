@@ -28,6 +28,23 @@ export function escapeHtml(text: string): string {
     .replaceAll("'", '&#39;');
 }
 
+/** C0 and C1 controls (escape sequences included) and bidi overrides and isolates, which could rewrite a terminal. */
+function terminalUnsafe(code: number): boolean {
+  return (
+    code < 32 ||
+    (code >= 127 && code <= 159) ||
+    (code >= 0x202a && code <= 0x202e) ||
+    (code >= 0x2066 && code <= 0x2069)
+  );
+}
+
+/** Peer-provided text made safe to print in a terminal, on one line. Every peer string the CLI prints goes through it. */
+export function terminalText(text: string): string {
+  let safe = '';
+  for (const char of text.replace(/[\t\n\r]+/g, ' ')) if (!terminalUnsafe(char.charCodeAt(0))) safe += char;
+  return safe;
+}
+
 function remaining(expiresAt: number, now: number): string {
   const seconds = Math.max(0, Math.round((expiresAt - now) / 1000));
   return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
@@ -37,8 +54,10 @@ function list(items: string[]): string {
   return `<ul>${items.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>`;
 }
 
-/** One line on who pays: the capability owner, who is also the one deciding here (D21). */
-/** `requester` names who pays when the requester funds the run (D27); otherwise the cost is the reader's. */
+/**
+ * One line on who pays: the capability owner, who is also the one deciding here (D21). `requester` names who pays when
+ * the requester funds the run (D27); otherwise the cost is the reader's.
+ */
 export function costLine(cost: ConsentCost | undefined, requester?: string): string | undefined {
   if (!cost) return undefined;
   if (cost.kind === 'free') return 'Coût : gratuit.';

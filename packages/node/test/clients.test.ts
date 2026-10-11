@@ -13,6 +13,7 @@ import { dirname, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { agentServers, CLIENTS, projectServers, type InstallProbe } from '@drop/capabilities';
 import { detectAgents, presentServer } from '../src/detect.ts';
+import { serverEntry } from '../src/install.ts';
 import { applyOnboarding, previewOnboarding } from '../src/onboarding.ts';
 import { addProject, listProjects, removeProject } from '../src/projects.ts';
 
@@ -232,7 +233,7 @@ describe('mcp clients (T4.5)', () => {
     expect(listProjects(f.dropHome, f.home).map((project) => project.dir)).toEqual([known, fromCodex]);
   });
 
-  it('connects Gemini CLI and VS Code through their official commands and Cline through its file, then verifies', () => {
+  it('connects Gemini CLI and VS Code through their official commands and Cline through its file, then verifies', async () => {
     const f = fixture();
     const ran: string[][] = [];
     const geminiFile = join(f.home, '.gemini', 'settings.json');
@@ -265,7 +266,7 @@ describe('mcp clients (T4.5)', () => {
       expect(plan?.state).toBe('ready');
       return { agent: plan?.agent ?? 'cline', fingerprint: plan?.fingerprint ?? '', action: 'connect' as const };
     };
-    const results = applyOnboarding([select('gemini_cli'), select('vscode'), select('cline')], options);
+    const results = await applyOnboarding([select('gemini_cli'), select('vscode'), select('cline')], options);
     expect(results.map((result) => [result.agent, result.state])).toEqual([
       ['gemini_cli', 'connected'],
       ['vscode', 'connected'],
@@ -307,12 +308,44 @@ describe('mcp clients (T4.5)', () => {
     const silent = { home: g.home, dropHome: g.dropHome, serverSource: g.source, probe: g.full, run: () => undefined };
     const plan = previewOnboarding(silent).find((item) => item.agent === 'gemini_cli');
     expect(
-      applyOnboarding([{ agent: 'gemini_cli', fingerprint: plan?.fingerprint ?? '', action: 'connect' }], silent)[0]
-        ?.detail,
+      (
+        await applyOnboarding(
+          [{ agent: 'gemini_cli', fingerprint: plan?.fingerprint ?? '', action: 'connect' }],
+          silent,
+        )
+      )[0]?.detail,
     ).toBe('E_CLI_UNVERIFIED');
   });
 
-  it('offers a client-specific copyable configuration where no safe automatic connection exists', () => {
+  it('runs the official command without blocking the daemon, then verifies what it wrote', async () => {
+    const f = fixture();
+    const geminiFile = join(f.home, '.gemini', 'settings.json');
+    const options = { home: f.home, dropHome: f.dropHome, serverSource: f.source, probe: f.full };
+    const plan = previewOnboarding(options).find((item) => item.agent === 'gemini_cli');
+    expect(plan?.state).toBe('ready');
+    // A slow stand-in for `gemini mcp add`, found on the probe's PATH: it writes what the real one writes.
+    const settings = JSON.parse(readFileSync(geminiFile, 'utf8')) as { mcpServers: Record<string, unknown> };
+    settings.mcpServers.drop = serverEntry('gemini_cli', f.dropHome, join(f.dropHome, 'bin', 'drop-mcp.mjs'));
+    const connected = join(f.root, 'connected.json');
+    writeFileSync(connected, JSON.stringify(settings));
+    writeFileSync(join(f.bin, 'gemini'), `#!/bin/sh\nsleep 0.3\ncp '${connected}' '${geminiFile}'\n`);
+    let ticks = 0;
+    const ticker = setInterval(() => {
+      ticks += 1;
+    }, 10);
+    try {
+      const results = await applyOnboarding(
+        [{ agent: 'gemini_cli', fingerprint: plan?.fingerprint ?? '', action: 'connect' }],
+        options,
+      );
+      expect(results.map((result) => result.state)).toEqual(['connected']);
+    } finally {
+      clearInterval(ticker);
+    }
+    expect(ticks).toBeGreaterThan(5);
+  });
+
+  it('offers a client-specific copyable configuration where no safe automatic connection exists', async () => {
     const f = fixture();
     const before = Object.fromEntries(
       [
@@ -340,7 +373,7 @@ describe('mcp clients (T4.5)', () => {
     expect(manual('jetbrains')?.manual?.steps).toContain('Model Context Protocol (MCP)');
     expect(manual('roo_code')?.manual?.steps).toContain('archivé');
     // Even a forged selection never writes into these clients.
-    const results = applyOnboarding(
+    const results = await applyOnboarding(
       ['opencode', 'zed', 'goose', 'jetbrains'].map((agent) => ({
         agent: agent as 'opencode',
         fingerprint: manual(agent)?.fingerprint ?? '',

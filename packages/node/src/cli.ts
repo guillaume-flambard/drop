@@ -15,7 +15,7 @@ import { clientAllowed, loadPolicy } from './policy.ts';
 import { isAgentKind, shareDetected } from './share.ts';
 import { oauthConnect } from './oauth.ts';
 import { DropHome, NodeConfigSchema } from './home.ts';
-import { costLine } from './ui.ts';
+import { costLine, terminalText } from './ui.ts';
 
 const AgentKindSchema = z.enum(AGENTS);
 
@@ -33,8 +33,9 @@ const USAGE = `drop <command>
   mcp-tools --config <file.json> list the tools of the MCP server in an mcp.answer config, to choose which to share
   team create <name>             start a team; your invites then bring people into it
   team                           members, their agents, online or not, and what each one shares (daemon must run)
-  install <agent>|all [--link]   add drop to Claude Code, Codex, Cursor or Claude Desktop (agent: claude_code, codex,
-                                 cursor, claude_desktop); --link prints a Cursor install link instead
+  install <agent>|all [--link]   add drop to one of the 13 detected MCP clients (see detect); seven are connected
+                                 automatically, the others print the configuration to copy; --link prints a Cursor
+                                 install link instead
   uninstall <agent>|all          remove drop from an agent
   detect [--json]                the coding agents on this machine, drop in each, and their MCP servers
   share <agent>/<server> [--label <text>] [--tools a,b] [--id mcp.answer.<name>] [--approver <nodeId>]
@@ -189,7 +190,8 @@ switch (command) {
     break;
   }
   case 'peers':
-    for (const peer of home.peers()) process.stdout.write(`${peer.displayName}\t${peer.ownerKind}\t${peer.nodeId}\n`);
+    for (const peer of home.peers())
+      process.stdout.write(`${terminalText(peer.displayName)}\t${peer.ownerKind}\t${peer.nodeId}\n`);
     break;
   case 'publish': {
     const { values, positionals } = parseArgs({
@@ -247,12 +249,13 @@ switch (command) {
       }[];
     };
     if (!team) fail('not in a team: `drop team create <name>`, or `drop pair <code>` with an invite from a member');
-    process.stdout.write(`${team.name} · ${String(members.length)} members\n`);
+    // Names, agents and titles come from peers: printed only once stripped of terminal controls.
+    process.stdout.write(`${terminalText(team.name)} · ${String(members.length)} members\n`);
     for (const member of members) {
       process.stdout.write(
-        `${member.online ? '●' : '○'} ${member.displayName}${member.self ? ' (toi)' : ''}\t${member.agents.join(', ') || '-'}\n`,
+        `${member.online ? '●' : '○'} ${terminalText(member.displayName)}${member.self ? ' (toi)' : ''}\t${terminalText(member.agents.join(', ')) || '-'}\n`,
       );
-      for (const capability of member.capabilities) process.stdout.write(`    ${capability.title}\n`);
+      for (const capability of member.capabilities) process.stdout.write(`    ${terminalText(capability.title)}\n`);
     }
     break;
   }
@@ -287,10 +290,10 @@ switch (command) {
         process.stderr.write(`${AGENT_LABELS[agent]}: ${plan?.detail ?? 'E_AGENT_INVALID'}\n`);
         continue;
       }
-      const result = applyOnboarding(
+      const [result] = await applyOnboarding(
         [{ agent, fingerprint: plan.fingerprint, action: remove ? 'disconnect' : 'connect' }],
         { dropHome: home.root },
-      )[0];
+      );
       if (result?.state === 'connected' || result?.state === 'disconnected' || result?.state === 'already_connected')
         process.stdout.write(`${AGENT_LABELS[agent]}: ${result.detail}\n`);
       else process.stderr.write(`${AGENT_LABELS[agent]}: ${result?.detail ?? 'E_ONBOARDING_FAILED'}\n`);
@@ -404,15 +407,18 @@ switch (command) {
       }[];
     };
     if (pending.length === 0) process.stdout.write('nothing pending\n');
+    // Everything but the drop id comes from a peer: stripped of terminal controls and bidi overrides before printing.
     for (const item of pending) {
-      const cost = costLine(
-        item.card?.cost,
-        item.card?.paidBy === 'requester' ? item.requestedBy?.displayName : undefined,
-      );
+      const who = terminalText(item.requestedBy?.displayName ?? '');
+      const cost = costLine(item.card?.cost, item.card?.paidBy === 'requester' ? who : undefined);
+      const output = JSON.stringify(item.output ?? null, null, 2)
+        .split('\n')
+        .map(terminalText)
+        .join('\n');
       process.stdout.write(
         item.kind === 'approval'
-          ? `${item.dropId}  ${item.requestedBy?.displayName ?? ''}: ${item.card?.title ?? ''}\n  « ${item.inputPreview ?? ''} »\n  Pourquoi : ${item.purpose ?? ''}\n${cost ? `  ${cost}\n` : ''}`
-          : `${item.dropId}  à relire : ${item.title ?? ''}\n${JSON.stringify(item.output, null, 2)}\n`,
+          ? `${item.dropId}  ${who}: ${terminalText(item.card?.title ?? '')}\n  « ${terminalText(item.inputPreview ?? '')} »\n  Pourquoi : ${terminalText(item.purpose ?? '')}\n${cost ? `  ${cost}\n` : ''}`
+          : `${item.dropId}  à relire : ${terminalText(item.title ?? '')}\n${output}\n`,
       );
     }
     break;

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { createTeam, generateIdentity, sealEnvelope, type Identity } from '@drop/protocol';
+import { createTeam, DropError, generateIdentity, sealEnvelope, type Identity } from '@drop/protocol';
 import { RelayClient, startRelay } from '@drop/relay';
 import { NodeEngine } from '../src/engine.ts';
 import { fakeCapability, MemoryStore, until } from './helpers.ts';
@@ -112,5 +112,25 @@ describe('team (T2.9)', () => {
     expect(julie.engine.team()?.members.map((member) => member.displayName)).toEqual(['Julie', 'Guillaume']);
     expect(julie.engine.peers().some((peer) => peer.nodeId === stranger.nodeId)).toBe(false);
     expect(outsider.engine.team()).toBeUndefined();
+  });
+
+  it('refuses a second team with a stable code', async () => {
+    const engine = new NodeEngine({
+      identity: await generateIdentity('Guillaume'),
+      ownerKind: 'human',
+      store: new MemoryStore(),
+      capabilities: [],
+      transport: { send: () => Promise.resolve('offline') },
+    });
+    engine.createTeam('Atlas');
+    let refused: unknown;
+    try {
+      engine.createTeam('Borée');
+    } catch (error) {
+      refused = error;
+    }
+    expect(refused).toBeInstanceOf(DropError);
+    expect(refused).toMatchObject({ code: 'E_DENIED' });
+    expect(engine.team()?.team.name).toBe('Atlas');
   });
 });
