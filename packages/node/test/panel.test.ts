@@ -398,3 +398,26 @@ describe('menu bar panel (T4.5)', () => {
     expect(() => new Script(script ?? '')).not.toThrow();
   });
 });
+
+describe('Drop Human V2 panel (presentation, no protocol changes)', () => {
+  it('injects the human palette, preserves the system theme, and remains self-contained', () => {
+    const html = renderPanel();
+    expect(html).toContain('--ground: #fbfaf8');
+    expect(html).toContain('--accent: #5656a9');
+    expect(html).toContain('@media (prefers-color-scheme: dark)');
+    expect(html).not.toContain('fonts.googleapis.com');
+  });
+
+  it('describes only the outbound state that the Node actually exposes', () => {
+    const html = renderPanel();
+    expect(html).toContain('function outboundSentence(drop)');
+    expect(html).toContain('Tu attends ');
+    expect(html).toContain('La réponse est arrivée. Retrouve-la dans ton assistant.');
+    expect(html).toContain("el('details', { class: 'activity-item' })");
+    expect(html).toContain('expandedOutbounds[drop.dropId]');
+    // An expandable current status is honest; a historic timeline would require a new backend API.
+    expect(html).not.toContain('42 %');
+    const script = /<script>([\s\S]*?)<\/script>/.exec(html)?.[1];
+    expect(() => new Script(script ?? '')).not.toThrow();
+  });
+});
