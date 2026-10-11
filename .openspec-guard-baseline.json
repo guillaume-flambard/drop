@@ -1083,14 +1083,6 @@
       "file": "openspec/specs/requester-mcp/spec.md"
     },
     {
-      "id": "sg_7dadf2fb56532615",
-      "reason": "missing-selector",
-      "verdict": "fail",
-      "capability": "requester-mcp",
-      "scenario": "Description exposée",
-      "file": "openspec/specs/requester-mcp/spec.md"
-    },
-    {
       "id": "sg_8afc209d954ea427",
       "reason": "missing-selector",
       "verdict": "fail",
