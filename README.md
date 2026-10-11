@@ -21,11 +21,12 @@ Promesse (D52) : vos données restent sur votre machine ; seule une réponse que
 - Revues de sécurité des corrections anti-rejeu (T3.1b, T3.1c).
 - Recette de l'app sur un Mac neuf, et VoiceOver (T3.4).
 - Hygiène de configuration (T4.15).
-- Le chemin de connexion et le protocole de l'essai (T4.6a, T4.6b).
+- Une vraie app sur Windows (T3.7) et Linux (T3.8), tous les agents raccordés automatiquement (T4.22), un seul lien
+  pour rejoindre l'équipe en deux clics (T4.23) et un design impeccable (T4.24) (D84).
+- Le relais de l'essai sur le VPS, un banc maison à quatre postes, puis le protocole de l'essai (T4.6a, T4.6c, T4.6b).
 - La mesure du besoin, sans l'app (T0.7, D24), puis l'essai en binômes de collègues (T4.6, D83).
 - Si l'essai inclut le partage par modèle : qualifier un modèle (T3.2) et choisir outils, modèle et approbateur depuis le panneau (T4.16).
 - Avant le lancement : preuve privée avec Internet bloqué (T3.5), préparation de la publication (T3.6, T4.13).
-- Après l'essai : Windows (T3.7), Linux (T3.8).
 
 L'ordre et les statuts sont dans [docs/TASKS.md](docs/TASKS.md) ; le bilan daté dans [docs/AVANCEMENT.md](docs/AVANCEMENT.md).
 
