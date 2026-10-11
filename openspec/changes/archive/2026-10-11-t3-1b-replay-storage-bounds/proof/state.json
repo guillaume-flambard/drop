@@ -1,7 +1,7 @@
 {
   "change": "t3-1b-replay-storage-bounds",
-  "phase": "VERIFYING",
-  "status": "VERIFYING_FORMAL_REVIEW_PENDING",
+  "phase": "CLOSED",
+  "status": "DONE_ARCHIVED",
   "requirements": [
     "REQ-1 UUIDv7 for new drop requests",
     "REQ-2 bounded durable anti-replay across restart and clock rollback",
@@ -29,15 +29,19 @@
     "relay_reconnect": "passed",
     "relay_uncorrelated_rate_close": "passed_full_suite",
     "relay_decoy_id_rate_close": "passed_full_suite",
-    "replay_clock_temp_cleanup": "passed_full_suite"
+    "replay_clock_temp_cleanup": "passed_full_suite",
+    "replay_marker_rollback": "passed",
+    "replay_prune_transient_failure": "passed",
+    "replay_first_migration_transient_failure": "passed",
+    "replay_pre_floor_digest": "passed"
   },
   "workGraph": {
     "P0-1": "DONE",
     "P0-2": "DONE",
     "P0-3": "DONE",
     "P1-1": "DONE",
-    "P1-2": "VERIFYING",
-    "P1-3": "TODO",
+    "P1-2": "DONE",
+    "P1-3": "DONE",
     "P1-4": "DONE",
     "P1-5": "DONE",
     "P1-6": "DONE",
@@ -48,19 +52,21 @@
     "P1-11": "DONE",
     "P1-12": "DONE",
     "P1-13": "DONE",
-    "P1-14": "DONE"
+    "P1-14": "DONE",
+    "P1-15": "DONE",
+    "P1-16": "DONE"
   },
   "risks": [
     {
       "id": "R-1",
       "severity": "high",
-      "status": "mitigated_pending_final_review",
-      "description": "Replay and quota bypasses fixed, including ws pre-message errors and concurrent review-decision delivery; foreign lock age takeover and missing clock after migration fail closed, pending formal scoped review"
+      "status": "closed_after_final_review",
+      "description": "Replay and quota bypasses fixed; final review on the stabilized code found no P0/P1 and two P2 availability defects (transient I/O bricking admission), both fixed red-green"
     },
     {
       "id": "R-2",
       "severity": "high",
-      "status": "mitigated_in_T3.1c_pending_formal_closure",
+      "status": "closed_in_T3.1c",
       "description": "T3.1c bounds executing and outbound with tests; CSO finding 369ec22b77cbf3bf1de4e4b432896a67 has static mitigation evidence, but its partial recheck cannot formally close it before pilot T3.5"
     },
     {
@@ -77,14 +83,12 @@
     "fullTests": "passed_353_of_353_current_worktree",
     "openspecValidate": "passed",
     "guard": "passed_436_criteria_161_linked_baseline_plus0_minus0",
-    "review": "isolated_gstack_cycles_found_missing_marker_directory_partial_marker_loss_and_missing_version;_all_red_green_fixed;_three_edit_cycle_limit_reached_before_final_zero_edit_pass;_formal_review_pending",
-    "cso": "run_1791572557316-4a4997eecdb7bea6_finished_partial_snapshot_only_no_security_domains_assessed;_prior_HIGH_memory_finding_remains_open_in_T3.1c"
+    "review": "final_review_2026-10-11_two_independent_passes_on_main_d61a2d4;_P2_marker_rollback_and_P2_prune_or_first_migration_fixed_red_green;_no_P0_P1;_not_a_logged_gstack_review_invocation",
+    "cso": "diff_run_1791738131254-49036b6f9ddab1ad_finished_partial_no_supported_findings_in_diff_scope;_scanners_not_run;_recheck_of_369ec22b_impossible_MISSING_INPUT"
   },
   "remaining": [
-    "Formal gstack /review bound to final T3.1b diff b0d9cb5; final zero-edit pass remains after the three-cycle review limit",
-    "T3.1c mitigates HIGH memory availability finding; formal closure is still blocked by partial CSO coverage and blocks T3.5, not the T3.1b replay-store contract",
-    "T3.1d owns relay E_RATE retry and outbound quota after the isolated adversarial pass identified possible result loss",
-    "CSO completeness remains partial: Semgrep Docker socket unavailable and snapshot exclusions",
-    "Archive and mark T3.1b done only after required review validates its own contract"
+    "T3.1d owns relay E_RATE retry and outbound quota",
+    "T3.1e owns per-peer marker quota, admission cost, crash recovery between marker and digest, Windows rename durability",
+    "Relay client ack timeout added to the index as a follow-up (T3.1f)"
   ]
 }

@@ -1,7 +1,7 @@
 {
   "change": "t3-1c-replay-store-hardening",
-  "phase": "VERIFY",
-  "status": "VERIFYING",
+  "phase": "CLOSED",
+  "status": "DONE_ARCHIVED",
   "requirements": [
     "REQ-1 bounded executor memory",
     "REQ-2 bounded requester memory",
@@ -35,7 +35,9 @@
     "funding_concurrent_reservation": "passed",
     "funding_failed_creation_release": "passed",
     "outbox_concurrent_flush": "passed",
-    "outbox_once_per_flush": "passed"
+    "outbox_once_per_flush": "passed",
+    "executor_concurrent_capacity": "passed",
+    "fact_rate_window_bounded": "passed"
   },
   "workGraph": {
     "1.1": "DONE",
@@ -51,19 +53,19 @@
     "3.7": "DONE",
     "4.1": "DONE",
     "4.2": "DONE",
-    "4.3": "TODO"
+    "4.3": "DONE"
   },
   "risks": [
     {
       "id": "R-1",
       "severity": "high",
-      "status": "mitigated_pending_formal_review",
+      "status": "closed_by_review_and_tests_cso_partial",
       "description": "Previously unbounded executor/requester memory under repeated valid requests; bounded in code and tests, awaiting gstack review and CSO"
     },
     {
       "id": "R-2",
       "severity": "high",
-      "status": "mitigated_pending_formal_review",
+      "status": "closed_by_review_and_tests_cso_partial",
       "description": "Previously unbounded inbox/outbox/ReplayCache and relay refusal stranding outbound slots; bounded in code and tests, awaiting gstack review and CSO"
     },
     {
@@ -87,14 +89,12 @@
     "openspecValidate": "passed_strict_change_and_16_specs",
     "guard": "passed_138_linked_258_historical_frozen_baseline_plus0_minus0",
     "independentReview": "codex_two_axis_final_rereview_found_no_P0_or_P1_in_examined_diff;_P2_snapshot_retention_corrected_afterward",
-    "review": "pending_gstack_quota;_blocked_observation_52f0c1bd-0a68-4df0-b7db-5eea72d2f345",
-    "cso": "fresh_full_T3.1c_diff_run_1791557865736-082622a35df52318_finished_partial_zero_supported_findings;_fresh_HIGH_recheck_1791557940520-9ded317c7f1aa4df_finished_partial_closure_unknown"
+    "review": "closing_review_2026-10-11_two_independent_passes;_P2_concurrent_admission_overshoot_and_P3_fact_rate_window_fixed_red_green;_not_a_logged_gstack_review_invocation",
+    "cso": "recheck_369ec22b_refused_MISSING_INPUT;_fresh_diff_run_1791738131254-49036b6f9ddab1ad_finished_partial_no_supported_findings;_scanners_not_run;_per_peer_caps_medium_follow_up_T3.1e"
   },
   "remaining": [
-    "Final snapshot retention adjustment passed the full 322-test suite; targeted independent review found no remaining P0/P1 in its examined scope",
-    "Run formal gstack /review after Claude quota reset at 18:20 Europe/Paris; resolve any P0/P1",
-    "Fresh full-diff CSO and original HIGH recheck are partial: static mitigation evidence exists, but helper disallows closure from partial coverage; Semgrep Docker socket and snapshot exclusions limit assurance",
-    "Do not archive or mark T3.1c done before formal review and no open high risk",
-    "Carry byte budget, ReplayCache operation cost and durable outcome delivery into T3.1e before pilot"
+    "T3.1e: byte budget, ReplayCache O(N), per-peer share of global caps, durable outcome delivery",
+    "T3.1d: durable pending revocations, E_RATE retry",
+    "Index follow-up: relay client ack timeout"
   ]
 }

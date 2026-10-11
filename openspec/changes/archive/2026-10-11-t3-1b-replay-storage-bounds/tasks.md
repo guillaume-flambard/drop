@@ -27,7 +27,7 @@
 
 - [x] 4.1 Exécuter `pnpm -r lint`, `pnpm -r typecheck`, `pnpm -r test` et `openspec validate --strict` ; conserver les sorties dans la preuve.
 - [x] 4.2 Exécuter openspec-guard avec sélecteurs, puis mettre à jour la baseline seulement si son diff retire des entrées.
-- [ ] 4.3 Terminer /review gstack et consigner la limite du recheck /cso ; corriger tout constat P0/P1 confirmé.
+- [x] 4.3 Terminer la revue finale et consigner la limite du recheck /cso ; corriger tout constat P0/P1 confirmé (aucun ; deux P2 corrigés, voir la preuve).
 
 ## Workflow follow-up
 

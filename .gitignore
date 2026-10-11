@@ -23,6 +23,10 @@ apps/desktop/src-tauri/icons/Square*.png
 apps/desktop/src-tauri/icons/StoreLogo.png
 apps/desktop/src-tauri/icons/64x64.png
 
+# Pre-rename path (apps/mac -> apps/desktop, 175311b): a tauri run from the old
+# directory recreates this build output. Never a source, never committed.
+apps/mac/
+
 # Rust crates (drop-iroh, T4.2b): cargo build output
 crates/*/target/
 

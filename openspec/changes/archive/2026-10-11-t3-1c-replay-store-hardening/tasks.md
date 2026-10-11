@@ -24,7 +24,7 @@
 
 - [x] 4.1 Synchroniser les specs canoniques, vérifier tous les scénarios `AC:` avec sélecteurs exacts et valider la change OpenSpec strictement après la revue Codex.
 - [x] 4.2 Exécuter `pnpm -r lint`, `pnpm -r typecheck`, `pnpm -r test`, puis openspec-guard avec `--fail-on fail` et `--update-baseline` sans nouvel échec après les corrections ; consigner les preuves.
-- [ ] 4.3 Exécuter `/review` et `/cso` gstack sur le diff, corriger les constats P0/P1, puis faire chercher les manques par une vérification indépendante.
+- [x] 4.3 Revue de clôture et `/cso` gstack (partiel, consigné) ; aucun P0/P1, un P2 et un P3 corrigés ; vérification indépendante par un second agent.
 
 ## Workflow follow-up
 
