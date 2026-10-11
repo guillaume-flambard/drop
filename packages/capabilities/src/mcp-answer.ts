@@ -238,6 +238,8 @@ export function toolResultText(result: unknown): string {
 
 export interface McpAnswerDeps {
   network?: PrivateNetwork;
+  /** False for a model endpoint the organization policy does not allow (T4.10). */
+  allowModel?: (baseUrl: string) => boolean;
   provider?: (config: ProviderConfig) => ChatProvider;
   connect?: (server: McpServerConfig) => Promise<McpClient>;
 }
@@ -282,6 +284,9 @@ export function createMcpAnswer(deps: McpAnswerDeps = {}): CapabilityImpl<McpAns
     async execute(input: McpAnswerInput, ctx: RunContext): Promise<McpAnswerOutput> {
       const config = McpAnswerConfigSchema.parse(ctx.config);
       const run = providerFor(config.provider, config.maxUsd, ctx.funding);
+      // An organization policy may limit where a model is reached (T4.10, D81): refused before any call.
+      if (deps.allowModel && !deps.allowModel(run.config.baseUrl))
+        throw new DropError('E_DENIED', 'E_DENIED model provider not allowed by policy');
       const provider = deps.provider
         ? deps.provider(run.config)
         : openAiCompatible(run.config, run.env, deps.network ? privateFetch(deps.network, run.config.baseUrl) : fetch);

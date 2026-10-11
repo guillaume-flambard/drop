@@ -191,6 +191,8 @@ async function runTool(name: string, rawArguments: string, workdir: string, file
 
 export interface RepoAnswerDeps {
   network?: PrivateNetwork;
+  /** False for a model endpoint the organization policy does not allow (T4.10). */
+  allowModel?: (baseUrl: string) => boolean;
   provider?: (config: ProviderConfig) => ChatProvider;
 }
 
@@ -224,6 +226,9 @@ export function createRepoAnswer(deps: RepoAnswerDeps = {}): CapabilityImpl<Repo
       const config = RepoAnswerConfigSchema.parse(ctx.config);
       const files = await takeSnapshot(config, ctx.workdir);
       const run = providerFor(config.provider, config.maxUsd, ctx.funding);
+      // An organization policy may limit where a model is reached (T4.10, D81): refused before any call.
+      if (deps.allowModel && !deps.allowModel(run.config.baseUrl))
+        throw new DropError('E_DENIED', 'E_DENIED model provider not allowed by policy');
       const provider = deps.provider
         ? deps.provider(run.config)
         : openAiCompatible(run.config, run.env, deps.network ? privateFetch(deps.network, run.config.baseUrl) : fetch);

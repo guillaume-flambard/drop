@@ -2,12 +2,14 @@ import {
   capabilities,
   connectMcp,
   createMcpAnswer,
+  createRepoAnswer,
   findAgentServer,
   mcpAnswer,
   privateCapabilities,
+  repoAnswer,
   type ConnectOptions,
 } from '@drop/capabilities';
-import { DropError, NodeIdSchema } from '@drop/protocol';
+import { DropError, NodeIdSchema, policyExpired } from '@drop/protocol';
 import { RelayClient } from '@drop/relay';
 import { NodeEngine, type InboxItem } from './engine.ts';
 import { detectAgents } from './detect.ts';
@@ -21,6 +23,15 @@ import type { DropHome } from './home.ts';
 import { notify } from './notify.ts';
 import { LanService } from './lan.ts';
 import { mdnsDiscovery } from './lan-mdns.ts';
+import {
+  assertPolicy,
+  clientAllowed,
+  gatewayAllowed,
+  irohRelayPermitted,
+  loadPolicy,
+  providerAllowed,
+  relayAllowed,
+} from './policy.ts';
 import {
   IrohService,
   assertInternetAllowed,
@@ -57,6 +68,13 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
   const config = home.config();
   const token = home.localToken();
   const log = options.log ?? ((line: string) => process.stderr.write(`${line}\n`));
+  // The organization policy, deployed by IT (T4.10, D81): one that does not verify stops the daemon here.
+  const policy = await loadPolicy();
+  if (policy) assertPolicy(relayAllowed(policy.policy, config.relayUrl), 'relay not allowed by policy');
+  // Requester funding mints keys at a model provider: the same limit as any model call.
+  if (policy && config.funding)
+    assertPolicy(providerAllowed(policy.policy, config.funding.baseUrl), 'funding provider not allowed by policy');
+  const guard = policy ? { allowModel: (baseUrl: string) => providerAllowed(policy.policy, baseUrl) } : {};
   // The engine is built before the relay client that delivers to it; the transport reads the client lazily.
   const link: { relay?: RelayClient; lan?: LanService; iroh?: IrohService; apiPort?: number } = {};
   // An unreadable local-network key turns the local mode off, logged, rather than inventing a new identity silently.
@@ -66,7 +84,11 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
   } catch {
     log(JSON.stringify({ at: new Date().toISOString(), event: 'lan_key_unreadable', code: 'E_LAN_KEY' }));
   }
-  const lanEnabled = lanKey !== undefined && config.lan && process.env.DROP_LAN !== 'off';
+  const lanEnabled =
+    lanKey !== undefined &&
+    config.lan &&
+    process.env.DROP_LAN !== 'off' &&
+    policy?.policy.requireInternalRelay !== true;
   // OAuth sign-ins to remote MCP servers (T2.17): the browser comes back to this node's API, on its bound port.
   const redirectUrl = () => oauthRedirect(link.apiPort ?? config.apiPort);
   const store = oauthStore(home);
@@ -81,12 +103,20 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
     // sign-ins to remote servers (T2.17).
     capabilities:
       config.profile === 'private' && config.network
-        ? privateCapabilities(config.network)
+        ? privateCapabilities(config.network, guard)
         : capabilities.map((impl) =>
             impl === mcpAnswer
-              ? createMcpAnswer({ connect: (server) => connectMcp(server, process.env, oauth) })
-              : impl,
+              ? createMcpAnswer({ connect: (server) => connectMcp(server, process.env, oauth), ...guard })
+              : impl === repoAnswer && policy
+                ? createRepoAnswer(guard)
+                : impl,
           ),
+    ...(policy
+      ? {
+          gatewayAllowed: (gateway: string) => gatewayAllowed(policy.policy, gateway),
+          irohRelayAllowed: (relay: string) => irohRelayPermitted(policy.policy, relay),
+        }
+      : {}),
     // A direct local session first (T4.2), then iroh (T4.2b), then the configured relay; otherwise the outbox.
     transport: {
       send: (envelope) => sendInOrder(envelope, [link.lan, link.iroh], link.relay),
@@ -120,6 +150,8 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
     identity,
     url: config.relayUrl,
     admission: () => home.pendingAdmission(),
+    // The internal relay checks this node runs its organization's policy (T4.10).
+    ...(policy ? { policy: () => policy.fingerprint } : {}),
     onEnvelope: (envelope) => {
       void engine.handleEnvelope(envelope).catch(() => {
         log('E_RUNNER envelope handling failed');
@@ -168,6 +200,14 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
   // The private profile never reaches a third party (D34): checked at start too, for a file edited by hand.
   const internetAllowed = (settings: InternetSettings): void => {
     assertInternetAllowed(settings, config);
+    if (!policy) return;
+    assertPolicy(settings.mode === 'off' || !policyExpired(policy.policy, Date.now()), 'policy expired');
+    assertPolicy(!policy.policy.requireInternalRelay || settings.mode === 'off', 'internet mode disabled by policy');
+    assertPolicy(settings.mode !== 'n0', 'third-party relays disabled by policy');
+    assertPolicy(
+      settings.mode !== 'relay' || irohRelayPermitted(policy.policy, settings.relay),
+      'iroh relay not allowed by policy',
+    );
   };
   let internet: InternetSettings = { mode: 'off' };
   try {
@@ -235,6 +275,15 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
         relayConnected: relay.connected,
         lan: lan.state(),
         internet: iroh.state(),
+        ...(policy
+          ? {
+              policy: {
+                policyId: policy.policy.policyId,
+                version: policy.policy.version,
+                expiresAt: policy.policy.expiresAt,
+              },
+            }
+          : {}),
       }),
       internet: () => ({ settings: internet, available: irohBinary() !== undefined, ...iroh.status() }),
       // One change at a time, and never during shutdown: two saves at once must not leave a second program running.
@@ -282,15 +331,26 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
         throw new Error('E_PREVIEW_REQUIRED');
       },
       onboardingPreview: () => ({
-        agents: previewOnboarding({ dropHome: home.root }),
-        manual: manualOnboarding({ dropHome: home.root }),
+        // Clients the policy does not allow are never offered (T4.10).
+        agents: previewOnboarding({ dropHome: home.root }).filter((plan) => clientAllowed(policy?.policy, plan.agent)),
+        ...(clientAllowed(policy?.policy, 'other') ? { manual: manualOnboarding({ dropHome: home.root }) } : {}),
       }),
-      onboardingApply: (selections) => applyOnboarding(selections, { dropHome: home.root }),
+      onboardingApply: (selections) => {
+        // Disconnecting stays possible: a client connected before the policy can always be removed.
+        assertPolicy(
+          selections.every(
+            (selection) => selection.action !== 'connect' || clientAllowed(policy?.policy, selection.agent),
+          ),
+          'client not allowed by policy',
+        );
+        return applyOnboarding(selections, { dropHome: home.root });
+      },
       projects: () => listProjects(home.root),
       addProject: (dir) => addProject(home.root, dir),
       removeProject: (dir) => removeProject(home.root, dir),
       createTeam: (name) => engine.createTeam(name),
       link: async (gateway, request) => {
+        assertPolicy(gatewayAllowed(policy?.policy, gateway), 'gateway not allowed by policy');
         if (config.profile === 'private') throw new DropError('E_DENIED', 'E_DENIED cloud gateway disabled');
         await engine.linkAssistant(NodeIdSchema.parse(gateway), request);
         return { ok: true, trusted: config.gateways.includes(gateway) };
@@ -330,7 +390,17 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
     });
   }
 
+  let policyLapsed = false;
   const ticker = setInterval(() => {
+    // A policy that expires while the node runs closes every path to the team; only the local API stays (T4.10).
+    if (policy && !policyLapsed && policyExpired(policy.policy, Date.now())) {
+      policyLapsed = true;
+      log(JSON.stringify({ at: new Date().toISOString(), event: 'policy_expired', code: 'E_POLICY' }));
+      relay.close();
+      void Promise.all([lan.stop(), iroh.stop()]).catch(() => {
+        log('E_RUNNER direct paths did not stop');
+      });
+    }
     void engine.tick().catch(() => {
       log('E_RUNNER tick failed');
     });
