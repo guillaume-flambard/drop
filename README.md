@@ -10,7 +10,7 @@ Promesse (D52) : vos données restent sur votre machine ; seule une réponse que
 
 - Le profil privé, créé par `drop init` et par l'app : relais interne, destinations réseau explicites, aucun repli cloud. Le propriétaire paie son propre modèle et refuse les clés reçues (T3.1).
 - Trois chemins de connexion : réseau local (mDNS), Internet par iroh, relais interne (T4.2, T4.2b). Aucun relais n'est imposé ; entre deux réseaux, iroh demande un relais choisi par l'équipe.
-- Treize clients MCP détectés ; sept raccordés automatiquement (Claude Code, Claude Desktop, Cursor, Codex, Gemini CLI, VS Code, Cline), six par une configuration à copier (T3.3, T4.5).
+- Treize clients MCP détectés et raccordés automatiquement sur macOS, Windows et Linux, commentaires et mise en forme de leurs fichiers gardés ; la configuration à copier ne reste qu'en secours, expliquée (T3.3, T4.5, T4.22).
 - Une carte de consentement conforme, la relecture champ par champ et l'invitation confirmée (T4.14).
 - La réponse à la main du propriétaire (T4.3) et les faits publiés, servis sans modèle (T4.4).
 - Le pack entreprise : politique signée appliquée au poste et au relais, image Docker et chart Helm du relais (T4.10).
