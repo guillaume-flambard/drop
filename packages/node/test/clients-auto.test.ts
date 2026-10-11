@@ -535,4 +535,15 @@ describe('all thirteen clients connected automatically (T4.22)', () => {
     expect(result?.state).toBe('error');
     expect(existsSync(join(m.dropHome, 'bin', 'drop-mcp.mjs'))).toBe(false);
   });
+
+  it('reports a drop entry in a Claude Code project as a conflict, never as something to paste', () => {
+    const m = machine('linux');
+    put(
+      join(m.home, '.claude.json'),
+      JSON.stringify({ projects: { '/work': { mcpServers: { drop: { command: 'x' } } } } }),
+    );
+    const plan = previewOnboarding(m.options).find((item) => item.agent === 'claude_code');
+    expect(plan).toMatchObject({ state: 'conflict', detail: 'E_SCOPE_CONFLICT', action: 'none' });
+    expect(plan?.manual).toBeUndefined();
+  });
 });
