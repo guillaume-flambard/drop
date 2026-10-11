@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { canonical } from './canonical.ts';
 import { sha256Hex } from './encoding.ts';
+import { MAX_CLOCK_SKEW_MS } from './envelope.ts';
 import { NodeIdSchema, signDetached, verifyDetached, type Identity } from './identity.ts';
 
 /**
@@ -75,7 +76,7 @@ export function policyFingerprint(signed: SignedPolicy): string {
   return sha256Hex({ policy: signed.policy, sig: signed.sig });
 }
 
-/** Expired, or issued more than 5 minutes ahead of this clock. */
+/** Expired, or issued further ahead of this clock than the protocol's clock skew (5 minutes). */
 export function policyExpired(policy: ParsedPolicy, now: number): boolean {
-  return Date.parse(policy.expiresAt) <= now || Date.parse(policy.issuedAt) > now + 5 * 60_000;
+  return Date.parse(policy.expiresAt) <= now || Date.parse(policy.issuedAt) > now + MAX_CLOCK_SKEW_MS;
 }

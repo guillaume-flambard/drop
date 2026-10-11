@@ -38,7 +38,3 @@ const TRANSITIONS: Record<DropState, readonly DropState[]> = {
 export function canTransition(from: DropState, to: DropState): boolean {
   return TRANSITIONS[from].includes(to);
 }
-
-export function isTerminal(state: DropState): boolean {
-  return TRANSITIONS[state].length === 0;
-}

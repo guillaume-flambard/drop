@@ -1,12 +1,17 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import WebSocket, { WebSocketServer } from 'ws';
-import { mkdtempSync, readFileSync, statSync, writeFileSync, rmSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { chmodSync, existsSync, mkdtempSync, readFileSync, statSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   createAdmission,
+  envelopeSize,
   generateIdentity,
+  MAX_CLOCK_SKEW_MS,
   MAX_ENVELOPE_BYTES,
+  MAX_TTL_MS,
   sealEnvelope,
   signDetached,
   verifyDetached,
@@ -24,6 +29,9 @@ import {
   type RelayHandle,
   type RelayLogEntry,
 } from '../src/index.ts';
+import { writePrivate } from '../src/private-file.ts';
+
+const CLI = fileURLToPath(new URL('../src/cli.ts', import.meta.url));
 
 const cleanups: (() => Promise<void> | void)[] = [];
 afterEach(async () => {
@@ -38,6 +46,7 @@ async function relayFor(
     revokedPath?: string;
     maxAdmissionsPerSponsorPerDay?: number;
     maxAdmissionsPerDay?: number;
+    maxQueueBytes?: number;
   } = {},
   options: { now?: () => number; pingIntervalMs?: number } = {},
 ) {
@@ -814,5 +823,137 @@ describe('relay contract', () => {
     const relay = await startRelay(readRelayConfig(configPath), { logger: () => undefined });
     cleanups.push(() => relay.close());
     await client(relay, alice).instance.waitReady();
+  });
+});
+
+describe('relay hardening', () => {
+  it('resolves revokedPath next to the config file, where drop-relay revoke writes it from any folder', async () => {
+    const alice = await generateIdentity('Alice');
+    const dir = mkdtempSync(join(tmpdir(), 'relay-revoked-path-'));
+    const elsewhere = mkdtempSync(join(tmpdir(), 'relay-elsewhere-'));
+    cleanups.push(() => {
+      rmSync(dir, { recursive: true, force: true });
+      rmSync(elsewhere, { recursive: true, force: true });
+    });
+    const configPath = join(dir, 'relay.config.json');
+    writeFileSync(configPath, JSON.stringify({ port: 0, allowedNodeIds: [], revokedPath: 'revoked.json' }));
+    expect(readRelayConfig(configPath).revokedPath).toBe(join(dir, 'revoked.json'));
+    execFileSync(process.execPath, [CLI, 'revoke', alice.nodeId, `--config=${configPath}`], {
+      cwd: elsewhere,
+      stdio: 'pipe',
+    });
+    expect(readFileSync(join(dir, 'revoked.json'), 'utf8')).toContain(alice.nodeId);
+    expect(existsSync(join(elsewhere, 'revoked.json'))).toBe(false);
+  });
+
+  it('refuses an envelope for a node it does not admit, or one that would outlive the maximum TTL', async () => {
+    const alice = await generateIdentity('Alice');
+    const bob = await generateIdentity('Bob');
+    const stranger = await generateIdentity('Stranger');
+    const { relay, logs } = await relayFor([alice, bob]);
+    const a = client(relay, alice);
+    await a.instance.waitReady();
+    const seal = () => sealEnvelope(alice, bob.nodeId, { type: 'catalog_request' });
+    expect(await a.instance.send(await sealEnvelope(alice, stranger.nodeId, { type: 'catalog_request' }))).toBe(
+      'E_SCHEMA',
+    );
+    const tooLong = await seal();
+    expect(await a.instance.send({ ...tooLong, exp: tooLong.ts + MAX_TTL_MS + 1 })).toBe('E_SCHEMA');
+    expect(await a.instance.send(await seal())).toBe('queued');
+    const outcomes = logs.filter((entry) => entry.event === 'envelope').map((entry) => entry.outcome);
+    expect(outcomes).toEqual(['unknown_recipient', 'ttl_too_long', 'queued']);
+  });
+
+  it('bounds the deferred queue across all recipients and sweeps expired envelopes before their owner returns', async () => {
+    const [alice, bob, carol] = await Promise.all(['Alice', 'Bob', 'Carol'].map((name) => generateIdentity(name)));
+    if (!alice || !bob || !carol) throw new Error('identities');
+    const clock = { now: Date.now() };
+    const sample = await sealEnvelope(alice, bob.nodeId, { type: 'catalog_request' });
+    const { relay } = await relayFor(
+      [alice, bob, carol],
+      { maxQueueBytes: Math.floor(envelopeSize(sample) * 2.5), rateLimitPerMinute: 100 },
+      { now: () => clock.now, pingIntervalMs: 20 },
+    );
+    const a = client(relay, alice);
+    await a.instance.waitReady();
+    const send = async (to: Identity, now = clock.now) =>
+      a.instance.send(await sealEnvelope(alice, to.nodeId, { type: 'catalog_request' }, { now }));
+    expect(await send(bob)).toBe('queued');
+    // A sender's clock a year ahead: within the TTL by its own `ts`, yet held no longer than any other envelope.
+    expect(await send(carol, clock.now + 365 * 86_400_000)).toBe('queued');
+    expect(await send(carol)).toBe('E_QUEUE_FULL');
+    // Neither Bob nor Carol comes back: the pinger alone frees the room their envelopes held.
+    clock.now += MAX_TTL_MS + MAX_CLOCK_SKEW_MS + 1;
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    expect(await send(bob)).toBe('queued');
+    expect(await send(carol)).toBe('queued');
+  });
+
+  it('ignores a second auth frame while the first is checked, and never closes its own socket as replaced', async () => {
+    const alice = await generateIdentity('Alice');
+    const { relay, logs } = await relayFor([alice]);
+    const socket = new WebSocket(relay.url);
+    cleanups.push(() => {
+      socket.terminate();
+    });
+    const frames: string[] = [];
+    let closeCode: number | undefined;
+    socket.on('close', (code) => {
+      closeCode = code;
+    });
+    socket.on('message', (data) => {
+      const frame = JSON.parse(Buffer.isBuffer(data) ? data.toString('utf8') : '{}') as {
+        type: string;
+        challenge?: string;
+      };
+      frames.push(frame.type);
+      if (frame.type === 'challenge')
+        void signDetached(alice, frame.challenge ?? '').then(
+          (sig) => {
+            const auth = JSON.stringify({ type: 'auth', nodeId: alice.nodeId, sig });
+            socket.send(auth);
+            socket.send(auth);
+          },
+          () => {
+            socket.terminate();
+          },
+        );
+    });
+    await until(() => frames.includes('ready'));
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(closeCode).toBeUndefined();
+    expect(frames.filter((type) => type === 'ready')).toHaveLength(1);
+    expect(logs.filter((entry) => entry.event === 'auth' && entry.outcome === 'ok')).toHaveLength(1);
+  });
+
+  it('keeps relay files at 0600 even when they already existed with a wider mode', async () => {
+    const julie = await generateIdentity('Julie');
+    const natha = await generateIdentity('Natha');
+    const dir = mkdtempSync(join(tmpdir(), 'relay-private-'));
+    cleanups.push(() => {
+      rmSync(dir, { recursive: true, force: true });
+    });
+    const plain = join(dir, 'plain.txt');
+    writeFileSync(plain, 'old', { mode: 0o644 });
+    chmodSync(plain, 0o644);
+    writePrivate(plain, 'new');
+    expect(readFileSync(plain, 'utf8')).toBe('new');
+    expect(statSync(plain).mode & 0o777).toBe(0o600);
+
+    const configPath = join(dir, 'relay.config.json');
+    writeFileSync(configPath, JSON.stringify({ port: 0, allowedNodeIds: [] }), { mode: 0o644 });
+    chmodSync(configPath, 0o644);
+    allowNode(configPath, julie.nodeId);
+    expect(statSync(configPath).mode & 0o777).toBe(0o600);
+    chmodSync(configPath, 0o644);
+    revokeInConfig(configPath, natha.nodeId);
+    expect(statSync(configPath).mode & 0o777).toBe(0o600);
+
+    const admittedPath = join(dir, 'admitted.json');
+    writeFileSync(admittedPath, JSON.stringify({ admitted: [], spentNonces: [] }), { mode: 0o644 });
+    chmodSync(admittedPath, 0o644);
+    const { relay } = await relayFor([julie], { admittedPath });
+    await client(relay, natha, await createAdmission(julie)).instance.waitReady();
+    expect(statSync(admittedPath).mode & 0o777).toBe(0o600);
   });
 });
