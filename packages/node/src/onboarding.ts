@@ -376,7 +376,8 @@ function copyServer(options: OnboardingOptions): void {
   try {
     copyFileSync(source, temp);
     chmodSync(temp, 0o700);
-    const fd = openSync(temp, 'r');
+    // Writable: Windows refuses to flush a file opened read-only (EPERM), which failed every connection there.
+    const fd = openSync(temp, 'r+');
     try {
       fsyncSync(fd);
     } finally {
