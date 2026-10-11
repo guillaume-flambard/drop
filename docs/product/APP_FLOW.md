@@ -12,7 +12,7 @@ Chaque affirmation porte un statut.
 - **Visé** : cible adoptée, livrée par la tâche citée (T3.\* ou T4.\*).
 - **Hypothèse** : supposition non vérifiée, avec le critère qui la confirme ou l'invalide.
 
-**Hypothèse** : aucun parcours n'a encore été validé avec de vrais utilisateurs. Julie et Natha sont des scénarios, pas des clients (`PRODUCT.md`, section « Evidence on Hand »). Critère : l'essai avec deux amis (T4.6) observe chaque parcours principal de bout en bout.
+**Hypothèse** : aucun parcours n'a encore été validé avec de vrais utilisateurs. Julie et Natha sont des scénarios, pas des clients (`PRODUCT.md`, section « Evidence on Hand »). Critère : l'essai en binômes de collègues (T4.6, D83) observe chaque parcours principal de bout en bout.
 
 **Existant** : « drop » reste un nom de code (D57).
 

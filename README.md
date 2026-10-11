@@ -22,7 +22,7 @@ Promesse (D52) : vos données restent sur votre machine ; seule une réponse que
 - Recette de l'app sur un Mac neuf, et VoiceOver (T3.4).
 - Hygiène de configuration (T4.15).
 - Le chemin de connexion et le protocole de l'essai (T4.6a, T4.6b).
-- L'essai avec deux amis et la mesure du besoin (T4.6, D24).
+- La mesure du besoin, sans l'app (T0.7, D24), puis l'essai en binômes de collègues (T4.6, D83).
 - Si l'essai inclut le partage par modèle : qualifier un modèle (T3.2) et choisir outils, modèle et approbateur depuis le panneau (T4.16).
 - Avant le lancement : preuve privée avec Internet bloqué (T3.5), préparation de la publication (T3.6, T4.13).
 - Après l'essai : Windows (T3.7), Linux (T3.8).

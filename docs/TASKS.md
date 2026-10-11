@@ -11,41 +11,48 @@ tableaux « À faire », dans l'ordre de lecture, dont les dépendances sont `do
 ## En bref (11 octobre 2026)
 
 Le socle est construit : protocole signé et chiffré, relais, consentement, profil privé, raccordement des agents,
-réseau local, Internet par iroh, réponse à la main, faits publiés, app Mac notarisée. Lint, types et 512 tests passent
-sur `main`. Aucun utilisateur réel ne l'a encore essayé : c'est le prochain cap (D57, D58).
+réseau local, Internet par iroh, réponse à la main, faits publiés, app Mac notarisée. Lint, types et 556 tests passent
+sur `main`. Aucun utilisateur réel ne l'a encore essayé, et le besoin n'est pas encore mesuré : sur 111 événements
+relevés chez Guillaume, 107 ne sont pas classés et aucun n'est un blocage (D24).
 
-Le prochain jalon est **l'essai avec deux amis (T4.6)**. Il manque, dans l'ordre :
+**Tout de suite, sans attendre l'app : mesurer le besoin (T0.7, D83).** Seul blocked-observer est à installer.
+
+Le jalon suivant est **l'essai en binômes de collègues (T4.6)**. Il manque, dans l'ordre :
 
 1. Fermer les revues de sécurité en attente (T3.1b, T3.1c).
 2. Finir l'app Mac : recette sur un Mac neuf et VoiceOver (T3.4).
 3. Hygiène de configuration (T4.15).
-4. Choisir et installer le chemin de connexion entre les deux amis (T4.6a).
+4. Choisir et installer le chemin de connexion entre les binômes (T4.6a).
 5. Écrire le protocole de l'essai (T4.6b).
 
 **Ce qui attend Guillaume** (personne d'autre ne peut le faire) :
 
+- recruter 3 à 5 développeurs pour la mesure D24, conduire les entretiens et classer tes 107 événements en
+  attente (T0.7) ;
 - installer l'app sur un Mac neuf et tester VoiceOver (T3.4) ;
 - choisir le relais de l'essai (T4.6a) et dire si l'essai inclut le partage par modèle (T3.2 et T4.16) ou seulement
   les réponses à la main et les faits publiés ;
-- recruter les deux amis et noter leur Mac (les builds sont Apple silicon seulement) ;
+- recruter au moins deux binômes de collègues qui travaillent vraiment ensemble, et noter leur Mac (les builds
+  sont Apple silicon seulement) ;
 - accepter ou refuser les 22 changes archivées en `READY_FOR_MANUAL_ACCEPTANCE` ;
 - décider du sort de la passerelle grand public (`packages/gateway`, T2.13) : option gardée ou sortie du dépôt ;
 - plus tard : le nom du produit et chaque accord de publication (T3.6, T4.13).
 
-## À faire : avant l'essai avec deux amis
+## À faire : avant l'essai en binômes de collègues
 
 | ID | Tâche (périmètre) | Capacités OpenSpec | Change | Dépend de | Statut |
 | -- | ----------------- | ------------------ | ------ | --------- | ------ |
+| T0.7 | Mesurer le besoin D24 sans attendre l'app : 3 à 5 développeurs qui codent avec des agents installent seulement blocked-observer, 10 jours actifs chacun, blocages classés en entretien ([codebook](CLASSIFICATION.md)), y compris les événements de Guillaume en attente ; verdict par `blocked-observer report --merge`. L'agent prépare le kit (guide d'installation relu, fiche d'entretien, consignes d'export) ; Guillaume recrute et conduit les entretiens | `blocked-observer` | `t0-7-d24-measure` | T0.6 | todo |
 | T4.19 | Audit du 11 octobre 2026 : branches ramenées sur main, revue de tout le code avec les règles d'open-code-review (Alibaba), corrections des défauts trouvés avec tests, docs et site remis en vérité, index réordonné selon l'essai (D82) | `node`, `relay`, `protocol`, `capabilities`, `requester-mcp`, `a2a`, `site` | `t4-19-audit-cleanup` (archivée, PR #26) | Demande humaine explicite | done |
 | T3.1b | Borner la persistance des identifiants de demandes reçues sans rouvrir le rejeu après redémarrage ; limiter aussi la cadence par identité de pair à travers les reconnexions et tester la saturation disque. **Reste** : une revue formelle `/review` sur le diff stabilisé, puis archive | `node`, `relay`, `protocol` | `t3-1b-replay-storage-bounds` | T3.1 | doing |
 | T3.1c | Borner les états mémoire du Node et du cache anti-rejeu (`executing`, `outbound`, `inbox`, `outbox`, ReplayCache), empêcher l'écrasement d'une carte de consentement, traiter les refus du relais et les pannes de transport, réessayer les révocations de clés plafonnées sans accumulation ; corriger le constat CSO HIGH avant pilote. **Implémentée** (322 tests au 9/10) ; **reste** : `/review` et `/cso`, clore le risque HIGH | `node`, `protocol` | `t3-1c-replay-store-hardening` | T3.1b | todo |
 | T3.4 | App Mac : finir T2.4 avec bootstrap privé, cycle de vie, clavier/VoiceOver, Node embarqué, signature/notarisation et mise à jour facultative vérifiée. **Fait** : builds signées et notarisées (PR #8). **Reste agent** : archiver la preuve de notarisation, tester veille et « Réessayer ». **Reste Guillaume** : installation sur un Mac neuf et recette VoiceOver. Builds Apple silicon seulement | `owner-app` | `t3-4-private-mac-app` | T3.3 | todo |
 | T4.15 | Hygiène de configuration trouvée en T4.0 : défaut `profile: legacy` du schéma de config alors que `drop init` crée un profil privé ; mode 0600 pour peers.json, team.json et relay.config.json (y compris fichier existant) ; E_QUEUE_FULL dans ERROR_CODES ; commentaire D21 périmé dans messages.ts ; liste d’agents du protocole plus étroite que la détection ; imposer `payer: owner` par le schéma en profil privé | `node`, `protocol`, `relay` | `t4-15-config-hygiene` | T3.1b | todo |
-| T4.6a | Chemin de connexion de l'essai : deux amis sur deux réseaux différents ne se joignent pas sans relais (D59, D68). Guillaume choisit entre un relais drop privé sur le VPS et un relais iroh auto-hébergé ; l'agent l'installe et prouve un échange entre deux réseaux | `relay`, `node`, `deploy-mac-vps` | `t4-6a-trial-connectivity` | T4.2b, T4.10, choix de Guillaume | todo |
-| T4.6b | Protocole de l'essai en profil privé : fiche d'accord, installation et désinstallation, blocked-observer, au moins 10 jours actifs par personne pour mesurer D24, canal pour livrer une correction pendant l'essai ; remplace le protocole historique `docs/essais/README.md` (T2.7) | Documentation, sans changement de contrat | `t4-6b-trial-protocol` | T4.6a | todo |
+| T4.6a | Chemin de connexion de l'essai : deux collègues sur deux réseaux différents ne se joignent pas sans relais (D59, D68). Guillaume choisit entre un relais drop privé sur le VPS et un relais iroh auto-hébergé ; l'agent l'installe et prouve un échange entre deux réseaux | `relay`, `node`, `deploy-mac-vps` | `t4-6a-trial-connectivity` | T4.2b, T4.10, choix de Guillaume | todo |
+| T4.6b | Protocole de l'essai en profil privé : fiche d'accord, installation et désinstallation, observation de l'usage (décisions dans la demi-heure, installation jusqu'à la première réponse, connexions directes H5), canal pour livrer une correction pendant l'essai ; la mesure D24 vient de T0.7 ; remplace le protocole historique `docs/essais/README.md` (T2.7) | Documentation, sans changement de contrat | `t4-6b-trial-protocol` | T4.6a | todo |
 | T3.2 | Modèles : réutilisation d'endpoint ou agent interne, choix local consenti, qualification Qwen3.5 4B/9B, mémoire/qualité/latence et erreurs | `runner`, `owner-app`, `capability-repo-answer`, `capability-mcp-answer` | `t3-2-local-model-qualification` | T3.1 | todo |
 | T4.16 | Partage depuis le panneau, écart trouvé en T4.0a : choisir outils, modèle et approbateur comme la CLI ; ne pas publier un partage sans modèle utilisable (aujourd’hui fournisseur local sans modèle, échec E_SCHEMA à l’exécution, lu dans `llm.ts`). Facultative pour l'essai si Guillaume le limite aux réponses à la main et aux faits publiés | `owner-app`, `node`, `capability-mcp-answer` | `t4-16-panel-sharing` | T3.2 | todo |
-| T4.6 | P1 : essai avec deux amis dans des contextes différents, protocole d'observation et mesure D24 | `deploy-mac-vps` | `t4-6-friends-trial` | T3.1b, T3.1c, T3.4, T4.15, T4.6a, T4.6b ; T4.16 si l'essai inclut le partage par modèle | todo |
+| T4.6 | P1 : essai en binômes de collègues (D83) : chaque testeur vient avec une personne avec qui il travaille vraiment, pour que les questions posées par drop soient réelles ; au moins deux binômes dans des contextes différents ; protocole d'observation et mesures d'usage du PRD. Le besoin (D24) se mesure en T0.7 ; la compréhension par des non-techniciens (H3) demande un test séparé | `deploy-mac-vps` | `t4-6-friends-trial` | T0.7 (verdict GO ou à prolonger), T3.1b, T3.1c, T3.4, T4.15, T4.6a, T4.6b ; T4.16 si l'essai inclut le partage par modèle | todo |
 
 ## À faire : avant le lancement public
 
