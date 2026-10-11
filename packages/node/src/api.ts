@@ -7,6 +7,7 @@ import { AmbiguousCapabilityError, UnknownCapabilityError, type NodeEngine } fro
 import { LinkRequestSchema, type LinkRequest } from './home.ts';
 import { InternetSettingsSchema, type InternetSettings } from './iroh.ts';
 import { renderPanel } from './panel.ts';
+import { renderWorkspace, WORKSPACE_CSP } from './workspace.ts';
 import { routeFacts, routeQuestion, takesQuestion } from './route.ts';
 import { teamAgent } from './a2a-inbound.ts';
 import { escapeHtml, renderInbox, renderPage } from './ui.ts';
@@ -429,6 +430,10 @@ export function startLocalApi(options: LocalApiOptions): Promise<LocalApi> {
         "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'",
         renderPanel(),
       );
+      return;
+    }
+    if (method === 'GET' && path === '/workspace') {
+      sendHtml(res, WORKSPACE_CSP, renderWorkspace());
       return;
     }
     if (method === 'GET' && path === '/ui/inbox') {

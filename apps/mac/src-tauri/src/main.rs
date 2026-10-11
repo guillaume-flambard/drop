@@ -183,6 +183,14 @@ fn panel_url(port: u16, extra: &[(&str, String)]) -> Option<Url> {
     Some(url)
 }
 
+/// Same private bearer token, but a full-size local management surface.
+/// The workspace is not granted Tauri IPC capabilities.
+fn workspace_url(port: u16) -> Option<Url> {
+    let mut url = panel_url(port, &[])?;
+    url.set_path("/workspace");
+    Some(url)
+}
+
 fn own_health(port: u16, marker: &str) -> bool {
     let Ok(mut stream) = TcpStream::connect(("127.0.0.1", port)) else {
         return false;
@@ -404,6 +412,41 @@ fn show_panel(app: &AppHandle, near: Option<PhysicalPosition<f64>>) {
     let _ = window.set_focus();
 }
 
+/// Opens a normal desktop window for settings. Never enlarges or pins the transient tray popover.
+fn show_workspace(app: &AppHandle) {
+    if !app.state::<Daemon>().ready.load(Ordering::SeqCst) {
+        show_panel(app, None);
+        return;
+    }
+    let Some(port) = *app.state::<Daemon>().verified_port.lock().expect("verified port") else {
+        show_panel(app, None);
+        return;
+    };
+    let Some(url) = workspace_url(port) else {
+        show_panel(app, None);
+        return;
+    };
+    if let Some(window) = app.get_webview_window("workspace") {
+        let _ = window.navigate(url);
+        let _ = window.show();
+        let _ = window.set_focus();
+        return;
+    }
+    match WebviewWindowBuilder::new(app, "workspace", WebviewUrl::External(url))
+        .title("drop · Mon espace")
+        .inner_size(980.0, 720.0)
+        .min_inner_size(720.0, 560.0)
+        .resizable(true)
+        .decorations(true)
+        .build()
+    {
+        Ok(window) => {
+            let _ = window.set_focus();
+        }
+        Err(error) => log_error("E_WORKSPACE", &error.to_string()),
+    }
+}
+
 /// Notifications handed over by the daemon (`DROP_NOTIFY=shell`, T4.14): one JSON object per line. Anything else
 /// on stdout is ignored. Peer text arrives as JSON strings and stays plain notification text, cut at 200 characters.
 fn relay_notifications(app: AppHandle, stdout: ChildStdout) {
@@ -551,6 +594,7 @@ fn open_links(app: &AppHandle, urls: Vec<Url>) {
 /// The icon's menu; with an update pending it starts with "Mettre à jour vers x.y.z", greyed out while installing.
 fn set_tray_menu(app: &AppHandle, update: Option<&str>, installing: bool) -> tauri::Result<()> {
     let open = MenuItem::with_id(app, "open", "Ouvrir drop", true, None::<&str>)?;
+    let workspace = MenuItem::with_id(app, "workspace", "Ouvrir mon espace…", true, None::<&str>)?;
     let retry = MenuItem::with_id(app, "retry", "Réessayer le démarrage", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Quitter drop", true, None::<&str>)?;
     let menu = match update {
@@ -561,9 +605,9 @@ fn set_tray_menu(app: &AppHandle, update: Option<&str>, installing: bool) -> tau
                 format!("Mettre à jour vers {version}")
             };
             let item = MenuItem::with_id(app, "update", label, !installing, None::<&str>)?;
-            Menu::with_items(app, &[&item, &open, &retry, &quit])?
+            Menu::with_items(app, &[&item, &open, &workspace, &retry, &quit])?
         }
-        None => Menu::with_items(app, &[&open, &retry, &quit])?,
+        None => Menu::with_items(app, &[&open, &workspace, &retry, &quit])?,
     };
     if let Some(tray) = app.tray_by_id(TRAY) {
         tray.set_menu(Some(menu))?;
@@ -683,6 +727,7 @@ fn main() {
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| match event.id().as_ref() {
                     "open" => show_panel(app, None),
+                    "workspace" => show_workspace(app),
                     "retry" => {
                         app.state::<Daemon>().retry.store(true, Ordering::SeqCst);
                         show_panel(app, None);

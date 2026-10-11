@@ -14,3 +14,6 @@ apps/mac/src-tauri/resources/
 crates/*/target/
 # Helm templates are Go templates, not YAML (T4.10).
 deploy/helm/*/templates/
+
+# Binary-derived, machine-generated offline React assets
+packages/node/src/workspace-assets.generated.ts

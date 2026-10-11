@@ -15,7 +15,7 @@ Ce document décrit les surfaces de drop, les écrans tels qu'ils existent dans 
 ## 1. Principes
 
 1. **Existant** (D46, contraignant) : un panneau Mac discret et familier, en typographie système, avec la palette neutre existante.
-2. **Existant** (D46) : l'accent vert sert aux actions et aux états, jamais à la décoration. Dans le code, l'accent est `--accent` et les états utilisent `--ok`, `--wait` et `--warn`.
+2. **Existant** (D46, couleur changée par D88) : l'accent sert aux actions et aux états, jamais à la décoration. Depuis le 11 octobre 2026, l'accent est violet dans la fenêtre « Ton espace » (React, D87) et dans le panneau Drop Human ; le panneau historique `panel.ts` garde l'ancien vert jusqu'à sa migration (T4.24).
 3. **Existant** (D46) : le clavier et VoiceOver passent avant toute décoration. Les onglets, l'annonce des résultats et le focus sont décrits en section 6. La recette VoiceOver réelle reste à faire (T3.4).
 4. **Existant** : tout texte écrit par un pair est inséré par `textContent`, jamais comme HTML (fonction `el`, spec owner-app « Texte des pairs inerte »).
 5. **Existant** : la carte de décision montre ce qui sort et ce qui ne sort jamais avant de demander une décision : « Julie recevra » et « Julie ne recevra jamais ».
@@ -204,6 +204,30 @@ Surface locale du paquet de simulation, hors panneau. React Flow est candidat, l
 - **Existant** : la spec node demande « Pas maintenant » comme bouton par défaut au clavier ; le panneau n'en fixe pas (écart E1). Dans l'ordre de tabulation, « Pas maintenant » vient pourtant en premier.
 
 ## 7. Jetons de design
+
+### 7.1 Fenêtre « Ton espace » (React et composants shadcn/ui, D87, D88)
+
+**Existant**, valeurs de `packages/desktop-ui/src/styles.css`, compilées et servies par le Node, sans police ni ressource externe.
+
+| Jeton                | Clair     | Sombre    | Usage                                   |
+| -------------------- | --------- | --------- | --------------------------------------- |
+| `--background`       | `#f8f8f7` | `#222127` | Fond                                    |
+| `--foreground`       | `#27262b` | `#f3f0f4` | Texte principal                         |
+| `--card`             | `#ffffff` | `#2d2b32` | Cartes                                  |
+| `--primary`          | `#6660aa` | `#c2b9fc` | Accent violet : actions principales     |
+| `--primary-foreground` | `#ffffff` | `#24212e` | Texte sur l'accent                    |
+| `--secondary`        | `#f2f1f0` | `#35323b` | Boutons secondaires                     |
+| `--muted`            | `#f4f3f2` | `#333139` | Fonds discrets                          |
+| `--muted-foreground` | `#77747c` | `#c1b9c4` | Texte secondaire                        |
+| `--border`           | `#e9e6e9` | `#46414b` | Bordures                                |
+| `--input`            | `#e4e1e6` | `#524c58` | Champs                                  |
+| `--ring`             | `#9790d0` | `#bdb4f2` | Contour de focus                        |
+| `--destructive`      | `#ac5e61` | `#efadaf` | Refus, erreur                           |
+
+Rayon de base `0.875rem`. Icônes Lucide. Typographie système, corps 14 px sur 1,5.
+
+### 7.2 Panneau historique (`panel.ts`)
+
 
 **Existant**, valeurs de `panel.ts`. La page de démarrage reprend les mêmes couleurs principales, avec une bordure sombre `#4B4944`.
 
