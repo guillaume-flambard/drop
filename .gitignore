@@ -13,7 +13,8 @@ coverage/
 id_ed25519*
 .npmrc
 
-# Mac app (T2.4): build output, generated schemas, resources copied by scripts/build-mac.ts, unused icon sets
+# Desktop app (T2.4, T3.7, T3.8): build output, generated schemas, resources copied by scripts/build-desktop.ts,
+# unused icon sets
 apps/desktop/src-tauri/target/
 apps/desktop/src-tauri/gen/
 apps/desktop/src-tauri/resources/

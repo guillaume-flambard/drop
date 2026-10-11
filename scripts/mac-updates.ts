@@ -1,7 +1,7 @@
 // Signed updates of the Mac app (T2.4, D70). The app looks for `latest.json` under drop.memolabs.dev/updates and only
 // installs an archive signed with drop's update key (minisign, Tauri updater plugin) whose signature names the version
 // the manifest announces. This module builds that manifest and the `--config` that turns the updater on; the build
-// itself is scripts/build-mac.ts.
+// itself is scripts/build-desktop.ts. Windows and Linux builds carry no updater yet.
 
 export const UPDATES_URL = 'https://drop.memolabs.dev/updates';
 export const UPDATE_ENDPOINT = `${UPDATES_URL}/latest.json`;
@@ -11,7 +11,7 @@ export type UpdatePlatform = (typeof PLATFORMS)[number];
 
 /**
  * The app embeds the Node binary of the Mac that builds it, so one platform per build (D30), named after that Mac's
- * `uname -m` (scripts/build-mac.ts refuses any other architecture).
+ * `uname -m` (scripts/build-desktop.ts refuses any other architecture).
  */
 export function updatePlatform(machine: string): UpdatePlatform {
   if (machine === 'arm64' || machine === 'aarch64') return 'darwin-aarch64';
