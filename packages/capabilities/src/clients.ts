@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { isAbsolute, join, posix, win32 } from 'node:path';
+import { join, posix, win32 } from 'node:path';
 import { REQUESTER_AGENTS } from '@drop/protocol';
 
 /**
@@ -53,7 +53,16 @@ export function clientHost(
 /** An absolute override from the environment, else the default. */
 function override(host: ClientHost, name: string, fallback: string): string {
   const value = host.env[name];
-  return value !== undefined && value !== '' && (isAbsolute(value) || win32.isAbsolute(value)) ? value : fallback;
+  return absoluteOn(host, value) ? value : fallback;
+}
+
+/**
+ * Absolute on the host's own system: a drive or UNC path on Windows (`\x` alone is relative to the current drive),
+ * a path from `/` elsewhere. Anything else would resolve against the daemon's working directory.
+ */
+function absoluteOn(host: ClientHost, value: string | undefined): value is string {
+  if (value === undefined || value === '') return false;
+  return host.platform === 'win32' ? /^[A-Za-z]:[\\/]|^\\\\[^\\]/.test(value) : posix.isAbsolute(value);
 }
 
 /** %APPDATA% (Roaming) on Windows. */
@@ -123,11 +132,11 @@ export function defaultProbe(home: string | ClientHost = homedir()): InstallProb
 /** The names a binary may have on the probe's system: itself, or with each Windows executable extension. */
 export function executableNames(binary: string, probe: Pick<InstallProbe, 'platform' | 'pathExt'>): string[] {
   if ((probe.platform ?? clientPlatform()) !== 'win32') return [binary];
-  const extensions = (probe.pathExt ?? '.COM;.EXE;.BAT;.CMD')
-    .split(';')
-    .map((extension) => extension.trim().toLowerCase())
-    .filter((extension) => /^\.[a-z0-9]+$/.test(extension));
-  return extensions.map((extension) => `${binary}${extension}`);
+  // Only what Node can start (directly, or through cmd.exe): PATHEXT also lists scripts such as .JS or .VBS.
+  const listed = (probe.pathExt ?? '.COM;.EXE;.BAT;.CMD').split(';').map((extension) => extension.trim().toLowerCase());
+  return ['.exe', '.com', '.cmd', '.bat']
+    .filter((extension) => listed.includes(extension))
+    .map((extension) => `${binary}${extension}`);
 }
 
 export interface ClientSpec {
@@ -262,7 +271,7 @@ export const CLIENT_SPECS: Record<ClientId, ClientSpec> = {
     // the strongest existing one is read first and written; OPENCODE_CONFIG names one file instead.
     global: (host) => {
       const custom = host.env.OPENCODE_CONFIG;
-      if (custom !== undefined && isAbsolute(custom)) return [jsonc(custom, 'opencode')];
+      if (absoluteOn(host, custom)) return [jsonc(custom, 'opencode')];
       const dir = join(xdgConfig(host), 'opencode');
       return [
         jsonc(join(dir, 'opencode.jsonc'), 'opencode'),
@@ -348,12 +357,11 @@ export const CLIENT_SPECS: Record<ClientId, ClientSpec> = {
     extensions: [],
     global: (host) => {
       const root = host.env.GOOSE_PATH_ROOT;
-      const dir =
-        root !== undefined && isAbsolute(root)
-          ? join(root, 'config')
-          : host.platform === 'win32'
-            ? join(appData(host), 'Block', 'goose', 'config')
-            : join(xdgConfig(host), 'goose');
+      const dir = absoluteOn(host, root)
+        ? join(root, 'config')
+        : host.platform === 'win32'
+          ? join(appData(host), 'Block', 'goose', 'config')
+          : join(xdgConfig(host), 'goose');
       return [{ path: join(dir, 'config.yaml'), format: 'yaml', layout: 'goose' }];
     },
     project: () => [],
@@ -383,7 +391,7 @@ export const CLIENT_SPECS: Record<ClientId, ClientSpec> = {
     // Shared by the extension (since its SDK migration), the CLI and the JetBrains plugin; strict JSON.
     global: (host) => {
       const explicit = host.env.CLINE_MCP_SETTINGS_PATH;
-      if (explicit !== undefined && isAbsolute(explicit)) return [json(explicit)];
+      if (absoluteOn(host, explicit)) return [json(explicit)];
       const base = override(host, 'CLINE_DIR', join(host.home, '.cline'));
       return [json(join(override(host, 'CLINE_DATA_DIR', join(base, 'data')), 'settings', 'cline_mcp_settings.json'))];
     },
@@ -449,7 +457,10 @@ export function clientInstalled(client: ClientId, probe: InstallProbe): boolean 
   const apps = spec.apps[platform];
   if (apps && probe.apps.some((dir) => listDir(dir).some((name) => apps.test(name)))) return true;
   const separator = (platform === 'win32' ? win32 : posix).delimiter;
-  const dirs = probe.path.split(separator).filter((dir) => dir !== '');
+  const dirs = probe.path
+    .split(separator)
+    .map((dir) => (platform === 'win32' ? dir.replace(/^"(.*)"$/, '$1') : dir))
+    .filter((dir) => dir !== '');
   const names = (binary: string) => executableNames(binary, { platform, pathExt: probe.pathExt });
   if (spec.binaries.some((binary) => dirs.some((dir) => names(binary).some((name) => existsSync(join(dir, name))))))
     return true;

@@ -120,4 +120,18 @@ describe('format-preserving configuration edits (T4.22)', () => {
     );
     expect(readYamlEntry(editYaml(undefined, ['extensions', 'drop'], entry), ['extensions', 'drop'])).toEqual(entry);
   });
+
+  it('keeps a YAML BOM, CRLF line endings and four-space indentation, and refuses an edit that would touch anything else', () => {
+    const original = '﻿# goose\r\nextensions:\r\n    github:\r\n        cmd: npx # on\r\n        enabled: true\r\n';
+    const entry = { name: 'drop', type: 'stdio', cmd: 'node', args: ['/d.mjs'], envs: {}, enabled: true, timeout: 300 };
+    const added = editYaml(original, ['extensions', 'drop'], entry);
+    expect(added.startsWith('﻿# goose\r\nextensions:\r\n    github:\r\n        cmd: npx # on\r\n')).toBe(true);
+    expect(added).not.toMatch(/[^\r]\n/);
+    expect(readYamlEntry(added, ['extensions', 'drop'])).toEqual(entry);
+    expect(editYaml(added, ['extensions', 'drop'], undefined)).toBe(original);
+    // Removing what is not there changes nothing.
+    expect(editYaml(original, ['extensions', 'drop'], undefined)).toBe(original);
+    // JSON: removing an absent entry changes nothing either.
+    expect(editJson('{ "a": 1 }', ['mcpServers', 'drop'], undefined, 'json')).toBe('{ "a": 1 }');
+  });
 });

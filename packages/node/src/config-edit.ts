@@ -181,22 +181,39 @@ export function editJson(
   const empty = original === undefined || original.trim() === '';
   const body = empty ? '{}' : original;
   const current = checkContainers(parseJsonText(body, format), path);
+  if (value === undefined && current === undefined) return text ?? '';
   const formattingOptions = detectFormatting(empty ? '' : body);
   const raw = modify(body, [...path], value, {});
   const edits =
     (value === undefined
-      ? current === undefined
-        ? []
-        : removalEdits(body, path)
+      ? removalEdits(body, path)
       : raw.length === 1 && raw[0] && current === undefined
         ? insertionEdits(body, raw[0], path, formattingOptions)
         : undefined) ?? modify(body, [...path], value, { formattingOptions });
   let out = applyEdits(body, edits);
   if (empty) out = `${out}${formattingOptions.eol}`;
-  // The result must say exactly what was asked, or nothing is written.
-  const written = checkContainers(parseJsonText(out, format), path);
-  if (JSON.stringify(written) !== JSON.stringify(value)) throw new Error('E_CONFIG_EDIT');
+  // The whole result must be the original with only our entry changed, or nothing is written.
+  const expected = withEntry(parseJsonText(body, format), path, value);
+  if (JSON.stringify(parseJsonText(out, format)) !== JSON.stringify(expected)) throw new Error('E_CONFIG_EDIT');
   return `${bom}${out}`;
+}
+
+/** A copy of a parsed document with `value` at `path` (removed when undefined), containers created as needed. */
+function withEntry(document: unknown, path: readonly string[], value: unknown): unknown {
+  const copy = JSON.parse(JSON.stringify(document ?? {})) as Record<string, unknown>;
+  let current = copy;
+  for (const key of path.slice(0, -1)) {
+    const next = current[key];
+    if (!isRecord(next)) {
+      if (value === undefined) return copy;
+      current[key] = {};
+    }
+    current = current[key] as Record<string, unknown>;
+  }
+  const last = path[path.length - 1] ?? '';
+  if (value === undefined) Reflect.deleteProperty(current, last);
+  else current[last] = value;
+  return copy;
 }
 
 function yamlDocument(text: string | undefined): Document {
@@ -235,9 +252,15 @@ function keptLines(original: string, candidate: string): number {
  * The YAML text with `value` at `path` (removed when undefined). Comments stay; the list indentation the file already
  * uses is kept (goose writes lists flush with their key), and long lines are never folded.
  */
-export function editYaml(text: string | undefined, path: readonly string[], value: unknown): string {
-  readYamlEntry(text, path);
+export function editYaml(input: string | undefined, path: readonly string[], value: unknown): string {
+  // A BOM and CRLF line endings are put back on the result: the library reads and writes LF without a BOM.
+  const bom = input?.startsWith(BOM) ? BOM : '';
+  const crlf = input?.includes('\r\n') ?? false;
+  const text = input === undefined ? undefined : input.slice(bom.length).replace(/\r\n/g, '\n');
+  const current = readYamlEntry(text, path);
+  if (value === undefined && current === undefined) return input ?? '';
   const doc = yamlDocument(text);
+  const before: unknown = doc.toJS();
   if (doc.contents === null || isScalar(doc.contents)) doc.contents = doc.createNode({});
   // An empty parent (`extensions:` with nothing under it) is a null scalar: replace it by a map.
   for (let depth = 1; depth < path.length; depth += 1) {
@@ -246,7 +269,10 @@ export function editYaml(text: string | undefined, path: readonly string[], valu
   }
   if (value === undefined) doc.deleteIn(path);
   else doc.setIn(path, doc.createNode(value));
-  const render = (indentSeq: boolean) => doc.toString({ indentSeq, lineWidth: 0, minContentWidth: 0 });
+  // The file's own indentation width, and its list style (goose writes lists flush with their key).
+  const width = /^( +)\S/m.exec(text ?? '')?.[1]?.length;
+  const indent = width !== undefined && width >= 2 && width <= 8 ? width : 2;
+  const render = (indentSeq: boolean) => doc.toString({ indent, indentSeq, lineWidth: 0, minContentWidth: 0 });
   const flush = render(false);
   const indented = render(true);
   const out =
@@ -255,7 +281,8 @@ export function editYaml(text: string | undefined, path: readonly string[], valu
       : keptLines(text, indented) >= keptLines(text, flush)
         ? indented
         : flush;
-  const written = readYamlEntry(out, path);
-  if (JSON.stringify(written) !== JSON.stringify(value)) throw new Error('E_CONFIG_EDIT');
-  return out;
+  // The whole result must be the original with only our entry changed, or nothing is written.
+  const after: unknown = yamlDocument(out).toJS();
+  if (JSON.stringify(after) !== JSON.stringify(withEntry(before ?? {}, path, value))) throw new Error('E_CONFIG_EDIT');
+  return `${bom}${crlf ? out.replace(/\n/g, '\r\n') : out}`;
 }

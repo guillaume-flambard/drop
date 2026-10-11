@@ -6,6 +6,7 @@ import {
   chmodSync,
   copyFileSync,
   existsSync,
+  fstatSync,
   fsyncSync,
   lstatSync,
   mkdirSync,
@@ -94,7 +95,7 @@ export interface OnboardingOptions {
 const FALLBACK_CODES = new Set([
   'E_CONFIG_INVALID_OR_UNREADABLE',
   'E_CONFIG_UNDOCUMENTED',
-  'E_CONFIG_AMBIGUOUS',
+  'E_CONFIG_SYMLINK',
   'E_CONFIG_LOCKED',
   'E_CLI_MISSING',
   'E_CLI_SHIM_UNSAFE',
@@ -132,11 +133,15 @@ function executable(path: string): boolean {
 function onPath(binary: string, probe: InstallProbe): string | undefined {
   const platform = probe.platform ?? clientPlatform();
   const path = platform === 'win32' ? win32 : posix;
-  return probe.path
-    .split(path.delimiter)
-    .filter((dir) => dir !== '' && path.isAbsolute(dir))
-    .flatMap((dir) => executableNames(binary, probe).map((name) => join(dir, name)))
-    .find((candidate) => executable(candidate));
+  return (
+    probe.path
+      .split(path.delimiter)
+      // Windows allows a PATH entry in double quotes.
+      .map((dir) => (platform === 'win32' ? dir.replace(/^"(.*)"$/, '$1') : dir))
+      .filter((dir) => dir !== '' && path.isAbsolute(dir))
+      .flatMap((dir) => executableNames(binary, probe).map((name) => join(dir, name)))
+      .find((candidate) => executable(candidate))
+  );
 }
 
 const CLI_BINARY: Partial<Record<AgentKind, string>> = {
@@ -156,16 +161,27 @@ function cliPath(agent: AgentKind, probe: InstallProbe): string | undefined {
   );
 }
 
-/** A regular file of bounded size, never through a symlink; undefined when absent. */
+/**
+ * A regular file of bounded size, never through a symlink; undefined when absent. Opened without following a link
+ * where the system allows it, then checked and read through the same descriptor.
+ */
 function readConfig(path: string): string | undefined {
+  let fd: number | undefined;
   try {
-    const stats = lstatSync(path);
+    if (lstatSync(path).isSymbolicLink()) throw new Error('E_CONFIG_SYMLINK');
+    // Windows has no O_NOFOLLOW; the lstat above is the check there.
+    fd = openSync(path, constants.O_RDONLY | ('O_NOFOLLOW' in constants ? constants.O_NOFOLLOW : 0));
+    const stats = fstatSync(fd);
     if (!stats.isFile()) throw new Error('E_CONFIG_TYPE');
     if (stats.size > MAX_GLOBAL_CONFIG_BYTES) throw new Error('E_CONFIG_TOO_LARGE');
-    return readFileSync(path, 'utf8');
+    return readFileSync(fd, 'utf8');
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === 'ENOENT') return undefined;
+    if (code === 'ELOOP') throw new Error('E_CONFIG_SYMLINK', { cause: error });
     throw error;
+  } finally {
+    if (fd !== undefined) closeSync(fd);
   }
 }
 
@@ -201,6 +217,14 @@ function existingDrop(agent: AgentKind, content: string | undefined, location: C
   return readJsonEntry(content, path, location.format);
 }
 
+/** A drop entry in one of the older files a client still imports, besides the one drop writes. */
+function legacyDrop(agent: AgentKind, host: ClientHost, target: ConfigLocation): boolean {
+  return CLIENT_SPECS[agent]
+    .global(host)
+    .filter((location) => location.path !== target.path)
+    .some((location) => existingDrop(agent, readConfig(location.path), location) !== undefined);
+}
+
 function sameEntry(location: ConfigLocation, existing: unknown, entry: ServerEntry): boolean {
   if (existing === undefined) return false;
   const server = normalizeEntry(location.layout, existing);
@@ -232,7 +256,8 @@ function withFallback<T extends { detail: string; manual?: ManualStep }>(
   location: ConfigLocation | undefined,
 ): T {
   if (!FALLBACK_CODES.has(item.detail)) return item;
-  return { ...item, manual: fallbackStep(agent, expected(agent, options), location, item.detail) };
+  const platform = hostOf(options).platform;
+  return { ...item, manual: fallbackStep(agent, expected(agent, options), location, item.detail, platform) };
 }
 
 function inspect(agent: AgentKind, options: OnboardingOptions, installed: boolean): AgentPreview {
@@ -266,12 +291,20 @@ function inspect(agent: AgentKind, options: OnboardingOptions, installed: boolea
         same ? 'Connecteur déjà configuré' : 'Une autre entrée drop existe déjà',
       );
     }
+    // Devin still imports its older files: a drop entry there would be a second one.
+    if (CLIENT_SPECS[agent].writeAlways && legacyDrop(agent, host, location))
+      return preview('conflict', fingerprint, 'E_DROP_CONFLICT');
     return preview('ready', fingerprint, 'Ajout du connecteur MCP drop uniquement');
   } catch (error) {
     const code = failureCode(error);
     // Another drop entry elsewhere in the file is a conflict to settle, not a reason to paste one more.
-    if (code === 'E_SCOPE_CONFLICT' || code === 'E_DROP_CONFLICT') return preview('conflict', '', code);
-    return preview('error', '', code === 'E_CONFIG_LOCKED' ? code : 'E_CONFIG_INVALID_OR_UNREADABLE');
+    if (code === 'E_SCOPE_CONFLICT' || code === 'E_DROP_CONFLICT' || code === 'E_CONFIG_AMBIGUOUS')
+      return preview('conflict', '', code);
+    return preview(
+      'error',
+      '',
+      code === 'E_CONFIG_LOCKED' || code === 'E_CONFIG_SYMLINK' ? code : 'E_CONFIG_INVALID_OR_UNREADABLE',
+    );
   }
 }
 
@@ -383,6 +416,9 @@ async function applyOne(
     const present = detectAgents(host, probe).find((item) => item.agent === agent)?.installed ?? false;
     const fresh = inspect(agent, options, present);
     if (fresh.state === 'absent' || fresh.state === 'error' || !location) return result('error', fresh.detail);
+    // A conflict outside our own entry (another scope, an older file) blocks a connection; removal stays possible.
+    if (fresh.state === 'conflict' && fresh.detail.startsWith('E_') && selection.action === 'connect')
+      return result('conflict', fresh.detail);
     const file = location.path;
     const before = readConfig(file);
     if (digest(before) !== selection.fingerprint) return result('changed', 'E_CONFIG_CHANGED');
@@ -425,6 +461,8 @@ async function applyOne(
   } catch (error) {
     const code = failureCode(error);
     if (code === 'E_CONFIG_CHANGED') return result('changed', code);
+    if (code === 'E_SCOPE_CONFLICT' || code === 'E_DROP_CONFLICT' || code === 'E_CONFIG_AMBIGUOUS')
+      return result('conflict', code);
     return result('error', code);
   }
 }

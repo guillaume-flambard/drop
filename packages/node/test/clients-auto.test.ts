@@ -6,6 +6,8 @@ import {
   readdirSync,
   readFileSync,
   realpathSync,
+  rmSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -24,7 +26,7 @@ import {
   type InstallProbe,
 } from '@drop/capabilities';
 import { readJsonEntry, readYamlEntry } from '../src/config-edit.ts';
-import { serverEntry } from '../src/install.ts';
+import { entryKeyPath, fallbackStep, serverEntry, shellLine } from '../src/install.ts';
 import { windowsShimCommand } from '../src/official-command.ts';
 import { applyOnboarding, previewOnboarding, type OnboardingOptions } from '../src/onboarding.ts';
 
@@ -435,12 +437,21 @@ describe('all thirteen clients connected automatically (T4.22)', () => {
     expect(at('zed', host('linux', { XDG_CONFIG_HOME: '/x' }))).toBe(join('/x', 'zed', 'settings.json'));
     expect(at('goose', host('linux', { XDG_CONFIG_HOME: '/x' }))).toBe(join('/x', 'goose', 'config.yaml'));
     expect(at('goose', host('darwin', { GOOSE_PATH_ROOT: '/g' }))).toBe(join('/g', 'config', 'config.yaml'));
-    expect(at('vscode', host('win32', { APPDATA: '/roaming' }))).toBe(join('/roaming', 'Code', 'User', 'mcp.json'));
-    expect(at('codex', host('linux', { CODEX_HOME: '/c' }))).toBe(join('/c', 'config.toml'));
-    expect(at('cline', host('win32', { CLINE_DIR: '/cl' }))).toBe(
-      join('/cl', 'data', 'settings', 'cline_mcp_settings.json'),
+    expect(at('vscode', host('win32', { APPDATA: 'D:\\Roaming' }))).toBe(
+      join('D:\\Roaming', 'Code', 'User', 'mcp.json'),
     );
-    expect(at('opencode', host('win32', { OPENCODE_CONFIG: '/o/custom.jsonc' }))).toBe('/o/custom.jsonc');
+    expect(at('codex', host('linux', { CODEX_HOME: '/c' }))).toBe(join('/c', 'config.toml'));
+    expect(at('cline', host('win32', { CLINE_DIR: '\\\\server\\cl' }))).toBe(
+      join('\\\\server\\cl', 'data', 'settings', 'cline_mcp_settings.json'),
+    );
+    expect(at('opencode', host('win32', { OPENCODE_CONFIG: 'C:\\o\\custom.jsonc' }))).toBe('C:\\o\\custom.jsonc');
+    // Absolute means absolute on that system: a drive-relative Windows path, or a Windows path on Linux, is ignored.
+    expect(at('vscode', host('win32', { APPDATA: '\\Roaming' }))).toBe(
+      join(home, 'AppData', 'Roaming', 'Code', 'User', 'mcp.json'),
+    );
+    expect(at('vscode', host('linux', { XDG_CONFIG_HOME: 'C:\\x' }))).toBe(
+      join(home, '.config', 'Code', 'User', 'mcp.json'),
+    );
     expect(at('gemini_cli', host('darwin', { GEMINI_CLI_HOME: '/gh' }))).toBe(join('/gh', '.gemini', 'settings.json'));
     // A relative override is ignored, never resolved against the daemon's working directory.
     expect(at('zed', host('linux', { XDG_CONFIG_HOME: 'relative' }))).toBe(
@@ -545,5 +556,66 @@ describe('all thirteen clients connected automatically (T4.22)', () => {
     const plan = previewOnboarding(m.options).find((item) => item.agent === 'claude_code');
     expect(plan).toMatchObject({ state: 'conflict', detail: 'E_SCOPE_CONFLICT', action: 'none' });
     expect(plan?.manual).toBeUndefined();
+    // Two drop tables in Codex: a conflict too, never an extra `codex mcp add` to paste.
+    put(
+      join(m.home, '.codex', 'config.toml'),
+      '[mcp_servers.drop]\ncommand = "a"\n[mcp_servers."drop"]\ncommand = "b"\n',
+    );
+    const codex = previewOnboarding(m.options).find((item) => item.agent === 'codex');
+    expect(codex).toMatchObject({ state: 'conflict', detail: 'E_CONFIG_AMBIGUOUS' });
+    expect(codex?.manual).toBeUndefined();
+  });
+
+  it('prints a fallback command quoted for the shell of the owner, Windows paths unchanged', () => {
+    const windows = serverEntry(
+      'codex',
+      'C:\\Users\\Jean Dupont\\.drop',
+      'C:\\Users\\Jean Dupont\\.drop\\bin\\drop-mcp.mjs',
+    );
+    const step = fallbackStep(
+      'codex',
+      { ...windows, command: 'C:\\Program Files\\nodejs\\node.exe' },
+      undefined,
+      'E_CLI_MISSING',
+      'win32',
+    );
+    expect(step.snippet).toBe(
+      "codex mcp add drop --env DROP_AGENT=codex --env 'DROP_HOME=C:\\Users\\Jean Dupont\\.drop' -- 'C:\\Program Files\\nodejs\\node.exe' 'C:\\Users\\Jean Dupont\\.drop\\bin\\drop-mcp.mjs'",
+    );
+    expect(step.steps).toContain('PowerShell');
+    expect(shellLine(["it's", 'a$b`c`'], 'win32')).toBe("'it''s' 'a$b`c`'");
+    expect(shellLine(["it's", 'a$b`c`'], 'linux')).toBe("'it'\\''s' 'a$b`c`'");
+  });
+
+  it('keeps edge cases out: a stable OpenCode server named servers, an older Devin entry, a linked file, script extensions', () => {
+    const m = machine('linux');
+    // OpenCode 1 with a server literally named `servers`: drop goes under `mcp`, not inside that server.
+    const opencode = m.files.get('opencode') ?? '';
+    writeFileSync(opencode, '{ "mcp": { "servers": { "type": "local", "command": ["srv"] } } }');
+    expect(entryKeyPath('opencode', readFileSync(opencode, 'utf8'))).toEqual(['mcp', 'drop']);
+    // A drop entry still in Devin's older file would make a second one: a conflict.
+    put(join(m.home, '.codeium', 'windsurf', 'mcp_config.json'), '{ "mcpServers": { "drop": { "command": "old" } } }');
+    // A configuration linked elsewhere (dotfiles) is not followed, and the reason says so.
+    const zed = m.files.get('zed') ?? '';
+    const target = join(m.root, 'dotfiles-zed.json');
+    writeFileSync(target, '{}');
+    rmSync(zed);
+    symlinkSync(target, zed);
+    const plans = previewOnboarding(m.options);
+    expect(plans.find((plan) => plan.agent === 'devin_desktop')).toMatchObject({
+      state: 'conflict',
+      detail: 'E_DROP_CONFLICT',
+    });
+    const linked = plans.find((plan) => plan.agent === 'zed');
+    expect(linked).toMatchObject({ state: 'error', detail: 'E_CONFIG_SYMLINK' });
+    expect(linked?.manual?.steps).toContain('lien');
+    expect(readFileSync(target, 'utf8')).toBe('{}');
+    // PATHEXT lists scripts Node cannot start: only .exe, .com, .cmd and .bat count.
+    expect(executableNames('claude', { platform: 'win32', pathExt: '.COM;.EXE;.BAT;.CMD;.VBS;.JS;.PY' })).toEqual([
+      'claude.exe',
+      'claude.com',
+      'claude.cmd',
+      'claude.bat',
+    ]);
   });
 });

@@ -75,7 +75,7 @@ Le Node SHALL raccorder les treize clients sur macOS, Windows et Linux sans copi
 - **THEN** drop écrit cette copie, que Windows ouvre en premier, et laisse le fichier de `%APPDATA%` intact
 
 ### Requirement: Fichier du client gardé tel quel
-Une écriture dans le fichier d'un client SHALL ne changer que l'entrée drop : commentaires, ordre des clés, indentation, fins de ligne, BOM et virgules finales MUST rester, et le retrait MUST rendre le fichier d'origine à l'octet près. Un fichier invalide, un commentaire dans un JSON strict ou un conteneur qui n'est pas un objet MUST être refusé sans écriture.
+Une écriture dans le fichier d'un client SHALL ne changer que l'entrée drop : commentaires, ordre des clés, indentation, fins de ligne, BOM et virgules finales MUST rester ; un document relu qui diffère autrement MUST être refusé (`E_CONFIG_EDIT`). Quand les serveurs sont un par ligne, comme les clients les écrivent, le retrait MUST rendre le fichier d'origine à l'octet près. Un fichier invalide MUST être refusé sans écriture.
 
 #### Scenario: AC: JSONC commenté
 <!-- openspec-guard:test="format-preserving configuration edits (T4.22) > adds then removes one JSONC entry, keeping comments, trailing commas, order and indentation" -->
@@ -97,8 +97,13 @@ Une écriture dans le fichier d'un client SHALL ne changer que l'entrée drop : 
 - **WHEN** drop ajoute puis retire son extension dans un `config.yaml` commenté écrit par goose
 - **THEN** chaque ligne d'origine reste, dans le style de listes du fichier, et le retrait rend le texte d'origine
 
+#### Scenario: AC: YAML avec BOM, CRLF et quatre espaces
+<!-- openspec-guard:test="format-preserving configuration edits (T4.22) > keeps a YAML BOM, CRLF line endings and four-space indentation, and refuses an edit that would touch anything else" -->
+- **WHEN** le `config.yaml` commence par un BOM, finit ses lignes en CRLF et indente de quatre espaces, ou que l'entrée à retirer n'existe pas
+- **THEN** BOM, CRLF et indentation restent, le retrait rend le texte d'origine, et retirer une entrée absente ne change rien
+
 ### Requirement: Secours expliqué quand l'écriture est impossible
-Le Node SHALL proposer la configuration à coller, ou la commande à lancer, seulement quand il ne peut pas écrire : fichier illisible, invalide, verrouillé ou trop gros, emplacement non documenté sur ce système, commande officielle absente ou arguments non sûrs pour `cmd.exe`. Le secours MUST dire la raison, quoi coller et où, et MUST NOT écrire ni préparer quoi que ce soit pour ce client.
+Le Node SHALL proposer la configuration à coller, ou la commande à lancer, seulement quand il ne peut pas écrire : fichier illisible, invalide, verrouillé, trop gros ou lien vers un autre fichier, emplacement non documenté sur ce système, commande officielle absente ou arguments non sûrs pour `cmd.exe`. Le secours MUST dire la raison, quoi coller et où, et MUST NOT écrire ni préparer quoi que ce soit pour ce client.
 
 #### Scenario: AC: secours seulement si l'écriture est impossible
 <!-- openspec-guard:test="all thirteen clients connected automatically (T4.22) > falls back to an explained configuration only when a write is impossible" -->
@@ -109,6 +114,16 @@ Le Node SHALL proposer la configuration à coller, ou la commande à lancer, seu
 <!-- openspec-guard:test="all thirteen clients connected automatically (T4.22) > reports a drop entry in a Claude Code project as a conflict, never as something to paste" -->
 - **WHEN** Claude Code déclare déjà une entrée drop dans l'un de ses projets
 - **THEN** l'état est `conflict` (`E_SCOPE_CONFLICT`), sans configuration à coller
+
+#### Scenario: AC: commande de secours prête à coller
+<!-- openspec-guard:test="all thirteen clients connected automatically (T4.22) > prints a fallback command quoted for the shell of the owner, Windows paths unchanged" -->
+- **WHEN** la commande officielle de Codex manque sous Windows, avec des chemins à espaces
+- **THEN** la commande donnée est citée pour PowerShell, sans doubler une barre oblique inverse, et pour un shell POSIX entre apostrophes
+
+#### Scenario: AC: cas limites sans écriture fautive
+<!-- openspec-guard:test="all thirteen clients connected automatically (T4.22) > keeps edge cases out: a stable OpenCode server named servers, an older Devin entry, a linked file, script extensions" -->
+- **WHEN** un serveur OpenCode 1 s'appelle `servers`, l'ancien fichier de Devin porte déjà une entrée drop, la configuration de Zed est un lien, et `PATHEXT` liste des scripts
+- **THEN** drop écrit sous `mcp` et non dans ce serveur, Devin est en conflit, le lien n'est pas suivi (`E_CONFIG_SYMLINK` avec sa raison), et seuls `.exe`, `.com`, `.cmd` et `.bat` comptent comme exécutables
 
 #### Scenario: AC: rien de préparé pour un client non écrit
 <!-- openspec-guard:test="all thirteen clients connected automatically (T4.22) > keeps the requester server out of a client drop could not write" -->
