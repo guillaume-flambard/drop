@@ -26,68 +26,73 @@ const helm = kubernetesHelm();
 const required = process.env.CI === 'true';
 
 describe('enterprise policy (T4.10)', () => {
-  it.skipIf(!helm && !required)('renders a hardened single-replica Helm chart for the relay', () => {
-    if (!helm) throw new Error('Kubernetes Helm 3 or 4 is required in CI (set HELM_BIN or put helm on the PATH)');
-    const run = (...args: string[]) => execFileSync(helm, args, { encoding: 'utf8' });
-    run('lint', '--strict', chart);
-    const plain = run('template', 'atlas', chart);
-    expect(plain).toContain('replicas: 1');
-    expect(plain).toContain('runAsNonRoot: true');
-    expect(plain).toContain('readOnlyRootFilesystem: true');
-    expect(plain).toContain('allowPrivilegeEscalation: false');
-    expect(plain).toContain('automountServiceAccountToken: false');
-    expect(plain).toContain('claimName: atlas-data');
-    expect(plain).not.toContain('policyPath');
+  it.skipIf(!helm && !required)(
+    'renders a hardened single-replica Helm chart for the relay',
+    () => {
+      if (!helm) throw new Error('Kubernetes Helm 3 or 4 is required in CI (set HELM_BIN or put helm on the PATH)');
+      const run = (...args: string[]) => execFileSync(helm, args, { encoding: 'utf8' });
+      run('lint', '--strict', chart);
+      const plain = run('template', 'atlas', chart);
+      expect(plain).toContain('replicas: 1');
+      expect(plain).toContain('runAsNonRoot: true');
+      expect(plain).toContain('readOnlyRootFilesystem: true');
+      expect(plain).toContain('allowPrivilegeEscalation: false');
+      expect(plain).toContain('automountServiceAccountToken: false');
+      expect(plain).toContain('claimName: atlas-data');
+      expect(plain).not.toContain('policyPath');
 
-    const managed = run(
-      'template',
-      'atlas',
-      chart,
-      '--set',
-      'tls.enabled=true',
-      '--set',
-      'tls.secretName=atlas-relay-tls',
-      '--set',
-      'policy.enabled=true',
-      '--set',
-      'policy.issuer=11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo',
-      '--set-json',
-      'policy.signedPolicy={"policy":{"policyId":"atlas-default"},"sig":"x"}',
-    );
-    expect(managed).toContain('containerPort: 8443');
-    expect(managed).toContain('scheme: HTTPS');
-    expect(managed).toContain('secretName: atlas-relay-tls');
-    expect(managed).toContain('mountPath: /policy/policy.json');
-    expect(managed).toContain('\\"policyPath\\":\\"/policy/policy.json\\"');
-    expect(managed).toContain('\\"certPath\\":\\"/tls/tls.crt\\"');
-    // An ingress without its TLS secret is refused: the relay is only reached over TLS.
-    expect(() => run('template', 'atlas', chart, '--set', 'ingress.enabled=true')).toThrow();
-    // A policy without its issuer would start an open relay: refused.
-    expect(() => run('template', 'atlas', chart, '--set', 'policy.enabled=true')).toThrow();
+      const managed = run(
+        'template',
+        'atlas',
+        chart,
+        '--set',
+        'tls.enabled=true',
+        '--set',
+        'tls.secretName=atlas-relay-tls',
+        '--set',
+        'policy.enabled=true',
+        '--set',
+        'policy.issuer=11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo',
+        '--set-json',
+        'policy.signedPolicy={"policy":{"policyId":"atlas-default"},"sig":"x"}',
+      );
+      expect(managed).toContain('containerPort: 8443');
+      expect(managed).toContain('scheme: HTTPS');
+      expect(managed).toContain('secretName: atlas-relay-tls');
+      expect(managed).toContain('mountPath: /policy/policy.json');
+      expect(managed).toContain('\\"policyPath\\":\\"/policy/policy.json\\"');
+      expect(managed).toContain('\\"certPath\\":\\"/tls/tls.crt\\"');
+      // An ingress without its TLS secret is refused: the relay is only reached over TLS.
+      expect(() => run('template', 'atlas', chart, '--set', 'ingress.enabled=true')).toThrow();
+      // A policy without its issuer would start an open relay: refused.
+      expect(() => run('template', 'atlas', chart, '--set', 'policy.enabled=true')).toThrow();
 
-    // A new policy changes the pod template, so the relay restarts on it; behind an ingress it is reached over HTTPS.
-    const checksum = (rendered: string) => /checksum\/config: (\w+)/.exec(rendered)?.[1];
-    const rotated = run(
-      'template',
-      'atlas',
-      chart,
-      '--set',
-      'tls.enabled=true',
-      '--set',
-      'tls.secretName=atlas-relay-tls',
-      '--set',
-      'policy.enabled=true',
-      '--set',
-      'policy.issuer=11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo',
-      '--set-json',
-      'policy.signedPolicy={"policy":{"policyId":"atlas-default","version":2},"sig":"y"}',
-      '--set',
-      'ingress.enabled=true',
-      '--set',
-      'ingress.tlsSecretName=atlas-ingress-tls',
-    );
-    expect(checksum(rotated)).toBeDefined();
-    expect(checksum(rotated)).not.toBe(checksum(managed));
-    expect(rotated).toContain('nginx.ingress.kubernetes.io/backend-protocol: HTTPS');
-  });
+      // A new policy changes the pod template, so the relay restarts on it; behind an ingress it is reached over HTTPS.
+      const checksum = (rendered: string) => /checksum\/config: (\w+)/.exec(rendered)?.[1];
+      const rotated = run(
+        'template',
+        'atlas',
+        chart,
+        '--set',
+        'tls.enabled=true',
+        '--set',
+        'tls.secretName=atlas-relay-tls',
+        '--set',
+        'policy.enabled=true',
+        '--set',
+        'policy.issuer=11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo',
+        '--set-json',
+        'policy.signedPolicy={"policy":{"policyId":"atlas-default","version":2},"sig":"y"}',
+        '--set',
+        'ingress.enabled=true',
+        '--set',
+        'ingress.tlsSecretName=atlas-ingress-tls',
+      );
+      expect(checksum(rotated)).toBeDefined();
+      expect(checksum(rotated)).not.toBe(checksum(managed));
+      expect(rotated).toContain('nginx.ingress.kubernetes.io/backend-protocol: HTTPS');
+    },
+    // About ten Helm runs, over a second each on the Windows runner.
+    60_000,
+  );
 });

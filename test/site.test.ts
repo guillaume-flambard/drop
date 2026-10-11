@@ -177,7 +177,8 @@ describe('documentation site', () => {
   });
 
   // root reads any file whatever its mode: the unreadable release cannot be staged then.
-  it.skipIf(process.getuid?.() === 0)(
+  // Windows has no mode that hides a file from its owner (chmod 0o000 only sets read-only): nothing to stage either.
+  it.skipIf(process.getuid?.() === 0 || process.platform === 'win32')(
     'answers 500 for a release file it cannot read and keeps serving (B8)',
     async () => {
       const releases = await mkdtemp(join(tmpdir(), 'drop-releases-'));
