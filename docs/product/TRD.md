@@ -142,7 +142,7 @@ La promesse adoptée : « Tes données restent sur ta machine. Seule une répons
 
 - **Existant** : consentement avant exécution, chiffrement de bout en bout, relais aveugle au contenu, reçus locaux (section 5).
 - **Existant** : le journal local des reçus garde des hash et des métadonnées, pas le contenu sorti (`packages/protocol/src/receipt.ts:7-32`). « Journal de tout ce qui est sorti » signifie donc aujourd'hui « trace vérifiable », pas copie.
-- **Visé** T3.6 : « code ouvert » ; le dépôt reste privé jusque-là.
+- **Existant** T3.6 : « code ouvert » ; le dépôt est public et open source (Apache-2.0) depuis le 11 octobre 2026. Aucun téléchargement n'est encore publié.
 - **Existant** (limite, D52) : drop contrôle ce qui passe par drop. Un connecteur MCP, un modèle ou un agent A2A choisi par le propriétaire peut avoir ses propres flux ([profil privé](../PRIVATE_PROFILE.md#frontière-prise-en-charge)).
 - **Existant** (limite) : le relais voit `from`, `to`, `id`, `ts`, `exp` et la taille de chaque enveloppe (`packages/protocol/src/envelope.ts:22-32`).
 
