@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       name="description"
-      content="Installer drop pour répondre depuis son Mac, ou pour demander depuis Claude Code, Codex, Cursor, Claude Desktop, Claude ou ChatGPT."
+      content="Installer drop pour répondre depuis son Mac, ou pour demander depuis un agent comme Claude Code, Codex, Cursor ou Claude Desktop."
     />
     <meta name="theme-color" content="#2548ed" />
     <title>Démarrer en 5 minutes · drop</title>
@@ -38,15 +38,15 @@
       <div class="doc-layout">
         <nav class="toc" aria-label="Sommaire">
           <a href="#avant">Avant de commencer</a><a href="#repondre">Pour répondre</a
-          ><a href="#agents">Depuis un agent de code</a><a href="#assistants">Depuis Claude ou ChatGPT</a
+          ><a href="#agents">Depuis un agent de code</a><a href="#assistants">Claude et ChatGPT sur le web</a
           ><a href="#ensuite">Et ensuite</a>
         </nav>
         <article class="article">
           <!-- if:beta -->
           <div class="note">
             <p>
-              <strong>Pendant la bêta, nous faisons ces étapes avec vous.</strong> L'app Mac attend sa signature Apple
-              et le paquet public son nom définitif. Voici déjà le parcours tel qu'il se passera.
+              <strong>Pendant la bêta, nous faisons ces étapes avec vous.</strong> L'app Mac est signée et notarisée ;
+              il reste à la tester sur un Mac neuf. Le paquet public attend son nom définitif. Voici déjà le parcours.
             </p>
           </div>
           <!-- /if:beta -->
@@ -55,7 +55,10 @@
             <p>drop relie des personnes d'une même équipe. Il faut :</p>
             <ul>
               <li>pour répondre, un Mac avec puce Apple et macOS 13 ou plus récent ;</li>
-              <li>pour demander, Claude Code, Codex, Cursor, Claude Desktop, ou Claude et ChatGPT sur le web ;</li>
+              <li>
+                pour demander, un agent qui parle MCP : Claude Code, Claude Desktop, Cursor, Codex, Gemini CLI, VS Code,
+                Cline, ou l'un des six autres clients reconnus ;
+              </li>
               <li>un lien d'invitation envoyé par quelqu'un de l'équipe, ou créer l'équipe vous-même.</li>
             </ul>
           </section>
@@ -73,21 +76,25 @@
                 invitez les autres.
               </li>
               <li>
-                <strong>Partagez vos outils.</strong> L'onglet Mes outils liste ce que drop a trouvé dans vos agents :
-                Figma, Notion, Linear, GitHub… Pour chacun, choisissez les outils en lecture que vos collègues pourront
-                faire utiliser.
+                <strong>Partagez vos outils.</strong> L'onglet Mes outils liste les serveurs MCP trouvés dans vos
+                agents. Un interrupteur partage un serveur avec les seuls outils que ce serveur déclare en lecture.
+                Choisir les outils, le modèle et la personne qui décide depuis l'app viendra plus tard ; en ligne de
+                commande, <code>drop share --tools</code> permet déjà de nommer les outils. Vous pouvez aussi publier un
+                fait : une information que vous acceptez de partager telle quelle, jusqu'à une date de fin.
               </li>
               <li>
                 <strong>Décidez.</strong> Chaque demande s'affiche sous l'icône : qui demande, pourquoi, ce qu'il
-                recevra et ce qu'il ne recevra jamais. Autoriser une fois, refuser, ou plus tard.
+                recevra, ce qu'il ne recevra jamais et quand la demande expire. Autoriser une fois, refuser, plus tard,
+                ou répondre vous-même par un texte.
               </li>
             </ol>
           </section>
           <section id="agents">
             <h2>Pour demander depuis un agent de code.</h2>
             <p>
-              Une minute. Dans l'onglet Mes outils de l'app, ajoutez drop aux agents détectés : Claude Code, Codex,
-              Cursor ou Claude Desktop. Ou dans un terminal :
+              Une minute. Dans l'onglet Mes outils de l'app, ajoutez drop aux agents détectés. Sept sont raccordés
+              automatiquement : Claude Code, Claude Desktop, Cursor, Codex, Gemini CLI, VS Code et Cline. Pour les six
+              autres, l'app affiche la configuration à copier. Ou dans un terminal :
             </p>
             <pre><code>drop install all</code></pre>
             <p>
@@ -102,40 +109,28 @@
             <!-- /if:open -->
           </section>
           <section id="assistants">
-            <h2>Pour demander depuis Claude ou ChatGPT.</h2>
-            <p>Deux minutes, avec l'app drop installée sur le même Mac.</p>
-            <ol>
-              <li>
-                <strong>Ajoutez le connecteur</strong> avec cette adresse : <code>https://drop.memolabs.dev/mcp</code>.
-                Dans Claude : Réglages, Connecteurs, ajouter un connecteur personnalisé. Dans ChatGPT : le mode
-                développeur des connecteurs, disponible selon votre abonnement.
-              </li>
-              <li>
-                <strong>Autorisez dans l'app drop.</strong> La page de connexion ouvre l'app, qui affiche le nom de
-                l'assistant et le domaine où partira l'autorisation : <code>claude.ai</code> ou
-                <code>chatgpt.com</code>. Si c'est un autre domaine, l'app vous prévient : refusez si vous n'avez rien
-                demandé.
-              </li>
-              <li>
-                <strong>Posez votre question</strong> dans la conversation. Vos collègues décident comme pour un agent
-                de code.
-              </li>
-            </ol>
+            <h2>Claude et ChatGPT sur le web : pas encore.</h2>
+            <p>
+              Ces assistants n'acceptent qu'un connecteur en ligne. Une passerelle existe dans le code, à l'adresse
+              prévue <code>https://drop.memolabs.dev/mcp</code>, mais elle n'est pas livrée. C'est une option cloud,
+              remise à plus tard.
+            </p>
             <div class="note">
               <p>
-                Le connecteur passe par la passerelle de drop, qui voit vos questions et les réponses en clair, comme
-                Claude ou ChatGPT eux-mêmes. Elle n'en garde rien. <a href="securite.html#assistants">En savoir plus</a>
+                Le profil privé, celui que crée l'app, refuse de se relier à cette passerelle. Une entreprise peut aussi
+                l'interdire par sa politique. Pour demander, utilisez un agent installé sur votre poste.
+                <a href="securite.html#assistants">En savoir plus</a>
               </p>
             </div>
           </section>
           <section id="ensuite">
             <h2>Et ensuite.</h2>
             <ul>
-              <li>Un assistant relié se retire d'un clic dans l'onglet Mes outils.</li>
+              <li>Un agent raccordé se retire d'un clic dans l'onglet Mes outils.</li>
               <li>Chaque échange laisse un reçu signé des deux côtés, sans le contenu.</li>
               <li>
-                Par défaut, celui qui demande paie le modèle qui répond, avec une clé plafonnée créée pour sa seule
-                demande. Le plafond est affiché sur la carte.
+                Le modèle qui répond est le vôtre, sur votre poste ou dans votre entreprise. Le profil privé refuse
+                toute clé envoyée par celui qui demande.
               </li>
             </ul>
             <p><a href="cas.html">Des idées de questions</a> · <a href="guide.html#essayer">Questions fréquentes</a></p>

@@ -1,5 +1,11 @@
 # Essais réels chez Julie et Natha (T2.7)
 
+> **Document historique, ne pas suivre tel quel.** Ce protocole date du 9 octobre 2026 et suppose le profil
+> historique : clé plafonnée payée par le demandeur (D27), passerelle publique pour Claude et ChatGPT (T2.13). Le profil
+> privé, créé aujourd'hui par `drop init` et par l'app, refuse les deux. Julie et Natha sont des personnages de
+> scénario, pas des testeuses recrutées. Le prochain essai réel est celui avec deux amis (T4.6), dont le protocole reste
+> à écrire. Voir [le bilan](../AVANCEMENT.md).
+
 Protocole des premiers essais en équipe. But : jouer les cas d'usage sur les vrais outils de deux testeuses,
 en rapporter des captures et une vidéo pour les entreprises, et noter tout ce qui coince. Préparé le 9 octobre 2026 ;
 les points marqués « à vérifier » le sont sur place, avant de commencer.

@@ -1,97 +1,48 @@
 # drop
 
-**Faire collaborer vos agents dans votre infrastructure. Obtenir la réponse, garder la maîtrise des accès.**
+**La réponse, pas l'accès.** Votre agent pose une question précise à l'environnement d'un collègue. Le collègue autorise une fois. Seule la réponse validée revient.
 
-Votre agent a besoin d'une information chez un collègue. Il pose une question précise ; le propriétaire autorise une fois ; une capacité s'exécute dans son environnement ; seule la réponse autorisée revient.
+Promesse (D52) : vos données restent sur votre machine ; seule une réponse que vous avez approuvée en sort, chiffrée, vers la personne qui l'a demandée. Limite : drop contrôle ce qui passe par drop, pas les flux propres d'un connecteur ou d'un modèle que vous choisissez.
 
-`drop` est un nom de code (D57). Positionnement adopté le 10 octobre 2026 (D47 à D58) : « la réponse, pas l'accès ». drop fait valider par le propriétaire la réponse qui sort et se place comme couche de consentement humain au-dessus d'A2A, sans le concurrencer. La référence produit est [`docs/product/`](docs/product/) : [PRD](docs/product/PRD.md), [TRD](docs/product/TRD.md), [parcours](docs/product/APP_FLOW.md), [UX/UI](docs/product/UX_UI.md), [schéma backend](docs/product/BACKEND_SCHEMA.md) et [plan d'implémentation](docs/product/IMPLEMENTATION_PLAN.md). Cible (D48) : premiers essais avec des amis techniques, conception selon les exigences d'une entreprise souveraine, adoption par les petites équipes. Promesse (D52) : vos données restent sur votre machine et seule une réponse que vous avez approuvée en sort, chiffrée ; limite : drop contrôle ce qui passe par drop, pas les flux propres d'un connecteur ou d'un modèle que vous choisissez. Aucun compte Memo Labs ni relais tiers n'est obligatoire. En cas d'écart avec un autre document descriptif, ces documents et D47 à D58 font foi ; les contrats restent dans `openspec/specs`.
+`drop` est un nom de code. Le dépôt est privé, sous [Apache-2.0](LICENSE). Rien n'a encore été validé avec de vrais utilisateurs.
 
-Ce qui existe : le profil privé avec relais interne et politique réseau explicite (T3.1, `packages/node/src/private-config.ts`), le niveau « capacité » de l'échelle des échanges (`packages/runner`, `packages/capabilities`), le raccordement en deux confirmations de quatre agents (T3.3, `packages/node/src/onboarding.ts`, vérifié sur fixtures, recette humaine sur un Mac de test à faire) et une app Mac de barre de menus sous Tauri 2 en paquet de développement (`apps/mac`). Ce qui est visé : distribution Mac signée et notarisée (T3.4), connexion directe sans relais par défaut (T4.2), réponse à la main du propriétaire (T4.3), faits publiés (T4.4), treize clients MCP (T4.5), essai avec deux amis (T4.6), puis Windows (T3.7) et Linux (T3.8). Rien n'a encore été validé avec de vrais utilisateurs. Le [bilan daté](docs/AVANCEMENT.md) distingue le code, les tests, les démonstrations et le travail restant.
+## Ce qui existe
 
-## Le socle et son modèle
+- Le profil privé, créé par `drop init` et par l'app : relais interne, destinations réseau explicites, aucun repli cloud. Le propriétaire paie son propre modèle et refuse les clés reçues (T3.1).
+- Trois chemins de connexion : réseau local (mDNS), Internet par iroh, relais interne (T4.2, T4.2b). Aucun relais n'est imposé ; entre deux réseaux, iroh demande un relais choisi par l'équipe.
+- Treize clients MCP détectés ; sept raccordés automatiquement (Claude Code, Claude Desktop, Cursor, Codex, Gemini CLI, VS Code, Cline), six par une configuration à copier (T3.3, T4.5).
+- Une carte de consentement conforme, la relecture champ par champ et l'invitation confirmée (T4.14).
+- La réponse à la main du propriétaire (T4.3) et les faits publiés, servis sans modèle (T4.4).
+- Le pack entreprise : politique signée appliquée au poste et au relais, image Docker et chart Helm du relais (T4.10).
+- L'app Mac de barre de menus, signée et notarisée pour Apple Silicon (T3.4).
 
-Le code du projet est sous [Apache-2.0](LICENSE). Rien n'est payant avant d'avoir des utilisateurs (D57) et la sécurité n'est jamais une option payante (D38). Des contrats d'installation et de support, puis un pack entreprise, restent des hypothèses sans tarif (PRD, hypothèse H6). Le dépôt est encore privé, sans installateur public annoncé. Voir [le cadre open source](docs/OPEN_SOURCE.md).
+## Ce qui reste
 
-Le profil privé (existant, T3.1) utilise un relais local ou interne choisi par le propriétaire. Les destinations modèle, MCP HTTP et A2A sont limitées à des origines privées explicites, sans redirection ni repli cloud. Le modèle doit être choisi ; aucun poids n'est téléchargé automatiquement. Le financement ne remplace plus son endpoint. Voir le [démarrage et les limites du profil privé](docs/PRIVATE_PROFILE.md), notamment le refus du DNS et des serveurs source MCP stdio non isolés. Les trois modes de connexion de D53 (réseau local, Internet par iroh, relais d'entreprise) sont visés en T4.2 et T4.10 ; aujourd'hui, les Nodes passent par un relais WebSocket configuré (`packages/relay`).
+- Revues de sécurité des corrections anti-rejeu (T3.1b, T3.1c).
+- Recette de l'app sur un Mac neuf, et VoiceOver (T3.4).
+- Hygiène de configuration (T4.15).
+- Le chemin de connexion et le protocole de l'essai (T4.6a, T4.6b).
+- L'essai avec deux amis et la mesure du besoin (T4.6, D24).
+- Si l'essai inclut le partage par modèle : qualifier un modèle (T3.2) et choisir outils, modèle et approbateur depuis le panneau (T4.16).
+- Avant le lancement : preuve privée avec Internet bloqué (T3.5), préparation de la publication (T3.6, T4.13).
+- Après l'essai : Windows (T3.7), Linux (T3.8).
 
-## Commencer par comprendre
+L'ordre et les statuts sont dans [docs/TASKS.md](docs/TASKS.md) ; le bilan daté dans [docs/AVANCEMENT.md](docs/AVANCEMENT.md).
 
-- [Les documents produit](docs/product/PRD.md) : problème, cible, échelle des échanges, statuts existant, visé et hypothèse.
-- [Le guide illustré](docs/GUIDE.md) : l'exemple joué par la démo, le parcours, l'architecture et la confidentialité.
-- [L'avancement du projet](docs/AVANCEMENT.md) : preuves, limites et prochaines étapes.
-- [Le raccordement en deux confirmations](docs/ONBOARDING.md) (quatre agents livrés en T3.3) et [les modèles locaux candidats](docs/MODELS.md).
-- [Les critères futurs](docs/ACCEPTANCE.md) et [les chantiers ordonnés](docs/TASKS.md).
-- [Les démonstrations conservées](docs/demo/README.md) : captures et résultats de Claude Code et Codex.
+## Essayer
 
-![Le trajet d'une réponse autorisée](docs/diagrams/journey.svg)
-
-## Ouvrir le site
-
-La publication sur [drop.memolabs.dev](https://drop.memolabs.dev) est suivie dans le [guide d'exploitation du site](docs/SITE-DEPLOYMENT.md). Le site utilise une stack distincte du relais.
-
-Depuis un clone du dépôt, avec Node **22.18 ou supérieur** et pnpm **11.27.0** :
+Avec Node 22.18 ou plus récent et pnpm 11.27.0 :
 
 ```bash
 pnpm install --frozen-lockfile
+pnpm -r test
 pnpm site:preview
 ```
 
-Ouvrir l'adresse locale affichée. Le site comprend une simulation pédagogique, le guide et le bilan. Il ne se connecte pas aux Nodes. `pnpm site:build` crée les fichiers statiques dans `dist/site/`, sans dépendance supplémentaire. Relancer la prévisualisation après une modification. Si `node scripts/bundle.ts` est exécuté ensuite, reconstruire le site : le bundle du produit nettoie `dist/`.
+Les tests n'utilisent aucune clé LLM. La démonstration, le panneau et la ligne de commande sont expliqués dans le guide.
 
-## Vérifier le prototype
+## Lire ensuite
 
-```bash
-pnpm -r lint
-pnpm -r typecheck
-pnpm -r test
-```
-
-Les tests utilisent des sources locales et des fournisseurs simulés ; ils ne demandent aucune clé LLM.
-
-## Rejouer la démonstration
-
-```bash
-bash scripts/demo-local.sh
-```
-
-Le script démarre un relais et trois Nodes temporaires (VPS, Guillaume et Julie) sur `127.0.0.1`, ports **7790 à 7793**. Il joue un résumé d'erreurs, puis la question de Guillaume sur le mode sombre dans le dépôt de Julie (`repo.answer`) avec relecture. Il arrête ses processus en quittant et conserve le dossier temporaire. Ses trois Nodes sont initialisés en profil historique (`--profile legacy`, `scripts/demo-local.sh`) : cette démo ne prouve pas le profil privé, dont la preuve d'ensemble est visée en T3.5.
-
-**La partie dépôt utilise OpenRouter et le réseau.** Elle attend `OPENROUTER_API_KEY`, ou une entrée du trousseau macOS nommée `OpenRouter API Key`. Sa durée dépend du fournisseur. Ne jamais placer la clé dans le dépôt. Le [guide](docs/GUIDE.md#essayer-le-prototype) explique les prérequis et la différence entre exécution locale et modèle distant.
-
-## Brancher un agent
-
-Un Node initialisé, admis sur un relais et lancé avec `serve` est nécessaire. Dans le panneau local, l'onglet « Mes outils » propose « 1. Analyser ce Mac » puis « 2. Connecter les agents sélectionnés » (existant, T3.3, `packages/node/src/panel.ts`). En ligne de commande, l'installation locale du connecteur se fait après assemblage :
-
-```bash
-node scripts/bundle.ts
-node packages/node/src/cli.ts install codex
-```
-
-Les autres identifiants sont `claude_code`, `cursor` et `claude_desktop` : ce sont les quatre adaptateurs existants (`packages/capabilities/src/agents.ts`). La commande passe par les mêmes contrôles d'aperçu, de conflit et de sauvegarde que le panneau, puis écrit la configuration de l'agent choisi. `uninstall <agent>` retire le connecteur. Les neuf autres clients de D55 sont visés en T4.5 ; d'ici là, une entrée MCP stdio se copie à la main. Le paquet npm public reste une tâche distincte ; ne pas supposer qu'un `npx drop` est disponible.
-
-Voir [les configurations manuelles](packages/requester-mcp/README.md) et `node packages/node/src/cli.ts help` pour les commandes du prototype.
-
-## Où trouver les sources
-
-| Chemin                                 | Rôle                                                      |
-| -------------------------------------- | --------------------------------------------------------- |
-| [AGENTS.md](AGENTS.md)                 | Méthode de contribution, stack et règles de sécurité      |
-| [openspec/specs/](openspec/specs/)     | Contrats normatifs des capacités                          |
-| [docs/product/](docs/product/)         | Référence produit descriptive (D58)                       |
-| [openspec/project/](openspec/project/) | Vision et architecture ; le PRD et le TRD font foi        |
-| [docs/TASKS.md](docs/TASKS.md)         | Ordre, dépendances et statuts du travail                  |
-| [docs/DECISIONS.md](docs/DECISIONS.md) | Décisions et évolutions du périmètre                      |
-| [packages/](packages/)                 | Protocole, relais, Node, runner, capacités et connecteurs |
-| [site/](site/)                         | Sources de la vitrine statique                            |
-
-## Contribuer
-
-Lire [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md) et [AGENTS.md](AGENTS.md), puis la première tâche disponible dans l'index ou celle désignée par l'humain. Une change OpenSpec porte le travail, ses critères et ses preuves. Les contrôles incluent lint, types, tests, liens aux scénarios, revue, puis archivage.
-
-```bash
-openspec list --specs
-openspec validate --all --strict
-npx --yes openspec-guard@0.3.0 check --require-selector --baseline .openspec-guard-baseline.json --fail-on fail
-```
-
-Le seuil de validation du besoin est fixé en D24 et sera mesuré pendant l'essai avec deux amis (T4.6). Rien n'a encore été validé avec de vrais utilisateurs ; un prototype qui fonctionne ne suffit pas à conclure que le besoin est validé.
+- [Le guide](docs/GUIDE.md) : le parcours, la démonstration, la confidentialité.
+- [Le profil privé](docs/PRIVATE_PROFILE.md) : démarrer, et ses limites.
+- [Contribuer](CONTRIBUTING.md), avec [SECURITY.md](SECURITY.md) et [AGENTS.md](AGENTS.md).
