@@ -1,12 +1,14 @@
-import { homedir } from 'node:os';
 import {
   CLIENT_SPECS,
+  clientConfigLocation,
+  clientHost,
   CLIENTS,
   gooseExtensions,
   MAX_GLOBAL_CONFIG_BYTES,
   MAX_PROJECT_CONFIG_BYTES,
   readConfigText,
   stripJsonc,
+  type ClientHost,
   type ClientId,
   type ConfigLayout,
   type ConfigLocation,
@@ -31,9 +33,9 @@ export interface AgentServer {
   headers: Record<string, string>;
 }
 
-/** The main global file of a client: the one drop writes for clients connected through a file. */
-export function agentConfigPath(agent: AgentKind, home: string = homedir()): string {
-  return CLIENT_SPECS[agent].global(home)[0]?.path ?? '';
+/** The global file drop writes (or its official command owns) for a client on this host; empty where it has none. */
+export function agentConfigPath(agent: AgentKind, home: string | ClientHost = clientHost()): string {
+  return clientConfigLocation(agent, clientHost(home))?.path ?? '';
 }
 
 function strings(value: unknown): Record<string, string> {
@@ -237,8 +239,8 @@ function merged(locations: ConfigLocation[], maxBytes: number = MAX_GLOBAL_CONFI
 }
 
 /** The MCP servers one agent declares globally; [] when the agent or its config is absent or unreadable. */
-export function agentServers(agent: AgentKind, home: string = homedir()): AgentServer[] {
-  return merged(CLIENT_SPECS[agent].global(home));
+export function agentServers(agent: AgentKind, home: string | ClientHost = clientHost()): AgentServer[] {
+  return merged(CLIENT_SPECS[agent].global(clientHost(home)));
 }
 
 /** The MCP servers one agent declares for one project folder, read only from its documented files. */
@@ -247,6 +249,10 @@ export function projectServers(agent: AgentKind, dir: string): AgentServer[] {
 }
 
 /** A server as one agent declares it, looked up when mcp.answer starts it (secrets stay in the agent's file). */
-export function findAgentServer(agent: AgentKind, name: string, home: string = homedir()): AgentServer | undefined {
+export function findAgentServer(
+  agent: AgentKind,
+  name: string,
+  home: string | ClientHost = clientHost(),
+): AgentServer | undefined {
   return agentServers(agent, home).find((server) => server.name === name);
 }
