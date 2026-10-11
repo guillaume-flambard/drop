@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { build } from 'esbuild';
 import { describe, expect, it } from 'vitest';
+import { NODE_BUNDLE_OPTIONS } from '../scripts/bundle.ts';
 
 describe('private bundled bootstrap', () => {
   it('initializes a fresh private home without starting the imported MCP executable', async () => {
@@ -12,16 +13,10 @@ describe('private bundled bootstrap', () => {
       const bundle = join(root, 'drop.mjs');
       const home = join(root, 'home');
       await build({
+        // The options of the real bundle, so this proof builds what ships (D85: jsonc-parser's module build).
+        ...NODE_BUNDLE_OPTIONS,
         entryPoints: [resolve('packages/node/src/cli.ts')],
         outfile: bundle,
-        bundle: true,
-        platform: 'node',
-        format: 'esm',
-        target: 'node22.18',
-        external: ['bufferutil', 'utf-8-validate'],
-        banner: {
-          js: "import { createRequire as __dropRequire } from 'node:module';const require = __dropRequire(import.meta.url);",
-        },
       });
       const initialized = spawnSync(process.execPath, [bundle, 'init', '--profile', 'private', '--name', 'Owner'], {
         encoding: 'utf8',

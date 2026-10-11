@@ -11,7 +11,22 @@ import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'no
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { build, type BuildOptions } from 'esbuild';
+import { createRequire } from 'node:module';
+import { build, type BuildOptions, type Plugin } from 'esbuild';
+
+/**
+ * jsonc-parser's `main` is a UMD build whose lazy require('./impl/…') esbuild cannot follow; its ES module build (its
+ * `module` field, lib/esm) bundles cleanly (D85).
+ */
+const jsoncParserEsm: Plugin = {
+  name: 'jsonc-parser-esm',
+  setup(context) {
+    context.onResolve({ filter: /^jsonc-parser$/ }, (args) => {
+      const manifest = createRequire(join(args.resolveDir, 'index.js')).resolve('jsonc-parser/package.json');
+      return { path: join(dirname(manifest), 'lib', 'esm', 'main.js') };
+    });
+  },
+};
 
 /** esbuild options shared by every Node bundle of the repo (this script and the proof builds). */
 export const NODE_BUNDLE_OPTIONS = {
@@ -21,6 +36,7 @@ export const NODE_BUNDLE_OPTIONS = {
   target: 'node22.18',
   // ws loads these native speedups only if present; without them it uses its JS code.
   external: ['bufferutil', 'utf-8-validate'],
+  plugins: [jsoncParserEsm],
   // Some dependencies are CommonJS and call require(); an ESM bundle needs one.
   banner: {
     js: "import { createRequire as __dropRequire } from 'node:module';const require = __dropRequire(import.meta.url);",
