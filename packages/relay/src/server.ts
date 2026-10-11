@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { existsSync, readFileSync, unwatchFile, watchFile, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, unwatchFile, watchFile } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { createServer } from 'node:http';
 import { createServer as createTlsServer } from 'node:https';
@@ -9,7 +9,9 @@ import {
   AdmissionSchema,
   EnvelopeSchema,
   envelopeSize,
+  MAX_CLOCK_SKEW_MS,
   MAX_ENVELOPE_BYTES,
+  MAX_TTL_MS,
   policyExpired,
   policyFingerprint,
   SignedPolicySchema,
@@ -18,12 +20,15 @@ import {
   verifyDetached,
   type Envelope,
 } from '@drop/protocol';
+import { writePrivate } from './private-file.ts';
 import {
+  CLOSE_RATE,
   CLOSE_REPLACED,
   CLOSE_SPOOFED_FROM,
   CLOSE_UNAUTHORIZED,
   ClientFrameSchema,
   parseFrame,
+  type ClientFrame,
   type ServerFrame,
 } from './wire.ts';
 
@@ -34,6 +39,12 @@ export const RelayConfigSchema = z
     allowedNodeIds: z.array(z.string()),
     revokedNodeIds: z.array(z.string()).default([]),
     maxQueuePerNode: z.number().int().positive().default(100),
+    /** All deferred envelopes together, in bytes: bounds the relay's memory whatever the number of offline nodes. */
+    maxQueueBytes: z
+      .number()
+      .int()
+      .positive()
+      .default(64 * 1024 * 1024),
     rateLimitPerMinute: z.number().int().positive().default(60),
     /** Where nodes admitted by invitation are kept across restarts (T2.1). Without it, admissions last until restart. */
     admittedPath: z.string().optional(),
@@ -89,17 +100,20 @@ export interface RelayHandle {
 
 export function readRelayConfig(path: string): RelayConfig {
   const config = RelayConfigSchema.parse(JSON.parse(readFileSync(path, 'utf8')));
-  if (config.admittedPath) config.admittedPath = resolve(dirname(path), config.admittedPath);
-  if (config.policyPath) config.policyPath = resolve(dirname(path), config.policyPath);
-  if (config.tls)
-    config.tls = {
-      certPath: resolve(dirname(path), config.tls.certPath),
-      keyPath: resolve(dirname(path), config.tls.keyPath),
-    };
+  // Every file the config names is relative to the config itself, so the relay and `drop-relay revoke` agree from any
+  // working directory.
+  const nearConfig = (file: string): string => resolve(dirname(path), file);
+  if (config.admittedPath) config.admittedPath = nearConfig(config.admittedPath);
+  if (config.revokedPath) config.revokedPath = nearConfig(config.revokedPath);
+  if (config.policyPath) config.policyPath = nearConfig(config.policyPath);
+  if (config.tls) config.tls = { certPath: nearConfig(config.tls.certPath), keyPath: nearConfig(config.tls.keyPath) };
   return config;
 }
 
 const RATE_WINDOW_MS = 60_000;
+const DAY_MS = 86_400_000;
+/** The longest a valid envelope can live, plus the clock skew the protocol tolerates between sender and relay. */
+const MAX_HOLD_MS = MAX_TTL_MS + MAX_CLOCK_SKEW_MS;
 /** A client frame serializes the envelope id within this prefix; E_RATE reads no further. */
 const RATE_ID_PREFIX_BYTES = 256;
 
@@ -123,6 +137,23 @@ interface Connection {
   socket: WebSocket;
   nodeId: string;
   missedPings: number;
+}
+
+/**
+ * A deferred envelope, with its serialized size counted once against `maxQueueBytes`, and the relay time it leaves at:
+ * its `exp`, but never later than MAX_HOLD_MS after it arrived, whatever `ts` its sender wrote.
+ */
+interface Queued {
+  envelope: Envelope;
+  size: number;
+  until: number;
+}
+
+type AuthFrame = Extract<ClientFrame, { type: 'auth' }>;
+
+/** What a frame ws rejected before 'message' counts as, for a sender still within its quota. */
+function wsErrorOutcome(code: string): 'E_TOO_LARGE' | 'E_SCHEMA' {
+  return code === 'WS_ERR_UNSUPPORTED_MESSAGE_LENGTH' ? 'E_TOO_LARGE' : 'E_SCHEMA';
 }
 
 /** Reads and verifies the relay's policy; a relay never starts on one that does not verify or has expired (T4.10). */
@@ -168,7 +199,7 @@ export async function startRelay(config: RelayConfig, options: RelayOptions = {}
     if (!isAllowed(ticket.sponsor)) return 'sponsor_not_admitted';
     admittedState.spentNonces = admittedState.spentNonces.filter((spent) => spent.expiresAt > now());
     if (admittedState.spentNonces.some((spent) => spent.nonce === ticket.nonce)) return 'ticket_spent';
-    const dayAgo = now() - 86_400_000;
+    const dayAgo = now() - DAY_MS;
     const sponsored = admittedState.admitted.filter((entry) => entry.sponsor === ticket.sponsor && entry.at > dayAgo);
     if (sponsored.length >= settings.maxAdmissionsPerSponsorPerDay) return 'sponsor_quota';
     if (admittedState.admitted.filter((entry) => entry.at > dayAgo).length >= settings.maxAdmissionsPerDay)
@@ -176,15 +207,31 @@ export async function startRelay(config: RelayConfig, options: RelayOptions = {}
     admittedState.spentNonces.push({ nonce: ticket.nonce, expiresAt: ticket.expiresAt });
     admittedState.admitted.push({ nodeId, sponsor: ticket.sponsor, at: now() });
     allowed.add(nodeId);
-    if (settings.admittedPath) {
-      writeFileSync(settings.admittedPath, `${JSON.stringify(admittedState, null, 2)}\n`, { mode: 0o600 });
-    }
+    if (settings.admittedPath) writePrivate(settings.admittedPath, `${JSON.stringify(admittedState, null, 2)}\n`);
     log({ event: 'admission', outcome: 'admitted', nodeId, sponsor: ticket.sponsor });
     return 'ok';
   };
   const connections = new Map<string, Connection>();
   const sentByNode = new Map<string, number[]>();
-  const queues = new Map<string, Envelope[]>();
+  const queues = new Map<string, Queued[]>();
+  let queuedBytes = 0;
+
+  /** Forgets a node's whole queue, delivered or dropped. */
+  const dropQueue = (nodeId: string): void => {
+    for (const entry of queues.get(nodeId) ?? []) queuedBytes -= entry.size;
+    queues.delete(nodeId);
+  };
+
+  /** Drops the expired envelopes of a node's queue, and the queue itself once empty; returns what is still live. */
+  const purge = (nodeId: string): Queued[] => {
+    const queue = queues.get(nodeId) ?? [];
+    const live = queue.filter((entry) => entry.until > now());
+    if (live.length === queue.length) return queue;
+    for (const entry of queue) if (entry.until <= now()) queuedBytes -= entry.size;
+    if (live.length) queues.set(nodeId, live);
+    else queues.delete(nodeId);
+    return live;
+  };
 
   /**
    * Reads the revocation file (T2.19): the listed nodes, plus, for an entry `withInvited`, every node it admitted and
@@ -214,7 +261,7 @@ export async function startRelay(config: RelayConfig, options: RelayOptions = {}
     for (const nodeId of next) {
       if (revoked.has(nodeId)) continue;
       connections.get(nodeId)?.socket.close(CLOSE_UNAUTHORIZED, 'revoked');
-      queues.delete(nodeId);
+      dropQueue(nodeId);
       log({ event: 'revocation', outcome: 'revoked', nodeId });
     }
     revoked = next;
@@ -239,12 +286,6 @@ export async function startRelay(config: RelayConfig, options: RelayOptions = {}
 
   const send = (socket: WebSocket, frame: ServerFrame): void => {
     socket.send(JSON.stringify(frame));
-  };
-
-  const purge = (nodeId: string): Envelope[] => {
-    const live = (queues.get(nodeId) ?? []).filter((envelope) => envelope.exp > now());
-    queues.set(nodeId, live);
-    return live;
   };
 
   const recentSends = (nodeId: string): number[] => {
@@ -284,6 +325,18 @@ export async function startRelay(config: RelayConfig, options: RelayOptions = {}
       log({ event: 'envelope', outcome: 'E_TOO_LARGE', ...meta });
       return;
     }
+    // Only a node this relay admits can ever collect a deferred envelope; any other `to` would hold memory for nobody.
+    if (!isAllowed(envelope.to)) {
+      send(sender.socket, { type: 'error', id: envelope.id, error: 'E_SCHEMA' });
+      log({ event: 'envelope', outcome: 'unknown_recipient', ...meta });
+      return;
+    }
+    // The protocol's own bound (openEnvelope). A far-future `ts` passes it, but the queue holds nothing past MAX_HOLD_MS.
+    if (envelope.exp > envelope.ts + MAX_TTL_MS) {
+      send(sender.socket, { type: 'error', id: envelope.id, error: 'E_SCHEMA' });
+      log({ event: 'envelope', outcome: 'ttl_too_long', ...meta });
+      return;
+    }
     const target = connections.get(envelope.to);
     if (target) {
       send(target.socket, { type: 'envelope', envelope });
@@ -292,19 +345,55 @@ export async function startRelay(config: RelayConfig, options: RelayOptions = {}
       return;
     }
     const queue = purge(envelope.to);
-    if (queue.length >= settings.maxQueuePerNode) {
+    if (queue.length >= settings.maxQueuePerNode || queuedBytes + size > settings.maxQueueBytes) {
       send(sender.socket, { type: 'error', id: envelope.id, error: 'E_QUEUE_FULL' });
       log({ event: 'envelope', outcome: 'E_QUEUE_FULL', ...meta });
       return;
     }
-    queue.push(envelope);
+    queue.push({ envelope, size, until: Math.min(envelope.exp, now() + MAX_HOLD_MS) });
+    queues.set(envelope.to, queue);
+    queuedBytes += size;
     send(sender.socket, { type: 'ack', id: envelope.id, status: 'queued' });
     log({ event: 'envelope', outcome: 'queued', ...meta });
+  };
+
+  /**
+   * Checks an `auth` frame: the signature over this socket's challenge, the relay's policy, then the allowlist or an
+   * admission ticket. Returns the node's connection, or closes the socket with 4401 and returns undefined.
+   */
+  const authenticate = async (
+    socket: WebSocket,
+    challenge: string,
+    frame: AuthFrame,
+  ): Promise<Connection | undefined> => {
+    const { nodeId, sig, admission } = frame;
+    const valid = await verifyDetached(nodeId, challenge, sig);
+    // Under a policy, only nodes that run it, while it is valid (T4.10, D81). Checked before any admission.
+    if (valid && policy && (frame.policy !== policy.fingerprint || policyExpired(policy.signed.policy, now()))) {
+      log({
+        event: 'auth',
+        outcome: frame.policy === policy.fingerprint ? 'policy_expired' : 'policy_mismatch',
+        nodeId,
+      });
+      socket.close(CLOSE_UNAUTHORIZED, 'policy');
+      return undefined;
+    }
+    if (valid && !isAllowed(nodeId) && admission !== undefined) {
+      const outcome = await admit(nodeId, admission);
+      if (outcome !== 'ok') log({ event: 'admission', outcome, nodeId });
+    }
+    if (!valid || !isAllowed(nodeId)) {
+      log({ event: 'auth', outcome: valid ? 'not_allowed' : 'bad_signature', nodeId });
+      socket.close(CLOSE_UNAUTHORIZED, 'unauthorized');
+      return undefined;
+    }
+    return { socket, nodeId, missedPings: 0 };
   };
 
   server.on('connection', (socket) => {
     const challenge = randomBytes(32).toString('base64url');
     let connection: Connection | undefined;
+    let authStarted = false;
     const authTimer = setTimeout(() => {
       if (!connection) socket.close(CLOSE_UNAUTHORIZED, 'auth timeout');
     }, options.authTimeoutMs ?? 10_000);
@@ -318,11 +407,7 @@ export async function startRelay(config: RelayConfig, options: RelayOptions = {}
       // ws rejects oversized or invalid frames before 'message'; account for authenticated attempts.
       const code = 'code' in error ? error.code : undefined;
       if (connection && typeof code === 'string' && code.startsWith('WS_ERR_')) {
-        const outcome = charge(connection.nodeId)
-          ? code === 'WS_ERR_UNSUPPORTED_MESSAGE_LENGTH'
-            ? 'E_TOO_LARGE'
-            : 'E_SCHEMA'
-          : 'E_RATE';
+        const outcome = charge(connection.nodeId) ? wsErrorOutcome(code) : 'E_RATE';
         log({ event: 'envelope', outcome, nodeId: connection.nodeId });
         return;
       }
@@ -331,44 +416,29 @@ export async function startRelay(config: RelayConfig, options: RelayOptions = {}
 
     socket.on('message', (data) => {
       if (!connection) {
+        // One auth check per socket: a burst of auth frames would start as many signature checks, and a second success
+        // would close this very socket as replaced. Frames that arrive while it runs are ignored.
+        if (authStarted) return;
         const frame = parseFrame(ClientFrameSchema, data);
         if (frame?.type !== 'auth') {
           socket.close(CLOSE_UNAUTHORIZED, 'auth expected');
           return;
         }
-        const { nodeId, sig, admission } = frame;
-        void verifyDetached(nodeId, challenge, sig)
-          .then(async (valid) => {
-            // Under a policy, only nodes that run it, while it is valid (T4.10, D81). Checked before any admission.
-            if (
-              valid &&
-              policy &&
-              (frame.policy !== policy.fingerprint || policyExpired(policy.signed.policy, now()))
-            ) {
-              log({
-                event: 'auth',
-                outcome: frame.policy === policy.fingerprint ? 'policy_expired' : 'policy_mismatch',
-                nodeId,
-              });
-              socket.close(CLOSE_UNAUTHORIZED, 'policy');
-              return;
-            }
-            if (valid && !isAllowed(nodeId) && admission !== undefined) {
-              const outcome = await admit(nodeId, admission);
-              if (outcome !== 'ok') log({ event: 'admission', outcome, nodeId });
-            }
-            if (!valid || !isAllowed(nodeId)) {
-              log({ event: 'auth', outcome: valid ? 'not_allowed' : 'bad_signature', nodeId });
-              socket.close(CLOSE_UNAUTHORIZED, 'unauthorized');
-              return;
-            }
+        authStarted = true;
+        authenticate(socket, challenge, frame)
+          .then((authed) => {
+            // A socket that closed while its signature was checked must not be registered: nothing would remove it.
+            if (!authed || socket.readyState !== socket.OPEN) return;
+            const { nodeId } = authed;
             clearTimeout(authTimer);
-            connections.get(nodeId)?.socket.close(CLOSE_REPLACED, 'replaced by a newer connection');
-            connection = { socket, nodeId, missedPings: 0 };
-            connections.set(nodeId, connection);
+            const previous = connections.get(nodeId);
+            if (previous && previous.socket !== socket)
+              previous.socket.close(CLOSE_REPLACED, 'replaced by a newer connection');
+            connection = authed;
+            connections.set(nodeId, authed);
             send(socket, { type: 'ready', nodeId });
             log({ event: 'auth', outcome: 'ok', nodeId });
-            for (const envelope of purge(nodeId)) {
+            for (const { envelope, size } of purge(nodeId)) {
               send(socket, { type: 'envelope', envelope });
               log({
                 event: 'envelope',
@@ -376,13 +446,13 @@ export async function startRelay(config: RelayConfig, options: RelayOptions = {}
                 id: envelope.id,
                 from: envelope.from,
                 to: envelope.to,
-                size: envelopeSize(envelope),
+                size,
               });
             }
-            queues.delete(nodeId);
+            dropQueue(nodeId);
           })
           .catch(() => {
-            log({ event: 'auth', outcome: 'error', nodeId });
+            log({ event: 'auth', outcome: 'error', nodeId: frame.nodeId });
             socket.close(CLOSE_UNAUTHORIZED, 'unauthorized');
           });
         return;
@@ -395,7 +465,7 @@ export async function startRelay(config: RelayConfig, options: RelayOptions = {}
         send(socket, { type: 'error', ...(id ? { id } : {}), error: 'E_RATE' });
         log({ event: 'envelope', outcome: 'E_RATE', nodeId: connection.nodeId, ...(id ? { id } : {}) });
         // A bounded prefix can contain a misleading id. Closing settles every unmatched send as offline.
-        socket.close(1013, 'rate limit');
+        socket.close(CLOSE_RATE, 'rate limit');
         return;
       }
       const frame = parseFrame(ClientFrameSchema, data);
@@ -431,6 +501,8 @@ export async function startRelay(config: RelayConfig, options: RelayOptions = {}
       connection.socket.ping();
     }
     for (const nodeId of [...sentByNode.keys()]) recentSends(nodeId);
+    // Expired envelopes leave even when their recipient never comes back.
+    for (const nodeId of [...queues.keys()]) purge(nodeId);
   }, options.pingIntervalMs ?? 25_000);
 
   return new Promise((resolve, reject) => {

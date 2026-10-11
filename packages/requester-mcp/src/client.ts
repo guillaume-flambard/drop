@@ -55,6 +55,28 @@ export interface LocalNode {
   ask(body: { question: string; purpose?: string | undefined; agent: string }): Promise<AskView>;
 }
 
+/** The local node could not be read: an error status, or a body that is not JSON (a proxy's HTML page, say). */
+export class LocalNodeError extends Error {
+  readonly code = 'E_LOCAL_NODE';
+  readonly status: number;
+
+  constructor(status: number, message: string) {
+    super(`E_LOCAL_NODE ${message}`);
+    this.name = 'LocalNodeError';
+    this.status = status;
+  }
+}
+
+/** The body as JSON, or undefined when it is not JSON. */
+function parseJson(body: string): { value: unknown } | undefined {
+  try {
+    return { value: JSON.parse(body) as unknown };
+  } catch {
+    // Not JSON: the caller reports it with the status, which says more than the parser would.
+    return undefined;
+  }
+}
+
 export function httpLocalNode(baseUrl: string, token: string): LocalNode {
   const call = async (method: string, path: string, body?: unknown): Promise<unknown> => {
     const response = await fetch(`${baseUrl}${path}`, {
@@ -62,9 +84,15 @@ export function httpLocalNode(baseUrl: string, token: string): LocalNode {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
-    const payload: unknown = await response.json();
-    if (!response.ok) throw new Error(`local node ${String(response.status)}: ${JSON.stringify(payload)}`);
-    return payload;
+    const status = String(response.status);
+    const payload = parseJson(await response.text());
+    if (!payload) throw new LocalNodeError(response.status, `le nœud local a répondu ${status} sans JSON lisible.`);
+    if (!response.ok)
+      throw new LocalNodeError(
+        response.status,
+        `le nœud local a refusé l\u2019appel (${status}) : ${JSON.stringify(payload.value)}`,
+      );
+    return payload.value;
   };
   return {
     capabilities: async () =>

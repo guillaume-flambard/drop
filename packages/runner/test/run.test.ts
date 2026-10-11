@@ -5,7 +5,14 @@ import { join } from 'node:path';
 import { CapabilityCardSchema, DropError, sha256Hex } from '@drop/protocol';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
-import { buildCard, runCapability, validateInput, type CapabilityImpl, type RunContext } from '../src/index.ts';
+import {
+  BUDGET_MESSAGES,
+  buildCard,
+  runCapability,
+  validateInput,
+  type CapabilityImpl,
+  type RunContext,
+} from '../src/index.ts';
 
 const NODE_A = 'A'.repeat(43);
 const NODE_B = 'B'.repeat(43);
@@ -303,6 +310,21 @@ describe('runCapability: budget', () => {
       { maxToolCalls: 1 },
     );
     expect(await run(impl)).toMatchObject({ ok: false, code: 'E_BUDGET' });
+  });
+
+  it('keeps the reason of a capability budget refusal, size or cost, as fixed text', async () => {
+    const refuse = (message: string) => fakeImpl(() => Promise.reject(new DropError('E_BUDGET', message)));
+    expect(await run(refuse(BUDGET_MESSAGES.size))).toMatchObject({
+      ok: false,
+      code: 'E_BUDGET',
+      message: 'snapshot exceeds maxSnapshotBytes',
+    });
+    expect(await run(refuse(BUDGET_MESSAGES.cost))).toMatchObject({ message: 'cost budget exceeded' });
+    // Any other text stays out of the result: a capability message is never passed through.
+    expect(await run(refuse('budget hit while reading sk_live_notreal'))).toMatchObject({
+      code: 'E_BUDGET',
+      message: 'cost budget exceeded',
+    });
   });
 
   it('accepts exactly maxToolCalls calls', async () => {

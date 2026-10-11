@@ -3,6 +3,8 @@ on:
   push:
     branches: [main]
   pull_request:
+permissions:
+  contents: read
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -15,3 +17,5 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm -r lint && pnpm -r typecheck && pnpm -r test
+      # Every covered AC scenario keeps its test (AGENTS.md step 6); the baseline only shrinks.
+      - run: npx --yes openspec-guard@0.3.0 check --require-selector --baseline .openspec-guard-baseline.json --fail-on fail

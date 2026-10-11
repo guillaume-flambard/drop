@@ -1,6 +1,6 @@
 # Signaler un problème de sécurité
 
-drop est un prototype, sans version stable déclarée ni audit de sécurité complet. Le profil privé cible n'est pas encore livré. Consulter [le bilan](docs/AVANCEMENT.md) avant toute évaluation.
+drop est un prototype, sans version stable déclarée ni audit de sécurité complet. Le profil privé est livré (T3.1, [ses limites](docs/PRIVATE_PROFILE.md)) ; sa preuve d'ensemble avec Internet bloqué (T3.5) et la revue de sécurité des corrections T3.1b et T3.1c restent à faire avant tout pilote. Consulter [le bilan](docs/AVANCEMENT.md) avant toute évaluation.
 
 Ne pas publier une vulnérabilité, une clé, une configuration réelle ou des données de client dans une issue ou une pull request. Ne pas tester sur l'infrastructure d'un tiers sans son autorisation.
 

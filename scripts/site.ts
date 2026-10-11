@@ -1,8 +1,9 @@
-import { createReadStream } from 'node:fs';
-import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, open, readFile, rm, stat, writeFile, type FileHandle } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { dirname, extname, join, posix, resolve } from 'node:path';
+import { pipeline } from 'node:stream/promises';
 import { fileURLToPath } from 'node:url';
+import { UPDATE_ARCHIVE } from './mac-updates.ts';
 
 const root = resolve(import.meta.dirname, '..');
 const output = join(root, 'dist/site');
@@ -132,10 +133,8 @@ export async function buildSite(directory = output, config?: SiteConfig): Promis
 
 /** Release files served by the public site (D70, D72), by exact name: nothing else in the directory is reachable. */
 const RELEASES: { prefix: string; name: RegExp }[] = [
-  {
-    prefix: '/updates/',
-    name: /^(?:latest\.json|drop-\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?-darwin-aarch64\.app\.tar\.gz)$/,
-  },
+  // The archive names come from scripts/mac-updates.ts, which writes them: the two never disagree on a version.
+  { prefix: '/updates/', name: new RegExp(`^latest\\.json$|${UPDATE_ARCHIVE.source}`) },
   { prefix: '/downloads/', name: /^drop\.(?:dmg|mcpb)$/ },
 ];
 
@@ -145,17 +144,40 @@ interface ServeOptions {
   hsts?: boolean;
 }
 
+/** A release file that exists but cannot be read answers 500, never crashes the site (logged as E_SITE_RELEASE). */
+function releaseFailed(res: ServerResponse, name: string, error: unknown): void {
+  const code = error instanceof Error && 'code' in error ? String(error.code) : 'unknown';
+  process.stderr.write(`E_SITE_RELEASE: ${name} (${code})\n`);
+  if (!res.headersSent) res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' }).end('E_SITE_RELEASE');
+  else res.destroy();
+}
+
 async function serveRelease(res: ServerResponse, method: string, releasesDir: string, name: string): Promise<boolean> {
   const path = join(releasesDir, name);
   const info = await stat(path).catch(() => undefined);
   if (!info?.isFile()) return false;
+  // Open before answering: a file that cannot be read still gets a status line.
+  let file: FileHandle;
+  try {
+    file = await open(path, 'r');
+  } catch (error) {
+    releaseFailed(res, name, error);
+    return true;
+  }
   res.writeHead(200, {
     'Content-Type': contentTypes[extname(name)] ?? 'application/octet-stream',
     'Content-Length': info.size,
     'Cache-Control': 'no-cache',
   });
-  if (method === 'HEAD') res.end();
-  else createReadStream(path).pipe(res);
+  if (method === 'HEAD') {
+    await file.close();
+    res.end();
+    return true;
+  }
+  // The stream closes the handle when it ends or fails.
+  await pipeline(file.createReadStream(), res).catch((error: unknown) => {
+    releaseFailed(res, name, error);
+  });
   return true;
 }
 

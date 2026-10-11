@@ -81,11 +81,11 @@ describe('local agent onboarding (T3.3)', () => {
     expect(executed).toEqual([]);
   });
 
-  it('AC-CONNECT-02 and AC-CONNECT-03 changes only the selected entry, then becomes idempotent', () => {
+  it('AC-CONNECT-02 and AC-CONNECT-03 changes only the selected entry, then becomes idempotent', async () => {
     const f = fixture();
     writeFileSync(f.cursor, JSON.stringify({ theme: 'dark', mcpServers: { notion: { url: 'https://example.test' } } }));
     const plan = cursorPlan({ home: f.home, dropHome: f.dropHome, serverSource: f.source });
-    const result = applyOnboarding([{ agent: 'cursor', fingerprint: plan.fingerprint, action: 'connect' }], {
+    const result = await applyOnboarding([{ agent: 'cursor', fingerprint: plan.fingerprint, action: 'connect' }], {
       home: f.home,
       dropHome: f.dropHome,
       serverSource: f.source,
@@ -102,26 +102,30 @@ describe('local agent onboarding (T3.3)', () => {
     const again = cursorPlan({ home: f.home, dropHome: f.dropHome, serverSource: f.source });
     expect(again.state).toBe('already_connected');
     expect(
-      applyOnboarding([{ agent: 'cursor', fingerprint: again.fingerprint, action: 'connect' }], {
-        home: f.home,
-        dropHome: f.dropHome,
-        serverSource: f.source,
-      })[0]?.state,
+      (
+        await applyOnboarding([{ agent: 'cursor', fingerprint: again.fingerprint, action: 'connect' }], {
+          home: f.home,
+          dropHome: f.dropHome,
+          serverSource: f.source,
+        })
+      )[0]?.state,
     ).toBe('already_connected');
   });
 
-  it('AC-CONNECT-03 refuses an existing entry with different settings', () => {
+  it('AC-CONNECT-03 refuses an existing entry with different settings', async () => {
     const f = fixture();
     const original = JSON.stringify({ mcpServers: { drop: { command: 'other', args: [] } } });
     writeFileSync(f.cursor, original);
     const plan = cursorPlan({ home: f.home, dropHome: f.dropHome, serverSource: f.source });
     expect(plan.state).toBe('conflict');
     expect(
-      applyOnboarding([{ agent: 'cursor', fingerprint: plan.fingerprint, action: 'connect' }], {
-        home: f.home,
-        dropHome: f.dropHome,
-        serverSource: f.source,
-      })[0]?.state,
+      (
+        await applyOnboarding([{ agent: 'cursor', fingerprint: plan.fingerprint, action: 'connect' }], {
+          home: f.home,
+          dropHome: f.dropHome,
+          serverSource: f.source,
+        })
+      )[0]?.state,
     ).toBe('conflict');
     expect(readFileSync(f.cursor, 'utf8')).toBe(original);
   });
@@ -145,7 +149,7 @@ describe('local agent onboarding (T3.3)', () => {
     }
   });
 
-  it('AC-CONNECT-04 and AC-CONNECT-05 refuses malformed and changed files without overwriting', () => {
+  it('AC-CONNECT-04 and AC-CONNECT-05 refuses malformed and changed files without overwriting', async () => {
     const f = fixture();
     writeFileSync(f.cursor, '{bad');
     expect(
@@ -157,20 +161,22 @@ describe('local agent onboarding (T3.3)', () => {
     const plan = cursorPlan({ home: f.home, dropHome: f.dropHome, serverSource: f.source });
     writeFileSync(f.cursor, JSON.stringify({ mcpServers: { added: { command: 'node' } } }));
     expect(
-      applyOnboarding([{ agent: 'cursor', fingerprint: plan.fingerprint, action: 'connect' }], {
-        home: f.home,
-        dropHome: f.dropHome,
-        serverSource: f.source,
-      })[0]?.state,
+      (
+        await applyOnboarding([{ agent: 'cursor', fingerprint: plan.fingerprint, action: 'connect' }], {
+          home: f.home,
+          dropHome: f.dropHome,
+          serverSource: f.source,
+        })
+      )[0]?.state,
     ).toBe('changed');
     expect(readFileSync(f.cursor, 'utf8')).toContain('added');
   });
 
-  it('AC-CONNECT-06 removes only the owned entry after a third-party addition', () => {
+  it('AC-CONNECT-06 removes only the owned entry after a third-party addition', async () => {
     const f = fixture();
     writeFileSync(f.cursor, JSON.stringify({ mcpServers: {} }));
     let plan = cursorPlan({ home: f.home, dropHome: f.dropHome, serverSource: f.source });
-    applyOnboarding([{ agent: 'cursor', fingerprint: plan.fingerprint, action: 'connect' }], {
+    await applyOnboarding([{ agent: 'cursor', fingerprint: plan.fingerprint, action: 'connect' }], {
       home: f.home,
       dropHome: f.dropHome,
       serverSource: f.source,
@@ -180,18 +186,20 @@ describe('local agent onboarding (T3.3)', () => {
     writeFileSync(f.cursor, JSON.stringify(config));
     plan = cursorPlan({ home: f.home, dropHome: f.dropHome, serverSource: f.source });
     expect(
-      applyOnboarding([{ agent: 'cursor', fingerprint: plan.fingerprint, action: 'disconnect' }], {
-        home: f.home,
-        dropHome: f.dropHome,
-        serverSource: f.source,
-      })[0]?.state,
+      (
+        await applyOnboarding([{ agent: 'cursor', fingerprint: plan.fingerprint, action: 'disconnect' }], {
+          home: f.home,
+          dropHome: f.dropHome,
+          serverSource: f.source,
+        })
+      )[0]?.state,
     ).toBe('disconnected');
     const final = JSON.parse(readFileSync(f.cursor, 'utf8')) as { mcpServers: Record<string, unknown> };
     expect(final.mcpServers.added).toEqual({ command: 'other' });
     expect(final.mcpServers.drop).toBeUndefined();
   });
 
-  it('uses each CLI without a preceding remove and verifies its resulting configuration', () => {
+  it('uses each CLI without a preceding remove and verifies its resulting configuration', async () => {
     const f = fixture();
     const claude = join(f.home, '.claude.json');
     const codexDir = join(f.home, '.codex');
@@ -224,13 +232,13 @@ describe('local agent onboarding (T3.3)', () => {
     const selected = plans
       .filter((plan) => plan.agent === 'claude_code' || plan.agent === 'codex')
       .map((plan) => ({ agent: plan.agent, fingerprint: plan.fingerprint, action: 'connect' as const }));
-    expect(applyOnboarding(selected, options).map((item) => item.state)).toEqual(['connected', 'connected']);
+    expect((await applyOnboarding(selected, options)).map((item) => item.state)).toEqual(['connected', 'connected']);
     expect(ran).toHaveLength(2);
     expect(ran.every((argv) => argv[2] === 'add')).toBe(true);
     expect(JSON.stringify(readFileSync(claude, 'utf8'))).toContain('other');
   });
 
-  it('reports a CLI that returns without installing instead of claiming success', () => {
+  it('reports a CLI that returns without installing instead of claiming success', async () => {
     const f = fixture();
     const claude = join(f.home, '.claude.json');
     writeFileSync(claude, JSON.stringify({ mcpServers: {} }));
@@ -238,7 +246,8 @@ describe('local agent onboarding (T3.3)', () => {
     const plan = previewOnboarding(options).find((item) => item.agent === 'claude_code');
     if (!plan) throw new Error('Claude Code plan missing');
     expect(
-      applyOnboarding([{ agent: 'claude_code', fingerprint: plan.fingerprint, action: 'connect' }], options)[0]?.state,
+      (await applyOnboarding([{ agent: 'claude_code', fingerprint: plan.fingerprint, action: 'connect' }], options))[0]
+        ?.state,
     ).toBe('error');
     expect(JSON.parse(readFileSync(claude, 'utf8'))).toEqual({ mcpServers: {} });
   });
@@ -252,11 +261,11 @@ describe('local agent onboarding (T3.3)', () => {
     });
   });
 
-  it('AC-CONNECT-05 preserves a competing write during the JSON transaction', () => {
+  it('AC-CONNECT-05 preserves a competing write during the JSON transaction', async () => {
     const f = fixture();
     writeFileSync(f.cursor, JSON.stringify({ mcpServers: {} }));
     const plan = cursorPlan({ home: f.home, dropHome: f.dropHome, serverSource: f.source });
-    const result = applyOnboarding([{ agent: 'cursor', fingerprint: plan.fingerprint, action: 'connect' }], {
+    const result = await applyOnboarding([{ agent: 'cursor', fingerprint: plan.fingerprint, action: 'connect' }], {
       home: f.home,
       dropHome: f.dropHome,
       serverSource: f.source,
@@ -269,11 +278,11 @@ describe('local agent onboarding (T3.3)', () => {
     expect(readFileSync(f.cursor, 'utf8')).not.toContain('drop-mcp');
   });
 
-  it('AC-CONNECT-07 reports agent restart independently of team connectivity', () => {
+  it('AC-CONNECT-07 reports agent restart independently of team connectivity', async () => {
     const f = fixture();
     writeFileSync(f.cursor, JSON.stringify({ mcpServers: {} }));
     const plan = cursorPlan({ home: f.home, dropHome: f.dropHome, serverSource: f.source });
-    const result = applyOnboarding([{ agent: 'cursor', fingerprint: plan.fingerprint, action: 'connect' }], {
+    const result = await applyOnboarding([{ agent: 'cursor', fingerprint: plan.fingerprint, action: 'connect' }], {
       home: f.home,
       dropHome: f.dropHome,
       serverSource: f.source,
@@ -282,18 +291,20 @@ describe('local agent onboarding (T3.3)', () => {
     expect(renderPanel()).toContain("status.relayConnected ? ' · connecté' : ' · hors ligne'");
   });
 
-  it('keeps only three private backups for repeated connections and disconnections', () => {
+  it('keeps only three private backups for repeated connections and disconnections', async () => {
     const f = fixture();
     writeFileSync(f.cursor, JSON.stringify({ mcpServers: {} }));
     const options = { home: f.home, dropHome: f.dropHome, serverSource: f.source };
     for (let i = 0; i < 3; i += 1) {
       let plan = cursorPlan(options);
       expect(
-        applyOnboarding([{ agent: 'cursor', fingerprint: plan.fingerprint, action: 'connect' }], options)[0]?.state,
+        (await applyOnboarding([{ agent: 'cursor', fingerprint: plan.fingerprint, action: 'connect' }], options))[0]
+          ?.state,
       ).toBe('connected');
       plan = cursorPlan(options);
       expect(
-        applyOnboarding([{ agent: 'cursor', fingerprint: plan.fingerprint, action: 'disconnect' }], options)[0]?.state,
+        (await applyOnboarding([{ agent: 'cursor', fingerprint: plan.fingerprint, action: 'disconnect' }], options))[0]
+          ?.state,
       ).toBe('disconnected');
     }
     const dir = join(f.dropHome, 'backups', 'onboarding');
@@ -302,7 +313,7 @@ describe('local agent onboarding (T3.3)', () => {
     expect(files.every((file) => (statSync(join(dir, file)).mode & 0o777) === 0o600)).toBe(true);
   });
 
-  it('connects Claude Desktop without touching other MCP entries', () => {
+  it('connects Claude Desktop without touching other MCP entries', async () => {
     const f = fixture();
     const path = join(f.home, 'Library', 'Application Support', 'Claude', 'claude_desktop_config.json');
     mkdirSync(join(f.home, 'Library', 'Application Support', 'Claude'), { recursive: true });
@@ -313,15 +324,16 @@ describe('local agent onboarding (T3.3)', () => {
     expect(plan.state).toBe('ready');
     expect(JSON.stringify(plan)).not.toContain('private');
     expect(
-      applyOnboarding([{ agent: 'claude_desktop', fingerprint: plan.fingerprint, action: 'connect' }], options)[0]
-        ?.state,
+      (
+        await applyOnboarding([{ agent: 'claude_desktop', fingerprint: plan.fingerprint, action: 'connect' }], options)
+      )[0]?.state,
     ).toBe('connected');
     expect(JSON.parse(readFileSync(path, 'utf8'))).toMatchObject({
       mcpServers: { github: { env: { KEY: 'private' } }, drop: { env: { DROP_AGENT: 'claude_desktop' } } },
     });
   });
 
-  it('does not follow a symlink at the bundled connector destination', () => {
+  it('does not follow a symlink at the bundled connector destination', async () => {
     const f = fixture();
     writeFileSync(f.cursor, JSON.stringify({ mcpServers: {} }));
     const victim = join(f.home, 'victim');
@@ -332,13 +344,14 @@ describe('local agent onboarding (T3.3)', () => {
     const options = { home: f.home, dropHome: f.dropHome, serverSource: f.source };
     const plan = cursorPlan(options);
     expect(
-      applyOnboarding([{ agent: 'cursor', fingerprint: plan.fingerprint, action: 'connect' }], options)[0]?.state,
+      (await applyOnboarding([{ agent: 'cursor', fingerprint: plan.fingerprint, action: 'connect' }], options))[0]
+        ?.state,
     ).toBe('connected');
     expect(readFileSync(victim, 'utf8')).toBe('must stay intact');
     expect(readFileSync(join(bin, 'drop-mcp.mjs'), 'utf8')).toContain('test server');
   });
 
-  it('refuses a symlinked backup directory before changing an agent file', () => {
+  it('refuses a symlinked backup directory before changing an agent file', async () => {
     const f = fixture();
     const original = JSON.stringify({ mcpServers: {} });
     writeFileSync(f.cursor, original);
@@ -349,7 +362,8 @@ describe('local agent onboarding (T3.3)', () => {
     const options = { home: f.home, dropHome: f.dropHome, serverSource: f.source };
     const plan = cursorPlan(options);
     expect(
-      applyOnboarding([{ agent: 'cursor', fingerprint: plan.fingerprint, action: 'connect' }], options)[0]?.state,
+      (await applyOnboarding([{ agent: 'cursor', fingerprint: plan.fingerprint, action: 'connect' }], options))[0]
+        ?.state,
     ).toBe('error');
     expect(readFileSync(f.cursor, 'utf8')).toBe(original);
     expect(readdirSync(target)).toEqual([]);

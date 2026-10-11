@@ -1,12 +1,15 @@
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { askAgent } from '@drop/a2a';
 import { generateIdentity, type Identity } from '@drop/protocol';
 import { startRelay } from '@drop/relay';
+import { startLocalApi } from '../src/api.ts';
+import { AmbiguousCapabilityError, NodeEngine, type CatalogEntry } from '../src/engine.ts';
 import { startDaemon, type Daemon } from '../src/daemon.ts';
 import { DropHome, NodeConfigSchema } from '../src/home.ts';
+import { MemoryStore } from './helpers.ts';
 
 const cleanups: (() => Promise<void> | void)[] = [];
 afterEach(async () => {
@@ -96,4 +99,52 @@ describe('the team as an A2A agent (T2.14)', () => {
     expect(vague.text).toContain('Julie (Répondre à partir de mon Figma)');
     await expect(askAgent({ url: base, text: 'Le bouton de la maquette est-il prêt ?' })).rejects.toThrow();
   }, 30_000);
+
+  it('asks for input, not a refusal, when every route was ambiguous and nothing was sent', async () => {
+    const engine = new NodeEngine({
+      identity: await generateIdentity('Guillaume'),
+      ownerKind: 'human',
+      store: new MemoryStore(),
+      capabilities: [],
+      transport: { send: () => Promise.resolve('offline') },
+    });
+    vi.spyOn(engine, 'catalog').mockReturnValue([
+      {
+        card: {
+          id: 'mcp.answer.github',
+          title: 'Répondre à partir de GitHub',
+          receives: ['Une question'],
+          inputSchema: { properties: { question: { type: 'string' } }, required: ['question'] },
+        },
+        ownerNodeId: 'j'.repeat(43),
+        ownerName: 'Julie',
+        online: true,
+      } as unknown as CatalogEntry,
+    ]);
+    vi.spyOn(engine, 'catalogIsFresh').mockReturnValue(true);
+    const requestDrop = vi.spyOn(engine, 'requestDrop').mockRejectedValue(
+      new AmbiguousCapabilityError('mcp.answer.github', [
+        { ownerNodeId: 'j'.repeat(43), ownerName: 'Julie' },
+        { ownerNodeId: 'k'.repeat(43), ownerName: 'Karim' },
+      ]),
+    );
+    const token = 'a2a-token-0123456789abcdefghijklmnop';
+    const api = await startLocalApi({
+      engine,
+      token,
+      port: 0,
+      relayUrl: 'ws://127.0.0.1:1/v1',
+      refreshCatalogs: () => Promise.resolve(),
+    });
+    cleanups.push(() => api.close());
+    const asked = await askAgent({
+      url: `http://127.0.0.1:${String(api.port)}`,
+      text: 'Où en est le ticket GitHub du paiement ?',
+      headers: { Authorization: `Bearer ${token}` },
+      pollMs: 50,
+    });
+    expect(requestDrop).toHaveBeenCalled();
+    expect(asked.outcome).toBe('input_required');
+    expect(asked.text).toContain('Julie');
+  });
 });

@@ -2,26 +2,26 @@
 
 Document descriptif. Les contrats normatifs vivent dans `openspec/specs` ; l'ordre dans `docs/TASKS.md` ; les décisions dans `docs/DECISIONS.md`.
 
-Ce plan regroupe les tâches de l'index en phases et donne, pour chacune, son but et sa condition de sortie. Il ne fixe pas l'ordre à lui seul : en cas d'écart, [`docs/TASKS.md`](../TASKS.md) fait foi. Décisions de référence : D47 à D58.
+Ce plan regroupe les tâches de l'index en phases et donne, pour chacune, son but et sa condition de sortie. Il ne donne ni l'ordre, ni les dépendances, ni les statuts : ils sont dans [`docs/TASKS.md`](../TASKS.md), seule source. Décisions de référence : D47 à D58.
 
 ## Règles communes
 
 - Une tâche = une change OpenSpec, selon AGENTS.md : lire, lever les doutes (grilling), proposer, attendre l'accord, tests d'abord, vérifier, archiver.
 - Chaque tâche promeut ses critères dans les specs avant de coder ; les scénarios `AC:` portent leur sélecteur de test.
-- Toute nouvelle dépendance est justifiée dans `docs/DECISIONS.md` par la change qui l'introduit (iroh pour T4.2, React Flow pour T4.7).
+- Toute nouvelle dépendance est justifiée dans `docs/DECISIONS.md` par la change qui l'introduit (par exemple iroh pour T4.2b, React Flow pour T4.7).
 - Statut final contrôlé par l'agent : READY_FOR_MANUAL_ACCEPTANCE. Les recettes humaines restent ouvertes tant qu'elles ne sont pas faites.
 
 ## Le chemin de sécurité T3 reste prioritaire
 
 La série T3 garde son ordre et ses prérequis (voir l'index). Points qui conditionnent les phases suivantes :
 
-| Tâche | Pourquoi elle compte ici | État au 10 octobre 2026 |
-|---|---|---|
-| T3.1b, T3.1c | bornes anti-rejeu et mémoire ; le risque CSO HIGH doit être clos avant tout pilote | T3.1b en cours chez Codex, T3.1c bloquée |
-| T3.1d, T3.1e | résilience protocole et stockage avant usage multi-organisation | todo |
-| T3.2 | qualification des modèles, prérequis de l'agent inclus (T4.8) | todo |
-| T3.4 | app Mac distribuable ; une build acceptée par Apple le 10 octobre, preuve à archiver, recette VoiceOver et Mac de test restantes | blocked |
-| T3.5 | preuve privée d'ensemble | todo |
+| Tâche | Pourquoi elle compte ici |
+|---|---|
+| T3.1b, T3.1c | bornes anti-rejeu et mémoire ; le risque CSO HIGH doit être clos avant tout pilote |
+| T3.1d, T3.1e | résilience protocole et stockage avant usage multi-organisation |
+| T3.2 | qualification des modèles, prérequis de l'agent inclus (T4.8) |
+| T3.4 | app Mac distribuable, recette sur Mac propre et VoiceOver |
+| T3.5 | preuve privée d'ensemble |
 
 L'essai avec de vraies personnes (T4.6) ne démarre pas avant la clôture CSO de T3.1c (D24 et T3.1c le demandent déjà avant tout pilote).
 
@@ -108,39 +108,9 @@ L'essai avec de vraies personnes (T4.6) ne démarre pas avant la clôture CSO de
 
 **Sortie.** Publication décidée par Guillaume, sur un dépôt audité, avec un site qui ne promet rien d'invérifiable.
 
-## Vue d'ensemble
+## Ordre et dépendances
 
-```mermaid
-flowchart LR
-  T40[T4.0 documents] --> T40a[T4.0a mise en vérité]
-  T40 --> T41[T4.1 simulation minimale]
-  T40 --> T42[T4.2 connexion]
-  T31b[T3.1b anti-rejeu] --> T42
-  T33 --> T414[T4.14 conformité du panneau]
-  T414 --> T46
-  T31b --> T415[T4.15 hygiène de configuration]
-  T40 --> T43[T4.3 réponse humaine]
-  T43 --> T44[T4.4 faits publiés]
-  T33[T3.3 raccordement] --> T45[T4.5 treize clients]
-  T41 --> T46[T4.6 essai P1]
-  T42 --> T46
-  T44 --> T46
-  T45 --> T46
-  T34[T3.4 app Mac] --> T46
-  T31c[T3.1c clôture CSO] --> T46
-  T41 --> T47[T4.7 simulation complète]
-  T43 --> T48[T4.8 agent inclus]
-  T32[T3.2 modèles] --> T48
-  T44 --> T49[T4.9 petite question]
-  T42 --> T410[T4.10 pack entreprise]
-  T49 --> T411[T4.11 tâches déléguées]
-  T44 --> T412[T4.12 contexte décentralisé]
-  T49 --> T412
-  T46 --> T413[T4.13 lancement]
-  T36[T3.6 publication] --> T413
-```
-
-Les dépendances ci-dessus recopient celles de l'index à la date du 10 octobre 2026 ; l'index fait foi.
+Voir [`docs/TASKS.md`](../TASKS.md). Ce plan n'en garde aucune copie.
 
 ## Ce qui reste humain
 

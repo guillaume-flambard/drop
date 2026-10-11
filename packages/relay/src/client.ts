@@ -1,6 +1,6 @@
 import WebSocket from 'ws';
 import { signDetached, type Envelope, type Identity } from '@drop/protocol';
-import { parseFrame, ServerFrameSchema, type ServerFrame } from './wire.ts';
+import { CLOSE_UNAUTHORIZED, parseFrame, ServerFrameSchema, type ServerFrame } from './wire.ts';
 
 export interface RelayClientOptions {
   identity: Identity;
@@ -91,7 +91,7 @@ export class RelayClient {
       this.ready = false;
       for (const resolve of this.pending.values()) resolve('offline');
       this.pending.clear();
-      this.options.onStatus?.(code === 4401 ? 'unauthorized' : 'disconnected');
+      this.options.onStatus?.(code === CLOSE_UNAUTHORIZED ? 'unauthorized' : 'disconnected');
       if (!this.closed) this.scheduleReconnect();
     });
     socket.on('error', () => {

@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { execFileSync } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import {
   accessSync,
   constants,
@@ -20,6 +20,7 @@ import {
 } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, delimiter, dirname, isAbsolute, join } from 'node:path';
+import { promisify } from 'node:util';
 import {
   AGENTS,
   agentConfigPath,
@@ -61,11 +62,21 @@ export interface OnboardingOptions {
   dropHome: string;
   home?: string;
   serverSource?: string;
-  run?: (argv: string[]) => void;
+  run?: (argv: string[]) => void | Promise<void>;
   /** Test seam for a competing writer between temporary-file creation and the final freshness check. */
   beforeJsonCommit?: () => void;
   /** Where apps and binaries are looked for; the real machine by default. */
   probe?: InstallProbe;
+}
+
+const execFileAsync = promisify(execFile);
+
+/** Bounded: an official command waiting for an update or a login must not hold the daemon, nor block it meanwhile. */
+async function runOfficial(argv: string[]): Promise<void> {
+  const running = execFileAsync(argv[0] ?? '', argv.slice(1), { timeout: 60_000, killSignal: 'SIGKILL' });
+  // Its output is not read, and a question it asks gets end of input at once, as with stdio ignored.
+  running.child.stdin?.end();
+  await running;
 }
 
 /** Copyable stdio entry for clients without an adapter; no permissions or publication are granted. */
@@ -346,79 +357,85 @@ function copyServer(options: OnboardingOptions): void {
   }
 }
 
-/** Applies only a freshly confirmed selection. Each agent fails independently. */
-export function applyOnboarding(selections: AgentSelection[], options: OnboardingOptions): AgentResult[] {
+/** Applies only a freshly confirmed selection, one agent after the other. Each agent fails independently. */
+export async function applyOnboarding(
+  selections: AgentSelection[],
+  options: OnboardingOptions,
+): Promise<AgentResult[]> {
   const home = options.home ?? homedir();
   const seen = new Set<AgentKind>();
-  return selections.map((selection): AgentResult => {
-    const agent = selection.agent;
-    const result = (state: AgentResult['state'], detail: string, restartRequired = false): AgentResult => ({
-      agent,
-      state,
-      detail,
-      restartRequired,
-    });
-    if (!AGENTS.includes(agent) || seen.has(agent)) return result('error', 'E_AGENT_INVALID');
-    seen.add(agent);
-    const file = agentConfigPath(agent, home);
-    try {
-      const probe = options.probe ?? defaultProbe(home);
-      const present = detectAgents(home, probe).find((item) => item.agent === agent)?.installed ?? false;
-      const fresh = inspect(agent, options, present);
-      if (fresh.state === 'absent' || fresh.state === 'error') return result('error', fresh.detail);
-      // A client drop does not write: never touched, whatever the selection says (D66).
-      if (CLIENT_SPECS[agent].connect === 'manual')
-        return { ...result('manual', 'E_MANUAL_ONLY'), manual: manualStep(agent, expected(agent, options)) };
-      const before = readConfig(file);
-      if (digest(before) !== selection.fingerprint) return result('changed', 'E_CONFIG_CHANGED');
-      const current = existingDrop(agent, before, home);
-      const entry = expected(agent, options);
-      if (selection.action === 'connect') {
-        if (current !== undefined)
-          return sameEntry(current, entry)
-            ? result('already_connected', 'Déjà configuré')
-            : result('conflict', 'E_DROP_CONFLICT');
-        if (CLIENT_SPECS[agent].connect === 'cli' && !options.run && !cliPath(agent, probe))
-          return result('error', 'E_CLI_MISSING');
-        copyServer(options);
-      } else if (current === undefined) return result('disconnected', 'Déjà retiré');
-      else if (!sameEntry(current, entry)) return result('conflict', 'E_DROP_CONFLICT');
-      if (CLIENT_SPECS[agent].connect === 'file') {
-        writeJsonEntry(file, before, selection.action === 'connect' ? entry : null, options);
-      } else {
-        // Official CLIs own these files. Never remove an existing entry before a new add.
-        if (digest(readConfig(file)) !== digest(before)) return result('changed', 'E_CONFIG_CHANGED');
-        const step = installSteps(agent, selection.action === 'connect' ? entry : null, home)[0];
-        if (step?.kind === 'manual') return { ...result('manual', 'E_MANUAL_ONLY'), manual: step };
-        const argv = step?.kind === 'run' ? step.argv : undefined;
-        if (!argv) return result('error', 'E_CLI_COMMAND');
-        // The official command, found on PATH or, for VS Code, inside its app bundle.
-        const binary = options.run ? argv[0] : cliPath(agent, probe);
-        if (!binary) return result('error', 'E_CLI_MISSING');
-        argv[0] = binary;
-        if (before !== undefined) saveBackup(file, before, options.dropHome);
-        (
-          options.run ??
-          ((args: string[]) => {
-            // Bounded: an official command waiting for an update or a login must not hold the daemon.
-            execFileSync(args[0] ?? '', args.slice(1), { stdio: 'ignore', timeout: 60_000, killSignal: 'SIGKILL' });
-          })
-        )(argv);
-        const after = existingDrop(agent, readConfig(file), home);
-        if (selection.action === 'connect' ? !sameEntry(after, entry) : after !== undefined)
-          return result('error', 'E_CLI_UNVERIFIED');
-      }
-      return result(
-        selection.action === 'connect' ? 'connected' : 'disconnected',
-        'Configuration modifiée ; relance de l’agent nécessaire',
-        true,
-      );
-    } catch (error) {
-      if (error instanceof Error && error.message === 'E_CONFIG_CHANGED') return result('changed', 'E_CONFIG_CHANGED');
-      return result(
-        'error',
-        error instanceof Error && error.message.startsWith('E_') ? error.message : 'E_ONBOARDING_FAILED',
-      );
-    }
+  const results: AgentResult[] = [];
+  for (const selection of selections) results.push(await applyOne(selection, options, home, seen));
+  return results;
+}
+
+async function applyOne(
+  selection: AgentSelection,
+  options: OnboardingOptions,
+  home: string,
+  seen: Set<AgentKind>,
+): Promise<AgentResult> {
+  const agent = selection.agent;
+  const result = (state: AgentResult['state'], detail: string, restartRequired = false): AgentResult => ({
+    agent,
+    state,
+    detail,
+    restartRequired,
   });
+  if (!AGENTS.includes(agent) || seen.has(agent)) return result('error', 'E_AGENT_INVALID');
+  seen.add(agent);
+  const file = agentConfigPath(agent, home);
+  try {
+    const probe = options.probe ?? defaultProbe(home);
+    const present = detectAgents(home, probe).find((item) => item.agent === agent)?.installed ?? false;
+    const fresh = inspect(agent, options, present);
+    if (fresh.state === 'absent' || fresh.state === 'error') return result('error', fresh.detail);
+    // A client drop does not write: never touched, whatever the selection says (D66).
+    if (CLIENT_SPECS[agent].connect === 'manual')
+      return { ...result('manual', 'E_MANUAL_ONLY'), manual: manualStep(agent, expected(agent, options)) };
+    const before = readConfig(file);
+    if (digest(before) !== selection.fingerprint) return result('changed', 'E_CONFIG_CHANGED');
+    const current = existingDrop(agent, before, home);
+    const entry = expected(agent, options);
+    if (selection.action === 'connect') {
+      if (current !== undefined)
+        return sameEntry(current, entry)
+          ? result('already_connected', 'Déjà configuré')
+          : result('conflict', 'E_DROP_CONFLICT');
+      if (CLIENT_SPECS[agent].connect === 'cli' && !options.run && !cliPath(agent, probe))
+        return result('error', 'E_CLI_MISSING');
+      copyServer(options);
+    } else if (current === undefined) return result('disconnected', 'Déjà retiré');
+    else if (!sameEntry(current, entry)) return result('conflict', 'E_DROP_CONFLICT');
+    if (CLIENT_SPECS[agent].connect === 'file') {
+      writeJsonEntry(file, before, selection.action === 'connect' ? entry : null, options);
+    } else {
+      // Official CLIs own these files. Never remove an existing entry before a new add.
+      if (digest(readConfig(file)) !== digest(before)) return result('changed', 'E_CONFIG_CHANGED');
+      const step = installSteps(agent, selection.action === 'connect' ? entry : null, home)[0];
+      if (step?.kind === 'manual') return { ...result('manual', 'E_MANUAL_ONLY'), manual: step };
+      const argv = step?.kind === 'run' ? step.argv : undefined;
+      if (!argv) return result('error', 'E_CLI_COMMAND');
+      // The official command, found on PATH or, for VS Code, inside its app bundle.
+      const binary = options.run ? argv[0] : cliPath(agent, probe);
+      if (!binary) return result('error', 'E_CLI_MISSING');
+      argv[0] = binary;
+      if (before !== undefined) saveBackup(file, before, options.dropHome);
+      await (options.run ?? runOfficial)(argv);
+      const after = existingDrop(agent, readConfig(file), home);
+      if (selection.action === 'connect' ? !sameEntry(after, entry) : after !== undefined)
+        return result('error', 'E_CLI_UNVERIFIED');
+    }
+    return result(
+      selection.action === 'connect' ? 'connected' : 'disconnected',
+      'Configuration modifiée ; relance de l’agent nécessaire',
+      true,
+    );
+  } catch (error) {
+    if (error instanceof Error && error.message === 'E_CONFIG_CHANGED') return result('changed', 'E_CONFIG_CHANGED');
+    return result(
+      'error',
+      error instanceof Error && error.message.startsWith('E_') ? error.message : 'E_ONBOARDING_FAILED',
+    );
+  }
 }

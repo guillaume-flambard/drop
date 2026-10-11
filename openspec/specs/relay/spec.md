@@ -34,13 +34,23 @@ Le Node SHALL répondre `{ nodeId, sig, admission? }` où `sig` = Ed25519(challe
 - **WHEN** un Node absent de `allowedNodeIds` répond au défi avec une signature valide
 - **THEN** le relais ferme la connexion avec le code `4401`
 
+#### Scenario: Une seule vérification par connexion
+<!-- openspec-guard:test="relay hardening > ignores a second auth frame while the first is checked, and never closes its own socket as replaced" -->
+- **WHEN** un Node envoie deux trames `auth` sur la même connexion avant la fin de la première vérification
+- **THEN** le relais n'en vérifie qu'une, l'authentifie une fois et ne ferme pas cette connexion comme remplacée (`4409`)
+
 ### Requirement: Validation minimale des enveloppes
-Après authentification, le relais MUST valider **seulement** le schéma `Envelope` et la taille de chaque enveloppe reçue. Il MUST NOT déchiffrer `body`.
+Après authentification, le relais MUST valider **seulement** le schéma `Envelope`, la taille, le destinataire et la durée de vie de chaque enveloppe reçue. Il MUST refuser avec `E_SCHEMA` une enveloppe dont `to` n'est pas un Node autorisé ou admis (ou est révoqué), ou dont `exp - ts` dépasse `MAX_TTL_MS` (15 min). Il MUST NOT déchiffrer `body`.
 
 #### Scenario: Enveloppe hors schéma
 <!-- openspec-guard:test="relay contract > refuses an envelope that breaks the schema, and routes one whose body it cannot read, unchanged" -->
 - **WHEN** un Node authentifié envoie un objet qui ne respecte pas le schéma `Envelope`
 - **THEN** le relais ne le transmet pas
+
+#### Scenario: Destinataire inconnu ou durée de vie excessive
+<!-- openspec-guard:test="relay hardening > refuses an envelope for a node it does not admit, or one that would outlive the maximum TTL" -->
+- **WHEN** un Node authentifié envoie une enveloppe à un Node que le relais n'admet pas, ou dont `exp - ts` dépasse `MAX_TTL_MS`
+- **THEN** le relais répond `E_SCHEMA`, ne la transmet pas et ne la met pas en file
 
 #### Scenario: Corps jamais déchiffré
 <!-- openspec-guard:test="relay contract > refuses an envelope that breaks the schema, and routes one whose body it cannot read, unchanged" -->
@@ -64,7 +74,7 @@ Si le destinataire `to` est connecté, le relais SHALL lui transmettre l'envelop
 - **THEN** B reçoit l'enveloppe inchangée
 
 ### Requirement: File d'attente pour destinataire déconnecté
-Si `to` n'est pas connecté, le relais SHALL mettre l'enveloppe en file (max 100 enveloppes par destinataire, `maxQueuePerNode`), MUST purger chaque enveloppe à son `exp`, et SHALL livrer la file à la reconnexion du destinataire.
+Si `to` n'est pas connecté, le relais SHALL mettre l'enveloppe en file (max 100 enveloppes par destinataire, `maxQueuePerNode`, et au plus `maxQueueBytes` octets pour toutes les files ensemble, 64 Mio par défaut ; au-delà, `E_QUEUE_FULL`), MUST purger chaque enveloppe à son `exp` et au plus tard `MAX_TTL_MS + MAX_CLOCK_SKEW_MS` (20 min) après sa réception, même si son destinataire ne revient jamais, et SHALL livrer la file à la reconnexion du destinataire.
 
 #### Scenario: AC: livraison différée après reconnexion
 <!-- openspec-guard:test="relay > deferred delivery after reconnect" -->
@@ -80,6 +90,11 @@ Si `to` n'est pas connecté, le relais SHALL mettre l'enveloppe en file (max 100
 <!-- openspec-guard:test="relay contract > caps the queue of an offline node at maxQueuePerNode" -->
 - **WHEN** 100 enveloppes sont déjà en file pour un destinataire
 - **THEN** la file de ce destinataire ne dépasse pas 100 enveloppes
+
+#### Scenario: Plafond global et purge sans reconnexion
+<!-- openspec-guard:test="relay hardening > bounds the deferred queue across all recipients and sweeps expired envelopes before their owner returns" -->
+- **WHEN** les files de plusieurs destinataires déconnectés atteignent `maxQueueBytes`, puis que leurs enveloppes expirent ou dépassent la durée de garde, sans qu'aucun destinataire ne revienne
+- **THEN** l'enveloppe suivante reçoit `E_QUEUE_FULL`, puis la place est libérée par le relais seul, y compris pour une enveloppe dont l'émetteur a daté `ts` loin dans le futur
 
 ### Requirement: Admission par invitation
 Un Node inconnu qui présente avec sa réponse au défi un ticket d'admission (protocole) SHALL être admis si le ticket est
@@ -98,13 +113,20 @@ moins de `maxAdmissionsPerSponsorPerDay` Nodes (20 par défaut) dans les derniè
 - **THEN** le relais ferme la connexion avec `4401` et journalise la raison
 
 ### Requirement: État d'admission persistant
-Le relais MUST garder les Nodes admis et les `nonce` utilisés dans `admittedPath` (mode `0600`), pour qu'un redémarrage
-ne les oublie pas, et journaliser chaque admission avec son sponsor. `allowedNodeIds` ne sert plus qu'à l'amorçage.
+Le relais MUST garder les Nodes admis et les `nonce` utilisés dans `admittedPath` (mode `0600`, même quand le fichier
+existait déjà avec un mode plus large), pour qu'un redémarrage ne les oublie pas, et journaliser chaque admission avec son
+sponsor. `allowedNodeIds` ne sert plus qu'à l'amorçage. `relay.config.json` et `revokedPath`, réécrits par
+`drop-relay allow` et `drop-relay revoke`, sont eux aussi ramenés en mode `0600`.
 
 #### Scenario: Admission gardée au redémarrage
 <!-- openspec-guard:test="relay > admits a newcomer who presents a ticket signed by an admitted node, once, and remembers it" -->
 - **WHEN** le relais redémarre après avoir admis un Node par invitation
 - **THEN** ce Node est encore authentifié, et `admittedPath` est en mode `0600`
+
+#### Scenario: Fichier existant ramené en 0600
+<!-- openspec-guard:test="relay hardening > keeps relay files at 0600 even when they already existed with a wider mode" -->
+- **WHEN** `admittedPath` ou `relay.config.json` existent déjà en mode `0644` et que le relais ou la commande les réécrit
+- **THEN** ils sont en mode `0600` ensuite
 
 ### Requirement: Révocation sans redémarrage
 `drop-relay revoke <nodeId> [--with-invited]` SHALL ajouter le Node à `revokedPath` (mode `0600`), que le relais relit
@@ -217,12 +239,20 @@ En v1, un redémarrage du relais SHALL entraîner la perte de la file d'attente 
 - **THEN** ces enveloppes sont perdues et ne sont pas livrées
 
 ### Requirement: Fichier de configuration du relais
-Le relais SHALL lire `relay.config.json` de la forme `{ port, allowedNodeIds: string[], maxQueuePerNode, rateLimitPerMinute, admittedPath?, maxAdmissionsPerSponsorPerDay?, maxAdmissionsPerDay?, revokedPath? }`. Sans `admittedPath`, les admissions par invitation durent jusqu'au redémarrage.
+Le relais SHALL lire `relay.config.json` de la forme `{ port, allowedNodeIds: string[], maxQueuePerNode, maxQueueBytes?, rateLimitPerMinute, admittedPath?, maxAdmissionsPerSponsorPerDay?, maxAdmissionsPerDay?, revokedPath? }`. Sans `admittedPath`, les admissions par invitation durent jusqu'au redémarrage.
 
 #### Scenario: Configuration chargée
 <!-- openspec-guard:test="relay > reads relay.config.json, with the admission settings optional" -->
 - **WHEN** le relais démarre avec un `relay.config.json` valide
 - **THEN** il écoute sur `port` et applique `allowedNodeIds`, `maxQueuePerNode`, `rateLimitPerMinute` et, s'ils sont fournis, `admittedPath` et `maxAdmissionsPerSponsorPerDay`
+
+### Requirement: Chemins relatifs au fichier de configuration
+Les chemins que nomme `relay.config.json` (`admittedPath`, `revokedPath`, `policyPath`, `tls`) MUST être résolus par rapport au dossier de ce fichier, pour le relais comme pour `drop-relay revoke`, quel que soit le dossier courant.
+
+#### Scenario: Chemins relatifs au fichier de configuration
+<!-- openspec-guard:test="relay hardening > resolves revokedPath next to the config file, where drop-relay revoke writes it from any folder" -->
+- **WHEN** `revokedPath` est relatif et que `drop-relay revoke --config=<chemin>` est lancé depuis un autre dossier
+- **THEN** la commande écrit le fichier à côté de `relay.config.json`, celui que le relais surveille
 
 ### Requirement: Commande drop relay allow
 `drop relay allow <nodeId>` SHALL ajouter `nodeId` à `allowedNodeIds` en éditant `relay.config.json`. En v1, la prise en compte MUST nécessiter un redémarrage du relais.

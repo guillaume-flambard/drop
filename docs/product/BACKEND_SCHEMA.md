@@ -168,7 +168,7 @@ API locale et MCP du demandeur (**Existant**) : routes `GET /peers`, `GET /capab
 
 ## Schémas cibles (propositions non normatives)
 
-Tout ce qui suit est **Visé** et seulement proposé. Les noms de champs sont des pistes ; la tâche citée écrit le schéma zod et la spec normative. Chaque objet signé réutiliserait la forme canonique et la signature Ed25519 existantes (`canonical.ts`, `identity.ts:34-47`) : **Hypothèse**, à confirmer par chaque spec.
+Mise à jour du 11 octobre 2026 : le fait publié (T4.4), la réponse humaine (T4.3), la politique d'entreprise (T4.10) et les réglages de connexion (T4.2, T4.2b) sont **Existant**, avec leurs schémas zod dans `packages/protocol/src/` (`fact.ts`, `human-answer.ts`, `policy.ts`, `iroh.ts`) et dans `packages/node/src/home.ts`. Les propositions ci-dessous datent d'avant ces tâches : pour elles, le code et les specs font foi. Le reste est **Visé** et seulement proposé. Les noms de champs sont des pistes ; la tâche citée écrit le schéma zod et la spec normative. Chaque objet signé réutiliserait la forme canonique et la signature Ed25519 existantes (`canonical.ts`, `identity.ts:34-47`) : **Hypothèse**, à confirmer par chaque spec.
 
 ### Fait publié
 

@@ -4,24 +4,31 @@ import { TaskState } from '@a2a-js/sdk';
 import type { AgentExecutor } from '@a2a-js/sdk/server';
 import { a2aEndpoint, askAgent, buildCard, finishTask, startTask, textOf } from '../src/index.ts';
 
-let server: Server | undefined;
+const servers: Server[] = [];
 afterEach(async () => {
-  await new Promise<void>((resolve) => {
-    if (!server) {
-      resolve();
-      return;
-    }
-    server.close(() => {
-      resolve();
-    });
-    server.closeAllConnections();
-  });
-  server = undefined;
+  await Promise.all(
+    servers.splice(0).map(
+      (server) =>
+        new Promise<void>((resolve) => {
+          server.close(() => {
+            resolve();
+          });
+          server.closeAllConnections();
+        }),
+    ),
+  );
 });
 
-/** A company's own A2A agent: answers, refuses a question about salaries, needs a bearer token. */
-async function startAgent(): Promise<{ url: string; seen: string[] }> {
+/**
+ * A company's own A2A agent: answers, refuses a question about salaries, needs a bearer token unless `token` is null.
+ * `interfaceUrl` makes its card send the client elsewhere; `authorizations` records each request's Authorization header.
+ */
+async function startAgent(
+  options: { token?: string | null; interfaceUrl?: string } = {},
+): Promise<{ url: string; seen: string[]; authorizations: (string | undefined)[] }> {
   const seen: string[] = [];
+  const authorizations: (string | undefined)[] = [];
+  const token = options.token === undefined ? 'Bearer company-token' : options.token;
   const executor: AgentExecutor = {
     execute: (context, bus) => {
       const question = textOf(context.userMessage.parts);
@@ -38,8 +45,9 @@ async function startAgent(): Promise<{ url: string; seen: string[] }> {
     cancelTask: () => Promise.resolve(),
   };
   const holder: { endpoint?: ReturnType<typeof a2aEndpoint> } = {};
-  server = createServer((req, res) => {
-    if (req.headers.authorization !== 'Bearer company-token') {
+  const server = createServer((req, res) => {
+    authorizations.push(req.headers.authorization);
+    if (token !== null && req.headers.authorization !== token) {
       res.writeHead(401).end();
       return;
     }
@@ -55,20 +63,21 @@ async function startAgent(): Promise<{ url: string; seen: string[] }> {
       holder.endpoint?.handle(req, res, body).catch(() => res.writeHead(500).end());
     });
   });
-  await new Promise<void>((resolve) => server?.listen(0, '127.0.0.1', resolve));
+  servers.push(server);
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   const address = server.address();
   const url = `http://127.0.0.1:${String(typeof address === 'object' && address ? address.port : 0)}`;
   holder.endpoint = a2aEndpoint(
     buildCard({
       name: 'Agent ventes',
       description: 'Répond sur les contrats clients.',
-      url,
+      url: options.interfaceUrl ?? url,
       version: '1.0.0',
       skills: [{ id: 'contracts', name: 'Contrats', description: 'État des contrats', tags: ['crm'], examples: [] }],
     }),
     executor,
   );
-  return { url, seen };
+  return { url, seen, authorizations };
 }
 
 describe('A2A v1.0 with the official SDK (D33)', () => {
@@ -96,5 +105,21 @@ describe('A2A v1.0 with the official SDK (D33)', () => {
     });
     expect(refused).toMatchObject({ outcome: 'rejected', text: 'Je ne réponds pas sur les salaires.' });
     await expect(askAgent({ url: agent.url, text: 'Le contrat Atlas est-il signé ?' })).rejects.toThrow();
+  });
+
+  it('keeps the owner headers away from an interface URL on another origin than the configured agent', async () => {
+    const elsewhere = await startAgent({ token: null });
+    const agent = await startAgent({ interfaceUrl: elsewhere.url });
+    const answer = await askAgent({
+      url: agent.url,
+      text: 'Le contrat Atlas est-il signé ?',
+      headers: { Authorization: 'Bearer company-token' },
+      pollMs: 20,
+    });
+    expect(answer.outcome).toBe('completed');
+    expect(agent.authorizations).toEqual(['Bearer company-token']);
+    expect(elsewhere.seen).toEqual(['Le contrat Atlas est-il signé ?']);
+    expect(elsewhere.authorizations.length).toBeGreaterThan(0);
+    expect(elsewhere.authorizations).toEqual(elsewhere.authorizations.map(() => undefined));
   });
 });

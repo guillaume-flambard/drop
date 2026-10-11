@@ -29,7 +29,6 @@ export {
   frameQuestion,
   globToRegExp,
   looksLikeCode,
-  parseFinal,
   repoAnswer,
   RepoAnswerConfigSchema,
   systemPrompt,
@@ -40,6 +39,7 @@ export {
   type RepoAnswerOutput,
 } from './repo-answer.ts';
 export { openAiCompatible, ProviderConfigSchema, providerFor, type ChatProvider, type ProviderConfig } from './llm.ts';
+export { parseFinalJson } from './tool-loop.ts';
 
 export {
   AGENTS,
@@ -58,7 +58,6 @@ export {
   clientInstalled,
   defaultProbe,
   gooseExtensions,
-  isClientId,
   MAX_GLOBAL_CONFIG_BYTES,
   MAX_PROJECT_CONFIG_BYTES,
   readConfigText,
@@ -77,7 +76,6 @@ export {
   McpAnswerConfigSchema,
   McpServerSchema,
   mcpSystemPrompt,
-  parseMcpFinal,
   toolResultText,
   type McpAnswerConfig,
   type McpAnswerDeps,

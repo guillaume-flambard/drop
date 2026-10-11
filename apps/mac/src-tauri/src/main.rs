@@ -54,7 +54,6 @@ struct Daemon {
 struct PendingUpdate(Mutex<Option<Update>>);
 
 fn instance_marker() -> String {
-    use std::time::{SystemTime, UNIX_EPOCH};
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
@@ -216,21 +215,24 @@ fn own_health(port: u16, marker: &str) -> bool {
         == Some(marker)
 }
 
+/// True once the daemon the app launched has exited (a poisoned lock or no child counts as not exited).
+fn child_exited(app: &AppHandle) -> bool {
+    app.state::<Daemon>()
+        .child
+        .lock()
+        .ok()
+        .and_then(|mut guard| {
+            guard
+                .as_mut()
+                .and_then(|child| child.try_wait().ok().flatten())
+        })
+        .is_some()
+}
+
 fn wait_for_daemon(app: &AppHandle, port: u16, marker: &str) -> bool {
     let deadline = Instant::now() + Duration::from_secs(15);
     while Instant::now() < deadline {
-        if app
-            .state::<Daemon>()
-            .child
-            .lock()
-            .ok()
-            .and_then(|mut guard| {
-                guard
-                    .as_mut()
-                    .and_then(|child| child.try_wait().ok().flatten())
-            })
-            .is_some()
-        {
+        if child_exited(app) {
             return false;
         }
         if own_health(port, marker) {
@@ -273,6 +275,30 @@ fn show_splash(app: &AppHandle, code: &str) {
     }
 }
 
+/// How many automatic restarts follow a run that failed, before the error splash waits for the user.
+const MAX_RESTARTS: u8 = 2;
+/// A run that stayed ready this long earns a fresh restart budget; a daemon that reaches ready then dies sooner, every
+/// time, still runs out of restarts and shows E_RESTART instead of looping forever.
+const MIN_HEALTHY_RUN: Duration = Duration::from_secs(5 * 60);
+
+/// After a run that had reached ready and stayed so for `healthy_for`: `Some(restarts)` restarts the daemon with that
+/// count, `None` gives up. A retry the user asked for never counts as a failure.
+fn restart_after_run(user_retry: bool, restarts: u8, healthy_for: Duration) -> Option<u8> {
+    if user_retry {
+        return Some(0);
+    }
+    let restarts = if healthy_for >= MIN_HEALTHY_RUN {
+        0
+    } else {
+        restarts
+    };
+    if restarts < MAX_RESTARTS {
+        Some(restarts + 1)
+    } else {
+        None
+    }
+}
+
 fn supervise(app: AppHandle) {
     let mut restarts = 0u8;
     while !app.state::<Daemon>().stopping.load(Ordering::SeqCst) {
@@ -293,6 +319,7 @@ fn supervise(app: AppHandle) {
             });
         match result {
             Ok(port) => {
+                let ready_at = Instant::now();
                 *app.state::<Daemon>()
                     .verified_port
                     .lock()
@@ -307,25 +334,17 @@ fn supervise(app: AppHandle) {
                 );
                 open_links(&app, links);
                 let mut failed_checks = 0u8;
+                // The swap clears the flag: keep its result, or the user's retry would count as a health failure.
+                let mut user_retry = false;
                 while app.state::<Daemon>().ready.load(Ordering::SeqCst)
                     && !app.state::<Daemon>().stopping.load(Ordering::SeqCst)
                 {
                     thread::sleep(Duration::from_secs(3));
                     if app.state::<Daemon>().retry.swap(false, Ordering::SeqCst) {
+                        user_retry = true;
                         break;
                     }
-                    let exited = app
-                        .state::<Daemon>()
-                        .child
-                        .lock()
-                        .ok()
-                        .and_then(|mut guard| {
-                            guard
-                                .as_mut()
-                                .and_then(|child| child.try_wait().ok().flatten())
-                        })
-                        .is_some();
-                    if exited || !own_health(port, &marker) {
+                    if child_exited(&app) || !own_health(port, &marker) {
                         failed_checks += 1;
                     } else {
                         failed_checks = 0;
@@ -335,13 +354,14 @@ fn supervise(app: AppHandle) {
                     }
                 }
                 stop_daemon(&app);
-                if app.state::<Daemon>().retry.swap(false, Ordering::SeqCst) {
-                    restarts = 0;
-                    continue;
-                }
-                if restarts < 2 {
-                    eprintln!("drop shell E_HEALTH: retry {}/2", restarts + 1);
-                    restarts += 1;
+                // A retry asked while the daemon was stopping counts as the user's too.
+                let user_retry =
+                    user_retry || app.state::<Daemon>().retry.swap(false, Ordering::SeqCst);
+                if let Some(next) = restart_after_run(user_retry, restarts, ready_at.elapsed()) {
+                    if !user_retry {
+                        eprintln!("drop shell E_HEALTH: retry {next}/{MAX_RESTARTS}");
+                    }
+                    restarts = next;
                     continue;
                 }
                 eprintln!("drop shell E_RESTART");
@@ -350,9 +370,9 @@ fn supervise(app: AppHandle) {
             Err(code) => {
                 eprintln!("drop shell {code}");
                 stop_daemon(&app);
-                if code == "E_START" && restarts < 2 {
+                if code == "E_START" && restarts < MAX_RESTARTS {
                     restarts += 1;
-                    eprintln!("drop shell E_START: retry {restarts}/2");
+                    eprintln!("drop shell E_START: retry {restarts}/{MAX_RESTARTS}");
                     continue;
                 }
                 if code == "E_START" {
@@ -656,16 +676,10 @@ fn main() {
             let ready = handle.clone();
             thread::spawn(move || supervise(ready));
 
-            let open = MenuItem::with_id(app, "open", "Ouvrir drop", true, None::<&str>)?;
-            let retry =
-                MenuItem::with_id(app, "retry", "Réessayer le démarrage", true, None::<&str>)?;
-            let quit = MenuItem::with_id(app, "quit", "Quitter drop", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&open, &retry, &quit])?;
             TrayIconBuilder::with_id(TRAY)
                 .icon(Image::from_bytes(include_bytes!("../icons/tray.png"))?)
                 .icon_as_template(true)
                 .tooltip("drop")
-                .menu(&menu)
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| match event.id().as_ref() {
                     "open" => show_panel(app, None),
@@ -689,6 +703,8 @@ fn main() {
                     }
                 })
                 .build(app)?;
+            // One menu builder for the first menu and the update menus.
+            set_tray_menu(&handle, None, false)?;
 
             let links = handle.clone();
             app.deep_link()
@@ -728,6 +744,50 @@ fn main() {
 mod tests {
     use super::*;
     use std::net::TcpListener;
+
+    #[test]
+    fn a_user_retry_restarts_without_spending_the_restart_budget() {
+        // The user's "Réessayer" never counts as a health failure, even with the budget spent.
+        let short = Duration::from_secs(10);
+        assert_eq!(restart_after_run(true, MAX_RESTARTS, short), Some(0));
+        assert_eq!(restart_after_run(true, 0, short), Some(0));
+    }
+
+    #[test]
+    fn short_lived_ready_runs_exhaust_the_restart_budget() {
+        // A daemon that reaches ready then dies within seconds, every cycle, gives up after MAX_RESTARTS.
+        let short = MIN_HEALTHY_RUN - Duration::from_secs(1);
+        let mut restarts = 0u8;
+        let mut cycles = 0;
+        while let Some(next) = restart_after_run(false, restarts, short) {
+            restarts = next;
+            cycles += 1;
+            assert!(cycles <= MAX_RESTARTS, "the budget must run out");
+        }
+        assert_eq!(cycles, MAX_RESTARTS);
+        assert_eq!(restarts, MAX_RESTARTS);
+    }
+
+    #[test]
+    fn a_long_healthy_run_resets_the_restart_budget() {
+        // With the budget spent, a run that stayed ready MIN_HEALTHY_RUN restarts as a first failure.
+        assert_eq!(
+            restart_after_run(false, MAX_RESTARTS, MIN_HEALTHY_RUN),
+            Some(1)
+        );
+        assert_eq!(
+            restart_after_run(
+                false,
+                MAX_RESTARTS,
+                MIN_HEALTHY_RUN + Duration::from_secs(3600)
+            ),
+            Some(1)
+        );
+        assert_eq!(
+            restart_after_run(false, MAX_RESTARTS, Duration::from_secs(1)),
+            None
+        );
+    }
 
     #[test]
     fn bootstrap_uses_loopback_or_explicit_relay() {

@@ -83,10 +83,10 @@ Section « Mes questions ».
 
 ### 3.5 Mes outils
 
-- **Existant**, « Connecter mes agents » : deux étapes numérotées (« Analyse locale des quatre agents compatibles. » puis « Choisis puis confirme les connecteurs à ajouter. Aucun outil ne sera partagé. ») et le bouton « 1. Analyser ce Mac ».
+- **Existant**, « Connecter mes agents » : deux étapes numérotées (« Analyse locale des treize clients MCP compatibles, dans leurs fichiers documentés seulement. » puis « Choisis puis confirme les connecteurs à ajouter. Aucun outil ne sera partagé. ») et le bouton « 1. Analyser ce Mac ».
 - **Existant** : après l'analyse, une ligne par agent trouvé. Prêt : case cochée. Déjà raccordé : « Retirer ce connecteur ». Conflit ou erreur : texte en couleur d'alerte, traduit, avec le code entre parenthèses.
 - **Existant** : « 2. Connecter les agents sélectionnés », bouton plein sur toute la largeur.
-- **Existant**, état vide : « Aucun des quatre agents détecté » et « Tu peux ajouter manuellement le connecteur MCP drop dans ton agent. »
+- **Existant**, état vide : « Aucun des treize clients détecté » et « Tu peux ajouter manuellement le connecteur MCP drop dans ton agent. »
 - **Existant**, voie manuelle : une ligne d'aide permanente, puis après l'analyse une carte « Configuration manuelle » avec l'entrée JSON et « Copie cette entrée dans la configuration MCP de ton agent, puis relance-le. Cela ne partage aucun outil. »
 - **Existant**, « Mes outils » : « Partager un outil, c’est répondre aux questions de l’équipe avec lui, après ton accord. Personne ne reçoit l’accès. » Puis, par agent installé, ses serveurs MCP partageables avec un interrupteur « Partager … » ou « Ne plus partager … ».
 - **Existant**, « Assistants reliés » : chaque assistant « peut demander à ton équipe en ton nom », avec « Retirer ».
@@ -114,7 +114,7 @@ Source : `apps/mac/web/index.html`.
 - **Existant** : en-tête « drop », état vivant « Démarrage local… », titre « Préparation de ton espace » et « Le moteur démarre sur ce Mac. Les échanges passent par l’infrastructure que tu as choisie. »
 - **Existant** : en cas d'échec, « Démarrage interrompu », point rouge orangé, un titre et une explication propres au code, « Réessayer » et « Tu peux aussi choisir « Réessayer le démarrage » dans le menu drop de la barre de menus. Code de diagnostic : E_PORT. »
 - **Existant** : codes couverts : `E_INIT` (identité), `E_CONFIG` (configuration), `E_PORT` (port), `E_LOG` (journal), `E_SPAWN` (moteur introuvable), `E_START` (moteur muet), `E_TOKEN` (jeton), `E_PANEL` (fenêtre), `E_RESTART` (reprise échouée).
-- **Existant** : la coque émet aussi `E_STATE` sans traduction sur cette page ; la page garde alors son texte de démarrage (`main.rs`). Écart à corriger en T4.14.
+- **Existant** : `E_STATE` est traduit sur cette page depuis T4.14.
 
 ### 3.9 Notifications
 
@@ -124,13 +124,13 @@ Source : `apps/mac/web/index.html`.
 
 ## 4. Écrans visés
 
-Chaque écran ci-dessous est **Visé** par la tâche citée. Les détails de mise en page marqués **Hypothèse** restent à confirmer pendant la tâche.
+Chaque écran ci-dessous est **Visé** par la tâche citée, sauf ceux marqués **Existant** au 11 octobre 2026. Les détails de mise en page marqués **Hypothèse** restent à confirmer pendant la tâche.
 
 ### 4.1 Réponse humaine (T4.3)
 
-- **Visé** : sur la carte de décision, une quatrième voie « Répondre moi-même », qui ouvre une zone de texte et un choix de fichier.
-- **Visé** : le registre « recevra » et « ne recevra jamais » reste affiché pendant la rédaction.
-- **Visé** : avant l'envoi, la même relecture et le même contrôle de secrets qu'une capacité.
+- **Existant** (T4.3) : sur la carte de décision, une quatrième voie « Répondre moi-même », qui ouvre une zone de texte et un choix de fichier.
+- **Existant** (T4.3) : le registre « recevra » et « ne recevra jamais » reste affiché pendant la rédaction.
+- **Existant** (T4.3) : avant l'envoi, la même relecture et le même contrôle de secrets qu'une capacité.
 - **Hypothèse** : la zone de texte tient dans le panneau de 380 px sans ouvrir de fenêtre. Critère : réponse de 1 500 caractères lisible et modifiable au clavier en T4.3.
 
 ### 4.2 Agent inclus (T4.8)
@@ -140,13 +140,13 @@ Chaque écran ci-dessous est **Visé** par la tâche citée. Les détails de mis
 
 ### 4.3 Faits publiés (T4.4)
 
-- **Visé** : une liste « Ce que je publie » : énoncé, source, date de validité, public ; actions modifier, retirer.
-- **Visé** : un fait expiré passe en grisé et n'est plus servi.
+- **Existant** (T4.4) : une liste « Ce que je publie » dans « Mes outils » : énoncé, source, date de validité, public ; actions modifier, retirer.
+- **Existant** (T4.4) : un fait expiré passe en grisé et n'est plus servi.
 - **Hypothèse** : cette liste vit dans l'onglet « Mes outils ». Critère : les testeurs de T4.6 la trouvent sans aide.
 
 ### 4.4 Choix du mode de connexion (T4.2)
 
-- **Visé** : au premier lancement, trois choix : « Réseau local », « Internet direct », « Relais de mon entreprise ».
+- **Existant** (T4.2, T4.2b) : le réseau local est actif sauf désactivation ; « Connexion par Internet » se règle dans le panneau (désactivée, relais iroh choisi, relais de test n0 signalé comme tiers, refusé en profil privé). Un choix guidé au premier lancement reste **Visé**.
 - **Visé** : en cas d'échec de la connexion directe, un écran explique ce qui a échoué en phrases simples et propose d'activer un relais : relais de test n0 signalé comme tiers, relais Memo Labs sur demande, relais auto-hébergé. Aucun n'est présélectionné.
 - **Visé** : l'en-tête distingue « connecté en direct », « connecté par relais » et « hors ligne ».
 
@@ -167,8 +167,8 @@ Chaque écran ci-dessous est **Visé** par la tâche citée. Les détails de mis
 
 ### 4.8 Raccordement des treize clients (T4.5)
 
-- **Visé** : la liste de l'analyse couvre les treize clients de D55, en séparant configuration globale et configuration par projet.
-- **Visé** : les textes « quatre agents compatibles » du panneau changent avec cette tâche.
+- **Existant** (T4.5) : la liste de l'analyse couvre les treize clients de D55, en séparant configuration globale et configuration par projet.
+- **Existant** (T4.5) : le panneau parle des treize clients ; pour les six sans raccordement automatique, il donne la configuration à copier.
 
 ### 4.9 Carte de simulation (T4.7)
 

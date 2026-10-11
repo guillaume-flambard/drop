@@ -1,19 +1,10 @@
-import type { PrivateNetwork } from '@drop/protocol';
-import { privateFetch } from './private-network.ts';
 import { copyFile, lstat, mkdir, readdir, readFile } from 'node:fs/promises';
 import { dirname, join, relative, sep } from 'node:path';
 import { z } from 'zod';
 import { DropError, type ConsentCost } from '@drop/protocol';
-import type { CapabilityImpl, RunContext } from '@drop/runner';
-import {
-  openAiCompatible,
-  providerFor,
-  ProviderConfigSchema,
-  type ChatMessage,
-  type ChatProvider,
-  type ProviderConfig,
-  type ToolSpec,
-} from './llm.ts';
+import { BUDGET_MESSAGES, type CapabilityImpl, type RunContext } from '@drop/runner';
+import { modelFor, providerCost, ProviderConfigSchema, type ModelDeps, type ToolSpec } from './llm.ts';
+import { MAX_TOOL_RESULT_CHARS, runToolLoop } from './tool-loop.ts';
 
 export const DEFAULT_ALLOW = ['src/**', 'tests/**', 'docs/**', 'package.json', 'README.md'];
 
@@ -101,7 +92,7 @@ export async function takeSnapshot(
       if (!patterns.some((pattern) => pattern.test(path))) continue;
       const stats = await lstat(absolute);
       total += stats.size;
-      if (total > config.maxSnapshotBytes) throw new DropError('E_BUDGET', 'snapshot exceeds maxSnapshotBytes');
+      if (total > config.maxSnapshotBytes) throw new DropError('E_BUDGET', BUDGET_MESSAGES.size);
       await mkdir(dirname(join(workdir, path)), { recursive: true });
       await copyFile(absolute, join(workdir, path));
       files.push(path);
@@ -127,20 +118,6 @@ export function looksLikeCode(text: string): boolean {
   return false;
 }
 
-/** Final answer: drops reasoning blocks, then reads the first JSON object. */
-export function parseFinal(content: string): RepoAnswerOutput | undefined {
-  const cleaned = content.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
-  const start = cleaned.indexOf('{');
-  const end = cleaned.lastIndexOf('}');
-  if (start < 0 || end <= start) return undefined;
-  try {
-    const parsed = RepoAnswerOutputSchema.safeParse(JSON.parse(cleaned.slice(start, end + 1)));
-    return parsed.success ? parsed.data : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
 const TOOLS: ToolSpec[] = [
   {
     name: 'list_files',
@@ -159,6 +136,11 @@ const TOOLS: ToolSpec[] = [
   },
 ];
 
+// What list_files and grep give the model at most.
+const MAX_LISTED_FILES = 500;
+const MAX_GREP_HITS = 50;
+const MAX_GREP_LINE_CHARS = 160;
+
 async function runTool(name: string, rawArguments: string, workdir: string, files: string[]): Promise<string> {
   let args: Record<string, unknown>;
   try {
@@ -166,12 +148,12 @@ async function runTool(name: string, rawArguments: string, workdir: string, file
   } catch {
     return 'arguments invalides';
   }
-  if (name === 'list_files') return files.slice(0, 500).join('\n');
+  if (name === 'list_files') return files.slice(0, MAX_LISTED_FILES).join('\n');
   if (name === 'read_file') {
     const path = typeof args.path === 'string' ? args.path.replace(/^\.\//, '') : '';
     // Only a path from the snapshot list is readable: no traversal, no absolute path.
     if (!files.includes(path)) return 'fichier introuvable';
-    return (await readFile(join(workdir, path), 'utf8')).slice(0, 20_000);
+    return (await readFile(join(workdir, path), 'utf8')).slice(0, MAX_TOOL_RESULT_CHARS);
   }
   if (name === 'grep') {
     const needle = typeof args.text === 'string' ? args.text.toLowerCase() : '';
@@ -180,8 +162,8 @@ async function runTool(name: string, rawArguments: string, workdir: string, file
     for (const path of files) {
       const lines = (await readFile(join(workdir, path), 'utf8')).split('\n');
       lines.forEach((line, index) => {
-        if (hits.length < 50 && line.toLowerCase().includes(needle))
-          hits.push(`${path}:${String(index + 1)}: ${line.trim().slice(0, 160)}`);
+        if (hits.length < MAX_GREP_HITS && line.toLowerCase().includes(needle))
+          hits.push(`${path}:${String(index + 1)}: ${line.trim().slice(0, MAX_GREP_LINE_CHARS)}`);
       });
     }
     return hits.length > 0 ? hits.join('\n') : 'aucun résultat';
@@ -189,12 +171,7 @@ async function runTool(name: string, rawArguments: string, workdir: string, file
   return 'outil inconnu';
 }
 
-export interface RepoAnswerDeps {
-  network?: PrivateNetwork;
-  /** False for a model endpoint the organization policy does not allow (T4.10). */
-  allowModel?: (baseUrl: string) => boolean;
-  provider?: (config: ProviderConfig) => ChatProvider;
-}
+export type RepoAnswerDeps = ModelDeps;
 
 export function createRepoAnswer(deps: RepoAnswerDeps = {}): CapabilityImpl<RepoAnswerInput, RepoAnswerOutput> {
   return {
@@ -216,66 +193,28 @@ export function createRepoAnswer(deps: RepoAnswerDeps = {}): CapabilityImpl<Repo
     preview: (input) => input.question,
     cost(rawConfig: unknown): ConsentCost {
       const config = RepoAnswerConfigSchema.parse(rawConfig);
-      const { provider } = config;
-      if (provider.inputUsdPerMTok > 0 || provider.outputUsdPerMTok > 0)
-        return { kind: 'capped', maxUsd: config.maxUsd };
-      const local = /^https?:\/\/(127\.0\.0\.1|localhost)(:|\/)/.test(provider.baseUrl);
-      return local || provider.model.endsWith(':free') ? { kind: 'free' } : { kind: 'unmeasured' };
+      return providerCost(config.provider, config.maxUsd);
     },
     async execute(input: RepoAnswerInput, ctx: RunContext): Promise<RepoAnswerOutput> {
       const config = RepoAnswerConfigSchema.parse(ctx.config);
       const files = await takeSnapshot(config, ctx.workdir);
-      const run = providerFor(config.provider, config.maxUsd, ctx.funding);
-      // An organization policy may limit where a model is reached (T4.10, D81): refused before any call.
-      if (deps.allowModel && !deps.allowModel(run.config.baseUrl))
-        throw new DropError('E_DENIED', 'E_DENIED model provider not allowed by policy');
-      const provider = deps.provider
-        ? deps.provider(run.config)
-        : openAiCompatible(run.config, run.env, deps.network ? privateFetch(deps.network, run.config.baseUrl) : fetch);
-      const messages: ChatMessage[] = [
-        { role: 'system', content: systemPrompt(config.allowSourceExcerpts) },
-        { role: 'user', content: frameQuestion(input.question) },
-      ];
-      let cost = 0;
-      let retried = false;
-      for (let turn = 0; turn < config.maxTurns; turn += 1) {
-        const reply = await provider.chat(messages, TOOLS, ctx.signal);
-        cost += reply.costUsd;
-        ctx.recordCost(reply.costUsd);
-        if (cost > run.maxUsd) throw new DropError('E_BUDGET', 'cost budget exceeded');
-        if (reply.toolCalls.length > 0) {
-          messages.push({
-            role: 'assistant',
-            content: reply.content,
-            tool_calls: reply.toolCalls.map((call) => ({
-              id: call.id,
-              type: 'function',
-              function: { name: call.name, arguments: call.arguments },
-            })),
-          });
-          for (const call of reply.toolCalls) {
-            ctx.recordToolCall(call.name);
-            messages.push({
-              role: 'tool',
-              tool_call_id: call.id,
-              content: await runTool(call.name, call.arguments, ctx.workdir, files),
-            });
-          }
-          continue;
-        }
-        const final = parseFinal(reply.content);
-        if (!final) {
-          if (retried) break;
-          retried = true;
-          messages.push({ role: 'assistant', content: reply.content });
-          messages.push({ role: 'user', content: 'Réponds uniquement avec l’objet JSON demandé, sans autre texte.' });
-          continue;
-        }
-        if (!config.allowSourceExcerpts && looksLikeCode(final.answer))
-          throw new DropError('E_OUTPUT_INVALID', 'answer contains code');
-        return { ...final, referencedFiles: final.referencedFiles.filter((path) => files.includes(path)).slice(0, 10) };
-      }
-      throw new DropError('E_OUTPUT_INVALID', 'no valid final answer');
+      const { provider, maxUsd } = modelFor(config.provider, config.maxUsd, ctx.funding, deps);
+      const final = await runToolLoop({
+        provider,
+        messages: [
+          { role: 'system', content: systemPrompt(config.allowSourceExcerpts) },
+          { role: 'user', content: frameQuestion(input.question) },
+        ],
+        tools: TOOLS,
+        maxTurns: config.maxTurns,
+        maxUsd,
+        ctx,
+        runTool: (call) => runTool(call.name, call.arguments, ctx.workdir, files),
+        output: RepoAnswerOutputSchema,
+      });
+      if (!config.allowSourceExcerpts && looksLikeCode(final.answer))
+        throw new DropError('E_OUTPUT_INVALID', 'answer contains code');
+      return { ...final, referencedFiles: final.referencedFiles.filter((path) => files.includes(path)).slice(0, 10) };
     },
   };
 }

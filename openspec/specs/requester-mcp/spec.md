@@ -41,8 +41,8 @@ contexte qui appartient à quelqu'un d'autre. »
 - **THEN** la description de `list_capabilities` est égale, caractère pour caractère, au texte ci-dessus
 
 ### Requirement: Entrée de request_drop
-L'entrée de `request_drop` MUST être `{ capability_id: string, input: object, purpose: string }`, avec `purpose` de
-10 à 140 caractères.
+L'entrée de `request_drop` MUST être `{ capability_id: string, owner_node_id?: string, input: object, purpose: string }`,
+avec `purpose` de 10 à 140 caractères et `owner_node_id` facultatif (voir « Propriétaire désigné par l'agent »).
 
 #### Scenario: purpose trop court ou trop long
 - **WHEN** l'agent appelle `request_drop` avec un `purpose` de 9 caractères ou de 141 caractères
@@ -62,11 +62,13 @@ où `{owner}` est le propriétaire de la capacité.
 
 ### Requirement: Description de request_drop mot pour mot
 La description de `request_drop` MUST être exactement : « Demande à la capacité d'un collègue de répondre pour toi.
-Le collègue doit accepter. `purpose` explique en une phrase pourquoi tu en as besoin, il sera lu par un humain. Ne
-relance jamais une demande refusée ; une demande 'pas maintenant' peut être relancée plus tard seulement si
-l'utilisateur le demande. »
+Le collègue doit accepter. Si plusieurs collègues publient le même capability_id, précise owner_node_id (donné par
+list_capabilities) ; sinon rien n'est envoyé. `purpose` explique en une phrase pourquoi tu en as besoin, il sera lu
+par un humain. Ne relance jamais une demande refusée ; une demande 'pas maintenant' peut être relancée plus tard
+seulement si l'utilisateur le demande. »
 
 #### Scenario: Description exposée
+<!-- openspec-guard:test="tool descriptions > exposes the request_drop description word for word to an MCP client" -->
 - **WHEN** un client MCP liste les outils
 - **THEN** la description de `request_drop` est égale, caractère pour caractère, au texte ci-dessus
 
