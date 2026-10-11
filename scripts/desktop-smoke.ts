@@ -5,6 +5,7 @@
 // Run by .github/workflows/release.yml on the macOS DMG, the Windows installer and the Linux packages.
 import { spawn, spawnSync } from 'node:child_process';
 import { accessSync, constants, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -15,6 +16,21 @@ const windows = process.platform === 'win32';
 const node = join(resources, windows ? 'node.exe' : 'node');
 const iroh = join(resources, windows ? 'drop-iroh.exe' : 'drop-iroh');
 const cli = join(resources, 'drop.mjs');
+
+/** A port nobody listens on now: the default 7781 may belong to a drop already running on this machine. */
+function freePort(): Promise<number> {
+  return new Promise((done, fail) => {
+    const server = createServer();
+    server.once('error', fail);
+    server.listen(0, '127.0.0.1', () => {
+      const address = server.address();
+      const port = typeof address === 'object' && address ? address.port : 0;
+      server.close(() => {
+        done(port);
+      });
+    });
+  });
+}
 
 function check(condition: boolean, message: string): void {
   if (!condition) throw new Error(`E_SMOKE: ${message}`);
@@ -57,7 +73,20 @@ try {
   // The shell's first launch (apps/desktop/src-tauri/src/main.rs, ensure_identity), on a loopback relay nobody serves.
   const init = spawnSync(
     node,
-    [cli, 'init', '--profile', 'private', '--name', 'Smoke', '--kind', 'human', '--relay', 'ws://127.0.0.1:9/v1'],
+    [
+      cli,
+      'init',
+      '--profile',
+      'private',
+      '--name',
+      'Smoke',
+      '--kind',
+      'human',
+      '--relay',
+      'ws://127.0.0.1:9/v1',
+      '--port',
+      String(await freePort()),
+    ],
     { env, encoding: 'utf8' },
   );
   check(init.status === 0, `drop init succeeds${init.status === 0 ? '' : `: ${init.stderr}`}`);
@@ -83,8 +112,9 @@ try {
         const body = (await response.json()) as { instance?: string };
         healthy = response.ok && body.instance === marker;
       } catch {
-        await new Promise((done) => setTimeout(done, 300));
+        // Not listening yet.
       }
+      if (!healthy) await new Promise((done) => setTimeout(done, 300));
     }
     check(healthy, `the daemon answers the shell's health probe on 127.0.0.1:${String(config.apiPort)}`);
     const token = readFileSync(join(temp, 'drop', 'local-token'), 'utf8').trim();

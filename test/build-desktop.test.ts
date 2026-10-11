@@ -7,6 +7,7 @@ import {
   mergeConfig,
   programNames,
   resolvePlatform,
+  tauriEnvironment,
   windowsSigningConfig,
 } from '../scripts/build-desktop.ts';
 
@@ -74,6 +75,17 @@ describe('the desktop build for macOS, Windows and Linux (T3.7, T3.8)', () => {
     expect(() => windowsSigningConfig({ WINDOWS_CERTIFICATE_THUMBPRINT: 'not-a-thumbprint' })).toThrow(
       /E_WINDOWS_SIGN/,
     );
+  });
+
+  it('hands Tauri no empty Apple variable and no signing identity unless the build is signed', () => {
+    const ci = { PATH: '/bin', APPLE_SIGNING_IDENTITY: '', APPLE_API_KEY: '', APPLE_API_ISSUER: '' };
+    expect(tauriEnvironment(ci, undefined)).toEqual({ PATH: '/bin' });
+    const local = { PATH: '/bin', APPLE_SIGNING_IDENTITY: 'Developer ID Application: X (T)' };
+    expect(tauriEnvironment(local, undefined)).toEqual({ PATH: '/bin' });
+    expect(tauriEnvironment({ PATH: '/bin' }, 'Developer ID Application: X (T)')).toEqual({
+      PATH: '/bin',
+      APPLE_SIGNING_IDENTITY: 'Developer ID Application: X (T)',
+    });
   });
 
   it('merges the extra build configs key by key', () => {

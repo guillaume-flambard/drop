@@ -17,7 +17,7 @@ describe('desktop management window (Tauri 2)', () => {
     expect(rust).toContain('.inner_size(980.0, 720.0)');
     expect(rust).toContain('.min_inner_size(720.0, 560.0)');
     expect(rust).toContain('"workspace" => show_workspace(app)');
-    expect(rust).toContain('Ouvrir mon espace…');
+    expect(rust).toContain('"Ouvrir mon espace"');
   });
 
   it('uses the local token and does not grant the remote page Tauri IPC', () => {

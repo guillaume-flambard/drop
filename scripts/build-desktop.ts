@@ -96,6 +96,25 @@ export function windowsSigningConfig(env: Readonly<Record<string, string | undef
   return { bundle: { windows: { certificateThumbprint: thumbprint, digestAlgorithm: 'sha256', timestampUrl } } };
 }
 
+/**
+ * The environment `tauri build` runs in. Tauri takes an APPLE_* variable that is set but empty as a value: CI passes
+ * absent secrets as empty strings, and an empty APPLE_SIGNING_IDENTITY makes codesign fail with "no identity found".
+ * So empty ones are dropped, and so is any signing identity when the build is not signed with a Developer ID.
+ */
+export function tauriEnvironment(
+  env: Readonly<Record<string, string | undefined>>,
+  identity: string | undefined,
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(env)) {
+    if (value === undefined || (key.startsWith('APPLE_') && value === '')) continue;
+    out[key] = value;
+  }
+  delete out.APPLE_SIGNING_IDENTITY;
+  if (identity) out.APPLE_SIGNING_IDENTITY = identity;
+  return out;
+}
+
 /** Merges plain JSON objects key by key, as RFC 7396 does for what Tauri receives with --config. */
 export function mergeConfig(...parts: (object | undefined)[]): Record<string, unknown> {
   const out: Record<string, unknown> = {};
@@ -265,7 +284,7 @@ function main(): void {
     {
       cwd: tauriDir,
       stdio: 'inherit',
-      env: { ...process.env, ...(codesignIdentity ? { APPLE_SIGNING_IDENTITY: codesignIdentity } : {}) },
+      env: tauriEnvironment(process.env, codesignIdentity),
     },
   );
 
