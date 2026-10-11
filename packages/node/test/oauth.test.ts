@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { request } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -12,6 +12,7 @@ import { NodeEngine } from '../src/engine.ts';
 import { OAuthSignIns, OAuthStore, runtimeOAuth } from '../src/oauth.ts';
 import { ShareError } from '../src/share.ts';
 import { MemoryStore } from './helpers.ts';
+import { expectPrivateMode } from '../../../test/private-mode.ts';
 
 const cleanups: (() => Promise<void> | void)[] = [];
 afterEach(async () => {
@@ -66,8 +67,8 @@ describe('remote MCP servers behind OAuth (T2.17)', () => {
 
     const files = readdirSync(store.directory);
     expect(files).toHaveLength(1);
-    expect(statSync(join(store.directory, files[0] ?? '')).mode & 0o777).toBe(0o600);
-    expect(statSync(store.directory).mode & 0o777).toBe(0o700);
+    expectPrivateMode(join(store.directory, files[0] ?? ''));
+    expectPrivateMode(store.directory, 0o700);
 
     const client = await connect();
     expect((await client.listTools()).tools.map((tool) => tool.name)).toContain('notion-search');
@@ -189,7 +190,7 @@ describe('remote MCP servers behind OAuth (T2.17)', () => {
       JSON.stringify({ mcpServers: { notion: { type: 'http', url: notion.url } } }),
     );
     const dropHome = join(home, '.drop');
-    const env = { ...process.env, HOME: home, DROP_HOME: dropHome };
+    const env = { ...process.env, HOME: home, USERPROFILE: home, DROP_HOME: dropHome };
     const run = (...args: string[]) =>
       new Promise<{ status: number | null; stdout: string; stderr: string }>((done) => {
         const child = spawn(process.execPath, [cli, ...args], { env });

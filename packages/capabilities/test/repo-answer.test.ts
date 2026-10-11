@@ -12,7 +12,7 @@ import {
   takeSnapshot,
 } from '../src/index.ts';
 import type { ChatMessage, ChatProvider, ChatTurn } from '../src/llm.ts';
-import { RepoAnswerOutputSchema } from '../src/repo-answer.ts';
+import { RepoAnswerConfigSchema, RepoAnswerOutputSchema } from '../src/repo-answer.ts';
 
 const repo = mkdtempSync(join(tmpdir(), 'drop-repo-'));
 mkdirSync(join(repo, 'src'));
@@ -196,6 +196,13 @@ describe('repo.answer', () => {
     expect(
       impl.cost?.({ repoPath: repo, provider: { baseUrl: 'https://provider.example/v1', model: 'paid/model' } }),
     ).toEqual({ kind: 'unmeasured' });
+  });
+
+  it('takes an absolute repository path of the system it runs on, and refuses a relative one', () => {
+    // On Windows the snapshot folder is a drive path such as C:\Users\…, which has no leading slash.
+    expect(RepoAnswerConfigSchema.parse({ repoPath: repo }).repoPath).toBe(repo);
+    expect(RepoAnswerConfigSchema.safeParse({ repoPath: 'relative/repo' }).success).toBe(false);
+    expect(RepoAnswerConfigSchema.safeParse({ repoPath: '' }).success).toBe(false);
   });
 
   it('matches allow globs on relative paths', () => {

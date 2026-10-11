@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -7,6 +7,7 @@ import { RelayClient } from '@drop/relay';
 import { startDaemon } from '../src/daemon.ts';
 import { DropHome } from '../src/home.ts';
 import { privateConfig } from '../src/private-config.ts';
+import { expectPrivateMode } from '../../../test/private-mode.ts';
 
 const roots: string[] = [];
 
@@ -27,7 +28,7 @@ describe('local token fail-closed behavior', () => {
   it('creates a local token with owner-only permissions', async () => {
     const home = await initializedHome();
     expect(home.localToken()).not.toBe('');
-    expect(statSync(join(home.root, 'local-token')).mode & 0o777).toBe(0o600);
+    expectPrivateMode(join(home.root, 'local-token'));
   });
 
   it('refuses to start with a missing or empty local token', async () => {
