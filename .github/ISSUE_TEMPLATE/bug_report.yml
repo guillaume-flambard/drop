@@ -1,24 +1,77 @@
-name: Signaler un bug
-description: Un comportement reproductible, sans donnée sensible.
+name: Bug report
+description: Report a reproducible problem, using synthetic data only.
+labels: ['bug']
 body:
   - type: markdown
     attributes:
-      value: 'Pour une faille de sécurité, suivre SECURITY.md. Ne joindre aucune clé, configuration réelle ou donnée de client.'
+      value: |
+        Thanks for taking the time to report a bug.
+
+        **Security vulnerabilities do not go here.** Use a [private security report](https://github.com/guillaume-flambard/drop/security/advisories/new) instead (see SECURITY.md).
+        Do not attach keys, real configurations, conversations or anyone's data. Redact logs.
   - type: textarea
     id: behavior
     attributes:
-      label: Comportement observé et attendu
+      label: What happened, and what did you expect?
+      description: Describe the actual behaviour and the expected one.
     validations:
       required: true
   - type: textarea
     id: reproduction
     attributes:
-      label: Reproduction avec données synthétiques
+      label: Steps to reproduce
+      description: Minimal steps with synthetic data or fixtures. A failing test is ideal.
+      placeholder: |
+        1. node packages/node/src/cli.ts init --name Alice --relay ws://127.0.0.1:7780/v1
+        2. ...
+    validations:
+      required: true
+  - type: input
+    id: commit
+    attributes:
+      label: Commit or version
+      description: Output of `git rev-parse --short HEAD`, or the Mac app build.
+    validations:
+      required: true
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options:
+        - Protocol
+        - Relay
+        - Node (CLI, local API, panel)
+        - Runner or capabilities
+        - Requester MCP server
+        - A2A
+        - Mac app
+        - Agent detection and installation
+        - Enterprise policy, Docker or Helm
+        - blocked-observer
+        - Documentation or site
+        - Other or not sure
     validations:
       required: true
   - type: input
     id: environment
     attributes:
-      label: Version ou commit, OS, agent et version
+      label: Environment
+      description: OS and version, Node version, agent and its version if relevant.
+      placeholder: macOS on Apple Silicon, Node 24, Claude Code
     validations:
       required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant output
+      description: Redacted logs or error codes (for example `E_SCHEMA`). This is rendered as code.
+      render: text
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: This is not a security vulnerability.
+          required: true
+        - label: The report contains no secret, real configuration or personal data.
+          required: true
