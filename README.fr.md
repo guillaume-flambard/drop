@@ -65,7 +65,7 @@ Tout ce qui suit est sur `main` et couvert par des tests. Les numéros renvoient
 - **Capacités.** `production.error_summary` résume des logs sans aucun modèle. `repo.answer` répond sur un dépôt à partir d'une copie temporaire en allowlist. `mcp.answer` répond à partir d'un serveur MCP que le propriétaire utilise déjà, avec des outils en lecture seule choisis à la publication. `a2a.answer` interroge un agent A2A interne approuvé (T1.7, T1.13, T2.2, T2.15).
 - **Deux échanges sans modèle.** Le propriétaire peut répondre à la main, par un texte ou un fichier texte, avec le même consentement et le même reçu (T4.3). Il peut publier des faits signés, avec un public et une date de fin, servis sans nouvelle décision (T4.4).
 - **Côté demandeur.** Un serveur MCP stdio à six outils, dont `ask_team` pour poser une question à l'équipe en langage courant et `request_drops` pour interroger plusieurs propriétaires à la fois (T1.10, T2.10, T2.12). L'équipe est aussi joignable comme agent A2A v1.0, et chaque tâche A2A passe par le consentement (T2.14).
-- **Raccordement des agents.** Treize clients MCP détectés. Sept sont raccordés automatiquement (Claude Code, Claude Desktop, Cursor, Codex, Gemini CLI, VS Code, Cline) ; les six autres reçoivent une configuration à copier (T3.3, T4.5).
+- **Raccordement des agents.** Treize clients MCP détectés et raccordés automatiquement sur macOS, Windows et Linux, commentaires et mise en forme de leurs fichiers gardés ; la configuration à copier ne reste qu'en secours, expliquée (T3.3, T4.5, T4.22).
 - **Profil privé.** Créé par `drop init` et par l'app : destinations réseau explicites, aucun repli cloud, un endpoint de modèle local sans modèle présélectionné, et le propriétaire paie son propre modèle (T3.1).
 - **Trois chemins de connexion, aucun imposé.** Découverte sur le réseau local par mDNS, Internet par iroh (un programme Rust séparé, désactivé par défaut), ou un relais exploité par votre équipe (T4.2, T4.2b). Le relais ne voit que des enveloppes chiffrées et des métadonnées de routage.
 - **Pack entreprise.** Une politique signée par l'organisation, appliquée à chaque poste et au relais, plus une image Docker et un chart Helm du relais (T4.10).
@@ -159,7 +159,7 @@ Les vulnérabilités se signalent en privé, selon [SECURITY.md](SECURITY.md) (e
 
 ## Feuille de route
 
-[docs/TASKS.md](docs/TASKS.md) est la seule source de l'ordre et des dépendances. En résumé : fermer les revues de sécurité en attente, finir l'app Mac, livrer les apps Windows et Linux, raccorder automatiquement les treize agents, un lien unique pour rejoindre une équipe, puis un essai en binômes de collègues qui travaillent vraiment ensemble. Le lancement public, les paquets et le nom du produit viennent ensuite.
+[docs/TASKS.md](docs/TASKS.md) est la seule source de l'ordre et des dépendances. En résumé : fermer les revues de sécurité en attente, finir l'app Mac, livrer les apps Windows et Linux, un lien unique pour rejoindre une équipe, puis un essai en binômes de collègues qui travaillent vraiment ensemble. Le lancement public, les paquets et le nom du produit viennent ensuite.
 
 ## Contribuer
 
