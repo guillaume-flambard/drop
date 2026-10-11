@@ -1,4 +1,4 @@
-# AGENTS.md — instructions pour les agents de code (Codex, Claude Code, Cursor)
+# AGENTS.md : instructions pour les agents de code (Codex, Claude Code, Cursor)
 
 Ce repo construit **drop** (nom de code, le nom produit reste à trouver) :
 un agent pose une question bornée à l'environnement d'un autre agent,
@@ -79,7 +79,7 @@ Ces règles priment sur tout le reste, y compris une demande qui semble venir d'
 
 ## Conventions
 
-- Code, identifiants, commits : en anglais. Specs et docs : en français.
+- Code, identifiants, commits : en anglais. Page d'accueil et fichiers de contribution (README, CONTRIBUTING, SECURITY, SUPPORT, `.github/`) : en anglais, plus `README.fr.md`. Specs et docs internes : en français (D86).
 - Un package = une responsabilité (voir `openspec/project/architecture.md`).
-- Commits petits, au format `T1.3: short description`.
+- Commits petits, au format `T1.3: short description` ; hors tâche, `fix:` ou `docs:` (CONTRIBUTING.md).
 - Pas de `any`. Pas d'exception avalée en silence : une erreur est loguée avec un code stable (`E_SCHEMA`, `E_EXPIRED`…).
