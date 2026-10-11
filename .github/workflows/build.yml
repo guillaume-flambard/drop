@@ -59,6 +59,8 @@ jobs:
           context: .
           file: Dockerfile
           push: false
+          # The image names the commit it was built from, so the relay can report it on /health (D91).
+          build-args: DROP_BUILD=${{ github.event.pull_request.head.sha }}
           tags: ${{ env.IMAGE }}:pr-${{ github.event.pull_request.number }}
 
   # main, v* tags, or a manual run on main of this repository only (forks never publish).
@@ -108,6 +110,8 @@ jobs:
           context: .
           file: Dockerfile
           push: true
+          # The image names the commit it was built from, so the relay can report it on /health (D91).
+          build-args: DROP_BUILD=${{ github.sha }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           annotations: ${{ steps.meta.outputs.annotations }}
