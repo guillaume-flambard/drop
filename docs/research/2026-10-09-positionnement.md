@@ -4,7 +4,7 @@
 
 Date : 9 octobre 2026. Cette recommandation a précédé la décision D34. Le cap privé est désormais adopté ; ciblage précis, prix et validation commerciale restent des hypothèses.
 
-Cette note répond au retour rapporté par Guillaume : un ingénieur d'un grand compte industriel utilise A2A et refuse une dépendance à un serveur externe supplémentaire. J'interprète ici ce terme comme Agent2Agent (A2A). Le protocole exact, le déploiement et le pouvoir d'achat de cet interlocuteur restent à confirmer. Ce témoignage révèle une objection ; il ne prouve ni une politique générale de son entreprise, ni une volonté de payer.
+Cette note répond à un retour rapporté à Guillaume : un ingénieur d'un grand compte industriel rapporte que son entreprise utilise un protocole entre agents et refuse une dépendance à un serveur externe supplémentaire. J'interprète ici le terme employé comme Agent2Agent (A2A). Le protocole exact, le déploiement et le pouvoir d'achat de cet interlocuteur restent à confirmer. Ce témoignage révèle une objection ; il ne prouve ni une politique générale de son entreprise, ni une volonté de payer.
 
 ## Recommandation
 
@@ -112,7 +112,7 @@ La vision et certaines décisions décrivent un relais privilégié, un fourniss
 
 ## Validation avant d'élargir le produit
 
-1. Confirmer ce retour : A2A exact, scénario déjà déployé, objection au traitement externe, à la dépendance de disponibilité, au coût ou à l'installation d'un service supplémentaire. Demander qui peut autoriser l'essai et qui achèterait la maintenance.
+1. Confirmer le retour de cet ingénieur : A2A exact, scénario déjà déployé, objection au traitement externe, à la dépendance de disponibilité, au coût ou à l'installation d'un service supplémentaire. Demander qui peut autoriser l'essai et qui achèterait la maintenance.
 2. Examiner trois situations récentes dans la cible proposée : ressource inaccessible, contournement employé, temps perdu, réponse minimale utile, personne autorisée à la transmettre. Une réponse copiée manuellement est le point de comparaison.
 3. Conserver le seuil de besoin déjà décidé en D24 : au moins trois développeurs et dix jours actifs chacun ; GO à partir de 0,5 blocage YES par dev-jour et une médiane d'au moins dix minutes perdues. Cette note n'en constate pas le franchissement.
 4. Préparer une preuve technique privée reproductible : installation cible inférieure à quinze minutes hors téléchargement du modèle, sources synthétiques, refus et relecture, modèle interne, aucune sortie Internet et reprise après panne. C'est un objectif de vérification, pas une performance mesurée.

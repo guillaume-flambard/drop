@@ -2,8 +2,8 @@
   "mcpServers": {
     "drop": {
       "command": "node",
-      "args": ["/Users/memo/projects/infrastructure/drop/packages/requester-mcp/src/index.ts"],
-      "env": { "DROP_HOME": "/Users/memo/.drop", "DROP_AGENT": "claude_code" }
+      "args": ["/path/to/drop/packages/requester-mcp/src/index.ts"],
+      "env": { "DROP_AGENT": "claude_code" }
     }
   }
 }
