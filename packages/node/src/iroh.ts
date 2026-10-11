@@ -94,13 +94,31 @@ export function privateSocket(socket: string): boolean {
   return privateAddresses([host]).length === 1;
 }
 
+/** The program's file name: Windows only runs it as an .exe. */
+export function irohProgramName(platform: NodeJS.Platform = process.platform): string {
+  return platform === 'win32' ? 'drop-iroh.exe' : 'drop-iroh';
+}
+
+/**
+ * The program's environment: empty, so no variable may point it at other relays or servers. Windows keeps SystemRoot
+ * alone, without which Winsock cannot load its providers and no socket starts (WSAStartup error 10106).
+ */
+export function irohEnvironment(
+  platform: NodeJS.Platform = process.platform,
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): Record<string, string> {
+  if (platform !== 'win32') return {};
+  const systemRoot = env.SystemRoot ?? env.SYSTEMROOT;
+  return systemRoot ? { SystemRoot: systemRoot } : {};
+}
+
 /**
  * The program shipped next to the bundled Node. DROP_IROH_BIN names another one on a development machine only: the
  * app's shell (DROP_SHELL_INSTANCE) never lets a variable choose who receives the key seed.
  */
 export function irohBinary(): string | undefined {
   const development = process.env.DROP_SHELL_INSTANCE === undefined ? process.env.DROP_IROH_BIN : undefined;
-  const candidates = [development, join(dirname(process.execPath), 'drop-iroh')];
+  const candidates = [development, join(dirname(process.execPath), irohProgramName())];
   for (const candidate of candidates) {
     if (!candidate) continue;
     try {
@@ -252,8 +270,7 @@ export class IrohService {
     };
     let child: ChildProcessWithoutNullStreams | undefined;
     try {
-      // An empty environment: no variable may point the program at other relays or servers.
-      child = spawn(binary, [], { stdio: ['pipe', 'pipe', 'pipe'], env: {} });
+      child = spawn(binary, [], { stdio: ['pipe', 'pipe', 'pipe'], env: irohEnvironment() });
       const started = child;
       this.child = started;
       started.on('error', () => {
