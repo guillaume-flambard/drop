@@ -6,6 +6,7 @@ Ce que drop fait tourner en public sous `drop.memolabs.dev`, comment vérifier q
 
 - **Le relais** : `wss://drop.memolabs.dev/v1`, avec sa sonde `https://drop.memolabs.dev/health`. Il admet les Nodes par invitation (T2.1) et applique les révocations sans redémarrage (T2.19, D75).
 - **Le site** : `https://drop.memolabs.dev/`, un export statique des pages de `site/`, servi sans privilèges et sans accès au dépôt, aux clés ni aux données des Nodes. L'export en ligne date de la publication du 8 octobre 2026 (T2.6b) : les pages corrigées depuis ne sont en ligne qu'au prochain export.
+- **L'image** du relais et du site : `ghcr.io/guillaume-flambard/drop`, construite par la CI sur des runners hébergés par GitHub. Chaque commit sur `main` publie `:<sha complet>`, `:main` et `:latest` (tiré automatiquement par le déploiement ; `latest` ne vient jamais d'un tag ni d'une pull request), chaque tag `v*` ses tags semver. SBOM et attestation de provenance : `gh attestation verify oci://ghcr.io/guillaume-flambard/drop:latest -R guillaume-flambard/drop`.
 - **Les mises à jour de l'app Mac** : servies sous `https://drop.memolabs.dev/updates/` quand une version est publiée (D70). La procédure de publication est dans [MAC_RELEASE](MAC_RELEASE.md).
 
 La passerelle grand public (`https://drop.memolabs.dev/mcp`, T2.13, D31) n'est pas un parcours produit : le profil privé refuse la liaison et une politique d'entreprise peut interdire toute passerelle. C'est une option cloud à réévaluer après la preuve privée (T3.5).
