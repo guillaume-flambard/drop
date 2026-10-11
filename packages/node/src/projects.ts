@@ -91,7 +91,12 @@ function knownProjects(home: string = homedir()): { dir: string; source: 'claude
   }
   try {
     const codex = readConfigText(CLIENT_SPECS.codex.global(clientHost(home))[0]?.path ?? '') ?? '';
-    for (const match of codex.matchAll(/^\s*\[projects\."((?:[^"\\]|\\.)+)"\]/gm)) {
+    // Codex writes a key holding a backslash (a Windows path) as a literal string, 'C:\…', which has no escapes.
+    for (const match of codex.matchAll(/^\s*\[projects\.(?:"((?:[^"\\]|\\.)+)"|'([^'\r\n]+)')\]/gm)) {
+      if (match[2] !== undefined) {
+        found.push({ dir: match[2], source: 'codex' });
+        continue;
+      }
       try {
         found.push({ dir: JSON.parse(`"${match[1] ?? ''}"`) as string, source: 'codex' });
       } catch {

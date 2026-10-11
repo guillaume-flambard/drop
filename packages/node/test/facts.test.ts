@@ -1,4 +1,4 @@
-import { mkdtempSync, statSync } from 'node:fs';
+import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -22,6 +22,7 @@ import { routeFacts } from '../src/route.ts';
 import type { CatalogEntry } from '../src/engine.ts';
 import { DropHome, NodeConfigSchema } from '../src/home.ts';
 import { allReceiptsValid, fakeCapability, startMesh, until, type Mesh } from './helpers.ts';
+import { expectPrivateMode } from '../../../test/private-mode.ts';
 
 const DAY = 24 * 60 * 60 * 1000;
 const TOKEN = 'test-token-0123456789abcdefghijklmnop';
@@ -123,7 +124,7 @@ describe('published facts (T4.4)', () => {
       status: 'active',
     });
     home.saveFacts([{ signed, served: 2 }]);
-    expect(statSync(join(home.root, 'facts.json')).mode & 0o777).toBe(0o600);
+    expectPrivateMode(join(home.root, 'facts.json'));
     expect(home.facts()).toEqual([{ signed, served: 2 }]);
   });
 

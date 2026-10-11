@@ -1,4 +1,4 @@
-import { mkdtempSync, statSync } from 'node:fs';
+import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -11,6 +11,7 @@ import WebSocket, { WebSocketServer } from 'ws';
 import { SeenAnnouncements } from '../src/lan-mdns.ts';
 import { knockMac, LAN_EPOCH_MS, newLanKey } from '../src/lan-tags.ts';
 import { MemoryStore, fakeCapability, startMesh, until, type Mesh } from './helpers.ts';
+import { expectPrivateMode } from '../../../test/private-mode.ts';
 
 let mesh: Mesh | undefined;
 const services: LanService[] = [];
@@ -126,10 +127,10 @@ describe('local network privacy (T4.2c)', () => {
     );
     const key = home.lanKey();
     expect(home.lanKey()).toBe(key);
-    expect(statSync(join(home.root, 'lan-key')).mode & 0o777).toBe(0o600);
+    expectPrivateMode(join(home.root, 'lan-key'));
     home.saveLanKey('x'.repeat(43), newLanKey());
     expect(Object.keys(home.lanKeys())).toEqual(['x'.repeat(43)]);
-    expect(statSync(join(home.root, 'lan-keys.json')).mode & 0o777).toBe(0o600);
+    expectPrivateMode(join(home.root, 'lan-keys.json'));
   });
 
   it('recovers from a passing refusal with growing delays', async () => {

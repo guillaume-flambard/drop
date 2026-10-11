@@ -1,5 +1,5 @@
 import { copyFile, lstat, mkdir, readdir, readFile } from 'node:fs/promises';
-import { dirname, join, relative, sep } from 'node:path';
+import { dirname, isAbsolute, join, relative, sep } from 'node:path';
 import { z } from 'zod';
 import { DropError, type ConsentCost } from '@drop/protocol';
 import { BUDGET_MESSAGES, type CapabilityImpl, type RunContext } from '@drop/runner';
@@ -9,7 +9,8 @@ import { MAX_TOOL_RESULT_CHARS, runToolLoop } from './tool-loop.ts';
 export const DEFAULT_ALLOW = ['src/**', 'tests/**', 'docs/**', 'package.json', 'README.md'];
 
 export const RepoAnswerConfigSchema = z.object({
-  repoPath: z.string().startsWith('/'),
+  // Absolute on the system the node runs on: `/…` on macOS and Linux, a drive or UNC path on Windows.
+  repoPath: z.string().refine((path) => isAbsolute(path), 'repoPath must be an absolute path'),
   allow: z.array(z.string().min(1)).min(1).default(DEFAULT_ALLOW),
   maxSnapshotBytes: z
     .number()

@@ -13,8 +13,18 @@ function put(path: string, content: string): void {
   writeFileSync(path, content);
 }
 
+/**
+ * The fixtures are laid out as on macOS whatever system runs the tests. On Windows the tree sits on the working
+ * directory's drive and its PATH entry drops the drive: `C:\…` would be cut at its colon, the POSIX separator, and the
+ * temporary folder may be on another drive (C: and D: on CI runners).
+ */
+const onWindows = process.platform === 'win32';
+const fixtureBase = onWindows ? join(process.cwd(), 'node_modules', '.cache') : tmpdir();
+const posixPathEntry = (dir: string) => (onWindows ? dir.replace(/^[A-Za-z]:/, '').replaceAll('\\', '/') : dir);
+
 function fixture() {
-  const root = realpathSync(mkdtempSync(join(tmpdir(), 'clients-')));
+  mkdirSync(fixtureBase, { recursive: true });
+  const root = realpathSync(mkdtempSync(join(fixtureBase, 'clients-')));
   const home = join(root, 'home');
   const apps = join(root, 'Applications');
   const bin = join(root, 'bin');
@@ -79,7 +89,7 @@ function fixture() {
   );
   put(join(home, '.junie', 'mcp', 'mcp.json'), JSON.stringify({ mcpServers: stdio('confluence') }));
   const empty: InstallProbe = { home, apps: [], path: '', platform: 'darwin' };
-  const full: InstallProbe = { home, apps: [apps], path: bin, platform: 'darwin' };
+  const full: InstallProbe = { home, apps: [apps], path: posixPathEntry(bin), platform: 'darwin' };
   for (const app of [
     'Claude.app',
     'Cursor.app',
@@ -197,9 +207,14 @@ describe('mcp clients (T4.5)', () => {
       join(f.home, '.claude.json'),
       JSON.stringify({ projects: { [known]: { mcpServers: {} }, [f.home]: {}, '/': {} } }),
     );
+    // Codex writes a key holding a backslash (a Windows path) as a TOML literal string, any other in double quotes.
+    const codexKey = (dir: string) => (dir.includes('\\') ? `'${dir}'` : JSON.stringify(dir));
+    const fromLiteral = join(f.root, 'work', 'literal');
+    mkdirSync(fromLiteral, { recursive: true });
     put(
       join(f.home, '.codex', 'config.toml'),
-      `[projects."${fromCodex}"]\ntrust_level = "trusted"\n[projects."bad\\Uescape"]\n`,
+      `[projects.${codexKey(fromCodex)}]\ntrust_level = "trusted"\n[projects."bad\\Uescape"]\n` +
+        `[projects.'${fromLiteral}']\ntrust_level = "trusted"\n`,
     );
     expect(addProject(f.dropHome, added, f.home)).toBe(added);
     for (const refused of ['relative/path', '/', f.home, join(f.root, 'missing')])
@@ -209,6 +224,7 @@ describe('mcp clients (T4.5)', () => {
     expect(projects.map((project) => [project.dir, project.sources])).toEqual([
       [known, ['claude_code']],
       [fromCodex, ['codex']],
+      [fromLiteral, ['codex']],
       [added, ['added']],
     ]);
     expect(projects[0]?.clients.map((client) => [client.agent, client.servers.map((server) => server.name)])).toEqual([
@@ -217,12 +233,12 @@ describe('mcp clients (T4.5)', () => {
     expect(projects[1]?.clients.map((client) => [client.agent, client.servers.map((server) => server.name)])).toEqual([
       ['codex', ['sentry']],
     ]);
-    expect(projects[2]?.clients.map((client) => [client.agent, client.dropInstalled])).toEqual([
+    expect(projects[3]?.clients.map((client) => [client.agent, client.dropInstalled])).toEqual([
       ['cursor', false],
       ['vscode', true],
     ]);
     expect(JSON.stringify(projects)).not.toContain(SECRET);
     expect(removeProject(f.dropHome, added)).toBe(true);
-    expect(listProjects(f.dropHome, f.home).map((project) => project.dir)).toEqual([known, fromCodex]);
+    expect(listProjects(f.dropHome, f.home).map((project) => project.dir)).toEqual([known, fromCodex, fromLiteral]);
   });
 });
