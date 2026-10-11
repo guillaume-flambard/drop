@@ -6,7 +6,7 @@ Votre agent a besoin d'une information détenue par un collègue. Avec drop, il 
 
 `drop` est un nom de code (D57). Positionnement adopté le 10 octobre 2026 (D47 à D58) : « la réponse, pas l'accès », couche de consentement humain au-dessus d'A2A. La référence produit est [`docs/product/`](product/PRD.md) ; en cas d'écart, elle fait foi sur ce guide. Ce guide décrit ce qui existe et signale ce qui reste à faire, avec la tâche qui le porte.
 
-Existant : le profil privé (T3.1) et le raccordement en deux confirmations (T3.3, T4.5, `packages/node/src/onboarding.ts`). Treize clients sont détectés ; sept sont raccordés automatiquement, six par une configuration à copier. Ce parcours est vérifié sur fixtures ; la recette humaine sur un Mac de test reste à faire. Rien n'a encore été validé avec de vrais utilisateurs. Le [bilan daté](AVANCEMENT.md) précise les preuves.
+Existant : le profil privé (T3.1) et le raccordement en deux confirmations (T3.3, T4.5, `packages/node/src/onboarding.ts`). Treize clients sont détectés et raccordés automatiquement sur macOS, Windows et Linux (T4.22) ; la configuration à copier ne reste qu'en secours, quand drop ne peut pas écrire. Ce parcours est vérifié sur fixtures ; la recette humaine sur un Mac de test reste à faire. Rien n'a encore été validé avec de vrais utilisateurs. Le [bilan daté](AVANCEMENT.md) précise les preuves.
 
 ## La cible privée
 
@@ -157,7 +157,7 @@ node scripts/bundle.ts
 node packages/node/src/cli.ts install codex
 ```
 
-Remplacer `codex` par `claude_code`, `claude_desktop`, `cursor`, `gemini_cli`, `vscode` ou `cline` : ce sont les sept clients raccordés automatiquement. Pour les six autres (OpenCode, Devin Desktop, Zed, goose, Roo Code, JetBrains AI), le panneau affiche la configuration à copier. Voir [ONBOARDING](ONBOARDING.md). Cette commande modifie la configuration de l'agent. `uninstall <agent>` retire le connecteur. Le paquet npm public n’est pas encore publié. `node scripts/bundle.ts` nettoie `dist/` : reconstruire ensuite le site si nécessaire.
+Remplacer `codex` par l'un des treize clients (`claude_code`, `claude_desktop`, `cursor`, `opencode`, `gemini_cli`, `devin_desktop`, `zed`, `goose`, `vscode`, `cline`, `roo_code`, `jetbrains`) ou par `all` : tous sont raccordés automatiquement, sur macOS, Windows et Linux. Si drop ne peut pas écrire (fichier illisible ou verrouillé, emplacement non documenté, commande officielle absente), la commande affiche la raison et la configuration à coller. Voir [ONBOARDING](ONBOARDING.md). Cette commande modifie la configuration de l'agent. `uninstall <agent>` retire le connecteur. Le paquet npm public n’est pas encore publié. `node scripts/bundle.ts` nettoie `dist/` : reconstruire ensuite le site si nécessaire.
 
 Dans le panneau local, « Mes outils » propose le parcours guidé : « Analyser ce Mac », choisir les agents, puis « Connecter les agents sélectionnés ». Une configuration changée depuis l'analyse est refusée ; aucune capacité n'est publiée par ce raccordement. La commande CLI suit les mêmes contrôles de conflit et de sauvegarde pour l'agent nommé.
 

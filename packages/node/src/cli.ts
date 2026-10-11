@@ -33,8 +33,10 @@ const USAGE = `drop <command>
   mcp-tools --config <file.json> list the tools of the MCP server in an mcp.answer config, to choose which to share
   team create <name>             start a team; your invites then bring people into it
   team                           members, their agents, online or not, and what each one shares (daemon must run)
-  install <agent>|all [--link]   add drop to one of the 13 detected MCP clients (see detect); seven are connected
-                                 automatically, the others print the configuration to copy; --link prints a Cursor
+  install <agent>|all [--link]   add drop to one of the 13 detected MCP clients (see detect), on macOS, Windows or
+                                 Linux: Claude Code and Codex through their official command, the others by editing
+                                 their file in place (comments kept, private backup); the configuration to paste is
+                                 printed only when a write is impossible, with the reason; --link prints a Cursor
                                  install link instead
   uninstall <agent>|all          remove drop from an agent
   detect [--json]                the coding agents on this machine, drop in each, and their MCP servers
@@ -288,6 +290,8 @@ switch (command) {
       const plan = previewOnboarding({ dropHome: home.root }).find((item) => item.agent === agent);
       if (!plan || plan.state === 'absent' || plan.state === 'error' || plan.state === 'conflict') {
         process.stderr.write(`${AGENT_LABELS[agent]}: ${plan?.detail ?? 'E_AGENT_INVALID'}\n`);
+        // A write drop cannot make (unreadable file, missing command…): what to do by hand, and why.
+        if (plan?.manual && !remove) process.stdout.write(`${plan.manual.steps}\n${plan.manual.snippet}\n`);
         continue;
       }
       const [result] = await applyOnboarding(
@@ -296,7 +300,10 @@ switch (command) {
       );
       if (result?.state === 'connected' || result?.state === 'disconnected' || result?.state === 'already_connected')
         process.stdout.write(`${AGENT_LABELS[agent]}: ${result.detail}\n`);
-      else process.stderr.write(`${AGENT_LABELS[agent]}: ${result?.detail ?? 'E_ONBOARDING_FAILED'}\n`);
+      else {
+        process.stderr.write(`${AGENT_LABELS[agent]}: ${result?.detail ?? 'E_ONBOARDING_FAILED'}\n`);
+        if (result?.manual && !remove) process.stdout.write(`${result.manual.steps}\n${result.manual.snippet}\n`);
+      }
     }
     if (!remove) process.stdout.write('restart the agent so it loads drop\n');
     break;
