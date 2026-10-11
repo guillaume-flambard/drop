@@ -147,6 +147,15 @@ function original(agent: AgentKind): string {
   }
 }
 
+/**
+ * A PATH entry for the simulated system. Simulating macOS or Linux on a Windows runner, `C:\…` would be cut at its
+ * colon, the POSIX separator: the drive is dropped and slashes used, which Windows resolves on the current drive.
+ */
+function pathEntry(dir: string, platform: ClientPlatform): string {
+  if (process.platform !== 'win32' || platform === 'win32') return dir;
+  return dir.replace(/^[A-Za-z]:/, '').replaceAll('\\', '/');
+}
+
 /** A home laid out as on one system, with every client installed the way that system shows it. */
 function machine(platform: ClientPlatform) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), `clients-${platform}-`)));
@@ -195,7 +204,7 @@ function machine(platform: ClientPlatform) {
   const probe: InstallProbe = {
     home,
     apps: [apps],
-    path: [bin, tools].join(separator),
+    path: [bin, tools].map((dir) => pathEntry(dir, platform)).join(separator),
     platform,
     pathExt: '.EXE;.CMD',
   };
@@ -488,6 +497,8 @@ describe('all thirteen clients connected automatically (T4.22)', () => {
   });
 
   it('runs the official command of Codex without blocking the daemon, then verifies what it wrote', async () => {
+    // Its stand-in for `codex` is a shell script, which only a POSIX system runs.
+    if (process.platform === 'win32') return;
     const m = machine(process.platform === 'darwin' ? 'darwin' : 'linux');
     const config = join(m.home, '.codex', 'config.toml');
     put(config, 'model = "gpt-5"\n');
