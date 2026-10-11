@@ -117,10 +117,10 @@ Sur la branche `chore/audit-2026-10-11`, le 11 octobre 2026 :
 ## Non fait, et pourquoi
 
 - Fusion de la PR #25, suppression des branches et worktrees : refusées par le garde-fou, attendent Guillaume.
-- Republication du site : passe par `lab-infra`, hors de ce dépôt.
+- Republication du site : passe par le dépôt d'infrastructure privé, hors de ce dépôt.
 - Découpage de `NodeEngine` et du script du panneau : trop gros pour une passe de correction sûre, inscrit en T4.21.
 - 143 scénarios déjà testés mais sans marqueur : inscrit en T4.20.
 - Passerelle `packages/gateway` : 784 lignes que rien n'importe, refusées par le profil privé. Garder ou sortir du
   dépôt est un choix de Guillaume.
-- `build.yml` est généré depuis `lab-infra/ci/build-selfhosted.yml` : le bloc `permissions` ajouté ici doit aussi
+- `build.yml` est généré depuis un modèle du dépôt d'infrastructure privé : le bloc `permissions` ajouté ici doit aussi
   l'être dans ce modèle.

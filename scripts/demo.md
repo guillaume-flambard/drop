@@ -6,9 +6,10 @@ Pour une démo 100 % locale, sans VPS : `scripts/demo-local.sh`.
 ## Avant
 
 - Le relais tourne : `curl https://drop.memolabs.dev/health` répond `{"ok":true,…}`.
-- Sur le VPS, `drop-node` publie `production.error_summary` sur les logs de Traefik, avec ton Node Mac comme
-  approbateur (`lab-infra/stacks/drop`, D22).
-- Sur le Mac, deux Nodes autorisés sur le relais (PR sur `lab-infra/stacks/drop/relay.config.json`) et appairés :
+- Sur le VPS, le Node du lab publie `production.error_summary` sur les logs du reverse proxy, avec ton Node Mac comme
+  approbateur (D22).
+- Sur le Mac, deux Nodes autorisés sur le relais (configuration versionnée du relais déployé, ou invitation, T2.1) et
+  appairés :
   - Guillaume : `~/.drop`, port 7781 ;
   - Julie : `~/.drop-julie`, port 7782, qui publie `repo.answer` sur `docs/demo/julie-repo` :
     `DROP_HOME=~/.drop-julie node packages/node/src/cli.ts publish repo.answer --approver <nodeId de Julie> --config <fichier>`
@@ -43,7 +44,6 @@ ou `--mcp-config docs/demo/mcp-guillaume.json`. Avec Codex : le bloc `[mcp_serve
    (UI sur le port 7782) : « Autoriser une fois », puis relecture de la réponse, puis « Envoyer ». L'agent reçoit une
    réponse avec des noms de fichiers, sans code.
 5. `node packages/node/src/cli.ts receipts`, puis la même commande avec `DROP_HOME=~/.drop-julie` et, sur le VPS,
-   `docker compose -f /opt/stacks/drop/compose.yml exec drop-node node packages/node/src/cli.ts receipts` : chaque
-   demande a son reçu des deux côtés.
+   la même commande dans le conteneur du Node du lab : chaque demande a son reçu des deux côtés.
 6. Le test des 30 secondes : montrer les étapes 1 à 3 à quelqu'un sans prononcer « MCP ». S'il comprend ce qui s'est
    passé et pourquoi personne n'a donné d'accès, c'est gagné.

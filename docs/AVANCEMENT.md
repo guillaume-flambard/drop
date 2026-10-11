@@ -16,7 +16,7 @@ L'ordre et les statuts font foi dans [TASKS](TASKS.md). Les preuves de chaque t�
 - **Pack entreprise (T4.10).** Politique signée appliquée au poste et au relais, qui peut interdire toute passerelle ; image Docker et chart Helm du relais.
 - **Relais.** Révocation sans redémarrage, avec `--with-invited` (T2.19).
 - **Divers.** Jeton local vide refusé (T3.4a), propriétaire désigné quand plusieurs pairs publient la même capacité (T4.17), daemon arrêté avec l'app (T4.18), banc de simulation de 50 nœuds (T4.1), documents produit (T4.0, T4.0a).
-- **Site.** Publié sur [drop.memolabs.dev](https://drop.memolabs.dev) le 8 octobre (T2.6b). La version en ligne date de ce jour-là ; voir [l'exploitation du lab](deploiement-lab.md).
+- **Site.** Publié sur [drop.memolabs.dev](https://drop.memolabs.dev) le 8 octobre (T2.6b). La version en ligne date de ce jour-là ; voir [l'exploitation publique](deploiement-lab.md).
 
 ### En vérification
 

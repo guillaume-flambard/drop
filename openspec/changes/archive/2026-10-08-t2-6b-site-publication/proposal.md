@@ -6,7 +6,7 @@ T2.6b poursuit la livraison de la documentation et du site. Après la présentat
 
 ## What Changes
 
-- Publier les dix fichiers publics produits par T2.6a dans une stack `drop-site` indépendante, gérée par lab-infra.
+- Publier les dix fichiers publics produits par T2.6a dans un service de site indépendant, géré par le dépôt d'infrastructure privé.
 - Conserver les routes existantes du relais, ses processus, son stockage et le chantier d'admission.
 - Documenter la révision publiée, le déploiement, les contrôles et le retrait du site.
 
@@ -22,7 +22,7 @@ Aucune. `skip_specs: true` : changement d'infrastructure, sans modification des 
 
 ## Impact
 
-Deux worktrees isolés : drop pour le suivi et la documentation ; lab-infra pour la stack et les fichiers publics. Réutilisation de nginx déjà présent dans le lab, avec digest fixe. Aucune dépendance npm ou modification du code d'exécution des agents.
+Deux worktrees isolés : drop pour le suivi et la documentation ; le dépôt d'infrastructure pour le service et les fichiers publics. nginx avec digest fixe. Aucune dépendance npm ou modification du code d'exécution des agents.
 
 ## Non-goals
 
