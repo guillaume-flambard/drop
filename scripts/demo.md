@@ -30,8 +30,8 @@ Seul le daemon de Julie a une clé de modèle : c'est elle qui paie ses réponse
 ## L'agent
 
 Avec Claude Code : `claude mcp add drop -e DROP_AGENT=claude_code -- node <repo>/packages/requester-mcp/src/index.ts`,
-ou `--mcp-config docs/demo/mcp-guillaume.json`. Avec Codex : le bloc `[mcp_servers.drop]` de
-`packages/requester-mcp/README.md`.
+ou `--mcp-config docs/demo/mcp-guillaume.json` (remplacer `/path/to/drop` par le chemin du dépôt ; sans `DROP_HOME`,
+le Node de Guillaume est `~/.drop`). Avec Codex : le bloc `[mcp_servers.drop]` de `packages/requester-mcp/README.md`.
 
 ## Déroulé
 
