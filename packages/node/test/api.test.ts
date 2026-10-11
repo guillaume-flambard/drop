@@ -75,7 +75,7 @@ describe('local API', () => {
         headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-      return { status: response.status, body: await response.json() };
+      return { status: response.status, body: (await response.json()) as unknown };
     };
     expect(await post('/drops', { capabilityId: 'mcp.answer.github', input: {}, purpose: 'Test' })).toMatchObject({
       status: 429,
@@ -140,7 +140,7 @@ describe('local API', () => {
         headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
         body,
       });
-      return { status: response.status, body: await response.json() };
+      return { status: response.status, body: (await response.json()) as unknown };
     };
     for (const path of ['/drops', '/ask']) {
       expect(await post(path, '{"capabilityId": ')).toMatchObject({ status: 400, body: { error: 'E_SCHEMA' } });
@@ -177,7 +177,7 @@ describe('local API', () => {
         headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ capabilityId: 'mcp.answer.github', input: {}, purpose: 'Test' }),
       });
-      return { status: response.status, body: await response.json() };
+      return { status: response.status, body: (await response.json()) as unknown };
     };
     expect(await drops()).toMatchObject({ status: 404, body: { error: 'E_UNKNOWN_CAPABILITY' } });
     expect(logged).toEqual([]);

@@ -13,6 +13,7 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { build, type BuildOptions, type Plugin } from 'esbuild';
+import { buildDesktopUi } from './build-desktop-ui.ts';
 
 /**
  * jsonc-parser's `main` is a UMD build whose lazy require('./impl/…') esbuild cannot follow; its ES module build (its
@@ -74,6 +75,9 @@ async function main(): Promise<void> {
   const version = (
     JSON.parse(readFileSync(join(root, 'packages', 'node', 'package.json'), 'utf8')) as { version: string }
   ).version;
+
+  // Keep JSX source and single-file Node distribution in sync.
+  await buildDesktopUi(root);
 
   rmSync(dist, { recursive: true, force: true });
   mkdirSync(dist, { recursive: true });
