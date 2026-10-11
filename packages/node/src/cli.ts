@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { dashedValues } from './cli-args.ts';
 import { privateConfig, migratePrivate, rollbackPrivate } from './private-config.ts';
 import { PrivateNetworkSchema } from '@drop/protocol';
 import { readFileSync } from 'node:fs';
@@ -98,7 +99,7 @@ const home = new DropHome();
 switch (command) {
   case 'init': {
     const { values } = parseArgs({
-      args: rest,
+      args: dashedValues(rest),
       options: {
         name: { type: 'string' },
         kind: { type: 'string' },
@@ -128,7 +129,10 @@ switch (command) {
     break;
   }
   case 'migrate-private': {
-    const { values } = parseArgs({ args: rest, options: { relay: { type: 'string' }, network: { type: 'string' } } });
+    const { values } = parseArgs({
+      args: dashedValues(rest),
+      options: { relay: { type: 'string' }, network: { type: 'string' } },
+    });
     if (!values.relay) fail('migrate-private requires --relay');
     migratePrivate(
       home,
@@ -197,7 +201,7 @@ switch (command) {
     break;
   case 'publish': {
     const { values, positionals } = parseArgs({
-      args: rest,
+      args: dashedValues(rest),
       allowPositionals: true,
       options: { approver: { type: 'string', multiple: true }, config: { type: 'string' } },
     });
@@ -330,7 +334,7 @@ switch (command) {
   }
   case 'share': {
     const { values, positionals } = parseArgs({
-      args: rest,
+      args: dashedValues(rest),
       allowPositionals: true,
       options: {
         label: { type: 'string' },
@@ -377,7 +381,7 @@ switch (command) {
     break;
   }
   case 'mcp-tools': {
-    const { values } = parseArgs({ args: rest, options: { config: { type: 'string' } } });
+    const { values } = parseArgs({ args: dashedValues(rest), options: { config: { type: 'string' } } });
     const raw: unknown = JSON.parse(readFileSync(values.config ?? fail('drop mcp-tools --config <file.json>'), 'utf8'));
     // Only the server part is needed here: the tool list may still be empty while the owner is choosing.
     const server = McpAnswerConfigSchema.shape.server.parse((raw as { server?: unknown }).server);
@@ -441,7 +445,7 @@ switch (command) {
   }
   case 'review': {
     const { values, positionals } = parseArgs({
-      args: rest,
+      args: dashedValues(rest),
       allowPositionals: true,
       options: { redact: { type: 'string', multiple: true } },
     });
@@ -453,7 +457,7 @@ switch (command) {
     break;
   }
   case 'receipts': {
-    const { values } = parseArgs({ args: rest, options: { since: { type: 'string' } } });
+    const { values } = parseArgs({ args: dashedValues(rest), options: { since: { type: 'string' } } });
     for (const receipt of home.receipts(parseSince(values.since))) {
       const at = new Date(receipt.timestamps.requested ?? 0).toISOString();
       process.stdout.write(
