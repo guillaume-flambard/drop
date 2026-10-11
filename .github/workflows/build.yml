@@ -1,52 +1,122 @@
-# Construit l'image SUR le VPS, avec un runner self-hosted, et la pousse dans le
-# registry local (127.0.0.1:5000). Reserve aux depots PRIVES : leur paquet GHCR
-# serait prive lui aussi, et le VPS ne peut pas le tirer sans jeton read:packages.
-# Ici il n'y a ni jeton, ni secret dans le depot, ni image privee a tirer de
-# l'exterieur : le build a lieu la ou l'image sera servie.
+# Builds the root Dockerfile (relay, node, gateway and site share one image) on GitHub-hosted runners.
 #
-# Genere depuis lab-infra/ci/build-selfhosted.yml — ne pas editer a la main,
-# relancer ./scripts/install-ci.sh <app>.
+# - pull_request: build only, never pushed, never logged in to a registry.
+# - push to main: pushed to ghcr.io/guillaume-flambard/drop as `<full sha>` and `main`.
+# - push of a `v*` tag: pushed as `<full sha>` and the semver tags (`1.2.3`, `1.2`, `1` from 1.0 on).
+# Pushed images carry a BuildKit SBOM and provenance, plus a GitHub-signed SLSA provenance attestation
+# (`gh attestation verify oci://ghcr.io/guillaume-flambard/drop:<tag> -R guillaume-flambard/drop`).
+#
+# The VPS no longer gets its image from a self-hosted runner and 127.0.0.1:5000: the `drop` stack must now pull
+# ghcr.io/guillaume-flambard/drop:<sha> (or :main). That change lives in lab-infra, not in this repository.
 name: build drop
 
 on:
   push:
     branches: [main]
+    tags: ['v*']
+  pull_request:
+    paths:
+      - Dockerfile
+      - .dockerignore
+      - docker/**
+      - packages/**
+      - package.json
+      - pnpm-lock.yaml
+      - pnpm-workspace.yaml
+      - site/**
+      - scripts/site.ts
+      - scripts/mac-updates.ts
+      - .github/workflows/build.yml
   workflow_dispatch: {}
 
-# The job only reads the checkout; the image goes to the VPS's local registry, never to GitHub.
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  IMAGE: ghcr.io/guillaume-flambard/drop
 
 jobs:
+  # Pull requests, forks included: no registry credentials and no write permission.
   build:
-    runs-on: [self-hosted, Linux, X64]
+    name: build
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Build (no push)
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: Dockerfile
+          push: false
+          tags: ${{ env.IMAGE }}:pr-${{ github.event.pull_request.number }}
 
-      - name: Construire
-        run: |
-          docker build \
-            -f Dockerfile \
-            -t 127.0.0.1:5000/drop:${{ github.sha }} \
-            --label org.opencontainers.image.source=https://github.com/${{ github.repository }} \
-            --label org.opencontainers.image.revision=${{ github.sha }} \
-            .
-
-      - name: Pousser le sha
-        run: docker push 127.0.0.1:5000/drop:${{ github.sha }}
-
-      # :latest UNIQUEMENT depuis main : sinon une branche de travail partirait en
-      # prod, l'agent de deploiement tirant :latest dans les deux minutes.
-      - name: Pousser latest (main seulement)
-        if: github.ref == 'refs/heads/main'
-        run: |
-          docker tag 127.0.0.1:5000/drop:${{ github.sha }} 127.0.0.1:5000/drop:latest
-          docker push 127.0.0.1:5000/drop:latest
-
-      - name: Menage des images intermediaires
-        if: always()
-        run: docker image prune -f --filter "until=168h" >/dev/null 2>&1 || true
+  # main, v* tags, or a manual run on main of this repository only (forks never publish).
+  publish:
+    name: publish
+    if: >-
+      github.repository == 'guillaume-flambard/drop' && (
+        (github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))) ||
+        (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write # push to GHCR
+      id-token: write # Sigstore certificate for the attestation
+      attestations: write # store the attestation
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Image tags and labels
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ env.IMAGE }}
+          # No `latest`: deployments name an exact sha (or follow `main`).
+          flavor: |
+            latest=false
+          tags: |
+            type=sha,format=long,prefix=
+            type=raw,value=main,enable=${{ github.ref == 'refs/heads/main' }}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}},enable=${{ !startsWith(github.ref, 'refs/tags/v0.') }}
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push
+        id: push
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
+          provenance: mode=max
+          sbom: true
+      - name: Attest build provenance
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+          # Storage records exist only for organization-owned repositories.
+          create-storage-record: false
