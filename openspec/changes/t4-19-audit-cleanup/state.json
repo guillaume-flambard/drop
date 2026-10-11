@@ -1,0 +1,17 @@
+{
+  "change": "t4-19-audit-cleanup",
+  "status": "READY_FOR_MANUAL_ACCEPTANCE",
+  "updated": "2026-10-11",
+  "verification": {
+    "lint": "pass",
+    "typecheck": "pass",
+    "tests": "556 pass, 1 skipped",
+    "cargo": "5 pass, clippy clean",
+    "openspec_validate": "pass",
+    "openspec_guard": "pass, baseline only shrinks"
+  },
+  "remaining": [
+    "Guillaume reviews and merges the audit PR and PR #25",
+    "Guillaume authorises deleting obsolete branches and worktrees"
+  ]
+}
