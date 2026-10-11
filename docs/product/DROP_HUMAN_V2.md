@@ -76,3 +76,43 @@ git switch --track origin/feat/drop-v2-human-ui
 Si `git status` révèle du travail non commité, le préserver dans un commit ou un worktree distinct avant le changement de branche. Ne pas utiliser de `reset --hard`, de `clean` ni de push forcé.
 
 Windows et Linux sont des cibles de design, pas des builds livrés par cette branche.
+
+## Itération 2 — véritable fenêtre de gestion (branche en cours de revue)
+
+Le petit panneau 380 × 620 conserve les décisions rapides. Une **seconde fenêtre native Tauri** s'ouvre depuis le menu de l'icône, via « Ouvrir mon espace… ». Dimensions initiales : 980 × 720, fenêtre redimensionnable, minimale 720 × 560. Aucun élargissement automatique du popover et aucun accès Tauri IPC ajouté à l'origine locale distante.
+
+La page `GET /workspace` est servie par le même Node, protégée par le **même jeton local** et la même CSP restrictive que `/app`. La fenêtre lit et modifie uniquement les mêmes API déjà définies dans `packages/node/src/api.ts` :
+
+- **Vue d'ensemble** : équipe, nombre d'outils partagés, derniers échanges, sans progression inventée.
+- **Équipe** : personnes, disponibilités, capacités, création d'une équipe et invitation en un geste explicite.
+- **Assistants** : détection locale et raccordement en deux confirmations ; les configurations manuelles restent affichées comme texte.
+- **Outils partagés** : aucun partage implicite ; une confirmation séparée précède l'appel au backend.
+- **Faits publiés** : création, modification et retrait ; l'exception au consentement question-par-question est montrée *avant* publication.
+- **Connexion** : réseau local et paramètres Internet existants ; aucun relais activé sans action explicite.
+
+La page n'ajoute aucun index central, accès permanent, service tiers, police distante ou dépendance UI.
+
+### Captures de cette itération
+
+Les images ci-dessous sont des **captures Chromium du vrai HTML rendu depuis les fichiers source de la branche** et alimenté par une **API simulée uniquement pour la démonstration**. Elles ne prouvent ni la compilation Tauri sur Mac ni la qualité d'un WebView système réel :
+
+- [Panneau : consentement 380 × 620](screenshots/12-panel-request.png)
+- [Panneau : relecture avant envoi](screenshots/14-panel-review.png)
+- [Fenêtre : vue d'ensemble](screenshots/01-overview.png)
+- [Fenêtre : équipe](screenshots/02-team.png)
+- [Fenêtre : assistants après analyse](screenshots/04-assistants-analysis.png)
+- [Fenêtre : confirmation de partage](screenshots/06-sharing-confirm.png)
+- [Fenêtre : faits publiés](screenshots/07-facts.png)
+- [Fenêtre : choix du relais](screenshots/09-network-relay.png)
+- [Fenêtre : apparence sombre](screenshots/10-overview-dark.png)
+
+Le test de rendu confirme l'absence d'erreur JavaScript dans ces scénarios, et vérifie qu'aucun `POST /ui/admin/share` n'est envoyé avant la confirmation. Sur la demande fictive de la capture, le bouton « Autoriser une fois » se termine à `y=572px` dans une fenêtre de `620px` ; cela ne garantit pas le même résultat pour toutes les longueurs de questions.
+
+### Non encore vérifié
+
+- Compilation Rust et affichage dans un vrai WebView macOS ; recette sur Mac et VoiceOver.
+- Builds natifs Windows et Linux. La nouvelle surface HTML est responsive mais les autres plateformes ne sont pas encore livrées.
+- Chronologie persistante : `/ui/outbound` n'expose toujours que l'état courant. Une ligne de temps réelle reste un chantier backend indépendant.
+- Finalisation du partage par modèle et de l'administration d'entreprise (T4.16), sans l'inventer dans les écrans.
+
+La fusion reste conditionnée aux validations de sécurité, à la mise à jour explicite de D46 et à une recette humaine sur l'app Mac.
