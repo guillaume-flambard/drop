@@ -105,6 +105,11 @@ Le Node SHALL proposer la configuration à coller, ou la commande à lancer, seu
 - **WHEN** sous Linux, la configuration de Zed est invalide, Claude Desktop (bêta, emplacement non documenté) est installé et Codex n'a pas de commande exécutable
 - **THEN** ces trois reçoivent leur secours avec la raison (`E_CONFIG_INVALID_OR_UNREADABLE`, `E_CONFIG_UNDOCUMENTED`, `E_CLI_MISSING`), le fichier invalide reste intact, et tous les autres clients installés sont prêts sans copier-coller
 
+#### Scenario: AC: conflit plutôt que secours
+<!-- openspec-guard:test="all thirteen clients connected automatically (T4.22) > reports a drop entry in a Claude Code project as a conflict, never as something to paste" -->
+- **WHEN** Claude Code déclare déjà une entrée drop dans l'un de ses projets
+- **THEN** l'état est `conflict` (`E_SCOPE_CONFLICT`), sans configuration à coller
+
 #### Scenario: AC: rien de préparé pour un client non écrit
 <!-- openspec-guard:test="all thirteen clients connected automatically (T4.22) > keeps the requester server out of a client drop could not write" -->
 - **WHEN** une sélection forgée vise un client dont le fichier est illisible

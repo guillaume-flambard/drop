@@ -1,0 +1,10 @@
+{
+  "phase": "READY_FOR_MANUAL_ACCEPTANCE",
+  "scope": "T4.22 : treize clients MCP raccordés automatiquement sur macOS, Windows et Linux, fichiers gardés tels quels, secours expliqué",
+  "requirements": { "total": 5, "covered": 5 },
+  "acceptance": { "total": 21, "verified": 21, "pending": 0, "failed": 0 },
+  "todos": { "p0_open": 0, "p1_open": 0 },
+  "risks": { "critical_open": 0, "high_open": 0 },
+  "verification": { "status": "PASS", "evidence": "evidence.md", "manual": "recette sur de vrais PC Windows et Linux au banc maison T4.6c" },
+  "ready_for_manual_acceptance": true
+}

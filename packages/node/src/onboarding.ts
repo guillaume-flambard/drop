@@ -269,6 +269,8 @@ function inspect(agent: AgentKind, options: OnboardingOptions, installed: boolea
     return preview('ready', fingerprint, 'Ajout du connecteur MCP drop uniquement');
   } catch (error) {
     const code = failureCode(error);
+    // Another drop entry elsewhere in the file is a conflict to settle, not a reason to paste one more.
+    if (code === 'E_SCOPE_CONFLICT' || code === 'E_DROP_CONFLICT') return preview('conflict', '', code);
     return preview('error', '', code === 'E_CONFIG_LOCKED' ? code : 'E_CONFIG_INVALID_OR_UNREADABLE');
   }
 }
