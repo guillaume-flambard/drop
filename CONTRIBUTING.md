@@ -27,7 +27,7 @@ pnpm site:preview           # static site on 127.0.0.1:4173
 bash scripts/demo-local.sh  # local end-to-end demo, see README.md
 ```
 
-The Mac app (`apps/mac`) and `crates/drop-iroh` also need Rust, and the app needs Xcode. You do not need them for most contributions.
+The desktop app (`apps/desktop`, Tauri) and `crates/drop-iroh` also need Rust, and building the macOS app needs Xcode. You do not need them for most contributions.
 
 ## Find your way around
 

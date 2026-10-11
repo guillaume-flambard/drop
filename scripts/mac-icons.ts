@@ -1,6 +1,6 @@
 // Draws the Mac app's icons as PNG, with no image library: a teardrop, the product's mark (T2.4).
-//   apps/mac/src-tauri/icons/app-icon.png   1024 px, white drop on a teal rounded square (input of `tauri icon`)
-//   apps/mac/src-tauri/icons/tray.png       44 px, black drop on transparent, used as a macOS template image
+//   apps/desktop/src-tauri/icons/app-icon.png   1024 px, white drop on a teal rounded square (input of `tauri icon`)
+//   apps/desktop/src-tauri/icons/tray.png       44 px, black drop on transparent, used as a macOS template image
 // Usage: node scripts/mac-icons.ts
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -78,7 +78,7 @@ function inRoundedSquare(x: number, y: number, size: number, margin: number, rad
   );
 }
 
-const dir = join(dirname(fileURLToPath(import.meta.url)), '..', 'apps', 'mac', 'src-tauri', 'icons');
+const dir = join(dirname(fileURLToPath(import.meta.url)), '..', 'apps', 'desktop', 'src-tauri', 'icons');
 mkdirSync(dir, { recursive: true });
 
 const size = 1024;

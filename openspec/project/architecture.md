@@ -68,7 +68,8 @@ Adaptateurs livrés : Claude Code, Codex, Cursor, Claude Desktop (T3.3). Treize 
 | `packages/requester-mcp`    | Connecteur MCP stdio vers l’API locale                                         |
 | `packages/a2a`              | Adaptation A2A entrante                                                        |
 | `packages/gateway`          | Connecteur distant grand public facultatif                                     |
-| `apps/mac`                  | Shell Tauri                                                                    |
+| `packages/desktop-ui` | Interface React + shadcn/ui, compilée et servie par le Node |
+| `apps/desktop` | Coque Tauri de l'app de bureau (macOS, Windows, Linux), voir [ARCHITECTURE](../../docs/ARCHITECTURE.md) |
 | `site`, `scripts/site.ts`   | Présentation statique et export explicite de documents                         |
 
 Le runner n’écoute aucun port. L’API du Node écoute localement et reste authentifiée. Les clés privées restent dans `~/.drop/` avec droits `0600`. `requester-mcp` parle à cette API, jamais directement au relais.

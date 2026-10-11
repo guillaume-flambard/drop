@@ -7,7 +7,7 @@ La source d'autorité reste `docs/product/PRD.md`, `docs/product/APP_FLOW.md` et
 ## Ce qui est intégré
 
 1. **Thème du panneau :** `packages/node/src/panel-human.ts`, injecté par `packages/node/src/panel.ts` dans la page `/app` servie localement. Aucune ressource externe, police ou dépendance UI. Modes clair/sombre, clavier et préférences de mouvement préservés.
-2. **Démarrage cohérent :** mêmes tokens de base dans `apps/mac/web/index.html` pour les états avant disponibilité du moteur.
+2. **Démarrage cohérent :** mêmes tokens de base dans `apps/desktop/web/index.html` pour les états avant disponibilité du moteur.
 3. **Demandes :** libellé humain, carte de consentement plus lisible, actions explicites et registre « recevra / ne recevra jamais » maintenu avant les boutons.
 4. **Relecture :** contenu et retrait champ par champ toujours présents ; seule la présentation et la formulation de l'étape changent.
 5. **Mes questions :** liste de suivi consultable au clavier (élément HTML natif `details`/`summary`) avec une explication courte de l'état réel fourni par `GET /ui/outbound`. L'ouverture d'un détail résiste aux mises à jour du panneau.

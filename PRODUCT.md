@@ -31,7 +31,7 @@ The owner keeps the decision on every request, and the requester gets an answer,
 - The panel lives in a small window under a menu bar icon; it is opened briefly, often after a notification, and closed again. In the Mac app, notifications carry the app icon and a click opens the panel (T4.14).
 - Tabs: Demandes (requests to decide, results to review before sending, questions I sent), Équipe (members, online state, their shared tools, invite links), Mes outils (two-confirmation agent connection, tool sharing, linked assistants).
 - Deep links `drop://pair` and `drop://link` open the panel. An invitation shows who invites and to which team, then waits for « Rejoindre » or « Refuser » (T4.14). `drop://link` is refused in the private profile.
-- A separate startup page (`apps/mac/web/index.html`) shows boot and failure states with diagnostic codes before the panel is reachable.
+- A separate startup page (`apps/desktop/web/index.html`) shows boot and failure states with diagnostic codes before the panel is reachable.
 
 ## Capabilities and Constraints
 

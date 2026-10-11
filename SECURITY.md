@@ -37,7 +37,7 @@ In scope, anything in this repository, in particular:
 - `packages/runner`: execution pipeline, budgets, output validation, secret scanner;
 - `packages/capabilities`: `production.error_summary`, `repo.answer`, `mcp.answer`, `a2a.answer`;
 - `packages/requester-mcp`: the requester's MCP server;
-- `apps/mac`: the Tauri menu bar app, deep links (`drop://`), the embedded runtime and update path;
+- `apps/desktop`: the Tauri menu bar app, deep links (`drop://`), the embedded runtime and update path;
 - `crates/drop-iroh`, `packages/a2a`, the relay Docker image and the Helm chart in `deploy/helm`.
 
 Typical questions worth testing: can a peer's request act as an instruction to the model? Can a request widen the tools a capability allows? Can a file outside the allowlist be read? Can unvalidated output, or a secret, reach the requester? Can a request run without the owner's decision, or be replayed? Can a node reach a network destination the private profile does not allow?

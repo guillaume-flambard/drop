@@ -33,7 +33,7 @@ Tous **Existant**, dans un monorepo pnpm sans étape de build en développement 
 | `packages/a2a`              | A2A v1.0 entrant et sortant sur `@a2a-js/sdk` 1.3.0 (D33).                                             | `src/server.ts`, `src/tasks.ts`, `src/client.ts`                                 |
 | `packages/gateway`          | Connecteur distant OAuth et MCP HTTP pour ChatGPT et Claude (D31), hors profil privé.                  | `src/server.ts`, `src/oauth.ts`, `src/bridge.ts`                                 |
 | `packages/blocked-observer` | Mesure de l'étape 0 (D2, D24).                                                                         | `src/store.ts`, `src/cli.ts`                                                     |
-| `apps/mac`                  | Coque Tauri 2 : icône de barre de menus, lien profond, démarrage automatique, panneau du Node.         | `apps/mac/src-tauri/Cargo.toml`, `apps/mac/src-tauri/src/main.rs`                |
+| `apps/desktop`                  | Coque Tauri 2 : icône de barre de menus, lien profond, démarrage automatique, panneau du Node.         | `apps/desktop/src-tauri/Cargo.toml`, `apps/desktop/src-tauri/src/main.rs`                |
 | `scripts/bundle.ts`         | Produit `dist/drop.mjs`, `dist/drop-mcp.mjs`, `dist/drop-relay.mjs` et `dist/drop.mcpb`.               | `scripts/bundle.ts:3-6`                                                          |
 
 ### 2.2 Processus et ports

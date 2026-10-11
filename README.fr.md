@@ -126,7 +126,8 @@ Le raccordement des agents, la configuration MCP manuelle et les treize clients 
 | `packages/blocked-observer` | Mesure locale du besoin                                                        |
 | `packages/simulation`       | Banc local de Nodes simulés                                                    |
 | `packages/gateway`          | Passerelle grand public facultative, mise de côté                              |
-| `apps/mac`                  | App Tauri 2 de barre de menus                                                  |
+| `packages/desktop-ui` | Interface React + shadcn/ui affichée dans l'app de bureau |
+| `apps/desktop` | Coque Tauri 2 de l'app de bureau (macOS, Windows, Linux) |
 | `crates/drop-iroh`          | Connexion par Internet avec iroh                                               |
 | `deploy/helm`               | Chart Helm du relais                                                           |
 | `openspec/`                 | Spécifications (le contrat) et historique des changes                          |
@@ -153,6 +154,7 @@ Les vulnérabilités se signalent en privé, selon [SECURITY.md](SECURITY.md) (e
 - [Le guide](docs/GUIDE.md) : le parcours, la démo, ce qui reste privé
 - [Le PRD](docs/product/PRD.md) : la cible, la promesse et sa limite, les hypothèses
 - [La vision](openspec/project/vision.md) et [l'architecture](openspec/project/architecture.md)
+- [Architecture](docs/ARCHITECTURE.md) : où vit chaque partie du dépôt et d'où vient chaque build
 - [Les spécifications](openspec/specs/) : le contrat normatif et ses scénarios d'acceptation
 - [Les décisions](docs/DECISIONS.md) : chaque choix produit et technique, avec sa raison
 - [Socle ouvert et modèle économique](docs/OPEN_SOURCE.md)
