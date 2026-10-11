@@ -61,8 +61,9 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
-      # The Helm chart test fails in CI without Helm (D81); unlike Ubuntu, the macOS image does not ship it.
-      - if: matrix.label == 'macos'
+      # The Helm chart test fails in CI without Helm (D81): the same pinned Helm on macOS, whose image lacks it, and on
+      # Windows, whose image version may drift.
+      - if: matrix.label == 'macos' || matrix.label == 'windows'
         uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
       - run: pnpm install --frozen-lockfile
       - run: pnpm -r lint
