@@ -255,7 +255,7 @@ temps que D34 à D46 sur la branche du profil privé. Elles ont été renumérot
   d'horloge que les enveloppes) est désormais refusé (`too_long`). Deux points restent ouverts, ci-dessous. Hors de ce
   dépôt : la configuration du relais déployé doit fixer `admittedPath` sur un volume persistant, sinon le relais
   oublie les Nodes admis à chaque redéploiement.
-- **D70** — Mises à jour signées de l'app Mac (2026-10-09, T2.4, choix de Guillaume). Le dépôt est privé, donc l'app
+- **D70** — Mises à jour signées de l'app Mac (2026-10-09, T2.4, choix de Guillaume). Le dépôt était alors privé, donc l'app
   ne peut pas lire les Releases GitHub sans jeton : les mises à jour sont servies en statique sous
   `https://drop.memolabs.dev/updates/` (`latest.json` et une archive nommée par version). L'app vérifie au lancement
   puis toutes les 6 h et propose la version dans le menu de son icône ; rien ne s'installe sans clic. Plugin updater
@@ -294,7 +294,7 @@ temps que D34 à D46 sur la branche du profil privé. Elles ont été renumérot
   et le routage de `drop.memolabs.dev` : `/v1` et `/health` vers le relais ; `/oauth`, `/mcp`,
   `/.well-known/oauth-*` et `/gateway` vers la passerelle ; tout le reste vers le site. La vidéo n'est pas tournée :
   l'accueil montre les captures de la démo du 8 octobre et l'annonce pour les premiers essais (T2.7). Les exports
-  Markdown pointent vers le dépôt, qui est privé : à revoir avant la mise en ligne.
+  Markdown pointent vers le dépôt, alors privé, public depuis le 11 octobre 2026.
 - **D73** — Préparation des essais réels (2026-10-09, T2.7). Protocole dans `docs/essais/README.md`. Ce que la
   confrontation aux vrais serveurs a montré, sources lues ce jour : Figma se branche par le serveur local de l'app de
   bureau (`127.0.0.1:3845/mcp`, sans jeton), mais exige un siège Dev ou Full (sinon 6 appels d'outil par mois) et lit
