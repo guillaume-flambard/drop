@@ -9,7 +9,7 @@ Graphe fini P1 : 1.1 → 1.2 → 2.1 → 2.2. Preuves dans evidence.md, exigence
 
 ## 2. Vérification et publication
 
-- [x] 2.1 Passer pnpm -r lint, pnpm -r typecheck, pnpm -r test, openspec-guard puis update-baseline sans ajout, openspec validate ; make check et déploiement ciblé après validation (REQ-PUB-4, 5).
+- [x] 2.1 Passer pnpm -r lint, pnpm -r typecheck, pnpm -r test, openspec-guard puis update-baseline sans ajout, openspec validate ; contrôle à blanc et déploiement ciblé après validation (REQ-PUB-4, 5).
 - [x] 2.2 Vérifier le HTTPS, les hashes, les refus, le relais avant/après et le rendu ; consigner preuves, risques et recette, archiver et committer (tous les critères).
 
 Preuves : 1.1 → EV-PUB-1 ; 1.2 → EV-PUB-1/2 ; 2.1 → EV-PUB-2/3 ; 2.2 → EV-PUB-3/4/5.

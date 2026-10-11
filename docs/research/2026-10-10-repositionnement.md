@@ -96,7 +96,7 @@ Sources : https://code.claude.com/docs/en/mcp, https://modelcontextprotocol.io/d
 
 ## 5. Capacité de simulation (mesures locales)
 
-- [F] VPS lab : 8 cœurs, 16 Go, environ 70 conteneurs, 7,2 Gio disponibles et 5,6 Gio de swap occupés sur 8 lors de la mesure ; inadapté à la simulation. Mac : 10 cœurs, 16 Go, environ 7 Go libres.
+- [F] VPS lab : 16 Go, mémoire déjà très occupée par d'autres services lors de la mesure ; inadapté à la simulation. Mac : 10 cœurs, 16 Go, environ 7 Go libres.
 - [F] Un Node v24 vide occupe 44 Mo de RSS, 67 Mo avec libsodium et zod chargés.
 - [I] Un nœud drop complet avec faux agent : 130 à 180 Mo ; 50 nœuds en processus séparés tiennent sur le Mac, 500 exigent des nœuds virtuels regroupés dans un processus, à mesurer en T4.1.
-- [F] Modèles gratuits : passerelle LiteLLM du lab (`lab-infra`, `stacks/litellm/config.yaml`), chaînes `lab-fast` (Groq Qwen3.8 27B, puis Gemini Flash-Lite, GLM 4.7 Flash, OVH) et `lab-agent` (Nemotron Ultra 550B gratuit, puis Kimi K3, GLM 5.3, DeepSeek V3.1, Devstral, gpt-oss-120b) ; le quota gratuit de Groq ne tient pas les rafales.
+- [F] Modèles gratuits : passerelle LiteLLM privée du lab, deux alias (`lab-fast`, `lab-agent`) qui enchaînent plusieurs fournisseurs gratuits ; le quota gratuit de Groq ne tient pas les rafales.

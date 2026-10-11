@@ -99,7 +99,7 @@ function exportMarkdown(text: string): string {
       if (target.startsWith('diagrams/')) return `](../${target})`;
       return `](${sourceBranch}${posix.normalize(posix.join('docs', target))})`;
     }) +
-    '\n> Les liens vers les sources GitHub nécessitent un accès au dépôt, encore privé. Ils suivent la branche main, pas un snapshot audité.\n'
+    '\n> Le dépôt est public et open source (Apache-2.0) depuis le 11 octobre 2026. Les liens vers les sources GitHub suivent la branche main, pas un snapshot audité.\n'
   );
 }
 
