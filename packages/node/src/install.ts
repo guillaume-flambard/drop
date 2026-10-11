@@ -7,8 +7,10 @@ import {
   CLIENT_SPECS,
   clientConfigLocation,
   clientHost,
+  clientPlatform,
   type AgentKind,
   type ClientHost,
+  type ClientPlatform,
   type ConfigLayout,
   type ConfigLocation,
 } from '@drop/capabilities';
@@ -99,7 +101,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function opencodeV2(text: string | undefined): boolean {
   if (text === undefined) return false;
   const config: unknown = parseJsonc(text.replace(/^\uFEFF/, ''), [], { allowTrailingComma: true });
-  return isRecord(config) && isRecord(config.mcp) && isRecord(config.mcp.servers);
+  if (!isRecord(config) || !isRecord(config.mcp) || !isRecord(config.mcp.servers)) return false;
+  // A stable-version server that happens to be named `servers` is a server definition, not the v2 envelope.
+  const servers = config.mcp.servers;
+  return !('type' in servers) && !('command' in servers) && !('url' in servers);
 }
 
 /** Where our entry sits in a client's file, key by key. */
@@ -177,11 +182,23 @@ export function normalizeEntry(layout: ConfigLayout, raw: unknown): ServerEntry 
 const REASONS: Record<string, string> = {
   E_CONFIG_INVALID_OR_UNREADABLE: 'son fichier est illisible ou invalide, drop ne le réécrit pas',
   E_CONFIG_LOCKED: 'son fichier est verrouillé ou protégé en écriture',
+  E_CONFIG_SYMLINK: 'son fichier est un lien vers un autre fichier, que drop ne suit pas',
   E_CONFIG_UNDOCUMENTED: 'son emplacement n’est pas documenté sur ce système',
   E_CONFIG_AMBIGUOUS: 'plusieurs fichiers possibles, drop ne choisit pas à ta place',
   E_CLI_MISSING: 'sa commande officielle est introuvable',
   E_CLI_SHIM_UNSAFE: 'sa commande officielle ne peut pas recevoir ces arguments sans risque sous Windows',
 };
+
+/**
+ * A command line to paste, quoted for the shell the owner has: single quotes in a POSIX shell (`'\''` for a quote),
+ * single quotes in PowerShell (`''` for a quote). Backslashes are never doubled: a Windows path stays as it is.
+ */
+export function shellLine(argv: readonly string[], platform: ClientPlatform): string {
+  const plain = platform === 'win32' ? /^[\w./:=@+\\-]+$/ : /^[\w./:=@+-]+$/;
+  const quote = (arg: string) =>
+    platform === 'win32' ? `'${arg.replaceAll("'", "''")}'` : `'${arg.replaceAll("'", "'\\''")}'`;
+  return argv.map((arg) => (plain.test(arg) ? arg : quote(arg))).join(' ');
+}
 
 /** Pasting or running by hand: why drop did not write, and exactly what to do (D84). */
 export function fallbackStep(
@@ -189,6 +206,7 @@ export function fallbackStep(
   entry: ServerEntry,
   location: ConfigLocation | undefined,
   reason: string,
+  platform: ClientPlatform = clientPlatform(),
 ): ManualStep {
   const label = CLIENT_SPECS[agent].label;
   const why = `Raccordement automatique impossible : ${REASONS[reason] ?? reason}.`;
@@ -196,10 +214,8 @@ export function fallbackStep(
     return {
       kind: 'manual',
       format: 'shell',
-      snippet: officialCommand(agent, entry)
-        .map((arg) => (/^[\w./:=@+-]+$/.test(arg) ? arg : JSON.stringify(arg)))
-        .join(' '),
-      steps: `${why} Lance cette commande dans un terminal, puis relance ${label}.`,
+      snippet: shellLine(officialCommand(agent, entry), platform),
+      steps: `${why} Lance cette commande dans ${platform === 'win32' ? 'PowerShell' : 'un terminal'}, puis relance ${label}.`,
     };
   const layout = location?.layout ?? 'mcpServers';
   const path = entryKeyPath(layout);

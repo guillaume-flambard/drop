@@ -14,15 +14,35 @@
 | Secours expliqué | Tests « … > falls back to an explained configuration only when a write is impossible », « … > keeps the requester server out of a client drop could not write » et « … > reports a drop entry in a Claude Code project as a conflict, never as something to paste ». |
 | Panneau | Test « menu bar panel (T4.22) > connects every client without a copy step and explains the fallback only when a write is impossible ». |
 
+| YAML : BOM, CRLF, indentation | Test « format-preserving configuration edits (T4.22) > keeps a YAML BOM, CRLF line endings and four-space indentation, and refuses an edit that would touch anything else ». |
+| Commande de secours | Test « … > prints a fallback command quoted for the shell of the owner, Windows paths unchanged ». |
+| Cas limites | Test « … > keeps edge cases out: a stable OpenCode server named servers, an older Devin entry, a linked file, script extensions ». |
+
 Les tests du raccordement fixent leur système ; ils passent aussi quand `process.platform` est forcé à `linux` (comme la CI) ou à `win32`.
 
 ## Vérification (11 octobre 2026)
 
 - `pnpm -r lint`, `pnpm -r typecheck` : verts.
-- `pnpm -r test` : 72 fichiers, 570 tests verts, 1 ignoré.
+- `pnpm -r test` : 72 fichiers, 574 tests verts, 1 ignoré.
 - `npx openspec validate --all --strict` : vert.
 - openspec-guard 0.3.0 `--require-selector --fail-on fail` : vert après archivage ; la baseline ne fait que perdre des entrées.
 - Bundle (`node scripts/bundle.ts`) : `drop install` et son aide fonctionnent ; `drop detect` en lecture seule sur ce Mac.
+
+## Revue adverse
+
+Sous-agent indépendant, environ trente entrées JSONC essayées (commentaires portant `,` `}` ou `//`, objets sur une ligne, conteneurs vides, CRLF, BOM, clés en double) : aucune corruption. Corrigé après la revue :
+
+- YAML : BOM et CRLF remis, largeur d'indentation du fichier gardée.
+- Chaque édition relit le document entier et refuse toute différence autre que notre entrée (`E_CONFIG_EDIT`) ; retirer une entrée absente ne change rien.
+- Commande de secours citée pour PowerShell (barres obliques inverses intactes) ou pour un shell POSIX (apostrophes), plus jamais en JSON.
+- Deux tables drop dans Codex, et une entrée drop dans un projet de Claude Code : conflit, sans extrait à coller.
+- OpenCode 1 avec un serveur nommé `servers` n'est plus lu comme OpenCode 2.
+- Variables d'environnement : absolues selon le système de l'hôte (lecteur ou UNC sous Windows).
+- Sous Windows, un délai dépassé arrête tout l'arbre de `cmd.exe` (`taskkill /T`) ; `PATHEXT` réduit à `.exe`, `.com`, `.cmd`, `.bat` ; entrées du `PATH` entre guillemets acceptées.
+- Fichier lié ailleurs : `E_CONFIG_SYMLINK`, lecture par descripteur ouvert sans suivre de lien (`O_NOFOLLOW` hors Windows).
+- Devin : une entrée drop dans un ancien fichier qu'il importe encore est un conflit.
+
+Écarté, écrit en limite : un conteneur créé par drop (`mcpServers` absent) reste vide après le retrait ; d'anciennes sauvegardes nommées sans empreinte ne sont plus élaguées ; la règle d'import de Devin (seulement si le nouveau fichier manque ?) n'est pas documentée.
 
 ## Lecture seule sur ce Mac
 

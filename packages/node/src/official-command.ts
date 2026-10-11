@@ -9,6 +9,7 @@ import { promisify } from 'node:util';
  * refused (E_CLI_SHIM_UNSAFE) and the owner gets it to run by hand.
  */
 const execFileAsync = promisify(execFile);
+const TIMEOUT_MS = 60_000;
 
 /** Inside double quotes, cmd.exe still expands `%` (and `!` with delayed expansion), and `"` would end the quotes. */
 const UNSAFE_FOR_CMD = /["%!^]|\\$/;
@@ -37,13 +38,25 @@ export async function runOfficial(argv: string[], platform: NodeJS.Platform = pr
   const shim = platform === 'win32' && isWindowsShim(file);
   const command = shim ? windowsShimCommand(argv, process.env.ComSpec ?? 'cmd.exe') : { file, args };
   const running = execFileAsync(command.file, command.args, {
-    timeout: 60_000,
+    // Through cmd.exe, killing cmd.exe alone would leave the node process it started: the whole tree goes below.
+    timeout: shim ? 0 : TIMEOUT_MS,
     killSignal: 'SIGKILL',
     windowsHide: true,
     // The arguments above are already quoted for cmd.exe; Node must not quote them again.
     windowsVerbatimArguments: shim,
   });
+  const pid = running.child.pid;
+  const timer =
+    shim && pid !== undefined
+      ? setTimeout(() => {
+          execFile('taskkill', ['/T', '/F', '/PID', String(pid)], { windowsHide: true }, () => undefined);
+        }, TIMEOUT_MS)
+      : undefined;
   // Its output is not read, and a question it asks gets end of input at once, as with stdio ignored.
   running.child.stdin?.end();
-  await running;
+  try {
+    await running;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
