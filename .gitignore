@@ -25,3 +25,6 @@ apps/mac/src-tauri/icons/64x64.png
 
 # Rust crates (drop-iroh, T4.2b): cargo build output
 crates/*/target/
+
+# Claude Code agent worktrees
+.claude/worktrees/
