@@ -5,6 +5,7 @@ import { generateIdentity } from '@drop/protocol';
 import { startLocalApi, type AdminHooks, type LocalApi } from '../src/api.ts';
 import { NodeEngine } from '../src/engine.ts';
 import { renderPanel } from '../src/panel.ts';
+import { renderWorkspace } from '../src/workspace.ts';
 import { MemoryStore } from './helpers.ts';
 
 const TOKEN = 'panel-token-0123456789abcdefghijklmn';
@@ -114,6 +115,7 @@ describe('menu bar panel and its admin routes (T2.4)', () => {
     const { port } = api;
 
     expect((await call(port, 'GET', '/app', undefined, false)).status).toBe(401);
+    expect((await call(port, 'GET', '/workspace', undefined, false)).status).toBe(401);
     expect(JSON.parse((await call(port, 'GET', '/_shell/health', undefined, false)).text)).toEqual({
       instance: 'shell-test-instance',
     });
@@ -122,6 +124,13 @@ describe('menu bar panel and its admin routes (T2.4)', () => {
     expect(page.headers['content-security-policy']).toBe(
       "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'",
     );
+    const workspace = await call(port, 'GET', `/workspace?token=${TOKEN}`, undefined, false);
+    expect(workspace.status).toBe(200);
+    expect(workspace.headers['content-security-policy']).toBe(
+      "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'",
+    );
+    expect(workspace.headers['referrer-policy']).toBe('no-referrer');
+    expect(workspace.text).toContain('Outils partagés');
     expect(JSON.parse((await call(port, 'GET', '/ui/admin/status')).text)).toMatchObject({ relayConnected: true });
     expect((await call(port, 'POST', '/ui/admin/share', { agent: 'claude_code', server: 'figma' })).status).toBe(200);
     expect((await call(port, 'POST', '/ui/admin/share', { agent: 'claude_code' })).status).toBe(400);
@@ -417,6 +426,25 @@ describe('Drop Human V2 panel (presentation, no protocol changes)', () => {
     expect(html).toContain('expandedOutbounds[drop.dropId]');
     // An expandable current status is honest; a historic timeline would require a new backend API.
     expect(html).not.toContain('42 %');
+    const script = /<script>([\s\S]*?)<\/script>/.exec(html)?.[1];
+    expect(() => new Script(script ?? '')).not.toThrow();
+  });
+});
+
+describe('workspace window — local management UI (Human V2)', () => {
+  it('uses local-only endpoints, no external images or Tauri IPC', () => {
+    const html = renderWorkspace();
+    expect(html).toContain('Vue d’ensemble');
+    expect(html).toContain('Ton équipe');
+    expect(html).toContain('Connecter les assistants sélectionnés');
+    expect(html).toContain('Confirmer le partage');
+    expect(html).toContain('Publier un fait');
+    expect(html).toContain('Connexion par Internet');
+    expect(html).toContain("api('GET','/ui/admin/tools')");
+    expect(html).toContain("api('POST','/ui/admin/onboarding'");
+    expect(html).not.toContain('window.__TAURI_INTERNALS__');
+    expect(html).not.toContain('fonts.googleapis.com');
+    expect(html).not.toContain('innerHTML');
     const script = /<script>([\s\S]*?)<\/script>/.exec(html)?.[1];
     expect(() => new Script(script ?? '')).not.toThrow();
   });
