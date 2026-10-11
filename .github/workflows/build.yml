@@ -6,9 +6,8 @@
 # Pushed images carry a BuildKit SBOM and provenance, plus a GitHub-signed SLSA provenance attestation
 # (`gh attestation verify oci://ghcr.io/guillaume-flambard/drop:<tag> -R guillaume-flambard/drop`).
 #
-# The VPS no longer gets its image from a self-hosted runner and 127.0.0.1:5000: the `drop` stack must now use
-# ghcr.io/guillaume-flambard/drop:latest, which the lab autodeploy agent pulls like the other public apps. `latest`
-# therefore only ever comes from main. That change lives in lab-infra, not in this repository.
+# The maintainer's server deploys ghcr.io/guillaume-flambard/drop:latest automatically (autodeploy), so `latest`
+# only ever comes from main. Its deployment configuration lives in a separate private repository, not here.
 name: build drop
 
 on:
@@ -87,7 +86,7 @@ jobs:
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: ${{ env.IMAGE }}
-          # `latest` is what the lab autodeploy pulls: set explicitly from main only, never derived from a tag.
+          # `latest` is what the autodeploy pulls: set explicitly from main only, never derived from a tag.
           flavor: |
             latest=false
           tags: |
