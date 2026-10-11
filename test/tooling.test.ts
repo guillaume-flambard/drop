@@ -16,10 +16,12 @@ interface RunResult {
 // Runs a command and keeps its output so a failing assertion shows the diagnostics.
 // A command that cannot start at all throws instead of passing for a failure.
 // On Windows pnpm and tsc are .cmd shims, which Node only starts through cmd.exe; the arguments here hold no spaces.
+// A name found on PATH stays unquoted: cmd.exe gives a quoted one the working directory as %~dp0, breaking the shim.
 function run(cmd: string, args: string[], cwd = root): RunResult {
+  const command = /\s/.test(cmd) ? `"${cmd}"` : cmd;
   const result =
     process.platform === 'win32'
-      ? spawnSync([`"${cmd}"`, ...args].join(' '), { cwd, encoding: 'utf8', shell: true })
+      ? spawnSync([command, ...args].join(' '), { cwd, encoding: 'utf8', shell: true })
       : spawnSync(cmd, args, { cwd, encoding: 'utf8' });
   if (result.error) throw result.error;
   return { status: result.status ?? 1, output: `${result.stdout}${result.stderr}` };
