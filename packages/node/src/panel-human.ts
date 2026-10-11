@@ -253,6 +253,26 @@ input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px;
   line-height: 1.55;
 }
 .activity-detail strong { color: var(--ink); font-weight: 620; }
+/* The tray popover has only 380×620 CSS pixels. Consent text must appear
+   before the actions, but the actions should not require a long scroll. */
+@media (max-width: 420px) {
+  header { padding: 12px 14px 9px; gap: 9px; }
+  .mark { font-size: 19px; }
+  nav button { min-height: 32px; }
+  main { padding: 11px 14px 19px; gap: 9px; }
+  .card.ask { padding: 13px; gap: 9px; }
+  .avatar { width: 31px; height: 31px; border-radius: 11px; }
+  .who { gap: 9px; }
+  .quote { font-size: 13.5px; line-height: 1.44; padding: 10px 11px; }
+  .why { font-size: 11.5px; line-height: 1.4; }
+  .ledger > div { padding-top: 7px; gap: 8px; }
+  .ledger > div + div { padding-top: 7px; }
+  .ledger ul { line-height: 1.37; margin-top: 2px; }
+  .ledger .label { font-size: 11.5px; }
+  .cost { font-size: 11px; line-height: 1.35; }
+  button.act { min-height: 34px; padding: 0 10px; font-size: 11.5px; }
+  .decision-actions { gap: 5px; }
+}
 @media (prefers-color-scheme: dark) {
   :root {
     --ground: #24232a;
