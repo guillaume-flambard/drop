@@ -76,7 +76,7 @@ Les phases P0 à P5 viennent de D58 ; leur détail et leurs critères de sortie 
 | ---------------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------ |
 | P0                     | Documents produit, puis mise en vérité des documents et specs existants.                              | T4.0, T4.0a                    |
 | Avant P1               | Banc de simulation minimal : relais dédié, 50 nœuds, faux agents déterministes, mesures.              | T4.1                           |
-| P1                     | Modes de connexion, réponse humaine, faits publiés, treize adaptateurs MCP, essai avec deux amis.     | T4.2 à T4.6, avec T3.1b à T3.5 |
+| P1                     | Modes de connexion, réponse humaine, faits publiés, treize adaptateurs MCP, mesure du besoin (T0.7), essai en binômes de collègues.     | T4.2 à T4.6, avec T3.1b à T3.5 |
 | P2                     | Simulation complète : 500 nœuds virtuels, personnages, carte, traces, boucle d'amélioration bornée. | T4.7                           |
 | P3                     | Agent inclus, petite question (niveau 2), pack entreprise et politique signée.                        | T4.8, T4.9, T4.10              |
 | P4                     | Tâches déléguées (niveau 4) et contexte partagé décentralisé.                                         | T4.11, T4.12                   |

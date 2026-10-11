@@ -25,13 +25,17 @@ L'ordre et les statuts font foi dans [TASKS](TASKS.md). Les preuves de chaque t�
 - **Audit du 11 octobre (T4.19).** Revue du code, corrections, documents et site remis en vérité.
 - **Recettes humaines.** Les changes archivées en `READY_FOR_MANUAL_ACCEPTANCE` attendent l'acceptation de Guillaume.
 
-### Reste avant l'essai avec deux amis (T4.6)
+### Tout de suite : mesurer le besoin (T0.7)
+
+- 3 à 5 développeurs installent seulement blocked-observer, 10 jours actifs chacun, puis les blocages sont classés en entretien (D24, D83). Au 11 octobre, 107 des 111 événements de Guillaume attendent leur classement.
+
+### Reste avant l'essai en binômes de collègues (T4.6)
 
 - Fermer les revues de sécurité T3.1b et T3.1c.
 - Finir l'app Mac (T3.4).
 - Hygiène de configuration (T4.15).
-- Choisir et installer le chemin de connexion entre les deux amis : relais drop privé ou relais iroh auto-hébergé (T4.6a).
-- Écrire le protocole de l'essai en profil privé et de la mesure D24 (T4.6b). L'ancien protocole des [essais](essais/README.md) est historique.
+- Choisir et installer le chemin de connexion entre les binômes : relais drop privé ou relais iroh auto-hébergé (T4.6a).
+- Écrire le protocole de l'essai en profil privé (T4.6b). L'ancien protocole des [essais](essais/README.md) est historique.
 - Si l'essai inclut le partage par modèle : qualifier un modèle (T3.2) et choisir outils, modèle et approbateur depuis le panneau (T4.16).
 
 ### Reste avant le lancement
