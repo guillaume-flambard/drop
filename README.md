@@ -65,7 +65,7 @@ Everything below is on `main` and covered by tests. Task IDs refer to [docs/TASK
 - **Capabilities.** `production.error_summary` summarizes logs without any model. `repo.answer` answers about a repository from an allowlisted temporary copy. `mcp.answer` answers from an MCP server the owner already uses, with read-only tools chosen at publish time. `a2a.answer` relays to an approved internal A2A agent (T1.7, T1.13, T2.2, T2.15).
 - **Two exchanges without a model.** The owner can answer by hand, with text or a text file, under the same consent and receipt (T4.3). The owner can publish signed facts with an audience and an end date, served without a new decision (T4.4).
 - **Requester side.** A stdio MCP server with six tools, including `ask_team` for plain-language questions to the team and `request_drops` for several owners at once (T1.10, T2.10, T2.12). The team is also reachable as an A2A v1.0 agent, and every A2A task goes through consent (T2.14).
-- **Agent onboarding.** Thirteen MCP clients are detected. Seven are connected automatically (Claude Code, Claude Desktop, Cursor, Codex, Gemini CLI, VS Code, Cline); the other six get a configuration to copy (T3.3, T4.5).
+- **Agent onboarding.** Thirteen MCP clients are detected and connected automatically on macOS, Windows and Linux, keeping the comments and layout of their config files. A configuration to copy only appears as an explained fallback when drop cannot write (T3.3, T4.5, T4.22).
 - **Private profile.** Created by `drop init` and by the app: explicit network destinations, no cloud fallback, a local model endpoint with no model preselected, and the owner pays for their own model (T3.1).
 - **Three ways to connect, none imposed.** Local network discovery over mDNS, internet through iroh (a separate Rust program, off by default), or a relay your team runs (T4.2, T4.2b). The relay only sees encrypted envelopes and routing metadata.
 - **Enterprise pack.** A signed organization policy enforced on each workstation and on the relay, plus a Docker image and a Helm chart for the relay (T4.10).
@@ -161,7 +161,7 @@ Internal documentation is written in French.
 
 ## Roadmap
 
-[docs/TASKS.md](docs/TASKS.md) (in French) is the single source for order and dependencies. Next steps, in short: close the pending security reviews, finish the Mac app, ship Windows and Linux apps, connect all thirteen agents automatically, a one-link invitation to join a team, then a trial with pairs of colleagues who actually work together. Public launch, packages and the product name come after.
+[docs/TASKS.md](docs/TASKS.md) (in French) is the single source for order and dependencies. Next steps, in short: close the pending security reviews, finish the Mac app, ship Windows and Linux apps, a one-link invitation to join a team, then a trial with pairs of colleagues who actually work together. Public launch, packages and the product name come after.
 
 ## Contributing
 

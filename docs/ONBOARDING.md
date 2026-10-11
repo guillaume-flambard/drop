@@ -1,6 +1,6 @@
 # Raccorder ses agents en deux confirmations
 
-**Existant : T3.3 est livrée, vérifiée sur fixtures, en attente de recette manuelle.** La change est archivée ([vérification](../openspec/changes/archive/2026-10-09-t3-3-local-agent-onboarding/proof/verification.md)) ; la recette humaine sur un Mac de test reste à faire. Le panneau local (`packages/node/src/panel.ts`) permet d'analyser les treize clients de D55 (T4.5, D66, `packages/capabilities/src/clients.ts`), de sélectionner ceux que drop sait raccorder, puis de confirmer l'ajout ; pour les autres, il donne la configuration à copier. L'app Mac est signée et notarisée ; sa recette sur un Mac propre reste à faire (T3.4). L'expérience dans la barre de menus n'est donc pas encore validée sur une installation neuve.
+**Existant : T3.3 est livrée, vérifiée sur fixtures, en attente de recette manuelle.** La change est archivée ([vérification](../openspec/changes/archive/2026-10-09-t3-3-local-agent-onboarding/proof/verification.md)) ; la recette humaine sur un Mac de test reste à faire. Le panneau local (`packages/node/src/panel.ts`) permet d'analyser les treize clients de D55 (T4.5, D66, `packages/capabilities/src/clients.ts`), de les sélectionner, puis de confirmer l'ajout. Depuis T4.22 (D84, D85), les treize se raccordent automatiquement sur macOS, Windows et Linux ; la configuration à copier ne reste qu'en secours, avec sa raison, quand drop ne peut pas écrire. L'app Mac est signée et notarisée ; sa recette sur un Mac propre reste à faire (T3.4). L'expérience dans la barre de menus n'est donc pas encore validée sur une installation neuve.
 
 ## Ce que couvrent les deux confirmations
 
@@ -22,21 +22,32 @@ Le panneau distingue « configuration raccordée », « connecteur utilisable à
 
 Sources : `packages/capabilities/src/agents.ts` pour les emplacements, `packages/node/src/onboarding.ts` et `packages/node/src/install.ts` pour le raccordement, D45 pour les choix.
 
-## Treize clients (T4.5, D66)
+## Treize clients sur trois systèmes (T4.5, T4.22, D66, D84, D85)
 
-| Client | Lu (global ; projet) | Raccordement |
-| --- | --- | --- |
-| OpenCode | `~/.config/opencode/opencode.json(c)` ; `opencode.json(c)`, `.opencode/` | À copier (JSONC commenté) |
-| Gemini CLI | `~/.gemini/settings.json` ; `.gemini/settings.json` | `gemini mcp add --scope user`, résultat relu |
-| Devin Desktop (Windsurf) | `~/.config/devin/mcp_config.json`, `~/.codeium/windsurf/mcp_config.json`, `~/.config/devin/config.json` ; `.devin/mcp_config.json` | À copier (emplacements contradictoires dans sa doc) |
-| Zed | `~/.config/zed/settings.json` ; `.zed/settings.json` | À copier (JSONC) |
-| goose | `~/.config/goose/config.yaml` | À copier (YAML, `goose configure`) |
-| VS Code (Copilot) | profil `mcp.json` ; `.vscode/mcp.json` | `code --add-mcp`, résultat relu ; retrait à la main |
-| Cline | `~/.cline/data/settings/cline_mcp_settings.json` | Fichier temporaire renommé, sauvegarde privée |
-| Roo Code (archivé) | `globalStorage/…/mcp_settings.json` ; `.roo/mcp.json` | À copier |
-| JetBrains AI | Junie : `~/.junie/mcp/mcp.json` ; `.junie/mcp/mcp.json` | À copier dans Settings, Tools, AI Assistant, Model Context Protocol (MCP) |
+Tous automatiques. Claude Code et Codex passent par leur commande officielle ; les onze autres par leur fichier documenté, édité en place : seule l'entrée drop change, commentaires, ordre, indentation, fins de ligne et BOM restent, et le retrait rend le fichier d'origine.
 
-Un client est dit installé par son application, son binaire ou son extension, jamais par un dossier de configuration seul ; les quatre clients de T3.3 gardent aussi leur fichier comme signe. Les configurations par projet sont lues dans les projets que Claude Code et Codex connaissent déjà et dans les dossiers ajoutés depuis le panneau ; aucun projet n'est raccordé automatiquement. Sources par client : [revérification du 10 octobre](research/2026-10-10-repositionnement.md#4-clients-mcp-configuration).
+| Client | macOS | Windows | Linux | Raccordement |
+| --- | --- | --- | --- | --- |
+| Claude Code | `~/.claude.json` | `%USERPROFILE%\.claude.json` | `~/.claude.json` | `claude mcp add --scope user`, résultat relu |
+| Claude Desktop | `~/Library/Application Support/Claude/claude_desktop_config.json` | `%APPDATA%\Claude\claude_desktop_config.json` (copie privée de la version Store d'abord) | non documenté : secours | Fichier JSON |
+| Cursor | `~/.cursor/mcp.json` | `%USERPROFILE%\.cursor\mcp.json` | `~/.cursor/mcp.json` | Fichier JSON |
+| Codex | `~/.codex/config.toml` (`$CODEX_HOME`) | `%USERPROFILE%\.codex\config.toml` | `~/.codex/config.toml` | `codex mcp add`, résultat relu |
+| OpenCode | `~/.config/opencode/opencode.json(c)` | `%USERPROFILE%\.config\opencode\opencode.json(c)` | `~/.config/opencode/opencode.json(c)` | Fichier JSONC, `mcp` ou `mcp.servers` selon le fichier |
+| Gemini CLI | `~/.gemini/settings.json` | `%USERPROFILE%\.gemini\settings.json` | `~/.gemini/settings.json` | Fichier JSONC |
+| Devin Desktop (Windsurf) | `~/.config/devin/mcp_config.json` | `%APPDATA%\devin\mcp_config.json` | `~/.config/devin/mcp_config.json` | Fichier JSONC ; anciens fichiers lus, jamais écrits |
+| Zed | `~/.config/zed/settings.json` | `%APPDATA%\Zed\settings.json` | `~/.config/zed/settings.json` | Fichier JSONC, `context_servers` |
+| goose | `~/.config/goose/config.yaml` | `%APPDATA%\Block\goose\config\config.yaml` | `~/.config/goose/config.yaml` | Fichier YAML, `extensions` |
+| VS Code (Copilot) | `~/Library/Application Support/Code/User/mcp.json` | `%APPDATA%\Code\User\mcp.json` | `~/.config/Code/User/mcp.json` | Fichier JSONC, `servers` ; retrait automatique |
+| Cline | `~/.cline/data/settings/cline_mcp_settings.json` | `%USERPROFILE%\.cline\data\settings\cline_mcp_settings.json` | `~/.cline/data/settings/cline_mcp_settings.json` | Fichier JSON |
+| Roo Code (archivé) | `…/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json` | idem sous `%APPDATA%\Code\User` | idem sous `~/.config/Code/User` | Fichier JSON |
+| JetBrains AI | Junie : `~/.junie/mcp/mcp.json` | `%USERPROFILE%\.junie\mcp\mcp.json` | `~/.junie/mcp/mcp.json` | Fichier JSON ; le chat AI Assistant importe depuis Claude dans l'IDE |
+
+Les variables documentées déplacent ces fichiers pour le vrai dossier personnel : `XDG_CONFIG_HOME`, `APPDATA`, `CODEX_HOME`, `GEMINI_CLI_HOME`, `OPENCODE_CONFIG`, `GOOSE_PATH_ROOT`, `CLINE_MCP_SETTINGS_PATH`, `CLINE_DIR`, `CLINE_DATA_DIR`. Projets : `.mcp.json`, `.cursor/mcp.json`, `.codex/config.toml`, `opencode.json(c)`, `.opencode/`, `.gemini/settings.json`, `.devin/mcp_config.json`, `.zed/settings.json`, `.vscode/mcp.json`, `.roo/mcp.json`, `.junie/mcp/mcp.json`, lus seulement.
+
+Un client est dit installé par son application, son binaire ou son extension, jamais par un dossier de configuration seul ; les quatre clients de T3.3 gardent aussi leur fichier comme signe. Sous Windows, le `PATH` se lit avec `;` et les extensions de `PATHEXT` ; les applications sont cherchées dans `%LOCALAPPDATA%\Programs` et `Program Files`, sous Linux dans les dossiers de fichiers `.desktop`. Sous Windows, une commande officielle installée par npm (`.cmd`) passe par `cmd.exe` seulement si ses arguments sont sûrs entre guillemets. Les configurations par projet sont lues dans les projets que Claude Code et Codex connaissent déjà et dans les dossiers ajoutés depuis le panneau ; aucun projet n'est raccordé automatiquement. Sources par client et par système : [note du 11 octobre](research/2026-10-11-clients-par-systeme.md).
+
+**Secours expliqué.** La configuration à copier, ou la commande à lancer, n'apparaît que si drop ne peut pas écrire : fichier illisible ou invalide (`E_CONFIG_INVALID_OR_UNREADABLE`), verrouillé (`E_CONFIG_LOCKED`), emplacement non documenté (`E_CONFIG_UNDOCUMENTED`, Claude Desktop sous Linux), commande officielle absente (`E_CLI_MISSING`) ou arguments non sûrs pour `cmd.exe` (`E_CLI_SHIM_UNSAFE`). Elle dit pourquoi, quoi coller et où.
+
 
 Pas de scan du disque, des conversations, du trousseau ou des ports. L'aperçu masque les valeurs d'environnement, en-têtes et arguments sensibles. Une config illisible n'est pas assimilée à un agent absent. Si aucun client n'est présent, le panneau affiche « Aucun des treize clients détecté » et une entrée MCP stdio à copier.
 

@@ -1,13 +1,14 @@
-import { homedir } from 'node:os';
 import {
   agentConfigPath,
   agentServers,
   AGENTS,
   CLIENT_SPECS,
+  clientHost,
   clientInstalled,
   defaultProbe,
   type AgentKind,
   type AgentServer,
+  type ClientHost,
   type InstallProbe,
 } from '@drop/capabilities';
 
@@ -36,8 +37,8 @@ export interface DetectedAgent {
   installed: boolean;
   configPath: string;
   dropInstalled: boolean;
-  /** cli or file: drop can connect it after two confirmations; manual: a copyable configuration only (D66). */
-  connect: 'cli' | 'file' | 'manual';
+  /** cli: its official command; file: drop edits its documented file in place (D84). Both after two confirmations. */
+  connect: 'cli' | 'file';
   servers: DetectedServer[];
 }
 
@@ -95,14 +96,18 @@ export function presentServer(agent: AgentKind, server: AgentServer): DetectedSe
   };
 }
 
-export function detectAgents(home: string = homedir(), probe: InstallProbe = defaultProbe(home)): DetectedAgent[] {
+export function detectAgents(
+  home: string | ClientHost = clientHost(),
+  probe: InstallProbe = defaultProbe(home),
+): DetectedAgent[] {
+  const host = clientHost(home);
   return AGENTS.map((agent) => {
-    const servers = agentServers(agent, home).map((server) => presentServer(agent, server));
+    const servers = agentServers(agent, host).map((server) => presentServer(agent, server));
     return {
       agent,
       label: AGENT_LABELS[agent],
-      installed: clientInstalled(agent, probe),
-      configPath: agentConfigPath(agent, home),
+      installed: clientInstalled(agent, { ...probe, platform: probe.platform ?? host.platform }),
+      configPath: agentConfigPath(agent, host),
       connect: CLIENT_SPECS[agent].connect,
       dropInstalled: servers.some((server) => server.name === 'drop' || /requester-mcp/.test(server.where)),
       servers,

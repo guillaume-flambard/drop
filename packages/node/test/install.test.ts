@@ -50,16 +50,25 @@ describe('agent installation command construction (T2.5)', () => {
   it('targets only the known JSON configuration paths', () => {
     const home = mkdtempSync(join(tmpdir(), 'drop-install-'));
     const entry = serverEntry('cursor', join(home, '.drop'), join(home, '.drop', 'bin', 'drop-mcp.mjs'));
-    expect(installSteps('cursor', entry, home)).toEqual([
-      { kind: 'json', file: join(home, '.cursor', 'mcp.json'), entry },
-    ]);
-    expect(installSteps('claude_desktop', null, home)).toEqual([
+    const mac = { home, platform: 'darwin' as const, env: {} };
+    expect(installSteps('cursor', entry, mac)).toEqual([
       {
-        kind: 'json',
-        file: join(home, 'Library', 'Application Support', 'Claude', 'claude_desktop_config.json'),
-        entry: null,
+        kind: 'file',
+        file: join(home, '.cursor', 'mcp.json'),
+        location: { path: join(home, '.cursor', 'mcp.json'), format: 'json', layout: 'mcpServers' },
+        entry,
       },
     ]);
+    const desktop = join(home, 'Library', 'Application Support', 'Claude', 'claude_desktop_config.json');
+    expect(installSteps('claude_desktop', null, mac)).toEqual([
+      { kind: 'file', file: desktop, location: { path: desktop, format: 'json', layout: 'mcpServers' }, entry: null },
+    ]);
+    // Windows keeps it in %APPDATA%; Linux documents no file, so there is nothing to write.
+    expect(installSteps('claude_desktop', null, { ...mac, platform: 'win32' })[0]).toMatchObject({
+      kind: 'file',
+      file: join(home, 'AppData', 'Roaming', 'Claude', 'claude_desktop_config.json'),
+    });
+    expect(installSteps('claude_desktop', null, { ...mac, platform: 'linux' })).toEqual([]);
   });
 
   it('builds a Cursor install link with the server entry', () => {

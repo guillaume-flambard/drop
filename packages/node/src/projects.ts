@@ -6,9 +6,9 @@
 import { realpathSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { homedir } from 'node:os';
-import { isAbsolute, join, resolve } from 'node:path';
+import { isAbsolute, join, parse, resolve } from 'node:path';
 import { z } from 'zod';
-import { AGENTS, CLIENT_SPECS, projectServers, readConfigText, type AgentKind } from '@drop/capabilities';
+import { AGENTS, CLIENT_SPECS, clientHost, projectServers, readConfigText, type AgentKind } from '@drop/capabilities';
 import { presentServer, type DetectedServer } from './detect.ts';
 
 const MAX_ADDED_PROJECTS = 50;
@@ -51,7 +51,7 @@ function saveAdded(dropHome: string, dirs: string[]): void {
 
 /** Neither the filesystem root nor the home folder: their files are the global ones, not a project's. */
 function eligible(dir: string, home: string): boolean {
-  return dir !== '/' && dir !== resolve(home) && isDirectory(dir);
+  return dir !== parse(dir).root && dir !== resolve(home) && isDirectory(dir);
 }
 
 /** Adds one absolute, existing folder (not the filesystem root, not the home folder itself). */
@@ -79,7 +79,9 @@ export function removeProject(dropHome: string, dir: string): boolean {
 function knownProjects(home: string = homedir()): { dir: string; source: 'claude_code' | 'codex' }[] {
   const found: { dir: string; source: 'claude_code' | 'codex' }[] = [];
   try {
-    const claude = JSON.parse(readConfigText(CLIENT_SPECS.claude_code.global(home)[0]?.path ?? '') ?? '{}') as {
+    const claude = JSON.parse(
+      readConfigText(CLIENT_SPECS.claude_code.global(clientHost(home))[0]?.path ?? '') ?? '{}',
+    ) as {
       projects?: unknown;
     };
     if (typeof claude.projects === 'object' && claude.projects !== null)
@@ -88,7 +90,7 @@ function knownProjects(home: string = homedir()): { dir: string; source: 'claude
     // No Claude Code config, or unreadable: nothing known from it.
   }
   try {
-    const codex = readConfigText(CLIENT_SPECS.codex.global(home)[0]?.path ?? '') ?? '';
+    const codex = readConfigText(CLIENT_SPECS.codex.global(clientHost(home))[0]?.path ?? '') ?? '';
     for (const match of codex.matchAll(/^\s*\[projects\."((?:[^"\\]|\\.)+)"\]/gm)) {
       try {
         found.push({ dir: JSON.parse(`"${match[1] ?? ''}"`) as string, source: 'codex' });

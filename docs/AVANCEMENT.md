@@ -9,7 +9,7 @@ L'ordre et les statuts font foi dans [TASKS](TASKS.md). Les preuves de chaque t�
 ### Livré
 
 - **Profil privé (T3.1).** Créé par `drop init` et par l'app : relais interne, destinations réseau explicites, aucun repli cloud. Le propriétaire paie son propre modèle ; une clé reçue est refusée avant le consentement. Le financement par le demandeur n'existe que dans le profil historique. Voir [le profil privé](PRIVATE_PROFILE.md).
-- **Raccordement des agents (T3.3, T4.5).** Treize clients MCP détectés ; sept raccordés automatiquement (Claude Code, Claude Desktop, Cursor, Codex, Gemini CLI, VS Code, Cline), six par une configuration à copier. Voir [ONBOARDING](ONBOARDING.md).
+- **Raccordement des agents (T3.3, T4.5).** Treize clients MCP détectés et raccordés automatiquement sur macOS, Windows et Linux, commentaires et mise en forme gardés (T4.22, vérifié sur fixtures simulant les trois systèmes ; recette sur de vrais PC Windows et Linux au banc maison T4.6c) ; configuration à copier en secours seulement. Voir [ONBOARDING](ONBOARDING.md).
 - **Connexion (T4.2, T4.2b à T4.2e).** Réseau local par mDNS. Internet par iroh, un programme Rust séparé, désactivé par défaut : entre deux réseaux, il faut un relais choisi (le sien ou celui de l'équipe), jamais un relais imposé. Plus les corrections issues des revues (T4.2c à T4.2e).
 - **Réponse à la main (T4.3)** et **faits publiés, servis sans modèle (T4.4)**.
 - **Panneau conforme (T4.14).** Expiration, « Sensibilité haute », « Pas maintenant » par défaut, retrait de champs à la relecture, invitation `drop://pair` confirmée, notifications à l'icône de l'app.
@@ -34,7 +34,6 @@ L'ordre et les statuts font foi dans [TASKS](TASKS.md). Les preuves de chaque t�
 - Fermer les revues de sécurité T3.1b et T3.1c.
 - Finir l'app Mac (T3.4).
 - Hygiène de configuration (T4.15).
-- Raccorder automatiquement les treize clients sur Mac, Windows et Linux (T4.22, D84).
 - Préparer le relais déjà en place sur le VPS (T4.6a) et le lien unique pour rejoindre l'équipe en deux clics (T4.23).
 - Construire l'app Windows (T3.7), puis tester à quatre : VPS, Mac et deux PC Windows (T4.6c).
 - Construire l'app Linux (T3.8) et mener le design au niveau impeccable (T4.24).
