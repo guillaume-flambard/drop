@@ -22,10 +22,10 @@ function safeForCmd(arg: string): boolean {
 }
 
 /** The `cmd.exe` invocation of a `.cmd` or `.bat` shim, every argument quoted; throws when one cannot be. */
-export function windowsShimCommand(argv: readonly string[], comspec = 'cmd.exe'): { file: string; args: string[] } {
+export function windowsShimCommand(argv: readonly string[]): { file: string; args: string[] } {
   if (argv.length === 0 || !argv.every(safeForCmd)) throw new Error('E_CLI_SHIM_UNSAFE');
   const line = argv.map((arg) => `"${arg}"`).join(' ');
-  return { file: comspec, args: ['/d', '/s', '/c', `"${line}"`] };
+  return { file: 'cmd.exe', args: ['/d', '/s', '/c', `"${line}"`] };
 }
 
 export function isWindowsShim(file: string): boolean {
@@ -36,7 +36,8 @@ export function isWindowsShim(file: string): boolean {
 export async function runOfficial(argv: string[], platform: NodeJS.Platform = process.platform): Promise<void> {
   const [file = '', ...args] = argv;
   const shim = platform === 'win32' && isWindowsShim(file);
-  const command = shim ? windowsShimCommand(argv, process.env.ComSpec ?? 'cmd.exe') : { file, args };
+  // A fixed cmd.exe, never the ComSpec variable: the shell that runs a shim does not come from the environment.
+  const command = shim ? windowsShimCommand(argv) : { file, args };
   const running = execFileAsync(command.file, command.args, {
     // Through cmd.exe, killing cmd.exe alone would leave the node process it started: the whole tree goes below.
     timeout: shim ? 0 : TIMEOUT_MS,
