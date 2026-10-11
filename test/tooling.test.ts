@@ -17,10 +17,11 @@ interface RunResult {
 // A command that cannot start at all throws instead of passing for a failure.
 // On Windows pnpm and tsc are .cmd shims, which Node only starts through cmd.exe; the arguments here hold no spaces.
 // A name found on PATH stays unquoted: cmd.exe gives a quoted one the working directory as %~dp0, breaking the shim.
+// git is a real program and starts directly, without the cost of a shell.
 function run(cmd: string, args: string[], cwd = root): RunResult {
   const command = /\s/.test(cmd) ? `"${cmd}"` : cmd;
   const result =
-    process.platform === 'win32'
+    process.platform === 'win32' && cmd !== 'git'
       ? spawnSync([command, ...args].join(' '), { cwd, encoding: 'utf8', shell: true })
       : spawnSync(cmd, args, { cwd, encoding: 'utf8' });
   if (result.error) throw result.error;
@@ -266,7 +267,8 @@ describe('monorepo tooling', () => {
     const trackedButIgnored = run('git', ['ls-files', '--cached', '--ignored', '--exclude-standard']);
     expect(trackedButIgnored.status, trackedButIgnored.output).toBe(0);
     expect(trackedButIgnored.output.trim()).toBe('');
-  });
+    // Fifteen git runs: past 5 s on a busy Windows runner.
+  }, 30_000);
 
   it('every dependency outside the imposed stack is recorded in DECISIONS', () => {
     const decisions = readFileSync(join(root, 'docs', 'DECISIONS.md'), 'utf8');
