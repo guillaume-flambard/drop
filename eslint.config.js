@@ -13,10 +13,10 @@ export default defineConfig(
     '.agents/',
     'docs/demo/julie-repo/',
     // Mac app (T2.4): Rust build output, generated schemas and the bundles copied in as resources.
-    'apps/mac/src-tauri/target/',
+    'apps/desktop/src-tauri/target/',
     'crates/*/target/',
-    'apps/mac/src-tauri/gen/',
-    'apps/mac/src-tauri/resources/',
+    'apps/desktop/src-tauri/gen/',
+    'apps/desktop/src-tauri/resources/',
   ]),
   {
     // Exceptions go through this file, where review sees them; inline disables are ignored (D15).

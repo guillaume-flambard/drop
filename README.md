@@ -126,7 +126,8 @@ Agent setup, manual MCP configuration and the thirteen supported clients are des
 | `packages/blocked-observer` | Local measurement of the need                                                  |
 | `packages/simulation`       | Local bench with simulated nodes                                               |
 | `packages/gateway`          | Optional consumer gateway, deferred                                            |
-| `apps/mac`                  | Tauri 2 menu bar app                                                           |
+| `packages/desktop-ui` | React + shadcn/ui interface shown inside the desktop app |
+| `apps/desktop` | Tauri 2 desktop shell for macOS, Windows and Linux |
 | `crates/drop-iroh`          | Internet connectivity through iroh                                             |
 | `deploy/helm`               | Helm chart for the relay                                                       |
 | `openspec/`                 | Specifications (the contract) and change history                               |
@@ -155,6 +156,7 @@ Internal documentation is written in French.
 - [Guide](docs/GUIDE.md): the journey, the demo, what stays private (in French)
 - [Product requirements](docs/product/PRD.md): target, promise and its limit, hypotheses (in French)
 - [Vision](openspec/project/vision.md) and [architecture](openspec/project/architecture.md) (in French)
+- [Architecture](docs/ARCHITECTURE.md): where each part of the repository lives and where each build comes from (in French)
 - [Specifications](openspec/specs/): the normative contract, with acceptance scenarios (in French)
 - [Decisions](docs/DECISIONS.md): every product and technical decision with its reason (in French)
 - [Open source and business model](docs/OPEN_SOURCE.md) (in French)

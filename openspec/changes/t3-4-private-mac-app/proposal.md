@@ -23,7 +23,7 @@ Aucune.
 
 ## Impact
 
-`apps/mac`, `packages/node/src/panel.ts`, les tests du panneau, le script de packaging et la documentation de distribution Mac. Aucun endpoint public ni service Memo Labs obligatoire n’est ajouté.
+`apps/desktop`, `packages/node/src/panel.ts`, les tests du panneau, le script de packaging et la documentation de distribution Mac. Aucun endpoint public ni service Memo Labs obligatoire n’est ajouté.
 
 ## Non-goals
 

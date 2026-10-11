@@ -27,9 +27,9 @@ Ce document décrit les surfaces de drop, les écrans tels qu'ils existent dans 
 
 | Surface                    | Rôle                                                       | Statut et source                                             |
 | -------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------ |
-| Icône de barre de menus    | Ouvrir ou fermer le panneau, menu de trois actions         | **Existant**, `apps/mac/src-tauri/src/main.rs`               |
+| Icône de barre de menus    | Ouvrir ou fermer le panneau, menu de trois actions         | **Existant**, `apps/desktop/src-tauri/src/main.rs`               |
 | Panneau                    | Demandes, Équipe, Mes outils ; servi par le Node sur `/app` | **Existant**, `panel.ts`                                     |
-| Page de démarrage          | États de démarrage et codes de diagnostic                  | **Existant**, `apps/mac/web/index.html`                      |
+| Page de démarrage          | États de démarrage et codes de diagnostic                  | **Existant**, `apps/desktop/web/index.html`                      |
 | Notifications macOS        | Annoncer une décision ou une relecture en attente          | **Existant**, `packages/node/src/notify.ts`                  |
 | Page historique `/`        | Ancienne UI de consentement, avec retrait de champs        | **Existant**, `packages/node/src/ui.ts`                      |
 | Page de liaison passerelle | Ouvrir drop pour relier un assistant distant               | **Existant** en code, T2.13 non livrée, `packages/gateway/src/server.ts` |
@@ -109,7 +109,7 @@ Section « Mes questions ».
 
 ### 3.8 Page de démarrage
 
-Source : `apps/mac/web/index.html`.
+Source : `apps/desktop/web/index.html`.
 
 - **Existant** : en-tête « drop », état vivant « Démarrage local… », titre « Préparation de ton espace » et « Le moteur démarre sur ce Mac. Les échanges passent par l’infrastructure que tu as choisie. »
 - **Existant** : en cas d'échec, « Démarrage interrompu », point rouge orangé, un titre et une explication propres au code, « Réessayer » et « Tu peux aussi choisir « Réessayer le démarrage » dans le menu drop de la barre de menus. Code de diagnostic : E_PORT. »

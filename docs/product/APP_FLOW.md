@@ -119,9 +119,9 @@ flowchart TD
 ### 4.1 Installer et premier lancement
 
 1. **Existant** : la personne ouvre l'app. Une build signée et notarisée pour Apple Silicon a été acceptée par Apple le 10 octobre 2026 (`openspec/changes/t3-4-private-mac-app/proof/verification.md`). **Visé** : installation sur un Mac propre et recette VoiceOver (T3.4).
-2. **Existant** : l'app n'a pas d'icône dans le Dock ; une icône apparaît dans la barre de menus. La fenêtre est créée cachée (`apps/mac/src-tauri/src/main.rs`, `ActivationPolicy::Accessory`, `.visible(false)`). **Hypothèse** : une personne qui découvre l'app trouve l'icône sans aide. Critère : chaque ami testeur de T4.6 ouvre le panneau seul.
+2. **Existant** : l'app n'a pas d'icône dans le Dock ; une icône apparaît dans la barre de menus. La fenêtre est créée cachée (`apps/desktop/src-tauri/src/main.rs`, `ActivationPolicy::Accessory`, `.visible(false)`). **Hypothèse** : une personne qui découvre l'app trouve l'icône sans aide. Critère : chaque ami testeur de T4.6 ouvre le panneau seul.
 3. **Existant** : sans `identity.json`, le système lance `drop init --profile private` avec le prénom du compte macOS et le relais de `DROP_RELAY_URL`, sinon `ws://127.0.0.1:7780/v1` (`main.rs`, `ensure_identity`). Le profil privé fixe « le propriétaire paie » (`packages/node/src/private-config.ts`).
-4. **Existant** : la page de démarrage affiche « Démarrage local… » et « Préparation de ton espace » (`apps/mac/web/index.html`).
+4. **Existant** : la page de démarrage affiche « Démarrage local… » et « Préparation de ton espace » (`apps/desktop/web/index.html`).
 5. **Existant** : le système lit le port dans `config.json`, refuse un port déjà occupé, lance le Node, puis attend jusqu'à 15 s une réponse portant son propre marqueur de session avant d'ouvrir l'URL qui contient le jeton (`main.rs`, `own_health`, D46).
 6. **Existant** : le panneau s'ouvre sur l'onglet Demandes. L'en-tête montre « Prénom · hors ligne » tant qu'aucun relais ne répond (`packages/node/src/panel.ts`).
 7. **Existant** : seule la version finale s'inscrit au démarrage de session (`main.rs`, `autolaunch`).
@@ -129,7 +129,7 @@ flowchart TD
 
 Échecs :
 
-- **Existant** : chaque code bloquant affiche un titre, une explication, « Réessayer » et le code de diagnostic : `E_INIT`, `E_CONFIG`, `E_PORT`, `E_LOG`, `E_SPAWN`, `E_TOKEN`, `E_PANEL`, `E_RESTART` (`apps/mac/web/index.html`).
+- **Existant** : chaque code bloquant affiche un titre, une explication, « Réessayer » et le code de diagnostic : `E_INIT`, `E_CONFIG`, `E_PORT`, `E_LOG`, `E_SPAWN`, `E_TOKEN`, `E_PANEL`, `E_RESTART` (`apps/desktop/web/index.html`).
 - **Existant** : collision de port (`E_PORT`) sans arrêter le programme déjà présent ; observé sur le vrai binaire (`verification.md`).
 - **Existant** : un Node qui ne démarre pas est relancé deux fois, puis `E_RESTART` reste affiché jusqu'au choix « Réessayer le démarrage » dans le menu (`main.rs`, `supervise`).
 - **Existant** : le bouton « Réessayer » dans le vrai WebView n'est pas qualifié (`verification.md`). **Visé** : recette en T3.4.

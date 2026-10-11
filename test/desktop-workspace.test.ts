@@ -4,8 +4,10 @@ import { describe, expect, it } from 'vitest';
 
 describe('desktop management window (Tauri 2)', () => {
   const root = process.cwd();
-  const rust = readFileSync(join(root, 'apps/mac/src-tauri/src/main.rs'), 'utf8');
-  const permissions = JSON.parse(readFileSync(join(root, 'apps/mac/src-tauri/capabilities/default.json'), 'utf8')) as {
+  const rust = readFileSync(join(root, 'apps/desktop/src-tauri/src/main.rs'), 'utf8');
+  const permissions = JSON.parse(
+    readFileSync(join(root, 'apps/desktop/src-tauri/capabilities/default.json'), 'utf8'),
+  ) as {
     windows: string[];
   };
 

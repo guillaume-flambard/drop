@@ -262,7 +262,7 @@ temps que D34 à D46 sur la branche du profil privé. Elles ont été renumérot
   de Tauri 2.13.2 (doc lue le 2026-10-09 dans tauri-docs, branche v2, et le source du plugin) avec
   `requireSignedVersion` : la CLI Tauri 2.12.1 inscrit la version dans le commentaire signé, ce qui empêche de
   ressortir une ancienne archive signée sous un numéro plus récent. La clé privée est générée et gardée par Guillaume
-  (procédure dans `apps/mac/README.md`) ; seule la clé publique, `apps/mac/updater.pub`, entre dans le dépôt. Hors de
+  (procédure dans `apps/desktop/README.md`) ; seule la clé publique, `apps/desktop/updater.pub`, entre dans le dépôt. Hors de
   ce dépôt : une route statique `/updates` dans le déploiement du lab. Le manifeste est validé sans zod pour ne pas
   ajouter de dépendance à la racine.
 - **D71** — Durcissement de la passerelle (2026-10-09, T2.13, plan accepté par Guillaume). Trois trous relevés en

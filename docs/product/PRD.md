@@ -118,7 +118,7 @@ Une politique signée, déployée par l'informatique, fixe les clients autorisé
 
 ### 5.7 L'app sur le poste
 
-- Existant : app Mac de barre de menus (Tauri), Node embarqué, panneau de décision, équipe, outils et raccordement (`apps/mac`, `packages/node/src/panel.ts`). Le script de release sait notariser avec un profil du trousseau (`scripts/build-mac.ts`, `docs/MAC_RELEASE.md`).
+- Existant : app Mac de barre de menus (Tauri), Node embarqué, panneau de décision, équipe, outils et raccordement (`apps/desktop`, `packages/node/src/panel.ts`). Le script de release sait notariser avec un profil du trousseau (`scripts/build-mac.ts`, `docs/MAC_RELEASE.md`).
 - Existant : build signée et notarisée pour Apple Silicon, acceptée par Apple le 10 octobre 2026 ([preuve](../../openspec/changes/t3-4-private-mac-app/proof/verification.md)). Visé (T3.4) : installation sur un Mac propre et recette VoiceOver, humaines.
 - Visé : Windows (T3.7), Linux (T3.8).
 
