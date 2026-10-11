@@ -255,7 +255,7 @@ temps que D34 à D46 sur la branche du profil privé. Elles ont été renumérot
   d'horloge que les enveloppes) est désormais refusé (`too_long`). Deux points restent ouverts, ci-dessous. Hors de ce
   dépôt : la configuration du relais déployé doit fixer `admittedPath` sur un volume persistant, sinon le relais
   oublie les Nodes admis à chaque redéploiement.
-- **D70** — Mises à jour signées de l'app Mac (2026-10-09, T2.4, choix de Guillaume). Le dépôt était alors privé, donc l'app
+- **D70** : Mises à jour signées de l'app Mac (2026-10-09, T2.4, choix de Guillaume). Le dépôt était alors privé, donc l'app
   ne peut pas lire les Releases GitHub sans jeton : les mises à jour sont servies en statique sous
   `https://drop.memolabs.dev/updates/` (`latest.json` et une archive nommée par version). L'app vérifie au lancement
   puis toutes les 6 h et propose la version dans le menu de son icône ; rien ne s'installe sans clic. Plugin updater
