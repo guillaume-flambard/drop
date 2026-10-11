@@ -1,17 +1,32 @@
 /**
  * Compiles React/Radix/shadcn-style desktop UI as offline assets.
  * Compressed JS/CSS are embedded in the single Node distribution.
- * Usage: node scripts/build-desktop-ui.ts
+ * Usage: node scripts/build-desktop-ui.ts [--check]
+ * With --check nothing is written: the committed assets must decode to exactly the freshly built JS and CSS.
+ * The decoded content is compared, not the gzip bytes, which differ between zlib builds of each system.
  */
 import { execFileSync } from 'node:child_process';
-import { gzipSync } from 'node:zlib';
+import { gunzipSync, gzipSync } from 'node:zlib';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 
-export async function buildDesktopUi(repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..')): Promise<void> {
+/** The JS and CSS a generated module embeds, decoded; empty when the module is absent. */
+function embedded(module: string): { js: Buffer; css: Buffer } {
+  const decode = (name: string): Buffer => {
+    const block = new RegExp('export const ' + name + ' =\\n\\[([\\s\\S]*?)\\]').exec(module)?.[1] ?? '';
+    const base64 = [...block.matchAll(/'([A-Za-z0-9+/=]*)'/g)].map((match) => match[1]).join('');
+    return base64 ? gunzipSync(Buffer.from(base64, 'base64')) : Buffer.alloc(0);
+  };
+  return { js: decode('workspaceJsGzipBase64'), css: decode('workspaceCssGzipBase64') };
+}
+
+export async function buildDesktopUi(
+  repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..'),
+  check = false,
+): Promise<void> {
   const uiRoot = join(repoRoot, 'packages', 'desktop-ui');
   const out = join(repoRoot, 'packages', 'node', 'src', 'workspace-assets.generated.ts');
   const temp = mkdtempSync(join(tmpdir(), 'drop-desktop-ui-'));
@@ -62,7 +77,12 @@ export async function buildDesktopUi(repoRoot = join(dirname(fileURLToPath(impor
         return '';
       }
     })();
-    if (previous !== next) writeFileSync(out, next);
+    if (check) {
+      const committed = embedded(previous);
+      if (!committed.js.equals(Buffer.from(bundle)) || !committed.css.equals(css)) {
+        throw new Error('E_WORKSPACE_STALE: rebuild with node scripts/build-desktop-ui.ts and commit the result');
+      }
+    } else if (previous !== next) writeFileSync(out, next);
     process.stdout.write(
       'Drop UI: React + Radix built offline (' +
         String(bundle.length) +
@@ -75,7 +95,7 @@ export async function buildDesktopUi(repoRoot = join(dirname(fileURLToPath(impor
   }
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  buildDesktopUi().catch((error: unknown) => {
+  buildDesktopUi(undefined, process.argv.includes('--check')).catch((error: unknown) => {
     process.stderr.write((error instanceof Error ? error.message : 'E_WORKSPACE_BUILD') + '\n');
     process.exitCode = 1;
   });

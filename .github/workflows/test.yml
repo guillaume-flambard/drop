@@ -33,9 +33,7 @@ jobs:
       - run: pnpm -r lint && pnpm -r typecheck && pnpm -r test
       # The compiled desktop UI shipped in the Node must match its React sources (D87).
       - name: Desktop UI assets match their sources
-        run: |
-          node scripts/build-desktop-ui.ts
-          git diff --exit-code -- packages/node/src/workspace-assets.generated.ts
+        run: node scripts/build-desktop-ui.ts --check
       # Every covered AC scenario keeps its test (AGENTS.md step 6); the baseline only shrinks.
       - run: npx --yes openspec-guard@0.3.0 check --require-selector --baseline .openspec-guard-baseline.json --fail-on fail
 
