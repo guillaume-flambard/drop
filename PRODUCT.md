@@ -12,7 +12,7 @@ The menu bar panel is HTML served by the local Node at `/app` and shown in a Tau
 
 ## Users
 
-Primary user of the panel: the owner of a source, technical or not, for example a designer who works in Figma (a targeted scenario, D48). Owners without an agent will answer by hand or through a built-in agent (targeted, T4.3 and T4.8). A colleague's agent asks a bounded question that needs this person's tools; the panel shows who asks, what will leave, and what never leaves, and the owner allows once or refuses in a few seconds. This person does not know what MCP or A2A is and must not need to.
+Primary user of the panel: the owner of a source, technical or not, for example a designer who works in Figma (a targeted scenario, D48). Owners without an agent answer by hand in the panel (exists, T4.3) or, later, through a built-in agent (targeted, T4.8). A colleague's agent asks a bounded question that needs this person's tools; the panel shows who asks, what will leave, and what never leaves, and the owner allows once or refuses in a few seconds. This person does not know what MCP or A2A is and must not need to.
 
 Secondary user: the requester, a developer in a small technical team, who connects their agents, shares tools with the team and follows the questions they sent. Configuration screens may use more technical words; deciding never does.
 
@@ -28,9 +28,9 @@ The owner keeps the decision on every request, and the requester gets an answer,
 
 ## Operating Context
 
-- The panel lives in a small window under a menu bar icon; it is opened briefly, often after a notification, and closed again. Clicking the notification does not open the panel yet (gap E5, T4.14).
+- The panel lives in a small window under a menu bar icon; it is opened briefly, often after a notification, and closed again. In the Mac app, notifications carry the app icon and a click opens the panel (T4.14).
 - Tabs: Demandes (requests to decide, results to review before sending, questions I sent), Équipe (members, online state, their shared tools, invite links), Mes outils (two-confirmation agent connection, tool sharing, linked assistants).
-- Deep links `drop://pair` and `drop://link` open the panel. Today an invitation is accepted as soon as the panel opens, without a confirmation click (gap E2, fixed in T4.14), and `drop://link` is refused in the private profile.
+- Deep links `drop://pair` and `drop://link` open the panel. An invitation shows who invites and to which team, then waits for « Rejoindre » or « Refuser » (T4.14). `drop://link` is refused in the private profile.
 - A separate startup page (`apps/mac/web/index.html`) shows boot and failure states with diagnostic codes before the panel is reachable.
 
 ## Capabilities and Constraints

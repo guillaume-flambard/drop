@@ -1,6 +1,6 @@
 # Installer un profil privé
 
-T3.1 fournit le runtime privé. Le raccordement groupé, les vrais modèles qualifiés et la distribution Mac signée restent dans T3.2 à T3.5.
+T3.1 fournit le runtime privé. Le raccordement groupé est livré (T3.3, T4.5) et l'app Mac est signée et notarisée (T3.4, recette humaine restante). Restent la qualification d'un vrai modèle (T3.2) et la preuve d'ensemble avec Internet bloqué (T3.5).
 
 ## Frontière prise en charge
 
@@ -92,10 +92,10 @@ Pour revenir à la configuration précédente, arrêter le daemon puis lancer `r
 ## Exploiter le relais
 
 ```bash
-node packages/relay/src/cli.ts revoke IDENTIFIANT_DU_MEMBRE --config=relay.config.json
+node packages/relay/src/cli.ts revoke IDENTIFIANT_DU_MEMBRE [--with-invited] --config=relay.config.json
 ```
 
-Redémarrer le relais pour appliquer la révocation. Elle prime sur l’allowlist, l’admission sauvegardée et les nouvelles invitations ; le membre ne peut plus parrainer. Les membres déjà admis qu’il avait invités ne sont pas révoqués automatiquement. Sauvegarder **ensemble**, relais arrêté, `relay.config.json` et `admitted.json` avec droits privés. Restaurer les deux sur le volume interne, conserver les révocations, puis démarrer. Ne pas restaurer une sauvegarde antérieure à une révocation sans la réappliquer.
+Avec `revokedPath` dans `relay.config.json`, le relais en marche applique la révocation en quelques secondes, sans redémarrage (T2.19) : le membre est coupé puis refusé, même avec une nouvelle invitation. Sans `revokedPath`, la révocation est écrite dans `relay.config.json` et ne s'applique qu'au redémarrage du relais. Elle prime sur l’allowlist, l’admission sauvegardée et les nouvelles invitations ; le membre ne peut plus parrainer. `--with-invited`, qui demande `revokedPath`, révoque aussi les membres qu'il avait fait admettre ; sans cette option, ils restent admis. Sauvegarder **ensemble**, relais arrêté, `relay.config.json`, `admitted.json` et le fichier de révocations avec droits privés. Restaurer les deux sur le volume interne, conserver les révocations, puis démarrer. Ne pas restaurer une sauvegarde antérieure à une révocation sans la réappliquer.
 
 Sauvegarder les répertoires des Nodes séparément, daemon arrêté, sur un support privé chiffré géré par le client. Ne jamais joindre identité, jeton, publications ou sauvegarde de migration à un ticket de support. Les fichiers `received-drops/` sont des identifiants sans contenu qui empêchent une demande déjà reçue de retrouver un consentement après redémarrage : les conserver avec le Node. Une demande interrompue se recrée avec un nouvel identifiant ; elle n’est pas relancée automatiquement.
 

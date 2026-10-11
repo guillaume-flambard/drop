@@ -4,15 +4,15 @@
 
 Votre agent a besoin d'une information détenue par un collègue. Avec drop, il lui adresse une demande précise. Le collègue choisit de l'autoriser ; son environnement exécute une action définie à l'avance ; votre agent reçoit la réponse autorisée.
 
-`drop` est un nom de code (D57). Positionnement adopté le 10 octobre 2026 (D47 à D58) : « la réponse, pas l'accès », couche de consentement humain au-dessus d'A2A. La référence produit est [`docs/product/`](product/PRD.md) ; en cas d'écart, elle fait foi sur ce guide. Ce guide décrit ce qui existe et signale ce qui est visé, avec la tâche qui le porte.
+`drop` est un nom de code (D57). Positionnement adopté le 10 octobre 2026 (D47 à D58) : « la réponse, pas l'accès », couche de consentement humain au-dessus d'A2A. La référence produit est [`docs/product/`](product/PRD.md) ; en cas d'écart, elle fait foi sur ce guide. Ce guide décrit ce qui existe et signale ce qui reste à faire, avec la tâche qui le porte.
 
-Existant : le profil privé (T3.1) et le raccordement en deux confirmations de quatre agents (T3.3, `packages/node/src/onboarding.ts`), vérifié dans le panneau local sur fixtures, recette humaine sur un Mac de test à faire. Rien n'a encore été validé avec de vrais utilisateurs. Le [bilan daté](AVANCEMENT.md) précise les preuves.
+Existant : le profil privé (T3.1) et le raccordement en deux confirmations (T3.3, T4.5, `packages/node/src/onboarding.ts`). Treize clients sont détectés ; sept sont raccordés automatiquement, six par une configuration à copier. Ce parcours est vérifié sur fixtures ; la recette humaine sur un Mac de test reste à faire. Rien n'a encore été validé avec de vrais utilisateurs. Le [bilan daté](AVANCEMENT.md) précise les preuves.
 
 ## La cible privée
 
-Aujourd'hui, un relais interne relie les postes (existant, `packages/relay`) ; aucun serveur Memo Labs ni compte externe ne doit être requis. Réseau local par découverte mDNS, Internet par iroh embarqué et relais d'entreprise packagé sont visés (T4.2, T4.10, D53), sans relais de secours activé par défaut. Le modèle peut être sur le laptop ou dans l'entreprise. Les destinations des modèles, connecteurs et agents joints doivent être approuvées : avoir l'app sur son Mac ne rend pas une API cloud locale.
+Trois chemins relient les postes (D53), sans serveur Memo Labs ni compte externe : le réseau local par découverte mDNS (T4.2), Internet par iroh, un programme Rust séparé embarqué dans l'app (T4.2b, `crates/drop-iroh`), et un relais interne (`packages/relay`), que le pack entreprise fournit en image Docker et en chart Helm (T4.10). Aucun relais n'est imposé. Le mode Internet est désactivé par défaut ; entre deux réseaux, deux pairs derrière un routeur ne se joignent qu'avec un relais iroh choisi (le sien ou celui de l'équipe ; jamais celui de n0 en profil privé). Le modèle peut être sur le laptop ou dans l'entreprise. Les destinations des modèles, connecteurs et agents joints doivent être approuvées : avoir l'app sur son Mac ne rend pas une API cloud locale.
 
-L'app conserve Tauri 2 et le moteur partagé (existant, `apps/mac`, paquet de développement). Distribution signée et notarisée visée en T3.4, puis Windows (T3.7) et Linux (T3.8). Après installation et environnement prêt : analyser les configurations compatibles, puis raccorder les agents sélectionnés. Ce parcours de deux confirmations ne publie aucun outil. Invitations, permissions système et téléchargements sont séparés. Voir [ONBOARDING](ONBOARDING.md).
+L'app conserve Tauri 2 et le moteur partagé (existant, `apps/mac`). Une build signée et notarisée pour Apple Silicon existe ; la recette sur un Mac propre et VoiceOver restent à faire (T3.4, [MAC_RELEASE](MAC_RELEASE.md)). Windows (T3.7) et Linux (T3.8) suivront. Après installation et environnement prêt : analyser les configurations compatibles, puis raccorder les agents sélectionnés. Ce parcours de deux confirmations ne publie aucun outil. Invitations, permissions système et téléchargements sont séparés. Voir [ONBOARDING](ONBOARDING.md).
 
 Sans modèle, les capacités déterministes fonctionnent (existant, `production.error_summary`). Réutiliser d'abord le modèle existant est visé en T3.2 ; Ollama avec Qwen3.5 4B/9B y est une option à mesurer, avec téléchargement volontaire et aucun fallback distant dans le profil privé cible. Voir [MODELS](MODELS.md).
 
@@ -29,7 +29,7 @@ C'est le scénario que joue réellement la démonstration (`scripts/demo-local.s
 1. **Demander.** L'agent choisit une capacité disponible et pose une question, accompagnée d'une raison lisible.
 2. **Autoriser.** Julie voit qui demande, pourquoi, ce qui pourra être renvoyé et le coût annoncé. Elle peut accepter une fois, refuser ou répondre « pas maintenant ».
 3. **Exécuter chez le propriétaire.** La capacité utilise seulement les outils prévus. Pour un dépôt, elle travaille dans une copie temporaire des fichiers autorisés.
-4. **Relire si la capacité est sensible.** Julie voit la réponse de `repo.answer` ou de `mcp.answer` avant son envoi. Dans le panneau de l'app (`/app`), elle choisit « Envoyer » ou « Ne pas envoyer ». Retirer des champs n'existe aujourd'hui que sur la page historique `/` (`packages/node/src/ui.ts`) et en ligne de commande (`review <dropId> send --redact <champ>`) ; le retrait dans le panneau est visé en T4.14.
+4. **Relire si la capacité est sensible.** Julie voit la réponse de `repo.answer` ou de `mcp.answer` avant son envoi. Dans le panneau de l'app (`/app`), elle peut retirer un champ, puis choisit « Envoyer » ou « Ne pas envoyer » (T4.14). En ligne de commande : `review <dropId> send --redact <champ>`. Elle peut aussi répondre elle-même, par un texte ou un fichier texte, avec le même consentement et le même reçu (T4.3).
 5. **Recevoir.** L'agent de Guillaume obtient une réponse structurée. Un reçu signé conserve des empreintes et des métadonnées, sans recopier la question ni la réponse.
 
 Un refus arrête cette demande. « Pas maintenant » ne planifie pas une relance automatique. Sans accord avant l'expiration, la capacité ne s'exécute pas. Un résultat invalide ou détecté comme secret par les contrôles de sortie n'est pas envoyé.
@@ -44,6 +44,8 @@ Un refus arrête cette demande. « Pas maintenant » ne planifie pas une relance
 | `mcp.answer.<nom>`         | « Cette maquette prévoit-elle un état vide ? » | Réponse courte, verdict et noms de sources              | Oui                                                |
 
 Toutes ces capacités demandent une autorisation initiale. Les capacités dépôt et MCP utilisent un modèle ; un agent A2A joint utilise sa propre implémentation. Le résumé d'erreurs ne nécessite pas de modèle.
+
+Deux autres échanges existent. Un **fait publié** est une information signée que le propriétaire marque partageable, avec un public et une date de fin ; il est servi sans modèle et sans nouvelle décision, avec un reçu (T4.4). La **réponse à la main** permet au propriétaire de répondre lui-même à une demande, par un texte ou un fichier texte (T4.3).
 
 Une capacité est un **contrat d'action** : une entrée, une sortie, des outils autorisés, une sensibilité et un budget. Le demandeur choisit dans ce catalogue ; il ne transmet pas une liste de nouveaux outils à exécuter.
 
@@ -97,7 +99,7 @@ Le chiffrement protège le transport entre Nodes. Les listes d'outils, schémas,
 
 ## Qui paie le modèle ?
 
-**Contrôle livré en T3.1.** Le financement ne remplace ni le modèle ni l’endpoint du propriétaire. Un financement incompatible est refusé avant appel ; en profil privé payé par le propriétaire, toute clé reçue est refusée avant consentement.
+**Par défaut, le propriétaire utilise son propre modèle.** Le profil privé, créé par `drop init` et par l'app, fixe le payeur au propriétaire (`packages/node/src/private-config.ts`). Le financement ne remplace ni le modèle ni l’endpoint du propriétaire. Un financement incompatible est refusé avant appel ; en profil privé payé par le propriétaire, toute clé reçue est refusée avant consentement.
 
 Le financement par le demandeur est implémenté pour le profil historique seulement, puisque le profil privé créé par `drop init` refuse toute clé reçue (le schéma ne l'impose pas encore, T4.15) : une clé plafonnée est créée pour la demande et transmise chiffrée à l'exécuteur. Elle n'est pas écrite sur son disque. Le coût annoncé et le payeur apparaissent sur la carte ; le cycle de fin de demande prévoit la révocation de la clé. Ce chemin dépend d'une configuration de financement valide.
 
@@ -155,11 +157,11 @@ node scripts/bundle.ts
 node packages/node/src/cli.ts install codex
 ```
 
-Remplacer `codex` par `claude_code`, `cursor` ou `claude_desktop` selon l’agent : ce sont les quatre adaptateurs existants. Les neuf autres clients de D55 sont visés en T4.5. Cette commande modifie sa configuration. `uninstall <agent>` retire le connecteur. Le paquet npm public n’est pas encore publié. `node scripts/bundle.ts` nettoie `dist/` : reconstruire ensuite le site si nécessaire.
+Remplacer `codex` par `claude_code`, `claude_desktop`, `cursor`, `gemini_cli`, `vscode` ou `cline` : ce sont les sept clients raccordés automatiquement. Pour les six autres (OpenCode, Devin Desktop, Zed, goose, Roo Code, JetBrains AI), le panneau affiche la configuration à copier. Voir [ONBOARDING](ONBOARDING.md). Cette commande modifie la configuration de l'agent. `uninstall <agent>` retire le connecteur. Le paquet npm public n’est pas encore publié. `node scripts/bundle.ts` nettoie `dist/` : reconstruire ensuite le site si nécessaire.
 
 Dans le panneau local, « Mes outils » propose le parcours guidé : « Analyser ce Mac », choisir les agents, puis « Connecter les agents sélectionnés ». Une configuration changée depuis l'analyse est refusée ; aucune capacité n'est publiée par ce raccordement. La commande CLI suit les mêmes contrôles de conflit et de sauvegarde pour l'agent nommé.
 
-Un annuaire d’équipe est implémenté : `team create <nom>` initialise l’équipe ; les invitations propagent l’adhésion et l’appairage ; `team` liste les membres, leurs agents et leurs capacités. Dans le panneau, un lien `drop://pair` est accepté dès l'ouverture, sans clic de confirmation ; la confirmation explicite est visée en T4.14. L'app Mac existe en paquet de développement (`apps/mac`) ; sa distribution signée et notarisée reste à prouver en T3.4.
+Un annuaire d’équipe est implémenté : `team create <nom>` initialise l’équipe ; les invitations propagent l’adhésion et l’appairage ; `team` liste les membres, leurs agents et leurs capacités. Dans le panneau, un lien `drop://pair` montre qui invite et dans quelle équipe, puis attend « Rejoindre » ou « Refuser » (T4.14).
 
 Pour examiner les agents reconnus et les sources déjà configurées :
 
@@ -168,9 +170,9 @@ node packages/node/src/cli.ts detect
 node packages/node/src/cli.ts help
 ```
 
-La commande `share <agent>/<serveur>` permet ensuite de publier une source existante. Dans le panneau, l'interrupteur de « Mes outils » fait la même chose en un clic (`packages/node/src/panel.ts`, `packages/node/src/share.ts`) : il publie `mcp.answer` sur ce serveur avec les seuls outils que le serveur marque en lecture seule, et le propriétaire comme approbateur. Si aucun outil n'est marqué en lecture seule, le partage est refusé ; `share --tools a,b` permet alors de les nommer. Vérifier les outils choisis avant le partage : une annotation de lecture seule est déclarée par le serveur, pas vérifiée par drop. Les identifiants du serveur restent lus depuis la configuration locale de l'agent.
+La commande `share <agent>/<serveur>` permet ensuite de publier une source existante. Dans le panneau, l'interrupteur de « Mes outils » fait la même chose en un clic (`packages/node/src/panel.ts`, `packages/node/src/share.ts`) : il publie `mcp.answer` sur ce serveur avec les seuls outils que le serveur marque en lecture seule, et le propriétaire comme approbateur. Le panneau ne permet pas encore de choisir les outils, le modèle ou l'approbateur (T4.16). Si aucun outil n'est marqué en lecture seule, le partage est refusé ; `share --tools a,b` permet alors de les nommer. Vérifier les outils choisis avant le partage : une annotation de lecture seule est déclarée par le serveur, pas vérifiée par drop. Les identifiants du serveur restent lus depuis la configuration locale de l'agent.
 
-Le parcours `drop://link`, qui relie un assistant comme ChatGPT par la passerelle publique, existe dans le panneau et dans `packages/gateway`, mais le profil privé le refuse (`E_DENIED`, `packages/node/src/daemon.ts`). Comme l'app Mac crée un profil privé au premier lancement (un dossier `~/.drop` existant est réutilisé tel quel), ce parcours échoue aujourd'hui dans l'app installée sur un poste neuf. La passerelle (T2.13) n'est pas livrée ; son option et son interdiction par une politique d'entreprise sont visées (D54, T4.10).
+Le parcours `drop://link`, qui relie un assistant comme ChatGPT par la passerelle publique, existe dans le panneau et dans `packages/gateway`, mais le profil privé le refuse (`E_DENIED`, `packages/node/src/daemon.ts`). Comme l'app Mac crée un profil privé au premier lancement (un dossier `~/.drop` existant est réutilisé tel quel), ce parcours échoue dans l'app installée sur un poste neuf. La passerelle (T2.13) n'est pas livrée : c'est une option cloud différée. Une politique d'entreprise peut déjà interdire toute passerelle (T4.10, `packages/node/src/policy.ts`).
 
 ## Si une demande n'aboutit pas
 

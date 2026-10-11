@@ -1,6 +1,6 @@
 # Raccorder ses agents en deux confirmations
 
-**Existant : T3.3 est livrée, vérifiée sur fixtures, en attente de recette manuelle.** La change est archivée ([vérification](../openspec/changes/archive/2026-10-09-t3-3-local-agent-onboarding/proof/verification.md)) ; la recette humaine sur un Mac de test reste à faire. Le panneau local (`packages/node/src/panel.ts`) permet d'analyser les treize clients de D55 (T4.5, D66, `packages/capabilities/src/clients.ts`), de sélectionner ceux que drop sait raccorder, puis de confirmer l'ajout ; pour les autres, il donne la configuration à copier. L'app Mac distribuée et signée reste le chantier T3.4 ; l'expérience finale dans la barre de menus n'est donc pas encore validée sur une installation neuve.
+**Existant : T3.3 est livrée, vérifiée sur fixtures, en attente de recette manuelle.** La change est archivée ([vérification](../openspec/changes/archive/2026-10-09-t3-3-local-agent-onboarding/proof/verification.md)) ; la recette humaine sur un Mac de test reste à faire. Le panneau local (`packages/node/src/panel.ts`) permet d'analyser les treize clients de D55 (T4.5, D66, `packages/capabilities/src/clients.ts`), de sélectionner ceux que drop sait raccorder, puis de confirmer l'ajout ; pour les autres, il donne la configuration à copier. L'app Mac est signée et notarisée ; sa recette sur un Mac propre reste à faire (T3.4). L'expérience dans la barre de menus n'est donc pas encore validée sur une installation neuve.
 
 ## Ce que couvrent les deux confirmations
 
@@ -11,7 +11,7 @@ Prérequis : app installée, Node local prêt, environnement sélectionné. Une 
 
 Le panneau distingue « configuration raccordée », « connecteur utilisable à vérifier après relance » et « équipe joignable ». Le raccordement peut réussir quand l'équipe est hors ligne. Aucun succès de bout en bout n'est annoncé si une relance ou une confirmation dans l'agent reste nécessaire.
 
-## Adaptateurs livrés (T3.3)
+## Les quatre premiers adaptateurs (T3.3)
 
 | Agent          | Source connue sur Mac                                             | Raccordement                                                    |
 | -------------- | ----------------------------------------------------------------- | --------------------------------------------------------------- |
@@ -57,7 +57,7 @@ Les sauvegardes locales sont privées, versionnées et limitées à trois par fi
 
 ## Après le raccordement
 
-Rejoindre l'équipe exige un lien d'invitation `drop://pair` valable 24 h et une seule fois. Dans le panneau, ce lien est accepté dès l'ouverture, sans clic de confirmation (existant, `packages/node/src/panel.ts`) ; une confirmation explicite est visée en T4.14.
+Rejoindre l'équipe exige un lien d'invitation `drop://pair` valable 24 h et une seule fois. Dans le panneau, ce lien montre qui invite et dans quelle équipe, puis attend « Rejoindre » ou « Refuser » (T4.14, `packages/node/src/panel.ts`).
 
 **Partager un outil, ce qui existe.** Dans « Mes outils », chaque serveur MCP partageable d'un agent installé porte un interrupteur « Partager … ». Un clic suffit (`packages/node/src/panel.ts`, `packages/node/src/share.ts`) :
 
@@ -69,8 +69,8 @@ Rejoindre l'équipe exige un lien d'invitation `drop://pair` valable 24 h et une
 
 Une annotation de lecture seule est déclarée par le serveur, pas vérifiée par drop. En ligne de commande, `share <agent>/<serveur> --tools a,b --approver <nodeId>` et `publish <capacité> --approver <nodeId> --config <fichier.json>` permettent de choisir les outils, l'approbateur et le modèle.
 
-**Ce qui était annoncé ici avant le 10 octobre.** Cette page disait que partager une source exigeait de choisir une capacité, les outils, les données, le modèle et l'approbateur. Ce n'est pas le parcours du panneau. Ce choix fin dans le panneau est porté par T4.16.
+Le panneau ne permet pas encore de choisir les outils, le modèle ou l'approbateur : ce choix est porté par T4.16.
 
 Un agent A2A d'entreprise se raccorde par une URL et des identifiants approuvés ; l'analyse locale ne découvre pas l'infrastructure d'entreprise.
 
-Chaque carte de consentement du panneau dit qui demande et par quel agent, la question, pourquoi, ce que le demandeur recevra et ce qu'il ne recevra jamais, puis le coût s'il existe. L'expiration et la sensibilité n'y figurent pas encore (visé, T4.14). Accepter une demande ne donne pas un accès permanent. Voir [les critères AC-CONNECT](ACCEPTANCE.md) ; la landing montre une simulation, pas un installeur.
+Chaque carte de consentement du panneau dit qui demande et par quel agent, la question, pourquoi, ce que le demandeur recevra et ce qu'il ne recevra jamais, puis le coût s'il existe, l'expiration et la sensibilité ; « Pas maintenant » est le choix par défaut au clavier (T4.14). Accepter une demande ne donne pas un accès permanent. Voir [les critères AC-CONNECT](ACCEPTANCE.md) ; la landing montre une simulation, pas un installeur.

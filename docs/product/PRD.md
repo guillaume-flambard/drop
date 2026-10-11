@@ -2,7 +2,7 @@
 
 Document descriptif. Les contrats normatifs vivent dans `openspec/specs` ; l'ordre dans `docs/TASKS.md` ; les décisions dans `docs/DECISIONS.md`.
 
-Ce document remplacera `openspec/project/vision.md` et `PRODUCT.md` lors de la mise en vérité T4.0a. D'ici là, en cas de contradiction, ce PRD et D47 à D58 font foi.
+`openspec/project/vision.md` en est le résumé et `PRODUCT.md` le brief de conception du panneau (mise en vérité T4.0a). En cas de contradiction, ce PRD et D47 à D58 font foi.
 
 **Statuts utilisés.** **Existant** : livré, avec un chemin ou une preuve. **Visé** : à livrer, avec la tâche qui le porte. **Hypothèse** : non validée, avec le critère qui la confirmera ou l'invalidera. Rien n'a encore été validé avec de vrais utilisateurs : Julie et Natha sont des scénarios, toutes les démonstrations ont tourné sur les machines de Guillaume.
 
@@ -62,7 +62,7 @@ Décision D48.
 | Demandeur | développeur avec un ou plusieurs agents | pose les questions | Visé en usage réel |
 | Propriétaire | technique ou non, avec ou sans agent | décide et répond | Visé en usage réel |
 | Responsable | veut l'avancée de l'équipe | pose des questions à plusieurs | Existant en code (T2.10, T2.12), jamais utilisé en vrai |
-| Administrateur | informatique d'une grande entreprise | déploie le relais interne et la politique | Visé (T4.10) |
+| Administrateur | informatique d'une grande entreprise | déploie le relais interne et la politique | Existant en code (T4.10), jamais utilisé en vrai |
 
 **Référence de conception.** Une grande entreprise souveraine : un ingénieur d'un grand compte industriel rapporte qu'ils utilisent A2A et veulent zéro dépendance externe, un outil installé en interne, avec protection des données. Chaque choix technique doit rester acceptable pour une telle équipe informatique.
 
@@ -78,7 +78,7 @@ Décision D48.
 
 | Niveau | Nom | Ce qui se passe | Statut |
 |---|---|---|---|
-| 1 | Fait publié | Le propriétaire marque une information comme partageable ; elle est servie telle quelle, sans modèle, jusqu'à son expiration. | Visé (T4.4) |
+| 1 | Fait publié | Le propriétaire marque une information comme partageable ; elle est servie telle quelle, sans modèle, jusqu'à son expiration. | Existant (T4.4) |
 | 2 | Petite question | Un modèle répond dans un appel neuf, sans outil, à partir d'un contexte que le propriétaire a déclaré partageable. Jamais depuis la session en cours de son agent. | Visé (T4.9) |
 | 3 | Capacité | Outils, budget et approbateur fixés avant la demande ; sortie validée par schéma puis scannée. | Existant (`packages/runner`, `packages/capabilities`, specs `runner` et `capability-*`) |
 | 4 | Tâche déléguée | Tâche longue avec jalons où le propriétaire approuve, budget plafonné, expiration, nouvelle approbation si le périmètre s'élargit. | Visé (T4.11) |
@@ -86,7 +86,7 @@ Décision D48.
 
 ### 5.2 Le propriétaire sans agent (D49)
 
-- **Réponse à la main** : la question arrive dans le panneau, le propriétaire répond par un texte ou un fichier, avec le même consentement et le même reçu. Visé (T4.3).
+- **Réponse à la main** : la question arrive dans le panneau, le propriétaire répond par un texte ou un fichier, avec le même consentement et le même reçu. Existant (T4.3).
 - **Agent inclus** : le propriétaire branche ses outils dans l'app et laisse drop répondre pour lui après accord, avec un modèle qu'il choisit. Visé (T4.8).
 
 ### 5.3 Le contexte partagé décentralisé (D51)
@@ -99,35 +99,34 @@ Limites écrites : une réponse livrée ne se rappelle pas ; le catalogue révè
 
 drop est un serveur MCP standard. La détection déterministe doit couvrir treize clients avec leurs configurations globales et par projet ; les autres reçoivent une configuration à copier. Aucun modèle ne fouille la machine.
 
-- Existant : quatre adaptateurs (Claude Code, Claude Desktop, Cursor, Codex) en deux confirmations (T3.3, `packages/node/src/onboarding.ts`).
-- Visé : les neuf autres (OpenCode, Gemini CLI, Windsurf, Zed, goose, VS Code Copilot, Cline, Roo Code, JetBrains AI), T4.5. Liste et emplacements : [recherche §4](../research/2026-10-10-repositionnement.md#4-clients-mcp-configuration).
-- ChatGPT n'accepte qu'un serveur distant en HTTPS : il passe par la passerelle publique de Guillaume, en option, et une entreprise peut l'interdire (D54). Le code de la passerelle existe (`packages/gateway`) mais T2.13 n'est pas livrée.
+- Existant : treize clients détectés ; sept raccordés automatiquement en deux confirmations (Claude Code, Claude Desktop, Cursor, Codex, Gemini CLI, VS Code, Cline), six par une configuration à copier (OpenCode, Devin Desktop ex-Windsurf, Zed, goose, Roo Code, JetBrains AI). T3.3 et T4.5, `packages/node/src/onboarding.ts`, `packages/capabilities/src/clients.ts`. Emplacements : [recherche §4](../research/2026-10-10-repositionnement.md#4-clients-mcp-configuration).
+- ChatGPT n'accepte qu'un serveur distant en HTTPS. La passerelle publique (T2.13) n'est pas livrée : c'est une option cloud différée, refusée par le profil privé. Le code existe (`packages/gateway`) ; une politique d'entreprise peut déjà interdire toute passerelle (D54, T4.10).
 
 ### 5.5 Se connecter (D53)
 
 | Mode | Pour qui | Comment | Statut |
 |---|---|---|---|
-| Réseau local | même bureau | découverte automatique, aucun serveur | Visé (T4.2) |
-| Internet | amis, petite équipe | iroh embarqué : connexion directe dans environ 9 cas sur 10 | Visé (T4.2) |
-| Entreprise | informatique interne | relais drop interne en binaire, Docker ou Helm, TLS sur 443 | Existant en partie (relais WebSocket, `packages/relay`) ; packaging et politique Visés (T4.10) |
+| Réseau local | même bureau | découverte automatique, aucun serveur | Existant (T4.2) |
+| Internet | amis, petite équipe | iroh, programme Rust séparé embarqué dans l'app (`crates/drop-iroh`) | Existant (T4.2b) |
+| Entreprise | informatique interne | relais drop interne en Docker ou Helm, TLS sur 443 | Existant (T4.10) ; binaire autonome Visé (T4.10b) |
 
-Par défaut, aucun relais de secours. Si la connexion directe échoue, l'app explique pourquoi et propose d'en activer un : relais de test d'un tiers (n0), relais de Memo Labs sur demande d'une équipe, ou relais auto-hébergé. Le chiffrement de bout en bout reste actif dans tous les modes. **Hypothèse H5** : environ 90 % de connexions directes dans les réseaux des testeurs ; critère : taux mesuré en T4.2 et T4.6.
+Par défaut, aucun relais de secours. Pour Internet, le panneau propose : désactivé, relais iroh auto-hébergé ou d'équipe, ou relais de test d'un tiers (n0) signalé comme tel et refusé en profil privé (T4.2b, D68). Sans relais, deux pairs derrière un routeur ne se joignent pas. Un relais de Memo Labs sur demande d'une équipe reste une hypothèse. Le chiffrement de bout en bout reste actif dans tous les modes. **Hypothèse H5** : environ 90 % de connexions directes dans les réseaux des testeurs ; critère : taux mesuré en T4.2 et T4.6.
 
 ### 5.6 La politique d'entreprise (D54)
 
-Une politique signée, déployée par l'informatique, fixe les clients autorisés, les fournisseurs de modèles autorisés, le relais interne obligatoire et l'interdiction des passerelles publiques. Le poste l'applique ; le relais la vérifie à nouveau. Visé (T4.10).
+Une politique signée, déployée par l'informatique, fixe les clients autorisés, les fournisseurs de modèles autorisés, le relais interne obligatoire et l'interdiction des passerelles publiques. Le poste l'applique ; le relais la vérifie à nouveau. Existant (T4.10, `packages/node/src/policy.ts`).
 
 ### 5.7 L'app sur le poste
 
 - Existant : app Mac de barre de menus (Tauri), Node embarqué, panneau de décision, équipe, outils et raccordement (`apps/mac`, `packages/node/src/panel.ts`). Le script de release sait notariser avec un profil du trousseau (`scripts/build-mac.ts`, `docs/MAC_RELEASE.md`).
-- Visé (T3.4) : qualification signée et notarisée. Une build a été acceptée par Apple le 10 octobre 2026 sur le Mac de Guillaume, mais sa preuve n'est pas encore archivée dans T3.4 ; recette VoiceOver et installation sur un Mac de test restent humaines.
+- Existant : build signée et notarisée pour Apple Silicon, acceptée par Apple le 10 octobre 2026 ([preuve](../../openspec/changes/t3-4-private-mac-app/proof/verification.md)). Visé (T3.4) : installation sur un Mac propre et recette VoiceOver, humaines.
 - Visé : Windows (T3.7), Linux (T3.8).
 
 ## 6. Simulation (D56)
 
 Avant de confier drop à de vraies personnes, on le fait vivre dans une entreprise fictive.
 
-- **Technique** : 50 nœuds en processus séparés, puis 500 nœuds virtuels regroupés, sur le Mac, avec un relais dédié. Visé (T4.1, T4.7).
+- **Technique** : 50 nœuds en processus séparés, sur le Mac, avec un relais dédié : Existant (T4.1). Puis 500 nœuds virtuels regroupés : Visé (T4.7).
 - **Usage** : 10 à 20 personnages joués par des modèles gratuits (passerelle LiteLLM du lab), qui se posent de vraies questions sur des données factices. Visé (T4.7).
 - **Carte interactive** : vue équipe regroupable, vue parcours par demande façon n8n, lecture et pas à pas, injection de pannes et de sorties piégées. Visé (T4.7).
 - **Boucle d'amélioration** : rapports, et ajustement versionné des seuls éléments sans risque (textes, routage, consignes des personnages). Jamais le code ni la sécurité.
