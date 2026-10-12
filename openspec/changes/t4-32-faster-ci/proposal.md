@@ -1,4 +1,4 @@
-# T4.26 : CI plus rapide sans retirer de contrôle
+# T4.32 : CI plus rapide sans retirer de contrôle
 
 ## Why
 
@@ -46,5 +46,5 @@ mêmes titres.
 ## Impact
 
 - `.github/workflows/test.yml`, `package.json`, `test/tooling.test.ts`.
-- `docs/DECISIONS.md` (D94), `docs/TASKS.md` (T4.26).
+- `docs/DECISIONS.md` (D94), `docs/TASKS.md` (T4.32).
 - Aucune dépendance npm, aucun schéma, aucun contrat. `actions/cache` est une action officielle de GitHub.
