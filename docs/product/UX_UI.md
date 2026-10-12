@@ -56,6 +56,7 @@ Ce document décrit les surfaces de drop, les écrans tels qu'ils existent dans 
 
 Section « À décider ».
 
+- **Existant** (T4.35) : la même liste et la même carte forment la page « Demandes » de « Ton espace », tenue à jour par le flux `/ui/events` ; la navigation compte les demandes qui attendent.
 - **Existant**, état vide : une carte centrée avec une icône de coche cerclée verte, « Tout est à jour » et « Lorsqu’un collègue aura une question, tu pourras choisir ce qui lui sera transmis. »
 - **Existant**, carte de décision, de haut en bas :
   - pastille aux initiales du demandeur, « Julie a besoin d’aide » et « via Claude Code », puis le titre de la capacité ;
@@ -66,9 +67,10 @@ Section « À décider ».
   - « Sensibilité haute : tu reliras le résultat avant envoi. » si la capacité est sensible, puis « Expire dans mm:ss », qui décompte chaque seconde ;
   - les actions : « Pas maintenant » discret à gauche, « Refuser », puis « Autoriser une fois » plein, en couleur d'accent ; « Répondre moi-même » sous un trait.
 - **Existant** : chaque bouton porte un nom accessible qui inclut le titre, par exemple « Refuser : Résumer les erreurs de production ».
-- **Existant** : une nouvelle carte arrive par un léger glissement de 0,24 s ; une carte décidée s'efface en 0,16 s.
+- **Existant** : une nouvelle carte arrive par un léger glissement de 0,24 s ; une carte de relecture traitée s'efface en 0,16 s.
+- **Existant** (T4.35), états nommés de la carte de décision : tant que la demande attend, la carte garde le contenu ci-dessus. Pendant l'envoi de la décision, les trois boutons restent focalisables, marqués inactifs (`aria-disabled`), et « Décision en cours d’envoi : attends sa confirmation. » s'affiche dessous. Ensuite, « Expire dans », les boutons et « Répondre moi-même » laissent place à une pastille et à une phrase sur les données : « Refusée », « Pas maintenant » ou « Expirée » avec « Rien n’a été envoyé à Julie. » ; « Autorisée une fois » avec « Seul le résultat de cette demande partira vers Julie. » (ou « Rien n’est encore parti : tu reliras le résultat avant qu’il parte vers Julie. » si la capacité est sensible) ; « Répondue » avec « Seule ta réponse partira vers Julie. » ; « Incertaine » quand la réponse du Node est illisible ou en erreur, avec « Impossible de confirmer ce qui a été envoyé à Julie. ». La carte reste jusqu'à « Masquer ». Seule une carte en attente expire. Logique dans `packages/desktop-ui/src/consent/model.ts`, carte dans `src/consent/card.tsx`, partagée avec « Ton espace ».
 - **Existant**, carte de relecture : pastille « À relire », titre, « Ta réponse est prête. Rien n’est parti. Relis les informations avant de choisir. », la sortie champ par champ (nom, valeur) avec une case « Retirer » par champ (un champ retiré est barré), puis « Ne pas envoyer » et « Envoyer » plein.
-- **Existant** : après une action, un bandeau de résultat apparaît et reçoit le focus : « Demande autorisée une fois. », « Demande refusée. », « Demande reportée. », « Réponse envoyée. » ou « Réponse conservée sur ce Mac. »
+- **Existant** : après une décision, la carte elle-même reçoit le focus et la région vivante annonce son état (T4.35). Après une relecture, un bandeau de résultat apparaît et reçoit le focus : « Réponse envoyée. » ou « Réponse conservée sur ce Mac. »
 
 Section « Mes questions ».
 
@@ -195,8 +197,8 @@ Surface locale du paquet de simulation, hors panneau. React Flow est candidat, l
 ## 6. Accessibilité
 
 - **Existant** : onglets Radix en `role="tablist"`, `tab` et `tabpanel`, avec tabindex mobile ; flèches gauche et droite, Début et Fin changent d'onglet et gardent le focus (test de composant).
-- **Existant** : une région vivante cachée annonce chaque résultat d'action ; l'état de connexion a sa propre région polie.
-- **Existant** : après une action, le focus va au bandeau de résultat ; dans la réponse humaine, il suit le geste (zone de texte, « Envoyer », « Retirer » du fichier). Vérifié par les tests de composants et en prévisualisation 380 × 620 dans Chromium.
+- **Existant** : une région vivante cachée, présente dès le premier rendu, annonce chaque résultat d'action et chaque changement d'état d'une carte de décision ; aucune carte n'a sa propre région (T4.35). L'état de connexion a sa propre région polie. « Ton espace » a une seule région vivante, elle aussi présente dès le rendu.
+- **Existant** : après une décision, le focus va sur la carte, dont les boutons disparaissent ; pendant l'envoi, le bouton activé garde le focus (T4.35). Après une autre action, le focus va au bandeau de résultat ; dans la réponse humaine, il suit le geste (zone de texte, « Envoyer », « Retirer » du fichier). Vérifié par les tests de composants et en prévisualisation 380 × 620 dans Chromium.
 - **Existant** : interrupteurs et cases Radix (`role="switch"`, `role="checkbox"`, `aria-checked`) ; icônes en `aria-hidden` ; champs invalides en `aria-invalid` ; erreurs en `role="alert"`.
 - **Existant** : contour de focus visible de 2 px en couleur d'accent.
 - **Existant** : respect de « réduire les animations », « réduire la transparence » (fond plein, sans flou) et « augmenter le contraste » (bordures plus foncées et plus épaisses).

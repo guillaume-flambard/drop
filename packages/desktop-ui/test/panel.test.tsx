@@ -257,13 +257,15 @@ describe('menu bar panel and its admin routes (T2.4)', () => {
     expect(text()).toContain('Guillaume <i>');
     expect(text()).toContain('<em>Karim</em>');
     expect(view.querySelector('main b:not([class]), main script, main img, main i, main em, main u')).toBeNull();
-    // No React escape hatch anywhere in the panel sources.
-    const dir = join(import.meta.dirname, '..', 'src', 'panel');
-    for (const file of readdirSync(dir)) {
-      const source = readFileSync(join(dir, file), 'utf8');
-      expect(source, file).not.toContain('dangerouslySetInnerHTML');
-      expect(source, file).not.toContain('innerHTML');
-      expect(source, file).not.toContain('insertAdjacentHTML');
+    // No React escape hatch anywhere in the panel sources, nor in the consent card they share with the workspace.
+    for (const folder of ['panel', 'consent', 'views']) {
+      const dir = join(import.meta.dirname, '..', 'src', folder);
+      for (const file of readdirSync(dir)) {
+        const source = readFileSync(join(dir, file), 'utf8');
+        expect(source, file).not.toContain('dangerouslySetInnerHTML');
+        expect(source, file).not.toContain('innerHTML');
+        expect(source, file).not.toContain('insertAdjacentHTML');
+      }
     }
   });
 
@@ -479,7 +481,7 @@ describe('menu bar panel and its admin routes (T4.14)', () => {
       'Refuser',
       'Autoriser une fois',
     ];
-    const card = plain(document.querySelector('article')?.textContent ?? '');
+    const card = plain(document.querySelector('[data-slot="consent-card"]')?.textContent ?? '');
     const positions = order.map((part) => card.indexOf(part));
     expect(positions.every((position) => position >= 0)).toBe(true);
     expect([...positions].sort((a, b) => a - b)).toEqual(positions);
@@ -852,19 +854,39 @@ describe('menu bar panel (T4.24)', () => {
   });
 
   it('announces each result, moves the focus to it, and shows the connection state in its own live region', async () => {
-    route('GET /ui/pending', { body: { pending: [approval()] } });
+    route('GET /ui/pending', { body: { pending: [approval(), review] } });
     await mount();
     await until(() => text().includes('Camille · connecté'), 'status');
     const status = [...document.querySelectorAll('[role="status"][aria-live="polite"]')];
     expect(status.some((node) => node.textContent === 'Camille · connecté')).toBe(true);
-    route('GET /ui/pending', { body: { pending: [] } });
+    route('GET /ui/pending', { body: { pending: [review] } });
     await click(button('Autoriser une fois : Résumer les erreurs de production'));
     expect(posted('/ui/decide')[0]?.body).toBe('dropId=' + DROP + '&decision=allow_once');
     await settle(80);
-    expect(document.activeElement?.textContent).toContain('Demande autorisée une fois.');
-    expect(status.some((node) => node.textContent === 'Demande autorisée une fois.')).toBe(true);
+    // A decision: the card itself takes the focus and says what happened to the data (T4.35).
+    const card = document.querySelector('[data-slot="consent-card"]');
+    expect(document.activeElement).toBe(card);
+    expect(card?.getAttribute('data-state')).toBe('authorized');
+    expect(plain(card?.textContent ?? '')).toContain(
+      'Autorisée une foisRien n’est encore parti : tu reliras le résultat avant qu’il parte vers Julie Moreau.',
+    );
+    expect(
+      status.some(
+        (node) =>
+          plain(node.textContent) ===
+          'Autorisée une fois : Résumer les erreurs de production. Rien n’est encore parti : tu reliras le résultat avant qu’il parte vers Julie Moreau.',
+      ),
+    ).toBe(true);
+    // Any other result still goes to the focused banner, announced by the same region.
+    route('GET /ui/pending', { body: { pending: [] } });
+    await click(button('Envoyer : État des tickets'));
+    await settle(80);
+    expect(document.activeElement?.textContent).toContain('Réponse envoyée.');
+    expect(status.some((node) => node.textContent === 'Réponse envoyée.')).toBe(true);
     await settle(200);
     expect(text()).toContain('Tout est à jour');
+    await click(button('Masquer : Résumer les erreurs de production'));
+    expect(document.querySelector('[data-slot="consent-card"]')).toBeNull();
     expect(connectionStatus({ displayName: 'Julie', relayConnected: false })).toEqual({
       text: 'Julie · hors ligne',
       tone: 'wait',

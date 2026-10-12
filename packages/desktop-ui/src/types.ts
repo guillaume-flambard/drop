@@ -1,3 +1,5 @@
+import type { PendingItem } from './panel/types.ts';
+
 export interface Person {
   nodeId: string;
   displayName: string;
@@ -86,5 +88,7 @@ export interface WorkspaceData {
   tools: ToolsData | null;
   facts: FactsData | null;
   outbound: { drops: DropStatus[] } | null;
+  /** What waits for the owner's decision (T4.35), the same list as the panel's. */
+  pending: PendingItem[] | null;
   internet: InternetData | null;
 }
