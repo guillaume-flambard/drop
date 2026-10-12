@@ -262,7 +262,7 @@ drop.
 diagnostic », le relit, puis « Copier le diagnostic » et le colle dans sa messagerie. drop n'envoie rien. Le texte donne
 les versions, le système, l'état des connexions et la fin des journaux, expurgés : ni clé, ni jeton, ni contenu de
 demande. Si le moteur ne démarre plus, la page de démarrage donne le chemin du journal et ouvre le dossier
-`~/.drop/logs`, qui ne contient que des journaux : le testeur peut l'envoyer tel quel. Ne jamais demander le dossier
+`~/.drop/logs`, qui ne contient que des journaux expurgés à l'écriture : le testeur les relit avant de les envoyer, l'expurgation ne reconnaissant pas tout. Ne jamais demander le dossier
 `~/.drop` entier, qui contient sa clé privée.
 
 ### 6.5 Rendez-vous

@@ -1,0 +1,113 @@
+{
+  "description": "Shared by the node's redaction (packages/node/test/daemon-log.test.ts) and the shell's (apps/desktop/src-tauri/src/main.rs, cargo test): what neither may write to a log, and what both must keep (T4.37).",
+  "vectors": [
+    {
+      "name": "AWS secret with slashes",
+      "input": "secret wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY end",
+      "absent": ["wJalrXUtnFEMI", "K7MDENG", "bPxRfiCYEXAMPLEKEY"],
+      "present": ["secret", "end"]
+    },
+    {
+      "name": "PEM body line",
+      "input": "leV4n6KW24sgl0jKU3UeB1ibaUiCdP/ucbBNDMfKIA9sBIg45naIEl4qRSdmtiuF",
+      "absent": ["leV4n6KW24", "sgl0jKU3Ue", "B1ibaUiCdP", "/ucbBNDMfK", "IA9sBIg45n", "aIEl4qRSdm"],
+      "present": []
+    },
+    {
+      "name": "base64 key ending in /9rE4=",
+      "input": "key 0HsEbKlI4sinhSkBLHI6RawreK1doWkzCuemf9/9rE4=",
+      "absent": ["/9rE4=", "0HsEbKlI4sinhSkBLHI6", "RawreK1doWkzCuemf9"],
+      "present": ["key"]
+    },
+    {
+      "name": "bare hex key",
+      "input": "for key 9167efb81690808e7ab6b3bf2e529a1f41ae2f54b6557a2538f7303b05af2297",
+      "absent": ["9167efb81690808e", "38f7303b05af2297"],
+      "present": ["for key"]
+    },
+    {
+      "name": "hex in a JSON field",
+      "input": "{\"event\":\"seed\",\"code\":\"E_SEED\",\"nodeSeed\":\"c71df850e6247feeb753408fa544f1204178877f9bcffc27afb3d25fdcb94e77\"}",
+      "absent": ["c71df850e6247fee"],
+      "present": ["E_SEED"]
+    },
+    {
+      "name": "hex in a query parameter",
+      "input": "GET /callback?access=de493c1732911871f8cb142c5ae6beb86fdbb24cf35055076f294ef505eae953&x=1",
+      "absent": ["de493c1732911871"],
+      "present": ["/callback"]
+    },
+    {
+      "name": "hex in a URL fragment",
+      "input": "open https://example.org/cb#4cf4cc5377129a37397aafa55e22712d981b9e8dabef88d3e57eeae95f3090aa",
+      "absent": ["4cf4cc5377129a37"],
+      "present": ["example.org"]
+    },
+    {
+      "name": "quoted password",
+      "input": "config \"password\": \"Hunter2Hunter2!\" loaded",
+      "absent": ["Hunter2Hunter2"],
+      "present": ["config", "loaded"]
+    },
+    {
+      "name": "quoted token",
+      "input": "config \"token\": \"cbd05c91ed7cb2c124d9699aade143e7e6547cca6da5fda75b6b486bc8a93ed6\"",
+      "absent": ["cbd05c91ed7cb2c1"],
+      "present": ["config"]
+    },
+    {
+      "name": "apiKey object in text",
+      "input": "body {\"apiKey\": \"ea1ad69294b13f6a5c6238b8f400af2ccb892b1b16ca4ffccdadacdb30bab213\"} sent",
+      "absent": ["ea1ad69294b13f6a"],
+      "present": ["body", "sent"]
+    },
+    {
+      "name": "tabbed bearer",
+      "input": "Authorization:\tBearer\t7b9e127263bd35ddf6b88d3e58397e4730ad2565de4f26e6067b4dfd8f3db563",
+      "absent": ["7b9e127263bd35dd"],
+      "present": ["Authorization"]
+    },
+    {
+      "name": "password in a URL",
+      "input": "relay https://u:Passw0rdPassw0rd@relay.example/v1 down",
+      "absent": ["Passw0rdPassw0rd"],
+      "present": ["relay.example/v1", "down"]
+    },
+    {
+      "name": "admin password in a URL",
+      "input": "relay https://admin:Hunter2Hunter2!@relay.example.org/v1",
+      "absent": ["Hunter2Hunter2"],
+      "present": ["relay.example.org/v1"]
+    },
+    {
+      "name": "letters-only token after a label",
+      "input": "token: abcdefghijklmnopqrstuvwxyzabcdefgh",
+      "absent": ["abcdefghijklmnopqrstuvwxyzabcdefgh"],
+      "present": ["token"]
+    },
+    {
+      "name": "stack frame kept",
+      "input": "at start (file:///Applications/drop.app/Contents/Resources/drop.mjs:41523:17)",
+      "absent": [],
+      "present": ["drop.mjs:41523:17"]
+    },
+    {
+      "name": "status line kept",
+      "input": "relay: disconnected",
+      "absent": [],
+      "present": ["relay: disconnected"]
+    },
+    {
+      "name": "code line kept",
+      "input": "E_RUNNER envelope handling failed",
+      "absent": [],
+      "present": ["E_RUNNER envelope handling failed"]
+    },
+    {
+      "name": "uuid kept",
+      "input": "drop 0199c6a2-7f3e-7c1a-9b2d-4e5f6a7b8c9d expired",
+      "absent": [],
+      "present": ["0199c6a2-7f3e-7c1a-9b2d-4e5f6a7b8c9d"]
+    }
+  ]
+}

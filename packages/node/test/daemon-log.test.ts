@@ -1,6 +1,19 @@
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { EventEmitter } from 'node:events';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  closeSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  unlinkSync,
+  utimesSync,
+  writeFileSync,
+} from 'node:fs';
 import { arch, hostname, platform, release, tmpdir, userInfo } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -13,6 +26,8 @@ import {
   LOG_LIMITS,
   logsDir,
   redactLogLine,
+  jsonObject,
+  logKinds,
   scanLogLine,
   secretValues,
   type LogProcess,
@@ -315,5 +330,101 @@ describe('daemon log (T4.37)', () => {
     tty.stderr.write(`relay: Bearer ${BEARER}\n`);
     plain.close();
     expect(tty.written.join('')).toBe('relay: Bearer [expurgé]\n');
+  });
+});
+
+interface Vector {
+  name: string;
+  input: string;
+  absent: string[];
+  present: string[];
+}
+
+/** Shared with the shell's cargo test: neither redaction may write these, both must keep the rest. */
+const VECTORS = (
+  JSON.parse(readFileSync(new URL('../../../test/fixtures/log-redaction-vectors.json', import.meta.url), 'utf8')) as {
+    vectors: Vector[];
+  }
+).vectors;
+
+describe('daemon log redaction, review of PR #82 (T4.37)', () => {
+  it.each(VECTORS.map((vector) => [vector.name, vector] as const))('redacts and keeps: %s', (_name, vector) => {
+    const out = redactLogLine(vector.input);
+    for (const secret of vector.absent) expect(out).not.toContain(secret);
+    for (const kept of vector.present) expect(out).toContain(kept);
+    expect(logKinds(jsonObject(out) ?? out)).toEqual([]);
+  });
+
+  it('never keeps the ending of a word that is not a real path', () => {
+    for (const word of ['wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY', 'Zm9vYmFyYmF6cXV4cXV1eHh5enp6eXl4eHd3dnZ1/9rE4=']) {
+      expect(redactLogLine(word)).toMatch(/^\[expurgé #[0-9a-f]{8}\]$/);
+    }
+  });
+
+  it('refuses to write through a symbolic link, for the log and for a moved legacy log', () => {
+    if (platform() === 'win32') return;
+    const root = tempRoot();
+    const victim = join(root, 'victim.txt');
+    writeFileSync(victim, 'untouched\n');
+    mkdirSync(logsDir(root), { recursive: true });
+    symlinkSync(victim, join(logsDir(root), DAEMON_LOG));
+    symlinkSync(victim, join(logsDir(root), 'daemon.log.legacy'));
+    writeFileSync(join(root, DAEMON_LOG), 'old line\n');
+    const fallback: string[] = [];
+    const log = new DaemonLog({ root, header: { engine: ENGINE_VERSION }, fallback: (line) => fallback.push(line) });
+    log.start();
+    log.write('{"event":"after","code":"E_NONE"}');
+    log.close();
+    expect(readFileSync(victim, 'utf8')).toBe('untouched\n');
+    expect(fallback.some((line) => line.includes('E_NONE'))).toBe(true);
+    // A legacy log that is itself a link is never read.
+    const other = tempRoot();
+    symlinkSync(victim, join(other, DAEMON_LOG));
+    new DaemonLog({ root: other, header: { engine: ENGINE_VERSION } }).start();
+    expect(existsSync(join(logsDir(other), 'daemon.log.legacy'))).toBe(false);
+  });
+
+  it('survives a failed close and a failed reopen, and reopens later', () => {
+    if (platform() === 'win32') return;
+    const root = tempRoot();
+    let now = Date.now();
+    const fallback: string[] = [];
+    const log = new DaemonLog({
+      root,
+      header: { engine: ENGINE_VERSION },
+      limits: { maxBytes: 600 },
+      now: () => now,
+      fallback: (line) => fallback.push(line),
+    });
+    log.start();
+    // The descriptor closed behind the log's back: the next rotation's close fails.
+    closeSync((log as unknown as { fd: number }).fd);
+    const line = JSON.stringify({ event: 'filler', code: 'E_FILL', reason: 'y'.repeat(400) });
+    expect(() => {
+      for (let index = 0; index < 4; index += 1) log.write(line);
+    }).not.toThrow();
+    // Now the folder refuses a new file: the reopen fails, lines go to the fallback.
+    unlinkSync(join(logsDir(root), DAEMON_LOG));
+    chmodSync(logsDir(root), 0o500);
+    try {
+      expect(() => {
+        for (let index = 0; index < 4; index += 1) log.write(line);
+      }).not.toThrow();
+      expect(fallback.length).toBeGreaterThan(0);
+    } finally {
+      chmodSync(logsDir(root), 0o700);
+    }
+    now += 61_000;
+    log.write(JSON.stringify({ event: 'back', code: 'E_BACK' }));
+    log.close();
+    expect(readFileSync(join(logsDir(root), DAEMON_LOG), 'utf8')).toContain('E_BACK');
+  });
+
+  it('keeps a legacy log when its redacted copy cannot be written', () => {
+    const root = tempRoot();
+    writeFileSync(join(root, DAEMON_LOG), 'old line\n');
+    mkdirSync(join(logsDir(root), 'daemon.log.legacy'), { recursive: true });
+    new DaemonLog({ root, header: { engine: ENGINE_VERSION } }).start();
+    expect(readFileSync(join(root, DAEMON_LOG), 'utf8')).toBe('old line\n');
   });
 });

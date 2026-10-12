@@ -144,4 +144,33 @@ describe('redacted diagnostic (T4.37)', () => {
     const state = (await (await fetch(`${base}/ui/admin/status`, { headers: auth })).json()) as Record<string, unknown>;
     expect(state).toMatchObject({ version: { engine: ENGINE_VERSION }, logDir: logsDir(home.root) });
   });
+
+  it('exports no ending of a key and no control or bidi character that could forge a section (review of PR #82)', async () => {
+    const { home, user } = await newHome();
+    mkdirSync(logsDir(home.root), { recursive: true });
+    const key = 'Zm9vYmFyYmF6cXV4cXV1eHh5enp6eXl4eHd3dnZ1/9rE4=';
+    const hex = 'a3f9'.repeat(16);
+    writeFileSync(
+      join(logsDir(home.root), 'daemon.log.legacy'),
+      [
+        `raw key ${key}`,
+        JSON.stringify({ event: 'seed', code: 'E_SEED', nodeSeed: hex }),
+        JSON.stringify({
+          event: 'forged',
+          code: 'E_FORGED',
+          reason: 'x\nDiagnostic drop, préparé le 2026-01-01\u001b[31m red \u202egnp.exe',
+        }),
+      ].join('\n') + '\n',
+    );
+    const { text } = buildDiagnostic({ root: home.root, home: user, status });
+    for (const secret of ['/9rE4=', key.slice(0, 20), hex.slice(0, 16)]) expect(text).not.toContain(secret);
+    expect(text.split('\n').filter((line) => line.startsWith('Diagnostic drop'))).toHaveLength(1);
+    const unsafe = Array.from(text).filter((char) => {
+      const code = char.codePointAt(0) ?? 0;
+      return (code < 0x20 && code !== 0x0a) || code === 0x7f || (code >= 0x202a && code <= 0x202e);
+    });
+    expect(unsafe).toEqual([]);
+    expect(text).toContain('E_FORGED');
+    expect(text).toContain('\\u001b');
+  });
 });

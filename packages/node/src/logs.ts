@@ -7,8 +7,10 @@ import { createHash } from 'node:crypto';
 import {
   chmodSync,
   closeSync,
+  constants as fsConstants,
   existsSync,
   fstatSync,
+  lstatSync,
   mkdirSync,
   openSync,
   readdirSync,
@@ -57,19 +59,30 @@ export function logsDir(root: string): string {
 const REDACTED = '[expurgé]';
 /** Names whose value is a secret: JSON keys and URL query parameters. */
 const SECRET_NAME =
-  /token|secret|passw(?:or)?d|passphrase|api[-_]?key|private[-_]?key|authori[sz]ation|cookie|credential|bearer|invite|session|key$/i;
+  /token|secret|passw(?:or)?d|passphrase|api[-_]?key|private[-_]?key|authori[sz]ation|cookie|credential|bearer|invite|session|seed|key$/i;
 /** Query parameters that carry a one-time secret without saying so (OAuth). */
 const SECRET_PARAM = /^(?:code|state|sig|signature|key)$/i;
 /** Environment variables whose value is a secret. */
 const SECRET_ENV = /KEY|TOKEN|SECRET|PASSWORD|PASSWD|PASSPHRASE|CREDENTIAL/i;
 const QUERY = /([?&;])([A-Za-z0-9_.-]{1,64})=([^&#\s"'<>]*)/g;
 const AUTH_SCHEME = /\b(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]{1,4096}/gi;
+/** `NAME=value`, `name: value`, `"name": "value"`: a name that says secret, then its value. */
 const ASSIGNMENT =
-  /\b([A-Za-z0-9_.-]{0,40}(?:KEY|SECRET|TOKEN|PASSWORD|PASSWD|PASSPHRASE)[A-Za-z0-9_.-]{0,40})\s*[=:]\s*("[^"]{0,4096}"|'[^']{0,4096}'|[^\s,;]{1,4096})/gi;
+  /\b([A-Za-z0-9_.-]{0,40}(?:KEY|SECRET|TOKEN|PASSWORD|PASSWD|PASSPHRASE)[A-Za-z0-9_.-]{0,40})(["']?)\s*[=:]\s*("[^"]{0,4096}"|'[^']{0,4096}'|[^\s,;]{1,4096})/gi;
+/** The credentials of a URL, `user:password` between `scheme://` and `@`: the user goes too, it often names a person. */
+const USERINFO = /\b([a-z][a-z0-9+.-]{0,20}:\/\/)[^\s/:@]{0,256}:[^\s/@]{1,1024}@/gi;
+/** A word made only of key characters (base64, base64url, hex): a key cut by `/` is still one key. */
+const OPAQUE = /^[A-Za-z0-9+/=_.-]+$/;
+/** A long run of hexadecimal digits: a key or a seed; the scanner's entropy rule cannot see it (4 bits a character). */
+const HEX_RUN = /[0-9a-fA-F]{32,}/;
 /** What the scanner calls a word: a run without whitespace. Inside one, these split the pieces we look at again. */
 const SPACES = /(\s+)/;
-const PIECES = /(["'`,;()<>[\]{}|=:@])/;
+const PIECES = /(["'`,;()<>[\]{}|=:@?&#/\\])/;
 const PATH_PARTS = /([/\\])/;
+/** Where a real path starts: `/`, `~/`, `./`, a drive letter, or `file://`. */
+const PATH_START = /^(?:file:\/\/\/?|~[/\\]|\.{1,2}[/\\]|\/|[A-Za-z]:[/\\])/;
+/** How a real path ends: a file name with its extension, maybe a line and a column (`drop.mjs:12:3`). */
+const PATH_END = /^[\w@+~-]*\.[A-Za-z0-9]{1,10}(?::\d+){0,2}$/;
 
 export interface RedactOptions {
   /** Exact values to remove wherever they appear: the local token, secret environment values. */
@@ -83,21 +96,35 @@ function marker(word: string): string {
   return `[expurgé #${createHash('sha256').update(word, 'utf8').digest('hex').slice(0, 8)}]`;
 }
 
-const flagged = (value: unknown): boolean => scanSecrets(value).length > 0;
+function hasHexRun(value: unknown, depth = 0): boolean {
+  if (typeof value === 'string') return HEX_RUN.test(value);
+  if (typeof value !== 'object' || value === null || depth > 8) return false;
+  return Object.entries(value).some(([key, item]) => HEX_RUN.test(key) || hasHexRun(item, depth + 1));
+}
+
+/** The scanner of the runner, plus long hexadecimal runs: what no log line may hold (T4.37, review of PR #82). */
+export function logKinds(value: unknown): string[] {
+  const kinds = scanSecrets(value);
+  return hasHexRun(value) ? [...kinds, 'hex_run'] : kinds;
+}
+
+const flagged = (value: unknown): boolean => logKinds(value).length > 0;
+
+/** A real path, whose end may be kept: it starts like a path and ends with a file name. */
+function realPath(word: string): boolean {
+  const body = word.replace(/^[(["'`<{]+/, '').replace(/[)\]"'`>},;.]+$/, '');
+  const last = body.split(PATH_PARTS).pop() ?? '';
+  return PATH_START.test(body) && PATH_END.test(last);
+}
 
 /**
- * A path the scanner takes for a secret, often only because it is long and varied: a part that is itself a secret
- * becomes a marker, then the longest end of the path the scanner accepts is kept (`…/Resources/drop.mjs:12:3`).
+ * A real path the scanner takes for a secret, only because it is long and varied: the longest end the scanner accepts
+ * is kept (`…/Resources/drop.mjs:12:3`). Any other word is replaced whole: an ending of a key is still part of the key.
  */
-function redactPath(word: string): string {
+function keepPathEnd(word: string): string {
   // An opening bracket or quote stays in front: `(…/drop.mjs:12:3)`.
   const lead = /^[(["'`<{]*/.exec(word)?.[0] ?? '';
-  const parts = word
-    .slice(lead.length)
-    .split(PATH_PARTS)
-    .map((part) => (part.length >= 5 && flagged(part) ? marker(part) : part));
-  const joined = lead + parts.join('');
-  if (!flagged(joined)) return joined;
+  const parts = word.slice(lead.length).split(PATH_PARTS);
   let kept: string | undefined;
   for (let start = parts.length - 1; start >= 0; start -= 1) {
     const part = parts[start] ?? '';
@@ -109,15 +136,17 @@ function redactPath(word: string): string {
   return kept ?? marker(word);
 }
 
-/** One word as the scanner sees it: kept if clean, else its secret pieces replaced, else replaced whole. */
+/** One word as the scanner sees it: kept if clean, else its secret pieces replaced, else a real path's end, else whole. */
 function redactWord(word: string): string {
   if (word.length < 5 || !flagged(word)) return word;
-  if (PATH_PARTS.test(word)) return redactPath(word);
+  const core = word.replace(/^[(["'`<{]+/, '').replace(/[)\]"'`>},;:]+$/, '');
+  if (OPAQUE.test(core) && !realPath(word)) return marker(word);
   const refined = word
     .split(PIECES)
     .map((piece, index) => (index % 2 === 1 || piece.length < 5 || !flagged(piece) ? piece : marker(piece)))
     .join('');
-  return flagged(refined) ? marker(word) : refined;
+  if (!flagged(refined)) return refined;
+  return realPath(word) && refined === word ? keepPathEnd(word) : marker(word);
 }
 
 function cut(text: string, maxBytes: number): string {
@@ -138,11 +167,12 @@ export function redactText(text: string, options: RedactOptions = {}): string {
   for (const value of known) out = replaceAll(out, value, REDACTED);
   const home = options.home;
   if (home && home.length > 1 && home !== '/' && home !== '\\') out = replaceAll(out, home, '~');
+  out = out.replace(USERINFO, (_whole, scheme: string) => `${scheme}${REDACTED}@`);
   out = out.replace(QUERY, (whole, separator: string, name: string) =>
     SECRET_NAME.test(name) || SECRET_PARAM.test(name) ? `${separator}${name}${REDACTED}` : whole,
   );
   out = out.replace(AUTH_SCHEME, (_whole, scheme: string) => `${scheme} ${REDACTED}`);
-  out = out.replace(ASSIGNMENT, (_whole, name: string) => `${name} ${REDACTED}`);
+  out = out.replace(ASSIGNMENT, (_whole, name: string, quote: string) => `${name}${quote} ${REDACTED}`);
   return out
     .split(SPACES)
     .map((word, index) => (index % 2 === 1 ? word : redactWord(word)))
@@ -180,7 +210,7 @@ export function jsonObject(line: string): Record<string, unknown> | undefined {
  * form has no space, so the whole line would read as one long word), any other line as text.
  */
 export function scanLogLine(line: string): string[] {
-  return scanSecrets(jsonObject(line) ?? line);
+  return logKinds(jsonObject(line) ?? line);
 }
 
 const LABEL = /^[A-Za-z0-9_.:-]{1,64}$/;
@@ -222,7 +252,7 @@ export function redactLogLineDetailed(line: string, options: RedactOptions = {})
   const parsed = line.length <= 8 * max ? jsonObject(line) : undefined;
   if (parsed) {
     const redacted = redactValue(parsed, options, 0) as Record<string, unknown>;
-    const kinds = scanSecrets(redacted);
+    const kinds = logKinds(redacted);
     if (kinds.length > 0) return replacedLine(parsed, kinds, options);
     const out = JSON.stringify(redacted);
     if (Buffer.byteLength(out, 'utf8') <= max) return { line: out, replaced: false };
@@ -241,7 +271,7 @@ export function redactLogLineDetailed(line: string, options: RedactOptions = {})
     };
   }
   const out = cut(redactText(cut(line, max), options), max);
-  const kinds = scanSecrets(out);
+  const kinds = logKinds(out);
   return kinds.length > 0 ? replacedLine(undefined, kinds, options) : { line: out, replaced: false };
 }
 
@@ -330,11 +360,15 @@ function firstLine(path: string): string {
 
 /** The lines in the last `bytes` of a file; a partial first line is dropped. */
 export function lastLines(path: string, bytes: number): string[] {
-  const size = statSync(path).size;
-  const start = Math.max(0, size - bytes);
-  const buffer = Buffer.alloc(size - start);
-  const fd = openSync(path, 'r');
+  // A log that is a link could point at any file of the user: never read through it.
+  if (lstatSync(path).isSymbolicLink()) throw new Error('E_LOG log is a symbolic link');
+  const fd = openSync(path, fsConstants.O_RDONLY | NOFOLLOW);
+  let buffer: Buffer;
+  let start: number;
   try {
+    const size = fstatSync(fd).size;
+    start = Math.max(0, size - bytes);
+    buffer = Buffer.alloc(size - start);
     readSync(fd, buffer, 0, buffer.length, start);
   } finally {
     closeSync(fd);
@@ -342,6 +376,35 @@ export function lastLines(path: string, bytes: number): string[] {
   const lines = buffer.toString('utf8').split('\n');
   if (start > 0) lines.shift();
   return lines.map((line) => line.replace(/\r$/, '')).filter((line) => line.trim() !== '');
+}
+
+/** O_NOFOLLOW where the system has it (not on Windows): a link planted in place of a log is refused, not followed. */
+const NOFOLLOW = (fsConstants as Partial<typeof fsConstants>).O_NOFOLLOW ?? 0;
+
+/** True when a path exists and is a symbolic link. */
+function isLink(path: string): boolean {
+  try {
+    return lstatSync(path).isSymbolicLink();
+  } catch {
+    return false;
+  }
+}
+
+/** Opens a log to append, never through a link. */
+function openAppend(path: string): number {
+  if (isLink(path)) throw new Error('E_LOG log is a symbolic link');
+  return openSync(path, fsConstants.O_WRONLY | fsConstants.O_APPEND | fsConstants.O_CREAT | NOFOLLOW, 0o600);
+}
+
+/** Writes all of `text`, or throws: a short write never passes for a complete one. */
+function writeAll(fd: number, text: string): void {
+  const buffer = Buffer.from(text, 'utf8');
+  let offset = 0;
+  while (offset < buffer.length) {
+    const written = writeSync(fd, buffer, offset, buffer.length - offset);
+    if (written <= 0) throw new Error('E_LOG short write');
+    offset += written;
+  }
 }
 
 function tighten(path: string, mode: number): void {
@@ -376,27 +439,31 @@ export class DaemonLog {
   /** Opens the file for this run: moves a pre-T4.37 log in, deletes stale files, turns over if due, writes the header. */
   start(): void {
     mkdirSync(this.dir, { recursive: true, mode: 0o700 });
+    if (isLink(this.dir)) throw new Error('E_LOG logs folder is a symbolic link');
     tighten(this.dir, 0o700);
     this.moveLegacy();
     this.purge();
-    if (existsSync(this.path)) {
+    if (existsSync(this.path) && !isLink(this.path)) {
       const size = statSync(this.path).size;
       if (size > 0 && (size >= this.limits.maxBytes || this.now() - startedAt(this.path) > this.limits.rotateAfterMs))
         this.shift();
     }
-    this.open();
+    if (!this.tryOpen())
+      this.raw(JSON.stringify({ at: new Date(this.now()).toISOString(), event: 'log_unwritable', code: 'E_LOG' }));
     this.append(systemHeader(this.options.header, 'start', this.now()));
   }
 
   /** Writes one line, redacted first, turning the file over before it grows too big or too old. */
   write(line: string): void {
     const redacted = redactLogLine(line, this.redaction());
+    const now = this.now();
+    // After a failed open, try again once a minute rather than giving up for the whole run.
+    if (this.fd === undefined && now >= this.retryAt) this.tryOpen();
     if (this.fd === undefined) {
       this.options.fallback?.(redacted);
       return;
     }
     const bytes = Buffer.byteLength(redacted, 'utf8') + 1;
-    const now = this.now();
     if (
       now >= this.retryAt &&
       this.size > 0 &&
@@ -406,12 +473,15 @@ export class DaemonLog {
     this.raw(redacted);
   }
 
+  /** Closes the file; a failure to close never reaches the daemon's write. */
   close(): void {
     if (this.fd === undefined) return;
+    const fd = this.fd;
+    this.fd = undefined;
     try {
-      closeSync(this.fd);
-    } finally {
-      this.fd = undefined;
+      closeSync(fd);
+    } catch {
+      // Already closed or lost: nothing left to flush, the next open starts afresh.
     }
   }
 
@@ -429,17 +499,30 @@ export class DaemonLog {
       return;
     }
     try {
-      this.size += writeSync(this.fd, line + '\n');
+      writeAll(this.fd, line + '\n');
+      this.size += Buffer.byteLength(line, 'utf8') + 1;
     } catch {
       this.options.fallback?.(line);
     }
   }
 
   private open(): void {
-    this.fd = openSync(this.path, 'a', 0o600);
+    this.fd = openAppend(this.path);
     tighten(this.path, 0o600);
     this.size = fstatSync(this.fd).size;
     this.started = this.size > 0 ? startedAt(this.path) : this.now();
+  }
+
+  /** Opens the file, or leaves the log on its fallback until the next attempt, a minute later. */
+  private tryOpen(): boolean {
+    try {
+      this.open();
+      return true;
+    } catch {
+      this.close();
+      this.retryAt = this.now() + 60_000;
+      return false;
+    }
   }
 
   /** daemon.log → .1 → … → .<keep>, the oldest deleted; false when the system refused a rename. */
@@ -459,13 +542,8 @@ export class DaemonLog {
   private rotate(): void {
     this.close();
     const shifted = this.shift();
-    try {
-      this.open();
-    } catch {
-      // The file cannot be reopened (disk, rights): lines go to the fallback rather than throw into the daemon.
-      this.fd = undefined;
-      return;
-    }
+    // The file cannot be reopened (disk, rights, a link): lines go to the fallback, and the open is retried later.
+    if (!this.tryOpen()) return;
     if (shifted) {
       this.append(systemHeader(this.options.header, 'rotate', this.now()));
       return;
@@ -476,26 +554,42 @@ export class DaemonLog {
 
   /**
    * Logs from before T4.37 (DROP_HOME/daemon.log, DROP_HOME/app.log) were written without this redaction: their last
-   * 256 KiB move into the logs folder as `<name>.legacy`, redacted line by line, so that everything in the folder the
-   * owner may open or send has been redacted. The originals are then removed.
+   * 256 KiB move into the logs folder as `<name>.legacy`, redacted line by line, through a new file renamed into place,
+   * so that everything in the folder the owner may open or send has been redacted. The original is removed only once
+   * its copy is complete; a link is never read nor written through.
    */
   private moveLegacy(): void {
     for (const name of [DAEMON_LOG, APP_LOG]) {
       const legacy = join(this.options.root, name);
       try {
-        if (!existsSync(legacy) || !statSync(legacy).isFile()) continue;
-        const target = join(this.dir, `${name}.legacy`);
+        const info = lstatSync(legacy);
+        if (!info.isFile()) continue;
+      } catch {
+        continue;
+      }
+      const target = join(this.dir, `${name}.legacy`);
+      const temporary = `${target}.${String(process.pid)}.tmp`;
+      try {
         const lines = lastLines(legacy, 256 * 1024).map((line) => redactLogLine(line, this.redaction()));
-        const fd = openSync(target, 'w', 0o600);
+        const fd = openSync(
+          temporary,
+          fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConstants.O_EXCL | NOFOLLOW,
+          0o600,
+        );
         try {
-          writeSync(fd, lines.map((line) => line + '\n').join(''));
+          writeAll(fd, lines.map((line) => line + '\n').join(''));
         } finally {
           closeSync(fd);
         }
-        tighten(target, 0o600);
+        renameSync(temporary, target);
         unlinkSync(legacy);
       } catch {
         // Left where it was: the next start tries again.
+        try {
+          unlinkSync(temporary);
+        } catch {
+          // Never created.
+        }
       }
     }
   }

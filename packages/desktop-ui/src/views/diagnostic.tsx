@@ -50,7 +50,8 @@ export function DiagnosticView({ data, busy, act }: ViewProps) {
         <CardContent className="px-6 py-6">
           <h2 className="text-[15px] font-semibold tracking-[-.025em]">Journaux</h2>
           <p className="mt-1 text-[12px] text-muted-foreground">
-            Ce dossier ne contient que les journaux de drop, déjà expurgés : ni clé, ni jeton.
+            Ce dossier ne contient que les journaux de drop, expurgés à l’écriture. L’expurgation ne reconnaît pas tout
+            : relis-les avant de les envoyer.
           </p>
           <p className="mt-3 rounded-lg bg-muted px-3 py-2 font-mono text-[12px] break-all select-all">
             {logDir || 'Chemin inconnu'}

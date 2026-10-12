@@ -156,11 +156,33 @@ fn logs_dir() -> PathBuf {
 const APP_LOG_MAX_BYTES: u64 = 1024 * 1024;
 /// A raw line of the daemon is cut at this many characters.
 const MAX_STRAY_CHARS: usize = 2000;
+/// At most this many bytes of one raw line are read; the rest of the line is skipped, never held in memory.
+const MAX_STRAY_LINE_BYTES: usize = 8 * 1024;
+/// The node turns daemon.log over at 2 MiB: past this size it no longer does, and the shell stops adding to it.
+const MAX_SHELL_DAEMON_LOG_BYTES: u64 = 8 * 1024 * 1024;
+/// Names whose value is a secret, lower case: `name=value`, `name: value`, `"name": "value"`.
+const SECRET_NAMES: [&str; 10] = [
+    "key",
+    "token",
+    "secret",
+    "password",
+    "passwd",
+    "passphrase",
+    "authorization",
+    "cookie",
+    "credential",
+    "seed",
+];
 
-/// Creates the logs folder, for the owner only on macOS and Linux.
+/// Creates the logs folder, for the owner only on macOS and Linux; a link in its place is refused.
 fn ensure_logs_dir() -> std::io::Result<PathBuf> {
     let dir = logs_dir();
     fs::create_dir_all(&dir)?;
+    if fs::symlink_metadata(&dir)?.file_type().is_symlink() {
+        return Err(std::io::Error::other(
+            "E_LOG logs folder is a symbolic link",
+        ));
+    }
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -169,8 +191,12 @@ fn ensure_logs_dir() -> std::io::Result<PathBuf> {
     Ok(dir)
 }
 
-/// Opens a log to append, never to empty it; a new file is for the owner only on macOS and Linux.
+/// Opens a log to append, never to empty it and never through a link; a new file is for the owner only on macOS and
+/// Linux.
 fn open_append(path: &Path) -> std::io::Result<fs::File> {
+    if fs::symlink_metadata(path).is_ok_and(|meta| meta.file_type().is_symlink()) {
+        return Err(std::io::Error::other("E_LOG log is a symbolic link"));
+    }
     let mut options = fs::OpenOptions::new();
     options.create(true).append(true);
     #[cfg(unix)]
@@ -183,7 +209,9 @@ fn open_append(path: &Path) -> std::io::Result<fs::File> {
 
 /// Appends a line; past `cap` bytes the file first becomes `<name>.1`, replacing the previous one.
 fn append_capped(path: &Path, line: &str, cap: u64) -> std::io::Result<()> {
-    let size = fs::metadata(path).map(|meta| meta.len()).unwrap_or(0);
+    let size = fs::symlink_metadata(path)
+        .map(|meta| meta.len())
+        .unwrap_or(0);
     if size > 0 && size + line.len() as u64 + 1 > cap {
         let mut previous = path.as_os_str().to_owned();
         previous.push(".1");
@@ -194,6 +222,49 @@ fn append_capped(path: &Path, line: &str, cap: u64) -> std::io::Result<()> {
     writeln!(file, "{line}")
 }
 
+/// Appends a raw line of the daemon to daemon.log, unless the file is past `cap` (the node no longer turns it over):
+/// `Ok(false)` then, and nothing is written.
+fn append_stray(path: &Path, line: &str, cap: u64) -> std::io::Result<bool> {
+    let size = fs::symlink_metadata(path)
+        .map(|meta| meta.len())
+        .unwrap_or(0);
+    if size >= cap {
+        return Ok(false);
+    }
+    let mut file = open_append(path)?;
+    writeln!(file, "{line}")?;
+    Ok(true)
+}
+
+/// Reads one line of at most `max` bytes, without its newline; the rest of a longer line is read and dropped.
+/// `None` at the end of the stream.
+fn read_capped_line<R: BufRead>(reader: &mut R, max: usize) -> std::io::Result<Option<Vec<u8>>> {
+    let mut line = Vec::new();
+    let mut seen = false;
+    loop {
+        let available = match reader.fill_buf() {
+            Ok(bytes) => bytes,
+            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(error) => return Err(error),
+        };
+        if available.is_empty() {
+            return Ok(seen.then_some(line));
+        }
+        seen = true;
+        let (used, done) = match available.iter().position(|byte| *byte == b'\n') {
+            Some(index) => (index + 1, true),
+            None => (available.len(), false),
+        };
+        let content = if done { used - 1 } else { used };
+        let room = max.saturating_sub(line.len());
+        line.extend_from_slice(&available[..content.min(room)]);
+        reader.consume(used);
+        if done {
+            return Ok(Some(line));
+        }
+    }
+}
+
 /// The local token, removed from every line the shell writes.
 fn local_token() -> Option<String> {
     let token = fs::read_to_string(drop_home().join("local-token")).ok()?;
@@ -202,9 +273,11 @@ fn local_token() -> Option<String> {
 }
 
 /// The shell's own redaction, for what reaches a log without the node's (T4.37): the daemon's raw stderr (the runtime
-/// failing before or outside JavaScript) and the app's errors. Coarser than the node's: the local token, a line with a
-/// key header, `NAME=value` with a secret name, words starting like a known key, and any long word of letters and
-/// digits without a path separator. The diagnostic redacts again with the full scanner of the node.
+/// failing before or outside JavaScript) and the app's errors. The node's rules, checked against the same vectors
+/// (test/fixtures/log-redaction-vectors.json): the local token, a line with a key header, URL credentials, the value
+/// after a secret name (`name=`, `name:`, `"name":`, also as the next word), after `Bearer` or `Basic`, runs of 32
+/// hexadecimal digits, words starting like a known key, and any long word of key characters that is not a real path.
+/// The diagnostic redacts again with the node's full scanner.
 fn redact_stray(line: &str, token: Option<&str>) -> String {
     let mut text: String = line.chars().take(MAX_STRAY_CHARS).collect();
     if text.contains("PRIVATE KEY") {
@@ -213,23 +286,147 @@ fn redact_stray(line: &str, token: Option<&str>) -> String {
     if let Some(token) = token.filter(|token| token.len() >= 8) {
         text = text.replace(token, "[expurgé]");
     }
-    text.split(' ')
-        .map(redact_stray_word)
-        .collect::<Vec<_>>()
-        .join(" ")
-}
-
-fn redact_stray_word(word: &str) -> String {
-    if let Some((name, _)) = word.split_once('=') {
-        let upper = name.to_ascii_uppercase();
-        if ["KEY", "TOKEN", "SECRET", "PASSWORD", "PASSPHRASE"]
-            .iter()
-            .any(|secret| upper.contains(secret))
-        {
-            return format!("{name} [expurgé]");
+    let text = redact_userinfo(&text);
+    let mut out = String::with_capacity(text.len());
+    let mut word = String::new();
+    let mut mask_next = false;
+    for c in text.chars() {
+        if c.is_whitespace() {
+            if !word.is_empty() {
+                out.push_str(&redact_stray_word(&word, &mut mask_next));
+                word.clear();
+            }
+            out.push(c);
+        } else {
+            word.push(c);
         }
     }
-    let core = word.trim_matches(|c: char| !c.is_ascii_alphanumeric());
+    if !word.is_empty() {
+        out.push_str(&redact_stray_word(&word, &mut mask_next));
+    }
+    out
+}
+
+/// `scheme://user:password@host` becomes `scheme://[expurgé]@host`.
+fn redact_userinfo(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(index) = rest.find("://") {
+        let (head, tail) = rest.split_at(index + 3);
+        out.push_str(head);
+        let end = tail
+            .find(|c: char| c == '/' || c.is_whitespace())
+            .unwrap_or(tail.len());
+        match tail[..end].rfind('@') {
+            Some(at) if tail[..at].contains(':') => {
+                out.push_str("[expurgé]");
+                rest = &tail[at..];
+            }
+            _ => rest = tail,
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
+/// Where a secret name followed by `=` or `:` (maybe after a quote) ends in `word`: the value starts there.
+fn secret_value_start(word: &str) -> Option<usize> {
+    let lower = word.to_ascii_lowercase();
+    SECRET_NAMES
+        .iter()
+        .filter_map(|name| {
+            lower.match_indices(name).find_map(|(index, _)| {
+                let mut end = index + name.len();
+                if matches!(lower.as_bytes().get(end), Some(b'"' | b'\'')) {
+                    end += 1;
+                }
+                matches!(lower.as_bytes().get(end), Some(b'=' | b':')).then_some(end + 1)
+            })
+        })
+        .min()
+}
+
+/// Runs of 32 hexadecimal digits or more, replaced where they are; the rest of the word stays.
+fn redact_hex_runs(word: &str) -> String {
+    let mut out = String::with_capacity(word.len());
+    let mut run = String::new();
+    for c in word.chars() {
+        if c.is_ascii_hexdigit() {
+            run.push(c);
+            continue;
+        }
+        out.push_str(if run.len() >= 32 { "[expurgé]" } else { &run });
+        run.clear();
+        out.push(c);
+    }
+    out.push_str(if run.len() >= 32 { "[expurgé]" } else { &run });
+    out
+}
+
+/// A real path, whose words are kept: it starts like a path and ends with a file name, maybe a line and a column.
+fn real_path(core: &str) -> bool {
+    let bytes = core.as_bytes();
+    let starts = core.starts_with('/')
+        || core.starts_with("~/")
+        || core.starts_with("./")
+        || core.starts_with("../")
+        || core.starts_with("file://")
+        || (bytes.len() > 2
+            && bytes[0].is_ascii_alphabetic()
+            && bytes[1] == b':'
+            && matches!(bytes[2], b'/' | b'\\'));
+    let last = core.rsplit(['/', '\\']).next().unwrap_or("");
+    let name = last.split(':').next().unwrap_or("");
+    let position_ok = last
+        .split(':')
+        .skip(1)
+        .all(|part| !part.is_empty() && part.bytes().all(|b| b.is_ascii_digit()));
+    starts
+        && position_ok
+        && name.contains('.')
+        && name
+            .rsplit('.')
+            .next()
+            .is_some_and(|ext| !ext.is_empty() && ext.len() <= 10)
+}
+
+/// A UUID (8-4-4-4-12 hexadecimal): an identifier the logs keep, not a key.
+fn is_uuid(core: &str) -> bool {
+    let parts: Vec<&str> = core.split('-').collect();
+    parts.len() == 5
+        && parts
+            .iter()
+            .zip([8, 4, 4, 4, 12])
+            .all(|(part, len)| part.len() == len && part.bytes().all(|b| b.is_ascii_hexdigit()))
+}
+
+/// One word of a raw line; `mask_next` carries a secret name or an auth scheme over to the next word.
+fn redact_stray_word(word: &str, mask_next: &mut bool) -> String {
+    let scheme = matches!(word.to_ascii_lowercase().as_str(), "bearer" | "basic");
+    if *mask_next {
+        // `Authorization: Bearer <value>`: the scheme stays, its value goes.
+        if scheme {
+            return word.to_string();
+        }
+        *mask_next = false;
+        return "[expurgé]".to_string();
+    }
+    if scheme {
+        *mask_next = true;
+        return word.to_string();
+    }
+    if let Some(start) = secret_value_start(word) {
+        let value = word[start..].trim_matches(|c: char| matches!(c, '"' | '\'' | '}' | ',' | ';'));
+        if value.is_empty() {
+            *mask_next = true;
+            return word.to_string();
+        }
+        // The name stays, without its `=` or `:`, so the line never reads as an assignment again.
+        return format!("{} [expurgé]", &word[..start - 1]);
+    }
+    let word = redact_hex_runs(word);
+    let core =
+        word.trim_matches(|c: char| !c.is_ascii_alphanumeric() && !matches!(c, '/' | '~' | '.'));
     let known_prefix = core.len() >= 20
         && [
             "sk-", "ghp_", "gho_", "ghs_", "ghu_", "ghr_", "xox", "AKIA", "eyJ",
@@ -241,11 +438,13 @@ fn redact_stray_word(word: &str) -> String {
         && core.chars().any(|c| c.is_ascii_alphabetic())
         && core
             .chars()
-            .all(|c| c.is_ascii_alphanumeric() || "-_+=.".contains(c));
+            .all(|c| c.is_ascii_alphanumeric() || "-_+=./".contains(c))
+        && !real_path(core)
+        && !is_uuid(core);
     if known_prefix || key_like {
         "[expurgé]".to_string()
     } else {
-        word.to_string()
+        word
     }
 }
 
@@ -263,11 +462,14 @@ fn log_error(code: &str, detail: &str) {
 }
 
 /// What the daemon writes on stderr outside its own log (with DROP_LOG=file, only what the runtime prints before or
-/// outside JavaScript) reaches daemon.log as JSON, after the shell's redaction. The node turns that file over: each
-/// line opens the file by its path, so it follows a rotation.
+/// outside JavaScript) reaches daemon.log as JSON, after the shell's redaction, each line read up to 8 KiB. The node
+/// turns that file over: each line opens the file by its path, so it follows a rotation. Past 8 MiB (the node no longer
+/// turns it over) the shell stops adding, and says so once in app.log.
 fn capture_stderr(stderr: ChildStderr) {
     thread::spawn(move || {
-        for raw in BufReader::new(stderr).split(b'\n').map_while(Result::ok) {
+        let mut reader = BufReader::new(stderr);
+        let mut full_reported = false;
+        while let Ok(Some(raw)) = read_capped_line(&mut reader, MAX_STRAY_LINE_BYTES) {
             let text = String::from_utf8_lossy(&raw);
             let text = text.trim_end_matches('\r');
             if text.trim().is_empty() {
@@ -279,10 +481,21 @@ fn capture_stderr(stderr: ChildStderr) {
                 .unwrap_or(0);
             let line = redact_stray(text, local_token().as_deref());
             let entry = serde_json::json!({ "at": at, "event": "daemon_stderr", "line": line });
-            let written = open_append(&logs_dir().join("daemon.log"))
-                .and_then(|mut file| writeln!(file, "{entry}"));
-            if written.is_err() {
-                log_error("E_LOG", "daemon stderr line not written");
+            match append_stray(
+                &logs_dir().join("daemon.log"),
+                &entry.to_string(),
+                MAX_SHELL_DAEMON_LOG_BYTES,
+            ) {
+                Ok(true) => full_reported = false,
+                Ok(false) if !full_reported => {
+                    full_reported = true;
+                    log_error(
+                        "E_LOG",
+                        "daemon.log past its limit, daemon stderr lines dropped",
+                    );
+                }
+                Ok(false) => {}
+                Err(_) => log_error("E_LOG", "daemon stderr line not written"),
             }
         }
     });
@@ -1207,9 +1420,78 @@ mod tests {
         let header = format!("-----BEGIN {} KEY----- abc", "RSA PRIVATE");
         assert_eq!(redact_stray(&header, None), "[ligne expurgée]");
         assert_eq!(
-            redact_stray(&"a".repeat(5000), None).chars().count(),
+            redact_stray(&"z".repeat(5000), None).chars().count(),
             MAX_STRAY_CHARS
         );
+    }
+
+    #[test]
+    fn redact_stray_follows_the_shared_vectors() {
+        // The same vectors as the node's redaction (packages/node/test/daemon-log.test.ts).
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../test/fixtures/log-redaction-vectors.json"
+        ))
+        .expect("vectors");
+        let vectors = fixture["vectors"].as_array().expect("vector list");
+        assert!(vectors.len() >= 18);
+        for vector in vectors {
+            let name = vector["name"].as_str().expect("name");
+            let out = redact_stray(vector["input"].as_str().expect("input"), None);
+            for secret in vector["absent"].as_array().expect("absent") {
+                let secret = secret.as_str().expect("secret");
+                assert!(!out.contains(secret), "{name}: {secret} in {out}");
+            }
+            for kept in vector["present"].as_array().expect("present") {
+                let kept = kept.as_str().expect("kept");
+                assert!(out.contains(kept), "{name}: {kept} missing from {out}");
+            }
+        }
+    }
+
+    #[test]
+    fn read_capped_line_keeps_memory_bounded() {
+        let long = "x".repeat(100_000);
+        let input = format!("{long}\nshort\r\nlast");
+        let mut reader = std::io::Cursor::new(input.into_bytes());
+        let first = read_capped_line(&mut reader, 16)
+            .expect("read")
+            .expect("line");
+        assert_eq!(first, b"x".repeat(16));
+        assert_eq!(
+            read_capped_line(&mut reader, 16)
+                .expect("read")
+                .expect("line"),
+            b"short\r"
+        );
+        assert_eq!(
+            read_capped_line(&mut reader, 16)
+                .expect("read")
+                .expect("line"),
+            b"last"
+        );
+        assert!(read_capped_line(&mut reader, 16).expect("read").is_none());
+    }
+
+    #[test]
+    fn append_stray_stops_past_its_cap_and_never_follows_a_link() {
+        let dir = std::env::temp_dir().join(format!("drop-stray-log-{}", instance_marker()));
+        fs::create_dir_all(&dir).expect("test folder");
+        let path = dir.join("daemon.log");
+        assert!(append_stray(&path, "one", 8).expect("first"));
+        assert!(append_stray(&path, "two", 8).expect("second"));
+        assert!(!append_stray(&path, "three", 8).expect("past the cap"));
+        assert_eq!(fs::read_to_string(&path).expect("log"), "one\ntwo\n");
+        #[cfg(unix)]
+        {
+            let victim = dir.join("victim.txt");
+            fs::write(&victim, "untouched\n").expect("victim");
+            let link = dir.join("linked.log");
+            std::os::unix::fs::symlink(&victim, &link).expect("link");
+            assert!(append_stray(&link, "never", 1_000).is_err());
+            assert!(append_capped(&link, "never", 1_000).is_err());
+            assert_eq!(fs::read_to_string(&victim).expect("victim"), "untouched\n");
+        }
+        fs::remove_dir_all(&dir).expect("cleanup");
     }
 
     #[test]

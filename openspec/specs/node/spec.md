@@ -1400,7 +1400,7 @@ Chaque démarrage et chaque nouveau fichier SHALL commencer par un en-tête : ve
 - **THEN** la première ligne du fichier, et la première de chaque démarrage, donne versions, système, architecture, Node et profil, sans nom de machine ni d'utilisateur, dans un dossier `0700` et un fichier `0600`
 
 ### Requirement: Expurgation dans l'écriture du journal
-Chaque ligne écrite par le daemon, entrée de journal ou autre écriture sur sa sortie d'erreur, MUST être expurgée avant l'écriture : valeurs connues (jeton local, variables au nom de secret), valeurs des clés et paramètres d'URL au nom de secret, `Bearer`, puis chaque mot reconnu par le scanner de secrets, remplacé par une empreinte courte. Une ligne encore reconnue MUST être remplacée en entier.
+Chaque ligne écrite par le daemon MUST être expurgée avant l'écriture : valeurs connues (jeton, variables au nom de secret), valeurs au nom de secret, identifiants d'URL, `Bearer`, puis tout mot reconnu par le scanner ou portant 32 chiffres hexadécimaux, remplacé entier par une empreinte courte ; seule la fin d'un vrai chemin est gardée. Une ligne encore reconnue MUST être remplacée en entier.
 
 #### Scenario: AC: secret planté jamais écrit
 <!-- openspec-guard:test="daemon log (T4.37) > redacts patterns, key names and known values in the writing itself" -->

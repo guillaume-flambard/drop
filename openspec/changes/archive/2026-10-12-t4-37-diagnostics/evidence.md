@@ -35,3 +35,7 @@ Revue et revue de sécurité menées par l'agent sur le diff, en passe manuelle 
 ## Non vérifié
 
 App construite et lancée : copie dans WKWebView, WebView2 et WebKitGTK, ouverture du dossier par `open`, `explorer.exe` et `xdg-open`, page de démarrage en échec réel, plantage natif du runtime recueilli par la coque.
+
+## Corrections après la revue adverse de la PR #82
+
+Chaque point a son test de régression, en échec avant la correction : vecteurs partagés `test/fixtures/log-redaction-vectors.json` (Node : `daemon log redaction, review of PR #82 (T4.37) > redacts and keeps: …` ; coque : `redact_stray_follows_the_shared_vectors`), `never keeps the ending of a word that is not a real path`, `refuses to write through a symbolic link, for the log and for a moved legacy log`, `survives a failed close and a failed reopen, and reopens later`, `exports no ending of a key and no control or bidi character that could forge a section (review of PR #82)`, `read_capped_line_keeps_memory_bounded`, `append_stray_stops_past_its_cap_and_never_follows_a_link`. `keeps a legacy log when its redacted copy cannot be written` passait déjà ; il garde le comportement après le passage à l'écriture complète vérifiée.

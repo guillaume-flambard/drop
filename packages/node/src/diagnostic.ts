@@ -9,8 +9,16 @@ import { existsSync } from 'node:fs';
 import { arch, platform, release } from 'node:os';
 import { join } from 'node:path';
 import { DropError } from '@drop/protocol';
-import { scanSecrets } from '@drop/runner';
-import { APP_LOG, DAEMON_LOG, jsonObject, lastLines, logsDir, redactLogLineDetailed, redactText } from './logs.ts';
+import {
+  APP_LOG,
+  DAEMON_LOG,
+  jsonObject,
+  lastLines,
+  logKinds,
+  logsDir,
+  redactLogLineDetailed,
+  redactText,
+} from './logs.ts';
 import { ENGINE_VERSION } from './version.ts';
 
 /** What the daemon knows of its own state; nothing that names a person or a machine. */
@@ -50,7 +58,13 @@ const TAIL_BYTES = 256 * 1024;
 
 /** The last lines of a file, reading at most TAIL_BYTES from its end; none when it is missing. */
 function tail(path: string): string[] {
-  return existsSync(path) ? lastLines(path, TAIL_BYTES) : [];
+  if (!existsSync(path)) return [];
+  try {
+    return lastLines(path, TAIL_BYTES);
+  } catch {
+    // A log that is a link, or unreadable, is left out rather than followed.
+    return [`(${path.split(/[/\\]/).pop() ?? 'journal'} illisible, laissé de côté)`];
+  }
 }
 
 function value(item: unknown): string {
@@ -59,8 +73,39 @@ function value(item: unknown): string {
   return JSON.stringify(item);
 }
 
-/** A JSON log line as a person reads it: date, event and code first, then `name: value`, words separated by spaces. */
+/**
+ * Control and bidirectional characters, written `\uXXXX`: a decoded `\n` would start a forged section, an escape
+ * sequence would recolour a terminal, U+202E would reverse what the owner reads.
+ */
+function unsafe(code: number): boolean {
+  return (
+    code < 0x20 ||
+    (code >= 0x7f && code <= 0x9f) ||
+    code === 0x61c ||
+    code === 0x200e ||
+    code === 0x200f ||
+    code === 0x2028 ||
+    code === 0x2029 ||
+    (code >= 0x202a && code <= 0x202e) ||
+    (code >= 0x2066 && code <= 0x2069)
+  );
+}
+
+export function escapeUnsafe(text: string): string {
+  let out = '';
+  for (const char of text) {
+    const code = char.codePointAt(0) ?? 0;
+    out += unsafe(code) ? '\\u' + code.toString(16).padStart(4, '0') : char;
+  }
+  return out;
+}
+
 function readable(line: string): string {
+  return escapeUnsafe(readableRaw(line));
+}
+
+/** A JSON log line as a person reads it: date, event and code first, then `name: value`, words separated by spaces. */
+function readableRaw(line: string): string {
   const entry = jsonObject(line);
   if (!entry) return line;
   const { at, event, code, ...rest } = entry;
@@ -82,7 +127,7 @@ function section(raw: string[], keep: number, options: DiagnosticOptions): Secti
   for (const line of raw.slice(-keep)) {
     const redacted = redactLogLineDetailed(line, { known: options.known ?? [], home: options.home });
     const shown = redacted.replaced ? undefined : readable(redacted.line);
-    if (shown === undefined || scanSecrets(shown).length > 0) {
+    if (shown === undefined || logKinds(shown).length > 0) {
       removed += 1;
       continue;
     }
@@ -140,7 +185,7 @@ export function buildDiagnostic(options: DiagnosticOptions): Diagnostic {
     removedSentence(removed),
     '',
   ].join('\n');
-  if (scanSecrets(text).length > 0)
+  if (logKinds(text).length > 0)
     throw new DropError('E_SECRET_DETECTED', 'Le diagnostic ressemble encore à un secret : rien n’est affiché.');
   return { text, removed, logDir: dir, logPath };
 }
