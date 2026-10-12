@@ -20,5 +20,18 @@ marqueurs `openspec-guard`.
 
 ## 3. Preuve sous charge
 
-- [ ] 3.1 Suite complète répétée en local, et runs `test-windows` répétés sur la PR. **Vérification** : aucun échec
-      du fichier ; durées relevées ici.
+- [x] 3.1 Suite complète répétée en local, et runs `test-windows` répétés sur la PR. **Vérification** : aucun échec
+      du fichier. Fait le 12 octobre 2026 : 6 suites complètes sur 6 en local (macOS), purge en 2,3 à 2,7 s et
+      premier claim en 1,7 à 2,1 s sur les 5 runs chronométrés ; 5 runs `test-windows` sur 5 (run 38226733100, tentatives 1 à 5) :
+
+      | Tentative | Purge | Premier claim | Fichier |
+      | --- | --- | --- | --- |
+      | 1 | 3,4 s | 4,9 s | 8,7 s |
+      | 2 | 0,55 s | 0,47 s | 1,1 s |
+      | 3 | 0,63 s | 0,64 s | 1,4 s |
+      | 4 | 0,75 s | 0,73 s | 1,7 s |
+      | 5 | 2,4 s | 1,8 s | 4,7 s |
+
+      Les tentatives 1 et 5 sont des runners lents (0,5 à 0,7 s par itération) : à ce rythme, l'ancienne boucle de
+      12 itérations aurait pris 5,8 à 8,2 s (estimation), au-delà des 5 s. Les comptes Windows (4 et 6) sont
+      vérifiés par ces runs, puisque le test les exige.

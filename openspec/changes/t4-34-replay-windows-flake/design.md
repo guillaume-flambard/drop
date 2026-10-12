@@ -46,7 +46,9 @@ ce nombre à la constante du système, puis boucle exactement sur ce nombre.
 
 ## Risks / Trade-offs
 
-- **Comptes Windows déduits, pas mesurés en local** : aucun poste Windows ici. Les runs `test-windows` de la PR les
-  vérifient (le test échoue si le compte diffère).
+- **Comptes Windows déduits, pas mesurés en local** : aucun poste Windows ici. Les 5 runs `test-windows` de la PR
+  les ont vérifiés (le test échoue si le compte diffère).
+- **Le délai reste nécessaire** : à la tentative 1, le premier claim a pris 4,9 s avec ses 7 claims cassés ou de
+  référence, à 0,1 s du délai par défaut.
 - **Un runner encore plus lent** que le pire observé pourrait dépasser 20 s : ce serait un temps 10 fois supérieur à
   la médiane Windows. Si cela arrive, le message de vitest donnera la durée réelle.
