@@ -46,13 +46,13 @@ describe('the desktop build for macOS, Windows and Linux (T3.7, T3.8)', () => {
       expect(readConfig(file).bundle.resources).toEqual({ [`resources/${node}`]: node, [`resources/${iroh}`]: iroh });
     }
     expect(readConfig('tauri.macos.conf.json').bundle.targets).toEqual(['app', 'dmg']);
-    expect(readConfig('tauri.windows.conf.json').bundle.targets).toEqual(['nsis', 'msi']);
-    expect(readConfig('tauri.linux.conf.json').bundle.targets).toEqual(['appimage', 'deb']);
+    expect(readConfig('tauri.windows.conf.json').bundle.targets).toEqual(['nsis']);
+    expect(readConfig('tauri.linux.conf.json').bundle.targets).toEqual(['appimage']);
   });
 
   it('collects the installers of this version only, per platform', () => {
-    expect(installerKinds('windows').map((kind) => kind.suffix)).toEqual(['-setup.exe', '.msi']);
-    expect(installerKinds('linux').map((kind) => kind.suffix)).toEqual(['.AppImage', '.deb']);
+    expect(installerKinds('windows').map((kind) => kind.suffix)).toEqual(['-setup.exe']);
+    expect(installerKinds('linux').map((kind) => kind.suffix)).toEqual(['.AppImage']);
     const files = ['drop_0.0.9_x64-setup.exe', 'drop_0.1.0_x64-setup.exe', 'drop_0.1.0_x64_en-US.msi'];
     expect(findInstaller(files, '0.1.0', '-setup.exe')).toBe('drop_0.1.0_x64-setup.exe');
     expect(findInstaller(files, '0.1.0', '.msi')).toBe('drop_0.1.0_x64_en-US.msi');

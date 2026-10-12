@@ -7,13 +7,13 @@
 //                                      [--sign "Developer ID Application: …"] [--notary-profile <name>]
 //                                      [--updates] [--notes "…"]
 // - The build embeds the Node that runs this script, so it builds for this machine only: --platform, when given, must
-//   name it (the default). No cross build: MSI needs Windows and AppImage needs the target's architecture (Tauri docs).
+//   name it (the default). No cross build: NSIS needs Windows and AppImage needs the target's architecture (Tauri docs).
 // - Without --release the build is a debug build, for trials only.
 // - macOS --release is signed with a Developer ID and notarized (docs/RELEASE.md); --release --unsigned makes an
 //   optimised build signed ad hoc instead, what CI produces without Apple secrets.
 // - Windows --release is Authenticode-signed when WINDOWS_CERTIFICATE_THUMBPRINT names a certificate of the user's
 //   store (v2.tauri.app/distribute/sign/windows), unsigned otherwise. Linux packages are never signed.
-// - --updates (macOS only) signs with drop's update key and writes dist/updates/ (D70, scripts/mac-updates.ts).
+// - --updates signs platform-native updater bundles and writes one fragment per target to dist/updates/.
 // The installers and a manifest of their SHA-256 land in dist/desktop/.
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -30,7 +30,7 @@ import {
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { updateManifest, updatePlatform, updaterConfig } from './mac-updates.ts';
+import { desktopUpdaterConfig, updateBundle, updateFragment } from './desktop-updates.ts';
 
 export type DesktopPlatform = 'macos' | 'windows' | 'linux';
 
@@ -68,15 +68,9 @@ export function installerKinds(platform: DesktopPlatform): { dir: string; suffix
     case 'macos':
       return [{ dir: 'dmg', suffix: '.dmg' }];
     case 'windows':
-      return [
-        { dir: 'nsis', suffix: '-setup.exe' },
-        { dir: 'msi', suffix: '.msi' },
-      ];
+      return [{ dir: 'nsis', suffix: '-setup.exe' }];
     case 'linux':
-      return [
-        { dir: 'appimage', suffix: '.AppImage' },
-        { dir: 'deb', suffix: '.deb' },
-      ];
+      return [{ dir: 'appimage', suffix: '.AppImage' }];
   }
 }
 
@@ -210,7 +204,6 @@ function main(): void {
   const publicKeyPath = join(root, 'apps', 'desktop', 'updater.pub');
   const updates = args.includes('--updates');
   const notesIndex = args.indexOf('--notes');
-  if (updates && platform !== 'macos') throw new Error('E_UPDATE_PLATFORM: signed updates exist for macOS only (D70)');
   if (updates && !existsSync(publicKeyPath)) {
     throw new Error(`E_UPDATER_KEY: ${publicKeyPath} is missing, see docs/RELEASE.md`);
   }
@@ -266,7 +259,7 @@ function main(): void {
   // build is signed ad hoc: Apple silicon refuses to open an unsigned app downloaded from the Internet ("damaged"), while
   // an ad hoc one opens after the user allows it (v2.tauri.app/distribute/sign/macos, "Ad-Hoc Signing").
   const extraConfig = mergeConfig(
-    updates ? updaterConfig(readFileSync(publicKeyPath, 'utf8')) : undefined,
+    updates ? desktopUpdaterConfig(readFileSync(publicKeyPath, 'utf8')) : undefined,
     windowsSigning,
     platform === 'macos' && unsigned ? { bundle: { macOS: { signingIdentity: '-' } } } : undefined,
   );
@@ -358,19 +351,24 @@ function main(): void {
   );
 
   if (updates) {
-    const bundleDir = join(bundleRoot, 'macos');
-    const { manifest: update, artifact } = updateManifest({
+    const asset = updateBundle({ platform, arch, version: config.version, bundleRoot, installers });
+    if (!existsSync(asset.source) || !existsSync(asset.signaturePath)) {
+      throw new Error(`E_UPDATE_BUNDLE: Tauri did not sign ${asset.target} (${asset.source})`);
+    }
+    const fragment = updateFragment({
       version: config.version,
-      signature: readFileSync(join(bundleDir, 'drop.app.tar.gz.sig'), 'utf8'),
+      target: asset.target,
+      signature: readFileSync(asset.signaturePath, 'utf8'),
+      artifact: asset.artifact,
+      tag: process.env.DROP_RELEASE_TAG ?? `v${config.version}`,
       notes: notesIndex >= 0 ? (args[notesIndex + 1] ?? '') : '',
       pubDate: new Date(),
-      platform: updatePlatform(arch),
     });
     const updatesDir = join(root, 'dist', 'updates');
     mkdirSync(updatesDir, { recursive: true });
-    copyFileSync(join(bundleDir, 'drop.app.tar.gz'), join(updatesDir, artifact));
-    writeFileSync(join(updatesDir, 'latest.json'), `${JSON.stringify(update, null, 2)}\n`);
-    process.stdout.write(`update ${config.version} in ${updatesDir}: publish ${artifact} first, then latest.json\n`);
+    copyFileSync(asset.source, join(updatesDir, asset.artifact));
+    writeFileSync(join(updatesDir, `${asset.target}.json`), `${JSON.stringify(fragment, null, 2)}\n`);
+    process.stdout.write(`update ${config.version} (${asset.target}) ready in ${updatesDir}\n`);
   }
 }
 

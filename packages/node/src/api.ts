@@ -1,3 +1,4 @@
+import { canRestartForUpdate } from './update-readiness.ts';
 import { timingSafeEqual } from 'node:crypto';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { z } from 'zod';
@@ -496,6 +497,12 @@ export function startLocalApi(options: LocalApiOptions): Promise<LocalApi> {
     if (method === 'GET' && path === '/ui/inbox') {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
       res.end(renderInbox(engine.pending(), now()));
+      return;
+    }
+    // Shell-only maintenance decision: authenticated loopback and no outgoing/incoming work.
+    // The desktop refuses updates if this route is unavailable, rather than assuming idle.
+    if (method === 'GET' && path === '/_shell/update-ready' && options.shellInstance) {
+      json(res, 200, { ready: canRestartForUpdate(engine) });
       return;
     }
     if (method === 'GET' && path === '/ui/pending') {

@@ -21,6 +21,8 @@ on:
       - apps/desktop/**
       - crates/drop-iroh/**
       - scripts/build-desktop.ts
+      - scripts/desktop-updates.ts
+      - scripts/merge-desktop-updates.ts
       - scripts/build-mac.ts
       - scripts/desktop-smoke.ts
       - scripts/drop-iroh-notice.ts
@@ -76,6 +78,20 @@ jobs:
             echo "tag=$tag"
             echo "prerelease=$prerelease"
           } >> "$GITHUB_OUTPUT"
+      - name: Require signed update publishing on tagged/manual releases
+        if: github.event_name != 'pull_request'
+        env:
+          UPDATE_SIGNING: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' && secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD != '' }}
+        run: |
+          # No draft release may accidentally appear with unsigned updater artifacts.
+          if [ "$UPDATE_SIGNING" != true ]; then
+            echo '::error::Set both TAURI_SIGNING_PRIVATE_KEY and TAURI_SIGNING_PRIVATE_KEY_PASSWORD before creating a release.'
+            exit 1
+          fi
+          if [ ! -s apps/desktop/updater.pub ]; then
+            echo '::error::Missing apps/desktop/updater.pub; distribute the public key with every update-enabled installation.'
+            exit 1
+          fi
 
   build:
     name: build-${{ matrix.label }}
@@ -98,10 +114,11 @@ jobs:
       PLATFORM: ${{ matrix.platform }}
       # Signing runs only when every secret it needs exists; the values never reach a log.
       APPLE_SIGNING: >-
-        ${{ secrets.APPLE_CERTIFICATE != '' && secrets.APPLE_CERTIFICATE_PASSWORD != '' &&
+        ${{ github.event_name != 'pull_request' && secrets.APPLE_CERTIFICATE != '' && secrets.APPLE_CERTIFICATE_PASSWORD != '' &&
         secrets.APPLE_SIGNING_IDENTITY != '' && secrets.APPLE_API_ISSUER != '' && secrets.APPLE_API_KEY != '' &&
         secrets.APPLE_API_PRIVATE_KEY != '' }}
-      WINDOWS_SIGNING: ${{ secrets.WINDOWS_CERTIFICATE != '' && secrets.WINDOWS_CERTIFICATE_PASSWORD != '' }}
+      WINDOWS_SIGNING: ${{ github.event_name != 'pull_request' && secrets.WINDOWS_CERTIFICATE != '' && secrets.WINDOWS_CERTIFICATE_PASSWORD != '' }}
+      UPDATE_SIGNING: ${{ github.event_name != 'pull_request' && secrets.TAURI_SIGNING_PRIVATE_KEY != '' && secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD != '' }}
     defaults:
       run:
         shell: bash
@@ -137,6 +154,13 @@ jobs:
           rustup default stable
           rustc --version
       - run: pnpm install --frozen-lockfile
+
+      # PR builds exercise the real signed updater path without production keys.
+      - name: Prepare throwaway updater signing key for PR build
+        if: github.event_name == 'pull_request'
+        run: |
+          npx --yes --package @tauri-apps/cli@2.12.1 tauri signer generate --ci -w .drop-ci-updater.key
+          cp .drop-ci-updater.key.pub apps/desktop/updater.pub
 
       - name: Import the Developer ID certificate (v2.tauri.app/distribute/sign/macos)
         if: matrix.platform == 'macos' && env.APPLE_SIGNING == 'true'
@@ -174,18 +198,47 @@ jobs:
 
       - name: Build
         env:
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_SIGNING_IDENTITY: ${{ github.event_name != 'pull_request' && secrets.APPLE_SIGNING_IDENTITY || '' }}
+          APPLE_API_ISSUER: ${{ github.event_name != 'pull_request' && secrets.APPLE_API_ISSUER || '' }}
+          APPLE_API_KEY: ${{ github.event_name != 'pull_request' && secrets.APPLE_API_KEY || '' }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ github.event_name != 'pull_request' && secrets.TAURI_SIGNING_PRIVATE_KEY || '' }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ github.event_name != 'pull_request' && secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD || '' }}
+          DROP_RELEASE_TAG: ${{ needs.meta.outputs.tag }}
         run: |
+          update_args=()
+          if [ "$UPDATE_SIGNING" = true ]; then
+            update_args=(--updates)
+          elif [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            # Disposable per-run signing key: the release workflow never publishes these updates.
+            export TAURI_SIGNING_PRIVATE_KEY="$(cat .drop-ci-updater.key)"
+            unset TAURI_SIGNING_PRIVATE_KEY_PASSWORD
+            update_args=(--updates)
+          fi
           if [ "$PLATFORM" = macos ] && [ "$APPLE_SIGNING" = true ]; then
-            node scripts/build-desktop.ts --release --sign "$APPLE_SIGNING_IDENTITY"
+            node scripts/build-desktop.ts --release --sign "$APPLE_SIGNING_IDENTITY" "${update_args[@]}"
           elif [ "$PLATFORM" = macos ]; then
-            node scripts/build-desktop.ts --release --unsigned
+            node scripts/build-desktop.ts --release --unsigned "${update_args[@]}"
           else
-            node scripts/build-desktop.ts --release
+            node scripts/build-desktop.ts --release "${update_args[@]}"
           fi
           ls -l dist/desktop
+
+      - name: Check the signed update bundle on PR builds
+        if: github.event_name == 'pull_request'
+        run: |
+          test -d dist/updates
+          test "$(find dist/updates -maxdepth 1 -name '*.json' | wc -l | tr -d ' ')" = 1
+          test "$(find dist/updates -maxdepth 1 -type f ! -name '*.json' | wc -l | tr -d ' ')" = 1
+          node -e '
+            const fs = require("node:fs");
+            const dir = "dist/updates";
+            const name = fs.readdirSync(dir).find((value) => value.endsWith(".json"));
+            const manifest = JSON.parse(fs.readFileSync(dir + "/" + name, "utf8"));
+            const entries = Object.entries(manifest.platforms);
+            if (entries.length !== 1 || !entries[0][1].signature || !entries[0][1].url) {
+              throw new Error("E_CI_UPDATE: incomplete signed update");
+            }
+          '
 
       # Each installer is opened the way a tester would, then its bundled Node, drop.mjs and drop-iroh run.
       - name: Smoke test the DMG
@@ -213,9 +266,6 @@ jobs:
         if: matrix.platform == 'linux'
         run: |
           work=$(mktemp -d)
-          dpkg-deb --info dist/desktop/*.deb
-          dpkg-deb -x dist/desktop/*.deb "$work/deb"
-          node scripts/desktop-smoke.ts "$(dirname "$(find "$work/deb" -name drop.mjs | head -n 1)")"
           cp dist/desktop/*.AppImage "$work/drop.AppImage"
           chmod +x "$work/drop.AppImage"
           (cd "$work" && ./drop.AppImage --appimage-extract > /dev/null)
@@ -228,9 +278,19 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-  # Draft only, in this repository only: write access is granted here and nowhere else.
+      - name: Upload signed updater artifacts
+        if: env.UPDATE_SIGNING == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: updates-${{ matrix.label }}
+          path: dist/updates/
+          if-no-files-found: error
+          retention-days: 14
+
+  # Release job writes drafts only by default; opt-in auto-publication follows all five signed builds and checks.
+  # Write access is granted here and nowhere else.
   release:
-    name: draft release
+    name: assemble signed release
     needs: [meta, build]
     if: >-
       github.repository == 'memolabs-dev/drop' &&
@@ -241,12 +301,35 @@ jobs:
       contents: write # create the draft release and upload its assets
       id-token: write # Sigstore certificate for the attestations
       attestations: write # store the attestations
+    env:
+      UPDATE_SIGNING: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' && secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD != '' }}
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          package-manager-cache: false
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: desktop-*
           path: release
           merge-multiple: true
+      - name: Download signed updates
+        if: env.UPDATE_SIGNING == 'true'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: updates-*
+          path: signed-updates
+          merge-multiple: true
+      - name: Assemble the complete updater feed
+        if: env.UPDATE_SIGNING == 'true'
+        env:
+          DROP_RELEASE_VERSION: ${{ needs.meta.outputs.version }}
+        run: |
+          node scripts/merge-desktop-updates.ts release/latest.json signed-updates/*.json
+          find signed-updates -maxdepth 1 -type f ! -name '*.json' -exec cp {} release/ \;
       - name: Checksums
         working-directory: release
         run: |
@@ -273,3 +356,13 @@ jobs:
           flags=(--draft --target "$GITHUB_SHA" --title "drop $VERSION" --notes-file notes.md)
           if [ "$PRERELEASE" = true ]; then flags+=(--prerelease); fi
           gh release create "$TAG" release/* --repo "$GITHUB_REPOSITORY" "${flags[@]}"
+      # Deliberately off until the signed N -> N+1 bench has passed on physical devices.
+      # Once enabled, a protected vX.Y.Z tag becomes a published stable release without manual clicks.
+      - name: Automatically publish the verified stable release (explicit opt-in)
+        if: github.event_name == 'push' && vars.DROP_RELEASE_AUTO_PUBLISH == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.meta.outputs.tag }}
+        run: |
+          test -s release/latest.json
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease=false
