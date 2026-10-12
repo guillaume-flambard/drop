@@ -93,51 +93,82 @@ try {
   check(existsSync(join(temp, 'drop', 'identity.json')), 'the first launch writes a private identity');
   const config = JSON.parse(readFileSync(join(temp, 'drop', 'config.json'), 'utf8')) as { apiPort: number };
 
-  const marker = `smoke-${String(process.pid)}`;
-  const daemon = spawn(node, [cli, 'serve'], {
-    env: { ...env, DROP_EXIT_WITH_PARENT: 'stdin', DROP_SHELL_INSTANCE: marker },
-    stdio: ['pipe', 'ignore', 'inherit'],
-  });
-  const exited = new Promise<number | null>((done) => {
-    daemon.once('exit', (code) => {
-      done(code);
+  // The bundle's shutdown/relaunch path is the same one used after a signed update.
+  // Assert that private identity and authorization survive a real daemon restart.
+  const originalIdentity = readFileSync(join(temp, 'drop', 'identity.json'), 'utf8');
+  const originalPort = config.apiPort;
+  let originalToken: string | undefined;
+
+  for (const attempt of [1, 2]) {
+    const marker = 'smoke-' + String(process.pid) + '-' + String(attempt);
+    const daemon = spawn(node, [cli, 'serve'], {
+      env: { ...env, DROP_EXIT_WITH_PARENT: 'stdin', DROP_SHELL_INSTANCE: marker },
+      stdio: ['pipe', 'ignore', 'inherit'],
     });
-  });
-  try {
-    const deadline = Date.now() + 30_000;
-    let healthy = false;
-    while (!healthy && Date.now() < deadline) {
-      try {
-        const response = await fetch(`http://127.0.0.1:${String(config.apiPort)}/_shell/health`);
-        const body = (await response.json()) as { instance?: string };
-        healthy = response.ok && body.instance === marker;
-      } catch {
-        // Not listening yet.
+    const exited = new Promise<number | null>((done) => {
+      daemon.once('exit', (code) => {
+        done(code);
+      });
+    });
+    try {
+      const deadline = Date.now() + 30_000;
+      let healthy = false;
+      while (!healthy && Date.now() < deadline) {
+        try {
+          const response = await fetch('http://127.0.0.1:' + String(config.apiPort) + '/_shell/health');
+          const body = (await response.json()) as { instance?: string };
+          healthy = response.ok && body.instance === marker;
+        } catch {
+          // Not listening yet.
+        }
+        if (!healthy) await new Promise((done) => setTimeout(done, 300));
       }
-      if (!healthy) await new Promise((done) => setTimeout(done, 300));
+      check(healthy, 'launch ' + String(attempt) + ': daemon responds to the shell health probe');
+      const token = readFileSync(join(temp, 'drop', 'local-token'), 'utf8').trim();
+      check(token.length >= 32, 'the private local authorization token is available');
+      if (originalToken === undefined) originalToken = token;
+      else check(token === originalToken, 'restart did not rotate the private API token');
+
+      const settings = await fetch('http://127.0.0.1:' + String(config.apiPort) + '/ui/admin/internet', {
+        headers: { Authorization: 'Bearer ' + token },
+      });
+      if (settings.ok) {
+        const internet = (await settings.json()) as { available?: boolean };
+        check(internet.available === true, 'the daemon finds drop-iroh next to the bundled Node');
+      } else {
+        process.stdout.write('skip drop-iroh discovery, HTTP ' + String(settings.status) + '\n');
+      }
+
+      const unauthorized = await fetch('http://127.0.0.1:' + String(config.apiPort) + '/_shell/update-ready');
+      check(unauthorized.status === 401, 'the update readiness API refuses unauthenticated callers');
+      const readiness = await fetch('http://127.0.0.1:' + String(config.apiPort) + '/_shell/update-ready', {
+        headers: { Authorization: 'Bearer ' + token },
+      });
+      const readinessBody = (await readiness.json()) as { ready?: boolean };
+      check(
+        readiness.ok && typeof readinessBody.ready === 'boolean',
+        'the shell can read authenticated update readiness',
+      );
+
+      check(
+        readFileSync(join(temp, 'drop', 'identity.json'), 'utf8') === originalIdentity,
+        'restart preserves the original cryptographic identity',
+      );
+      const currentConfig = JSON.parse(readFileSync(join(temp, 'drop', 'config.json'), 'utf8')) as { apiPort: number };
+      check(currentConfig.apiPort === originalPort, 'restart preserves the private local API port');
+
+      // The shell dies: the system closes its end of the pipe.
+      daemon.stdin.end();
+      const timeout = new Promise<string>((done) => {
+        setTimeout(() => {
+          done('timeout');
+        }, 15_000);
+      });
+      const code = await Promise.race([exited, timeout]);
+      check(code === 0, 'launch ' + String(attempt) + ': daemon stops with the shell (exit ' + String(code) + ')');
+    } finally {
+      if (daemon.exitCode === null) daemon.kill();
     }
-    check(healthy, `the daemon answers the shell's health probe on 127.0.0.1:${String(config.apiPort)}`);
-    const token = readFileSync(join(temp, 'drop', 'local-token'), 'utf8').trim();
-    const settings = await fetch(`http://127.0.0.1:${String(config.apiPort)}/ui/admin/internet`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (settings.ok) {
-      const internet = (await settings.json()) as { available?: boolean };
-      check(internet.available === true, 'the daemon finds drop-iroh next to the bundled Node');
-    } else {
-      process.stdout.write(`skip drop-iroh discovery: /ui/admin/internet answered ${String(settings.status)}\n`);
-    }
-    // The shell dies: the system closes its end of the pipe.
-    daemon.stdin.end();
-    const timeout = new Promise<string>((done) => {
-      setTimeout(() => {
-        done('timeout');
-      }, 15_000);
-    });
-    const code = await Promise.race([exited, timeout]);
-    check(code === 0, `the daemon stops by itself when the shell's pipe closes (exit ${String(code)})`);
-  } finally {
-    if (daemon.exitCode === null) daemon.kill();
   }
 } finally {
   rmSync(temp, { recursive: true, force: true });
