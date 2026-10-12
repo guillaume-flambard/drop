@@ -231,7 +231,7 @@ describe('menu bar panel and its admin routes (T4.14)', () => {
       relayUrl: 'ws://x/v1',
       refreshCatalogs: () => Promise.resolve(),
     });
-    const code = encodeInvite(createInvite(julie, 'ws://x/v1'));
+    const code = encodeInvite(await createInvite(julie, 'ws://x/v1'));
     const form = (value: string) => new URLSearchParams({ code: value }).toString();
     const preview = await new Promise<{ status: number; text: string }>((resolve, reject) => {
       const req = request(
@@ -260,7 +260,7 @@ describe('menu bar panel and its admin routes (T4.14)', () => {
       req.end(form(code));
     });
     expect(preview.status).toBe(200);
-    expect(JSON.parse(preview.text)).toEqual({ displayName: 'Julie' });
+    expect(JSON.parse(preview.text)).toMatchObject({ displayName: 'Julie', relayHost: 'x', relay: 'kept' });
     expect(sent).toHaveLength(0);
     expect((await call(api.port, 'POST', '/ui/pair/preview', undefined, false)).status).toBe(401);
     expect((await call(api.port, 'POST', '/ui/pair/preview', { code: 'not-a-code' })).status).toBe(400);
@@ -272,6 +272,13 @@ describe('menu bar panel and its admin routes (T4.14)', () => {
     const inviteCard = html.slice(html.indexOf('function inviteCard(view)'));
     const handler = inviteCard.slice(0, inviteCard.indexOf("'Rejoindre'"));
     expect(handler).toContain("api('POST', '/ui/pair', undefined");
+    // A link from anyone can open the card: it says when « Rejoindre » moves the app to the inviter's relay, and a
+    // refusal shows its own reason (wrong relay, expired, used) rather than one catch-all sentence.
+    expect(html).toContain('relay: preview.relay, relayHost: preview.relayHost');
+    expect(inviteCard).toContain("invite.relay === 'adopt'");
+    expect(inviteCard).toContain('ton app passera par le relais ');
+    expect(html).not.toContain("function () { notice = 'Ce lien d’invitation n’est plus valable");
+    expect(html).not.toContain("function () { pendingInvite = null; notice = 'Ce lien d’invitation n’est plus valable");
   });
 
   it('renders expiry, high sensitivity, a default Pas maintenant and per-field redaction', () => {

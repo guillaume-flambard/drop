@@ -1040,9 +1040,9 @@ ${humanPanelStyles}
   if (invitation) {
     history.replaceState(null, '', '/app?token=' + encodeURIComponent(token));
     api('POST', '/ui/pair/preview', undefined, { code: invitation }).then(function (preview) {
-      pendingInvite = { code: invitation, displayName: preview.displayName, team: preview.team || '' };
+      pendingInvite = { code: invitation, displayName: preview.displayName, team: preview.team || '', relay: preview.relay, relayHost: preview.relayHost };
       render(true);
-    }, function () { notice = 'Ce lien d’invitation n’est plus valable. Demande-en un nouveau.'; render(true); });
+    }, function (error) { notice = error.message; render(true); });
   }
 
   function inviteCard(view) {
@@ -1050,6 +1050,7 @@ ${humanPanelStyles}
     view.appendChild(el('div', { class: 'card ask' },
       el('div', { class: 'name', text: invite.team ? invite.displayName + ' t’invite dans l’équipe ' + invite.team : 'Invitation de ' + invite.displayName }),
       el('div', { class: 'muted', text: 'Nom et équipe annoncés par le lien : si tu ne l’attendais pas, vérifie avec la personne avant de rejoindre.' }),
+      invite.relay === 'adopt' ? el('div', { class: 'muted', text: 'En rejoignant, ton app passera par le relais ' + invite.relayHost + ', celui de la personne qui t’invite. Si tu ne connais pas ce relais, refuse.' }) : null,
       el('div', { class: 'muted', text: 'En rejoignant, vous verrez les outils partagés l’un de l’autre. Chaque question reste soumise à ton accord ; personne ne reçoit d’accès.' }),
       el('div', { class: 'actions' },
         el('button', { class: 'act', autofocus: 'autofocus', onclick: function () { pendingInvite = null; info = 'Invitation refusée.'; announce(info); render(true); } }, 'Refuser'),
@@ -1061,7 +1062,7 @@ ${humanPanelStyles}
             tab = 'team';
             announce(info);
             render(true);
-          }, function () { pendingInvite = null; notice = 'Ce lien d’invitation n’est plus valable. Demande-en un nouveau.'; render(true); });
+          }, function (error) { pendingInvite = null; notice = error.message; render(true); });
         } }, 'Rejoindre'))));
   }
   var events = new EventSource('/ui/events?token=' + encodeURIComponent(token));

@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta http-equiv="Content-Security-Policy" content="{{joinCsp}}" />
+    <meta name="referrer" content="no-referrer" />
+    <meta name="robots" content="noindex" />
+    <meta name="description" content="Rejoindre une équipe drop avec une invitation reçue d'un collègue." />
+    <meta name="theme-color" content="#2548ed" />
+    <title>Rejoindre une équipe · drop</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#contenu">Aller au contenu</a>
+    <header class="site-header">
+      <div class="wrap header-inner">
+        <a class="logo" href="/index.html" aria-label="drop, accueil"
+          ><img src="/favicon.svg" width="34" height="34" alt="" />drop</a
+        >
+        <nav class="nav" aria-label="Navigation principale">
+          <a href="/securite.html">Sécurité</a><a href="/guide.html">Le guide</a
+          ><span class="header-note">Un projet Memo Labs</span>
+        </nav>
+      </div>
+    </header>
+    <main id="contenu" class="wrap join">
+      <div class="page-title">
+        <span class="pill">Invitation</span>
+        <h1 id="join-title">Tu as reçu une invitation drop.</h1>
+        <p>
+          drop relie les agents d'une même équipe. Quand ton agent est bloqué, il pose une question bornée à un
+          collègue, qui accepte ou refuse. Personne ne reçoit d'accès : seulement des réponses autorisées.
+        </p>
+        <p id="join-expires" class="join-muted"></p>
+      </div>
+      <div id="join-status" class="note join-error" role="alert" hidden></div>
+      <noscript>
+        <div class="note">
+          <p>
+            Sans JavaScript, cette page ne peut pas lire l'invitation. Installe drop ci-dessous, puis colle le lien
+            entier dans drop : Mon espace, Équipe, « J'ai reçu une invitation ».
+          </p>
+        </div>
+      </noscript>
+      <ol id="join-steps" class="join-steps">
+        <li class="install-card">
+          <h2><span class="step-number">1</span> Installe drop</h2>
+          <p id="join-recommended" class="join-muted">Choisis le fichier de ton système sur la page des versions.</p>
+          <ul class="join-downloads">
+            <li data-os="mac">
+              <a class="button" href="https://github.com/guillaume-flambard/drop/releases/latest"
+                >Pour Mac <span class="join-file">(fichier .dmg)</span></a
+              >
+            </li>
+            <li data-os="windows">
+              <a class="button light" href="https://github.com/guillaume-flambard/drop/releases/latest"
+                >Pour Windows <span class="join-file">(fichier .exe)</span></a
+              >
+            </li>
+            <li data-os="linux">
+              <a class="button light" href="https://github.com/guillaume-flambard/drop/releases/latest"
+                >Pour Linux <span class="join-file">(fichier .AppImage ou .deb)</span></a
+              >
+            </li>
+          </ul>
+          <p class="join-muted">
+            Les fichiers viennent de la page des versions de drop sur GitHub. Déjà installé ? Passe à l'étape 2.
+          </p>
+        </li>
+        <li class="install-card">
+          <h2><span class="step-number">2</span> Rejoins l'équipe</h2>
+          <p>
+            Ouvre drop une fois, puis clique ici. drop affiche qui t'invite et attend que tu cliques sur « Rejoindre ».
+          </p>
+          <p><a id="join-open" class="button" href="#contenu">J'ai installé drop : rejoindre l'équipe</a></p>
+          <p class="join-muted">
+            drop vérifie l'invitation avant tout envoi : si le nom affiché ne te dit rien, refuse et demande à la
+            personne.
+          </p>
+        </li>
+        <li class="install-card">
+          <h2><span class="step-number">3</span> Le bouton ne fait rien ?</h2>
+          <p>
+            Copie le code ci-dessous, puis dans drop ouvre Mon espace, Équipe, « J'ai reçu une invitation » et colle-le.
+            En ligne de commande : <code>drop join</code> suivi du code.
+          </p>
+          <label for="join-code" class="join-muted">Code d'invitation, à usage unique</label>
+          <textarea id="join-code" rows="3" readonly spellcheck="false"></textarea>
+          <p><button id="join-copy" class="button light" type="button">Copier le code</button></p>
+          <p id="join-copied" class="join-muted" role="status"></p>
+        </li>
+      </ol>
+      <div class="note">
+        <p>
+          <strong>L'invitation reste dans ton navigateur.</strong> Elle est dans la partie du lien après le signe #,
+          qu'un navigateur n'envoie jamais au site, et cette page n'envoie rien : elle ne fait que l'afficher. Une
+          invitation sert une seule fois et expire au bout de 24 heures.
+        </p>
+      </div>
+    </main>
+    <footer class="footer">
+      <div class="wrap footer-inner">
+        <a class="logo" href="/index.html">drop</a>
+        <div class="footer-links"><a href="/securite.html">Sécurité</a><a href="/guide.html">Documentation</a></div>
+        <span>Nom de code, par Memo Labs.</span>
+      </div>
+    </footer>
+    <script>
+      (function () {
+        'use strict';
+        var KEY = 'drop-invite';
+        function byId(id) {
+          return document.getElementById(id);
+        }
+        function clean(text, max) {
+          return String(text)
+            .replace(/[\u0000-\u001f\u007f-\u009f\u061c\u200b-\u200f\u2028-\u202e\u2060-\u2069\ufeff]/g, '')
+            .trim()
+            .slice(0, max);
+        }
+        function fail(message) {
+          byId('join-status').textContent = message;
+          byId('join-status').hidden = false;
+          byId('join-steps').hidden = true;
+        }
+        // The invite lives in the fragment, never sent to a server. Kept for this tab only, then out of the address bar.
+        // A fragment that cannot be an invite (the page's own #contenu anchor) never replaces the one kept.
+        var code = location.hash.slice(1);
+        if (!/^[A-Za-z0-9_-]{40,3500}$/.test(code)) code = '';
+        try {
+          if (code) sessionStorage.setItem(KEY, code);
+          else code = sessionStorage.getItem(KEY) || '';
+        } catch (error) {
+          // Storage refused: the invite stays in this page's memory only.
+        }
+        if (location.hash) history.replaceState(null, '', location.pathname);
+        if (!/^[A-Za-z0-9_-]{40,3500}$/.test(code)) {
+          fail('Ce lien est incomplet. Demande à la personne de te renvoyer le lien en entier.');
+          return;
+        }
+        var invite;
+        try {
+          var base64 = code.replace(/-/g, '+').replace(/_/g, '/');
+          var binary = atob(base64 + '==='.slice((base64.length + 3) % 4));
+          var bytes = new Uint8Array(binary.length);
+          for (var index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+          invite = JSON.parse(new TextDecoder().decode(bytes));
+        } catch (error) {
+          invite = null;
+        }
+        if (!invite || typeof invite.displayName !== 'string' || typeof invite.expiresAt !== 'number') {
+          fail('Ce lien est illisible. Demande à la personne de te renvoyer le lien en entier.');
+          return;
+        }
+        if (invite.expiresAt <= Date.now()) {
+          fail('Cette invitation a expiré : une invitation vaut 24 heures. Demande un nouveau lien.');
+          return;
+        }
+        var name = clean(invite.displayName, 80) || 'Quelqu’un';
+        var team = invite.team && typeof invite.team.name === 'string' ? clean(invite.team.name, 60) : '';
+        byId('join-title').textContent = team ? name + ' t’invite dans l’équipe ' + team : name + ' t’invite sur drop';
+        var until = new Intl.DateTimeFormat('fr-FR', {
+          day: 'numeric',
+          month: 'long',
+          hour: '2-digit',
+          minute: '2-digit',
+        }).format(new Date(invite.expiresAt));
+        byId('join-expires').textContent = 'Invitation à usage unique, valable jusqu’au ' + until + '.';
+        byId('join-open').href = 'drop://join?invite=' + code;
+        byId('join-code').value = code;
+        byId('join-copy').addEventListener('click', function () {
+          var done = function (text) {
+            byId('join-copied').textContent = text;
+          };
+          var manual = 'Sélectionne le code puis copie-le.';
+          byId('join-code').select();
+          if (navigator.clipboard && navigator.clipboard.writeText)
+            navigator.clipboard.writeText(code).then(
+              function () {
+                done('Code copié.');
+              },
+              function () {
+                done(manual);
+              },
+            );
+          else done(manual);
+        });
+        // The download that matches this computer first; the others stay offered.
+        var agent = navigator.userAgent || '';
+        var os = /Windows/.test(agent)
+          ? 'windows'
+          : /iPhone|iPad|Android/.test(agent)
+            ? 'mobile'
+            : /Macintosh|Mac OS X/.test(agent)
+              ? 'mac'
+              : /Linux|X11/.test(agent)
+                ? 'linux'
+                : '';
+        var labels = { mac: 'un Mac', windows: 'Windows', linux: 'Linux' };
+        if (os === 'mobile')
+          byId('join-recommended').textContent =
+            'drop s’installe sur un ordinateur : ouvre ce lien sur ton Mac ou ton PC.';
+        else if (labels[os])
+          byId('join-recommended').textContent = 'Ton ordinateur semble être sous ' + labels[os] + '.';
+        var items = labels[os] ? document.querySelectorAll('[data-os]') : [];
+        for (var at = 0; at < items.length; at += 1) {
+          var item = items[at];
+          var link = item.querySelector('a');
+          var mine = item.getAttribute('data-os') === os;
+          link.className = mine ? 'button' : 'button light';
+          if (mine) item.parentNode.insertBefore(item, item.parentNode.firstChild);
+        }
+      })();
+    </script>
+  </body>
+</html>
