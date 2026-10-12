@@ -264,6 +264,16 @@ jobs:
           mount=$(mktemp -d)
           hdiutil attach -nobrowse -readonly -mountpoint "$mount" dist/desktop/*.dmg
           codesign --verify --deep --strict --verbose=2 "$mount/drop.app"
+          if [ "$APPLE_SIGNING" = true ]; then
+            # A valid ad-hoc signature is not sufficient for a public installer.
+            # Require the actual Apple Developer ID Team and a stapled notarization ticket.
+            codesign -dv --verbose=4 "$mount/drop.app" 2> "$RUNNER_TEMP/apple-signature.txt"
+            grep -Fq 'TeamIdentifier=Q52VN4UT34' "$RUNNER_TEMP/apple-signature.txt"
+            grep -Fq 'Authority=Developer ID Application:' "$RUNNER_TEMP/apple-signature.txt"
+            xcrun stapler validate "$mount/drop.app"
+            xcrun stapler validate dist/desktop/*.dmg
+            spctl --assess --type execute --verbose=4 "$mount/drop.app"
+          fi
           /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$mount/drop.app/Contents/Info.plist"
           node scripts/desktop-smoke.ts "$mount/drop.app/Contents/Resources"
           hdiutil detach "$mount"

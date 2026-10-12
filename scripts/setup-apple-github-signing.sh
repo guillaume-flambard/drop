@@ -42,7 +42,8 @@ printf '\n'
 
 # Verify the specific certificate, not just that the archive is parseable.
 fingerprint="$(
-  APPLE_P12_PASSWORD="$p12_password" openssl pkcs12 -in "$p12_path" -clcerts -nokeys     -passin env:APPLE_P12_PASSWORD 2>/dev/null |
+  APPLE_P12_PASSWORD="$p12_password" openssl pkcs12 -in "$p12_path" -clcerts -nokeys \
+    -passin env:APPLE_P12_PASSWORD 2>/dev/null |
     openssl x509 -noout -fingerprint -sha1 |
     tr -d ':' | sed 's/.*=//'
 )"
@@ -54,7 +55,8 @@ echo 'Developer ID certificate fingerprint matches the installed Apple identity.
 
 # A TEAM API key is needed; individual App Store Connect keys cannot notarize.
 # Validate against Apple's service before writing any GitHub secrets.
-if ! xcrun notarytool history --issuer "$api_issuer" --key-id "$api_id"   --key "$api_path" --output-format json >/dev/null; then
+if ! xcrun notarytool history --issuer "$api_issuer" --key-id "$api_id" \
+  --key "$api_path" --output-format json >/dev/null; then
   echo 'Apple notarization rejected the API credentials. Check that this is a Team key.' >&2
   exit 1
 fi

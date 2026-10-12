@@ -63,5 +63,6 @@ jobs:
             exit 1
           fi
           echo 'Developer ID certificate import and identity: OK'
-          xcrun notarytool history --issuer "$APPLE_API_ISSUER" --key-id "$APPLE_API_KEY"             --key "$private_key" --output-format json > /dev/null
+          xcrun notarytool history --issuer "$APPLE_API_ISSUER" --key-id "$APPLE_API_KEY" \
+            --key "$private_key" --output-format json > /dev/null
           echo 'App Store Connect TEAM key notarization authentication: OK'
