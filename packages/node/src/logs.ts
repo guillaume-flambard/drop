@@ -57,32 +57,17 @@ export function logsDir(root: string): string {
 }
 
 const REDACTED = '[expurgé]';
-/** Names whose value is a secret: JSON keys and URL query parameters. */
-const SECRET_NAME =
-  /token|secret|passw(?:or)?d|passphrase|api[-_]?key|private[-_]?key|authori[sz]ation|cookie|credential|bearer|invite|session|seed|key$/i;
-/** Query parameters that carry a one-time secret without saying so (OAuth). */
-const SECRET_PARAM = /^(?:code|state|sig|signature|key)$/i;
+/** JSON keys whose value is a secret: the words of rule 5 of docs/LOG_REDACTION.md, and a few more. */
+const SECRET_NAME = /pass|secret|token|key|auth|cred|seed|cookie|session|invite|bearer/i;
 /** Environment variables whose value is a secret. */
 const SECRET_ENV = /KEY|TOKEN|SECRET|PASSWORD|PASSWD|PASSPHRASE|CREDENTIAL/i;
-const QUERY = /([?&;])([A-Za-z0-9_.-]{1,64})=([^&#\s"'<>]*)/g;
-const AUTH_SCHEME = /\b(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]{1,4096}/gi;
-/** `NAME=value`, `name: value`, `"name": "value"`: a name that says secret, then its value. */
-const ASSIGNMENT =
-  /\b([A-Za-z0-9_.-]{0,40}(?:KEY|SECRET|TOKEN|PASSWORD|PASSWD|PASSPHRASE)[A-Za-z0-9_.-]{0,40})(["']?)\s*[=:]\s*("[^"]{0,4096}"|'[^']{0,4096}'|[^\s,;]{1,4096})/gi;
-/** The credentials of a URL, `user:password` between `scheme://` and `@`: the user goes too, it often names a person. */
-const USERINFO = /\b([a-z][a-z0-9+.-]{0,20}:\/\/)[^\s/:@]{0,256}:[^\s/@]{1,1024}@/gi;
-/** A word made only of key characters (base64, base64url, hex): a key cut by `/` is still one key. */
-const OPAQUE = /^[A-Za-z0-9+/=_.-]+$/;
-/** A long run of hexadecimal digits: a key or a seed; the scanner's entropy rule cannot see it (4 bits a character). */
-const HEX_RUN = /[0-9a-fA-F]{32,}/;
-/** What the scanner calls a word: a run without whitespace. Inside one, these split the pieces we look at again. */
-const SPACES = /(\s+)/;
-const PIECES = /(["'`,;()<>[\]{}|=:@?&#/\\])/;
-const PATH_PARTS = /([/\\])/;
-/** Where a real path starts: `/`, `~/`, `./`, a drive letter, or `file://`. */
-const PATH_START = /^(?:file:\/\/\/?|~[/\\]|\.{1,2}[/\\]|\/|[A-Za-z]:[/\\])/;
-/** How a real path ends: a file name with its extension, maybe a line and a column (`drop.mjs:12:3`). */
-const PATH_END = /^[\w@+~-]*\.[A-Za-z0-9]{1,10}(?::\d+){0,2}$/;
+/** Rule 5: the words a secret name contains. */
+const NAME_WORDS = ['pass', 'secret', 'token', 'key', 'auth', 'cred', 'seed'];
+/** Rule 7: the base64, base64url and hexadecimal alphabets. */
+const KEY_CHAR = /[A-Za-z0-9+/=_-]/;
+/** Allowlist protected before rules 6 and 7: UUIDs (dropIds) and stable error codes. */
+const ALLOWED =
+  /(?<![0-9A-Za-z])[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}(?![0-9A-Za-z])|(?<![A-Za-z0-9_])E_[A-Z0-9_]{2,60}(?![A-Za-z0-9_])/g;
 
 export interface RedactOptions {
   /** Exact values to remove wherever they appear: the local token, secret environment values. */
@@ -96,58 +81,28 @@ function marker(word: string): string {
   return `[expurgé #${createHash('sha256').update(word, 'utf8').digest('hex').slice(0, 8)}]`;
 }
 
+/** Long runs of hexadecimal digits, checked again after redaction. */
+const HEX_RUN = /[0-9a-fA-F]{32,}/;
+
 function hasHexRun(value: unknown, depth = 0): boolean {
   if (typeof value === 'string') return HEX_RUN.test(value);
   if (typeof value !== 'object' || value === null || depth > 8) return false;
   return Object.entries(value).some(([key, item]) => HEX_RUN.test(key) || hasHexRun(item, depth + 1));
 }
 
-/** The scanner of the runner, plus long hexadecimal runs: what no log line may hold (T4.37, review of PR #82). */
+/**
+ * What no written log line may still hold: the runner scanner's patterns (keys with known prefixes, JWT, PEM headers,
+ * assignments) and long hexadecimal runs. The scanner's entropy rule is left out: rule 7 of docs/LOG_REDACTION.md
+ * replaces it for logs, and it would mask every long path.
+ */
 export function logKinds(value: unknown): string[] {
-  const kinds = scanSecrets(value);
+  const kinds = scanSecrets(value).filter((kind) => kind !== 'high_entropy');
   return hasHexRun(value) ? [...kinds, 'hex_run'] : kinds;
 }
 
-const flagged = (value: unknown): boolean => logKinds(value).length > 0;
-
-/** A real path, whose end may be kept: it starts like a path and ends with a file name. */
-function realPath(word: string): boolean {
-  const body = word.replace(/^[(["'`<{]+/, '').replace(/[)\]"'`>},;.]+$/, '');
-  const last = body.split(PATH_PARTS).pop() ?? '';
-  return PATH_START.test(body) && PATH_END.test(last);
-}
-
-/**
- * A real path the scanner takes for a secret, only because it is long and varied: the longest end the scanner accepts
- * is kept (`…/Resources/drop.mjs:12:3`). Any other word is replaced whole: an ending of a key is still part of the key.
- */
-function keepPathEnd(word: string): string {
-  // An opening bracket or quote stays in front: `(…/drop.mjs:12:3)`.
-  const lead = /^[(["'`<{]*/.exec(word)?.[0] ?? '';
-  const parts = word.slice(lead.length).split(PATH_PARTS);
-  let kept: string | undefined;
-  for (let start = parts.length - 1; start >= 0; start -= 1) {
-    const part = parts[start] ?? '';
-    if (part === '/' || part === '\\') continue;
-    const candidate = lead + '…/' + parts.slice(start).join('');
-    if (flagged(candidate)) break;
-    kept = candidate;
-  }
-  return kept ?? marker(word);
-}
-
-/** One word as the scanner sees it: kept if clean, else its secret pieces replaced, else a real path's end, else whole. */
-function redactWord(word: string): string {
-  if (word.length < 5 || !flagged(word)) return word;
-  const core = word.replace(/^[(["'`<{]+/, '').replace(/[)\]"'`>},;:]+$/, '');
-  if (OPAQUE.test(core) && !realPath(word)) return marker(word);
-  const refined = word
-    .split(PIECES)
-    .map((piece, index) => (index % 2 === 1 || piece.length < 5 || !flagged(piece) ? piece : marker(piece)))
-    .join('');
-  if (!flagged(refined)) return refined;
-  return realPath(word) && refined === word ? keepPathEnd(word) : marker(word);
-}
+const isHex = (char: string): boolean => /^[0-9a-fA-F]$/.test(char);
+const isNameChar = (char: string | undefined): boolean => char !== undefined && /^[A-Za-z0-9_.-]$/.test(char);
+const isBlank = (char: string | undefined): boolean => char !== undefined && /^\s$/.test(char);
 
 function cut(text: string, maxBytes: number): string {
   if (Buffer.byteLength(text, 'utf8') <= maxBytes) return text;
@@ -160,23 +115,148 @@ function replaceAll(text: string, value: string, by: string): string {
   return text.split(value).join(by);
 }
 
-/** Text redaction, in order: known values, home folder, query parameters, auth schemes, assignments, scanned words. */
+/** Rule 3: from `://` to the last `@` before the next blank or quote. */
+function redactUserinfo(text: string): string {
+  return text.replace(/(:\/\/)([^\s"'<>]*)@/g, (_whole, start: string) => `${start}${REDACTED}@`);
+}
+
+/** Rule 4: the word after `Bearer` or `Basic`. */
+function redactAuthSchemes(text: string): string {
+  return text.replace(
+    /\b(Bearer|Basic)(\s+)[^\s"'<>,;]+/gi,
+    (_whole, scheme: string, space: string) => `${scheme}${space}${REDACTED}`,
+  );
+}
+
+/** The quote that opens at `index` (`"`, `'`, `\"`, `\'`), or ''. */
+function quoteAt(text: string, index: number): string {
+  const char = text[index];
+  if (char === '"' || char === "'") return char;
+  if (char === '\\' && (text[index + 1] === '"' || text[index + 1] === "'")) return text.slice(index, index + 2);
+  return '';
+}
+
+const VALUE_END = /[\s,;}&)\]"'\\]/;
+
+/** Rule 5: a name holding a secret word, quoted or not, then `=` or `:`, then its whole value. */
+function redactNamedValues(text: string): string {
+  let out = '';
+  let index = 0;
+  while (index < text.length) {
+    if (!isNameChar(text[index]) || isNameChar(text[index - 1])) {
+      out += text[index] ?? '';
+      index += 1;
+      continue;
+    }
+    let end = index;
+    while (isNameChar(text[end])) end += 1;
+    const name = text.slice(index, end);
+    const lower = name.toLowerCase();
+    let cursor = end;
+    let rewritten: string | undefined;
+    if (NAME_WORDS.some((word) => lower.includes(word))) {
+      const nameQuote = quoteAt(text, cursor);
+      cursor += nameQuote.length;
+      let before = cursor;
+      while (isBlank(text[before])) before += 1;
+      const separator = text[before];
+      if (separator === '=' || separator === ':') {
+        let start = before + 1;
+        while (isBlank(text[start])) start += 1;
+        const valueQuote = quoteAt(text, start);
+        const valueStart = start + valueQuote.length;
+        if (text.startsWith('[expurgé', valueStart)) {
+          // Already replaced (a known value): only the `=` goes, so the line never reads as an assignment.
+          const close = text.indexOf(']', valueStart);
+          let stop = close < 0 ? text.length : close + 1;
+          if (valueQuote && text.startsWith(valueQuote, stop)) stop += valueQuote.length;
+          rewritten = separator === '=' ? `${name}${nameQuote} ${REDACTED}` : text.slice(index, stop);
+          cursor = stop;
+        } else if (valueQuote) {
+          const close = text.indexOf(valueQuote, start + valueQuote.length);
+          const stop = close < 0 ? text.length : close + valueQuote.length;
+          rewritten =
+            separator === '='
+              ? `${name}${nameQuote} ${REDACTED}`
+              : `${text.slice(index, start)}${valueQuote}${REDACTED}${close < 0 ? '' : valueQuote}`;
+          cursor = stop;
+        } else {
+          let stop = start;
+          while (stop < text.length && !VALUE_END.test(text[stop] ?? '')) stop += 1;
+          // `Authorization: Bearer <value>`: the scheme stays, rule 4 already replaced its value.
+          const scheme = /^(?:bearer|basic)$/i.test(text.slice(start, stop));
+          if (stop > start && !scheme) {
+            rewritten =
+              separator === '=' ? `${name}${nameQuote} ${REDACTED}` : `${text.slice(index, start)}${REDACTED}`;
+            cursor = stop;
+          }
+        }
+      }
+    }
+    if (rewritten === undefined) {
+      out += name;
+      index = end;
+    } else {
+      out += rewritten;
+      index = cursor;
+    }
+  }
+  return out;
+}
+
+/** Rule 6: hexadecimal groups split by `:`, `-` or spaces, 32 hex digits in all and a decimal digit among them. */
+function redactHexGroups(text: string): string {
+  return text.replace(/(?<![0-9A-Za-z])[0-9a-fA-F]{1,64}(?:[: -][0-9a-fA-F]{1,64})+(?![0-9A-Za-z])/g, (span) => {
+    const digits = span.replace(/[^0-9a-fA-F]/g, '');
+    return digits.length >= 32 && /[0-9]/.test(digits) ? marker(span) : span;
+  });
+}
+
+/** Rule 7: runs of 16 key characters mixing letters and digits, or of 32 hexadecimal digits. */
+function redactKeyRuns(text: string): string {
+  let out = '';
+  let index = 0;
+  while (index < text.length) {
+    if (!KEY_CHAR.test(text[index] ?? '')) {
+      out += text[index] ?? '';
+      index += 1;
+      continue;
+    }
+    let end = index;
+    while (end < text.length && KEY_CHAR.test(text[end] ?? '')) end += 1;
+    const run = text.slice(index, end);
+    const mixed = /[A-Za-z]/.test(run) && /[0-9]/.test(run);
+    const hex = Array.from(run).filter(isHex).length >= 32 && /^[0-9a-fA-F]+$/.test(run);
+    out += run.length >= 16 && (mixed || hex) ? marker(run) : run;
+    index = end;
+  }
+  return out;
+}
+
+/** Rules 6 and 7, with the allowlist (UUIDs, error codes) set aside first and put back after. */
+function redactRuns(text: string): string {
+  const kept: string[] = [];
+  const shielded = text.replace(ALLOWED, (match) => {
+    kept.push(match);
+    // A private-use character, outside both alphabets, so that runs stop at it.
+    return `\uE000${String(kept.length - 1)}\uE000`;
+  });
+  const masked = redactKeyRuns(redactHexGroups(shielded));
+  return masked.replace(/\uE000(\d+)\uE000/g, (_whole, slot: string) => kept[Number(slot)] ?? '');
+}
+
+/** Free-text redaction, the rule of docs/LOG_REDACTION.md, shared with the shell's `redact_stray`. */
 export function redactText(text: string, options: RedactOptions = {}): string {
   let out = text;
   const known = [...(options.known ?? [])].filter((value) => value.length >= 8).sort((a, b) => b.length - a.length);
   for (const value of known) out = replaceAll(out, value, REDACTED);
   const home = options.home;
   if (home && home.length > 1 && home !== '/' && home !== '\\') out = replaceAll(out, home, '~');
-  out = out.replace(USERINFO, (_whole, scheme: string) => `${scheme}${REDACTED}@`);
-  out = out.replace(QUERY, (whole, separator: string, name: string) =>
-    SECRET_NAME.test(name) || SECRET_PARAM.test(name) ? `${separator}${name}${REDACTED}` : whole,
-  );
-  out = out.replace(AUTH_SCHEME, (_whole, scheme: string) => `${scheme} ${REDACTED}`);
-  out = out.replace(ASSIGNMENT, (_whole, name: string, quote: string) => `${name}${quote} ${REDACTED}`);
-  return out
-    .split(SPACES)
-    .map((word, index) => (index % 2 === 1 ? word : redactWord(word)))
-    .join('');
+  if (out.includes('PRIVATE KEY')) return '[ligne expurgée]';
+  out = redactUserinfo(out);
+  out = redactAuthSchemes(out);
+  out = redactNamedValues(out);
+  return redactRuns(out);
 }
 
 function redactValue(value: unknown, options: RedactOptions, depth: number): unknown {
@@ -217,7 +297,7 @@ const LABEL = /^[A-Za-z0-9_.:-]{1,64}$/;
 
 /** A field of a replaced line kept only if it is a short label the scanner accepts: its event or code. */
 function label(value: unknown): string | undefined {
-  return typeof value === 'string' && LABEL.test(value) && !flagged(value) ? value : undefined;
+  return typeof value === 'string' && LABEL.test(value) && logKinds(value).length === 0 ? value : undefined;
 }
 
 export interface RedactedLine {
@@ -270,6 +350,7 @@ export function redactLogLineDetailed(line: string, options: RedactOptions = {})
       replaced: false,
     };
   }
+  if (line.includes('PRIVATE KEY')) return replacedLine(undefined, ['pem_private_key'], options);
   const out = cut(redactText(cut(line, max), options), max);
   const kinds = logKinds(out);
   return kinds.length > 0 ? replacedLine(undefined, kinds, options) : { line: out, replaced: false };

@@ -164,20 +164,6 @@ const MAX_STRAY_CHARS: usize = 2000;
 const MAX_STRAY_LINE_BYTES: usize = 8 * 1024;
 /// The node turns daemon.log over at 2 MiB: past this size it no longer does, and the shell stops adding to it.
 const MAX_SHELL_DAEMON_LOG_BYTES: u64 = 8 * 1024 * 1024;
-/// Names whose value is a secret, lower case: `name=value`, `name: value`, `"name": "value"`.
-const SECRET_NAMES: [&str; 10] = [
-    "key",
-    "token",
-    "secret",
-    "password",
-    "passwd",
-    "passphrase",
-    "authorization",
-    "cookie",
-    "credential",
-    "seed",
-];
-
 /// Creates the logs folder, for the owner only on macOS and Linux; a link in its place is refused.
 fn ensure_logs_dir() -> std::io::Result<PathBuf> {
     let dir = logs_dir();
@@ -269,180 +255,369 @@ fn read_capped_line<R: BufRead>(reader: &mut R, max: usize) -> std::io::Result<O
     }
 }
 
+const REDACTED: &str = "[expurgé]";
+/// Rule 5 of docs/LOG_REDACTION.md: the words a secret name contains.
+const NAME_WORDS: [&str; 7] = ["pass", "secret", "token", "key", "auth", "cred", "seed"];
+
 /// The shell's own redaction, for what reaches a log without the node's (T4.37): the daemon's raw stderr (the runtime
-/// failing before or outside JavaScript) and the app's errors. The node's rules, checked against the same vectors
-/// (test/fixtures/log-redaction-vectors.json): the local token, a line with a key header, URL credentials, the value
-/// after a secret name (`name=`, `name:`, `"name":`, also as the next word), after `Bearer` or `Basic`, runs of 32
-/// hexadecimal digits, words starting like a known key, and any long word of key characters that is not a real path.
-/// The diagnostic redacts again with the node's full scanner.
+/// failing before or outside JavaScript) and the app's errors. The rule of docs/LOG_REDACTION.md, the same as the
+/// node's `redactText`, checked against the same vectors (test/fixtures/log-redaction-vectors.json): mask by default.
 fn redact_stray(line: &str, token: Option<&str>) -> String {
     let mut text: String = line.chars().take(MAX_STRAY_CHARS).collect();
+    if let Some(token) = token.filter(|token| token.len() >= 8) {
+        text = text.replace(token, REDACTED);
+    }
     if text.contains("PRIVATE KEY") {
         return "[ligne expurgée]".to_string();
     }
-    if let Some(token) = token.filter(|token| token.len() >= 8) {
-        text = text.replace(token, "[expurgé]");
-    }
     let text = redact_userinfo(&text);
-    let mut out = String::with_capacity(text.len());
-    let mut word = String::new();
-    let mut mask_next = false;
-    for c in text.chars() {
-        if c.is_whitespace() {
-            if !word.is_empty() {
-                out.push_str(&redact_stray_word(&word, &mut mask_next));
-                word.clear();
-            }
-            out.push(c);
-        } else {
-            word.push(c);
-        }
-    }
-    if !word.is_empty() {
-        out.push_str(&redact_stray_word(&word, &mut mask_next));
-    }
-    out
+    let text = redact_auth_schemes(&text);
+    let text = redact_named_values(&text);
+    redact_runs(&text)
 }
 
-/// `scheme://user:password@host` becomes `scheme://[expurgé]@host`.
+fn is_name_char(c: Option<&char>) -> bool {
+    c.is_some_and(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '-'))
+}
+
+fn is_word_char(c: Option<&char>) -> bool {
+    c.is_some_and(|c| c.is_ascii_alphanumeric() || *c == '_')
+}
+
+fn is_blank(c: Option<&char>) -> bool {
+    c.is_some_and(|c| c.is_whitespace())
+}
+
+fn starts_with_at(chars: &[char], index: usize, prefix: &str) -> bool {
+    let prefix: Vec<char> = prefix.chars().collect();
+    chars.len() >= index + prefix.len() && chars[index..index + prefix.len()] == prefix[..]
+}
+
+/// Rule 3: from `://` to the last `@` before the next blank or quote.
 fn redact_userinfo(text: &str) -> String {
+    let chars: Vec<char> = text.chars().collect();
     let mut out = String::with_capacity(text.len());
-    let mut rest = text;
-    while let Some(index) = rest.find("://") {
-        let (head, tail) = rest.split_at(index + 3);
-        out.push_str(head);
-        let end = tail
-            .find(|c: char| c == '/' || c.is_whitespace())
-            .unwrap_or(tail.len());
-        match tail[..end].rfind('@') {
-            Some(at) if tail[..at].contains(':') => {
-                out.push_str("[expurgé]");
-                rest = &tail[at..];
+    let mut index = 0;
+    while index < chars.len() {
+        if starts_with_at(&chars, index, "://") {
+            out.push_str("://");
+            let start = index + 3;
+            let mut end = start;
+            while end < chars.len()
+                && !chars[end].is_whitespace()
+                && !matches!(chars[end], '"' | '\'' | '<' | '>')
+            {
+                end += 1;
             }
-            _ => rest = tail,
-        }
-    }
-    out.push_str(rest);
-    out
-}
-
-/// Where a secret name followed by `=` or `:` (maybe after a quote) ends in `word`: the value starts there.
-fn secret_value_start(word: &str) -> Option<usize> {
-    let lower = word.to_ascii_lowercase();
-    SECRET_NAMES
-        .iter()
-        .filter_map(|name| {
-            lower.match_indices(name).find_map(|(index, _)| {
-                let mut end = index + name.len();
-                if matches!(lower.as_bytes().get(end), Some(b'"' | b'\'')) {
-                    end += 1;
+            match chars[start..end].iter().rposition(|c| *c == '@') {
+                Some(at) => {
+                    out.push_str(REDACTED);
+                    index = start + at;
                 }
-                matches!(lower.as_bytes().get(end), Some(b'=' | b':')).then_some(end + 1)
-            })
-        })
-        .min()
-}
-
-/// Runs of 32 hexadecimal digits or more, replaced where they are; the rest of the word stays.
-fn redact_hex_runs(word: &str) -> String {
-    let mut out = String::with_capacity(word.len());
-    let mut run = String::new();
-    for c in word.chars() {
-        if c.is_ascii_hexdigit() {
-            run.push(c);
+                None => index = start,
+            }
             continue;
         }
-        out.push_str(if run.len() >= 32 { "[expurgé]" } else { &run });
-        run.clear();
-        out.push(c);
+        out.push(chars[index]);
+        index += 1;
     }
-    out.push_str(if run.len() >= 32 { "[expurgé]" } else { &run });
     out
 }
 
-/// A real path, whose words are kept: it starts like a path and ends with a file name, maybe a line and a column.
-fn real_path(core: &str) -> bool {
-    let bytes = core.as_bytes();
-    let starts = core.starts_with('/')
-        || core.starts_with("~/")
-        || core.starts_with("./")
-        || core.starts_with("../")
-        || core.starts_with("file://")
-        || (bytes.len() > 2
-            && bytes[0].is_ascii_alphabetic()
-            && bytes[1] == b':'
-            && matches!(bytes[2], b'/' | b'\\'));
-    let last = core.rsplit(['/', '\\']).next().unwrap_or("");
-    let name = last.split(':').next().unwrap_or("");
-    let position_ok = last
-        .split(':')
-        .skip(1)
-        .all(|part| !part.is_empty() && part.bytes().all(|b| b.is_ascii_digit()));
-    starts
-        && position_ok
-        && name.contains('.')
-        && name
-            .rsplit('.')
-            .next()
-            .is_some_and(|ext| !ext.is_empty() && ext.len() <= 10)
+/// Rule 4: the word after `Bearer` or `Basic`.
+fn redact_auth_schemes(text: &str) -> String {
+    let chars: Vec<char> = text.chars().collect();
+    let mut out = String::with_capacity(text.len());
+    let mut index = 0;
+    while index < chars.len() {
+        let boundary = index == 0 || !is_word_char(chars.get(index - 1));
+        let scheme = ["bearer", "basic"].iter().find_map(|word| {
+            let len = word.len();
+            (boundary
+                && chars.len() >= index + len
+                && chars[index..index + len]
+                    .iter()
+                    .collect::<String>()
+                    .eq_ignore_ascii_case(word))
+            .then_some(len)
+        });
+        if let Some(len) = scheme {
+            let mut start = index + len;
+            while is_blank(chars.get(start)) {
+                start += 1;
+            }
+            let mut end = start;
+            while end < chars.len()
+                && !chars[end].is_whitespace()
+                && !matches!(chars[end], '"' | '\'' | '<' | '>' | ',' | ';')
+            {
+                end += 1;
+            }
+            if start > index + len && end > start {
+                out.extend(&chars[index..start]);
+                out.push_str(REDACTED);
+                index = end;
+                continue;
+            }
+        }
+        out.push(chars[index]);
+        index += 1;
+    }
+    out
 }
 
-/// A UUID (8-4-4-4-12 hexadecimal): an identifier the logs keep, not a key.
-fn is_uuid(core: &str) -> bool {
-    let parts: Vec<&str> = core.split('-').collect();
-    parts.len() == 5
-        && parts
-            .iter()
-            .zip([8, 4, 4, 4, 12])
-            .all(|(part, len)| part.len() == len && part.bytes().all(|b| b.is_ascii_hexdigit()))
+/// The quote that opens at `index` (`"`, `'`, `\"`, `\'`), as characters.
+fn quote_at(chars: &[char], index: usize) -> Vec<char> {
+    match (chars.get(index), chars.get(index + 1)) {
+        (Some('"'), _) => vec!['"'],
+        (Some('\''), _) => vec!['\''],
+        (Some('\\'), Some(q)) if matches!(q, '"' | '\'') => vec!['\\', *q],
+        _ => vec![],
+    }
 }
 
-/// One word of a raw line; `mask_next` carries a secret name or an auth scheme over to the next word.
-fn redact_stray_word(word: &str, mask_next: &mut bool) -> String {
-    let scheme = matches!(word.to_ascii_lowercase().as_str(), "bearer" | "basic");
-    if *mask_next {
-        // `Authorization: Bearer <value>`: the scheme stays, its value goes.
-        if scheme {
-            return word.to_string();
+fn find_from(chars: &[char], from: usize, needle: &[char]) -> Option<usize> {
+    if needle.is_empty() || from > chars.len() {
+        return None;
+    }
+    (from..=chars.len().saturating_sub(needle.len()))
+        .find(|&i| chars[i..i + needle.len()] == needle[..])
+}
+
+/// Rule 5: a name holding a secret word, quoted or not, then `=` or `:`, then its whole value.
+fn redact_named_values(text: &str) -> String {
+    let chars: Vec<char> = text.chars().collect();
+    let marker_start: Vec<char> = "[expurgé".chars().collect();
+    let mut out = String::with_capacity(text.len());
+    let mut index = 0;
+    while index < chars.len() {
+        if !is_name_char(chars.get(index)) || (index > 0 && is_name_char(chars.get(index - 1))) {
+            out.push(chars[index]);
+            index += 1;
+            continue;
         }
-        *mask_next = false;
-        return "[expurgé]".to_string();
-    }
-    if scheme {
-        *mask_next = true;
-        return word.to_string();
-    }
-    if let Some(start) = secret_value_start(word) {
-        let value = word[start..].trim_matches(|c: char| matches!(c, '"' | '\'' | '}' | ',' | ';'));
-        if value.is_empty() {
-            *mask_next = true;
-            return word.to_string();
+        let mut end = index;
+        while is_name_char(chars.get(end)) {
+            end += 1;
         }
-        // The name stays, without its `=` or `:`, so the line never reads as an assignment again.
-        return format!("{} [expurgé]", &word[..start - 1]);
+        let name: String = chars[index..end].iter().collect();
+        let lower = name.to_ascii_lowercase();
+        let mut rewritten: Option<(String, usize)> = None;
+        if NAME_WORDS.iter().any(|word| lower.contains(word)) {
+            let name_quote = quote_at(&chars, end);
+            let mut before = end + name_quote.len();
+            while is_blank(chars.get(before)) {
+                before += 1;
+            }
+            let separator = chars.get(before).copied();
+            if matches!(separator, Some('=' | ':')) {
+                let equals = separator == Some('=');
+                let mut start = before + 1;
+                while is_blank(chars.get(start)) {
+                    start += 1;
+                }
+                let value_quote = quote_at(&chars, start);
+                let value_start = start + value_quote.len();
+                let name_part = format!("{name}{}", name_quote.iter().collect::<String>());
+                let head: String = chars[index..start].iter().collect();
+                let quote: String = value_quote.iter().collect();
+                if chars[value_start..].starts_with(&marker_start) {
+                    // Already replaced (a known value): only the `=` goes.
+                    let mut stop = chars[value_start..]
+                        .iter()
+                        .position(|c| *c == ']')
+                        .map_or(chars.len(), |p| value_start + p + 1);
+                    if !value_quote.is_empty() && chars[stop..].starts_with(&value_quote) {
+                        stop += value_quote.len();
+                    }
+                    let kept: String = chars[index..stop].iter().collect();
+                    rewritten = Some((
+                        if equals {
+                            format!("{name_part} {REDACTED}")
+                        } else {
+                            kept
+                        },
+                        stop,
+                    ));
+                } else if !value_quote.is_empty() {
+                    let close = find_from(&chars, value_start, &value_quote);
+                    let stop = close.map_or(chars.len(), |c| c + value_quote.len());
+                    let closing = if close.is_some() { quote.as_str() } else { "" };
+                    rewritten = Some((
+                        if equals {
+                            format!("{name_part} {REDACTED}")
+                        } else {
+                            format!("{head}{quote}{REDACTED}{closing}")
+                        },
+                        stop,
+                    ));
+                } else {
+                    let mut stop = start;
+                    while stop < chars.len()
+                        && !chars[stop].is_whitespace()
+                        && !matches!(
+                            chars[stop],
+                            ',' | ';' | '}' | '&' | ')' | ']' | '"' | '\'' | '\\'
+                        )
+                    {
+                        stop += 1;
+                    }
+                    let value: String = chars[start..stop].iter().collect();
+                    // `Authorization: Bearer <value>`: the scheme stays, rule 4 already replaced its value.
+                    let scheme =
+                        value.eq_ignore_ascii_case("bearer") || value.eq_ignore_ascii_case("basic");
+                    if stop > start && !scheme {
+                        rewritten = Some((
+                            if equals {
+                                format!("{name_part} {REDACTED}")
+                            } else {
+                                format!("{head}{REDACTED}")
+                            },
+                            stop,
+                        ));
+                    }
+                }
+            }
+        }
+        match rewritten {
+            Some((text, stop)) => {
+                out.push_str(&text);
+                index = stop;
+            }
+            None => {
+                out.push_str(&name);
+                index = end;
+            }
+        }
     }
-    let word = redact_hex_runs(word);
-    let core =
-        word.trim_matches(|c: char| !c.is_ascii_alphanumeric() && !matches!(c, '/' | '~' | '.'));
-    let known_prefix = core.len() >= 20
-        && [
-            "sk-", "ghp_", "gho_", "ghs_", "ghu_", "ghr_", "xox", "AKIA", "eyJ",
-        ]
-        .iter()
-        .any(|prefix| core.starts_with(prefix));
-    let key_like = core.len() >= 24
-        && core.chars().any(|c| c.is_ascii_digit())
-        && core.chars().any(|c| c.is_ascii_alphabetic())
-        && core
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || "-_+=./".contains(c))
-        && !real_path(core)
-        && !is_uuid(core);
-    if known_prefix || key_like {
-        "[expurgé]".to_string()
-    } else {
-        word
+    out
+}
+
+/// The allowlist of docs/LOG_REDACTION.md, set aside before rules 6 and 7: UUIDs (dropIds) and `E_…` error codes.
+fn allowed_spans(chars: &[char]) -> Vec<bool> {
+    let mut kept = vec![false; chars.len()];
+    let hex = |c: Option<&char>| c.is_some_and(|c| c.is_ascii_hexdigit());
+    let alnum = |c: Option<&char>| c.is_some_and(|c| c.is_ascii_alphanumeric());
+    let mut index = 0;
+    while index < chars.len() {
+        let after_boundary = index == 0 || !alnum(chars.get(index - 1));
+        // 8-4-4-4-12 hexadecimal.
+        if after_boundary && chars.len() >= index + 36 && !alnum(chars.get(index + 36)) {
+            let uuid = (0..36).all(|offset| {
+                let c = chars.get(index + offset);
+                if matches!(offset, 8 | 13 | 18 | 23) {
+                    c == Some(&'-')
+                } else {
+                    hex(c)
+                }
+            });
+            if uuid {
+                kept[index..index + 36].fill(true);
+                index += 36;
+                continue;
+            }
+        }
+        let code_boundary = index == 0 || !is_word_char(chars.get(index - 1));
+        if code_boundary && chars.get(index) == Some(&'E') && chars.get(index + 1) == Some(&'_') {
+            let mut end = index + 2;
+            while chars
+                .get(end)
+                .is_some_and(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || *c == '_')
+            {
+                end += 1;
+            }
+            let len = end - index - 2;
+            if (2..=60).contains(&len) && !is_word_char(chars.get(end)) {
+                kept[index..end].fill(true);
+                index = end;
+                continue;
+            }
+        }
+        index += 1;
     }
+    kept
+}
+
+/// Rules 6 and 7, with the allowlist set aside: hexadecimal groups split by `:`, `-` or spaces (32 hex digits, one
+/// decimal digit), then runs of 16 key characters mixing letters and digits, or of 32 hexadecimal digits.
+fn redact_runs(text: &str) -> String {
+    let chars: Vec<char> = text.chars().collect();
+    let kept = allowed_spans(&chars);
+    let free = |i: usize| !kept[i];
+    let alnum_at = |i: usize| i < chars.len() && free(i) && chars[i].is_ascii_alphanumeric();
+    let hex_at = |i: usize| i < chars.len() && free(i) && chars[i].is_ascii_hexdigit();
+    // Rule 6.
+    let mut stage: Vec<(char, bool)> = Vec::with_capacity(chars.len());
+    let mut index = 0;
+    while index < chars.len() {
+        if hex_at(index) && (index == 0 || !alnum_at(index - 1)) {
+            let group = |from: usize| {
+                let mut end = from;
+                while hex_at(end) {
+                    end += 1;
+                }
+                end
+            };
+            let first = group(index);
+            let mut ends = vec![];
+            if first - index <= 64 {
+                let mut end = first;
+                while end < chars.len()
+                    && free(end)
+                    && matches!(chars[end], ':' | '-' | ' ')
+                    && hex_at(end + 1)
+                {
+                    let next = group(end + 1);
+                    if next - end - 1 > 64 {
+                        break;
+                    }
+                    ends.push(next);
+                    end = next;
+                }
+            }
+            // The longest series of groups that ends before something other than a letter or a digit.
+            let last = ends.iter().rev().copied().find(|end| !alnum_at(*end));
+            if let Some(end) = last {
+                let span = &chars[index..end];
+                let digits = span.iter().filter(|c| c.is_ascii_hexdigit()).count();
+                if digits >= 32 && span.iter().any(|c| c.is_ascii_digit()) {
+                    stage.extend(REDACTED.chars().map(|c| (c, true)));
+                    index = end;
+                    continue;
+                }
+            }
+        }
+        stage.push((chars[index], kept[index]));
+        index += 1;
+    }
+    // Rule 7.
+    let key_char = |(c, kept): (char, bool)| {
+        !kept && (c.is_ascii_alphanumeric() || matches!(c, '+' | '/' | '=' | '_' | '-'))
+    };
+    let mut out = String::with_capacity(text.len());
+    let mut index = 0;
+    while index < stage.len() {
+        if !key_char(stage[index]) {
+            out.push(stage[index].0);
+            index += 1;
+            continue;
+        }
+        let mut end = index;
+        while end < stage.len() && key_char(stage[end]) {
+            end += 1;
+        }
+        let run: String = stage[index..end].iter().map(|(c, _)| *c).collect();
+        let mixed =
+            run.chars().any(|c| c.is_ascii_alphabetic()) && run.chars().any(|c| c.is_ascii_digit());
+        let hex = run.len() >= 32 && run.chars().all(|c| c.is_ascii_hexdigit());
+        if run.chars().count() >= 16 && (mixed || hex) {
+            out.push_str(REDACTED);
+        } else {
+            out.push_str(&run);
+        }
+        index = end;
+    }
+    out
 }
 
 /// Appends `{ at, code, detail }` to logs/app.log: the app's own errors, with a stable code (AGENTS.md), redacted.
@@ -1462,13 +1637,14 @@ mod tests {
         ] {
             assert!(!out.contains(secret), "{secret} in {out}");
         }
-        // What explains a crash stays: the message, the path and position, an address.
+        // What explains a crash stays: the message, the path and position.
         assert!(
             out.starts_with("FATAL ERROR: heap limit token [expurgé] at /Applications/drop.app/")
         );
         assert!(out.contains("drop.mjs:12:3"));
         assert!(out.contains("OPENROUTER_API_KEY [expurgé]"));
-        assert!(out.contains("0x0000000100c3a4f8"));
+        // Mask by default: a long run of letters and digits goes, even an address.
+        assert!(!out.contains("0x0000000100c3a4f8"));
         // A key header loses its whole line; a long line is cut.
         let header = format!("-----BEGIN {} KEY----- abc", "RSA PRIVATE");
         assert_eq!(redact_stray(&header, None), "[ligne expurgée]");

@@ -18,7 +18,6 @@ import { arch, hostname, platform, release, tmpdir, userInfo } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
-import { scanSecrets } from '@drop/runner';
 import {
   DAEMON_LOG,
   DaemonLog,
@@ -274,17 +273,16 @@ describe('daemon log (T4.37)', () => {
       event: 'log_line_redacted',
       code: 'E_SECRET_DETECTED',
     });
-    // The home folder becomes ~; a path the scanner would take for a secret keeps its end, file name and position.
+    // The home folder becomes ~; a path keeps its words, unless one of them looks like a key.
     const frame = redactLogLine(
       'at start (file:///Users/someone/Applications/drop.app/Contents/Resources/drop.mjs:41523:17)',
       { home: '/Users/someone' },
     );
-    expect(frame).not.toContain('someone');
-    expect(frame).toMatch(/^at start \(.*Resources\/drop\.mjs:41523:17\)$/);
-    expect(scanSecrets(frame)).toEqual([]);
+    expect(frame).toBe('at start (file://~/Applications/drop.app/Contents/Resources/drop.mjs:41523:17)');
+    expect(scanLogLine(frame)).toEqual([]);
     const temp = redactLogLine('at x (/var/folders/7k/qx1n2r3d4c5_6f7g8h9j0k0000gn/T/drop-test-XyZ12/drop.mjs:1:2)');
-    expect(temp).toMatch(/^at x \(…\/.*drop\.mjs:1:2\)$/);
-    expect(scanSecrets(temp)).toEqual([]);
+    expect(temp).not.toContain('qx1n2r3d4c5');
+    expect(temp).toMatch(/^at x \(\[expurgé #[0-9a-f]{8}\]\.mjs:1:2\)$/);
     // A very long line is cut.
     expect(Buffer.byteLength(redactLogLine('a '.repeat(10_000)))).toBeLessThanOrEqual(LOG_LIMITS.maxLineBytes + 32);
   });

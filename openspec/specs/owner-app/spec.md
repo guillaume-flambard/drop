@@ -250,7 +250,7 @@ Sous Windows et Linux, la coque SHALL enregistrer en premier le plugin `single-i
 - **THEN** l'instance ouverte montre la carte de confirmation, aucun second daemon ni seconde icône n'apparaît
 
 ### Requirement: Journal du moteur gardé par l'app
-L'app SHALL lancer le daemon avec `DROP_LOG=file` et sa propre version dans `DROP_APP_VERSION`, et MUST NOT vider `daemon.log`. Ce que le moteur écrit hors de son journal SHALL arriver dans le même fichier, après l'expurgation de la coque, qui suit les mêmes vecteurs que celle du Node, ligne lue jusqu'à 8 Kio, jamais à travers un lien. Les erreurs de l'app SHALL aller dans `DROP_HOME/logs/app.log`, expurgées, avec un fichier précédent au-delà de 1 Mio.
+L'app SHALL lancer le daemon avec `DROP_LOG=file` et sa propre version dans `DROP_APP_VERSION`, et MUST NOT vider `daemon.log`. Ce que le moteur écrit hors de son journal SHALL arriver dans le même fichier, expurgé par la coque selon la règle du Node (`docs/LOG_REDACTION.md`), jamais à travers un lien. Les erreurs de l'app SHALL aller dans `DROP_HOME/logs/app.log`, expurgées, avec un fichier précédent au-delà de 1 Mio.
 
 #### Scenario: AC: journal jamais vidé par l'app
 <!-- openspec-guard:test="desktop logs (T4.37) > keeps daemon.log: the shell never empties it, hands the node its log and redacts what it writes" -->

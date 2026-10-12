@@ -1,5 +1,5 @@
 {
-  "description": "Shared by the node's redaction (packages/node/test/daemon-log.test.ts) and the shell's (apps/desktop/src-tauri/src/main.rs, cargo test): what neither may write to a log, and what both must keep (T4.37).",
+  "description": "Shared by the node's redaction (packages/node/test/daemon-log.test.ts) and the shell's (apps/desktop/src-tauri/src/main.rs, cargo test), which both apply the rule of docs/LOG_REDACTION.md: what neither may write to a log, and what both must keep (T4.37). Inputs from both review rounds of PR #82.",
   "vectors": [
     {
       "name": "AWS secret with slashes",
@@ -108,6 +108,90 @@
       "input": "drop 0199c6a2-7f3e-7c1a-9b2d-4e5f6a7b8c9d expired",
       "absent": [],
       "present": ["0199c6a2-7f3e-7c1a-9b2d-4e5f6a7b8c9d"]
+    },
+    {
+      "name": "key inside a real-looking path",
+      "input": "open failed /tmp/wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY/drop.log",
+      "absent": ["wJalrXUtnFEMI", "K7MDENG", "bPxRfiCYEXAMPLEKEY"],
+      "present": ["open failed", ".log"]
+    },
+    {
+      "name": "base64 key as a file name",
+      "input": "read /tmp/0HsEbKlI4sinhSkBLHI6RawreK1doWkzCuemf9/9rE4=.json",
+      "absent": ["0HsEbKlI4sinhSkBLHI6", "RawreK1doWkzCuemf9", "9rE4"],
+      "present": ["read", ".json"]
+    },
+    {
+      "name": "hex split by colons",
+      "input": "seed 3b:72:6e:d6:d4:97:b1:49:96:d4:b9:61:88:48:85:e6:1a:3f:31:c1:99:2f:f3:f5:54:27:cb:5e:d3:27:dc:d2",
+      "absent": ["3b:72:6e:d6", "d3:27:dc:d2"],
+      "present": ["seed"]
+    },
+    {
+      "name": "hex in 8-character groups split by dashes",
+      "input": "id c5170912-909e8b83-afe8a88b-e2b73d7f",
+      "absent": ["c5170912", "e2b73d7f"],
+      "present": ["id "]
+    },
+    {
+      "name": "hex in 8-character groups split by spaces",
+      "input": "fingerprint 7b221e1a 4fe36e26 15d9cf3f 1636f2fb end",
+      "absent": ["7b221e1a", "1636f2fb"],
+      "present": ["fingerprint", "end"]
+    },
+    {
+      "name": "escaped-quoted password",
+      "input": "payload {\\\"password\\\":\\\"Tr0ub4dor&3xyz\\\"} sent",
+      "absent": ["Tr0ub4dor", "3xyz"],
+      "present": ["payload", "sent"]
+    },
+    {
+      "name": "spaced quoted password",
+      "input": "config \"password\"   :    \"xvaluehere\" done",
+      "absent": ["xvaluehere"],
+      "present": ["config", "done"]
+    },
+    {
+      "name": "slash inside a URL password",
+      "input": "relay https://admin:Hunt/er2Hunter2!@relay.example.org/v1 down",
+      "absent": ["Hunt", "er2Hunter2", "admin"],
+      "present": ["relay.example.org/v1", "down"]
+    },
+    {
+      "name": "at sign inside a URL password",
+      "input": "relay https://admin:Hunter2@Hunter2!@relay.example.org/v1",
+      "absent": ["Hunter2"],
+      "present": ["relay.example.org/v1"]
+    },
+    {
+      "name": "pass as a quoted name",
+      "input": "login \"pass\": \"opensesame\" ok",
+      "absent": ["opensesame"],
+      "present": ["login", "ok"]
+    },
+    {
+      "name": "allowlist: dropId UUIDv7, UUIDv4 and error codes survive",
+      "input": "drop 0199c6a2-7f3e-7c1a-9b2d-4e5f6a7b8c9d and f47ac10b-58cc-4372-a567-0e02b2c3d479 failed E_INVITE_EXPIRED E_RELAY_TIMEOUT E_SECRET_DETECTED",
+      "absent": [],
+      "present": [
+        "0199c6a2-7f3e-7c1a-9b2d-4e5f6a7b8c9d",
+        "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+        "E_INVITE_EXPIRED",
+        "E_RELAY_TIMEOUT",
+        "E_SECRET_DETECTED"
+      ]
+    },
+    {
+      "name": "allowlist: versions and dates survive",
+      "input": "drop 0.1.0 node 24.21.0 os 27.0.0 at 2026-10-12T14:07:54.668Z",
+      "absent": [],
+      "present": ["0.1.0", "24.21.0", "27.0.0", "2026-10-12T14:07:54.668Z"]
+    },
+    {
+      "name": "path without a key kept",
+      "input": "read /Applications/drop.app/Contents/Resources/drop.mjs:41523:17 failed",
+      "absent": [],
+      "present": ["/Applications/drop.app/Contents/Resources/drop.mjs:41523:17"]
     }
   ]
 }
