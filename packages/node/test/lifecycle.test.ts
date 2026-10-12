@@ -152,7 +152,9 @@ describe('daemon lifecycle (T4.18)', () => {
       expect(await until(() => listening(port(3)), 30_000)).toBe(true);
       shell.kill('SIGKILL');
       expect(await until(() => Promise.resolve(!alive(daemonPid)), 15_000)).toBe(true);
-      expect(await listening(port(3))).toBe(false);
+      // Windows can report a process exited before its listening socket has finished closing.
+      // Observe the socket eventually closing rather than racing its teardown instant.
+      expect(await until(async () => !(await listening(port(3))), 5_000)).toBe(true);
     } finally {
       if (alive(daemonPid)) process.kill(daemonPid, 'SIGKILL');
     }

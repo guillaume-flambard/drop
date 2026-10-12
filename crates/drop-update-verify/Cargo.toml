@@ -1,0 +1,10 @@
+[package]
+name = "drop-update-verify"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+
+[dependencies]
+base64 = "0.22"
+minisign-verify = "0.2.5"
+serde_json = "1"

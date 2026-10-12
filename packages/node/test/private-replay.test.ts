@@ -136,6 +136,7 @@ describe('bounded received drops', () => {
     }
   });
 
+  // This synchronous filesystem migration is much slower on heavily loaded Windows CI disks.
   it('prunes old markers and rejects them after restart and clock rollback', () => {
     const root = mkdtempSync(join(tmpdir(), 'drop-replay-rollback-'));
     try {
@@ -149,7 +150,7 @@ describe('bounded received drops', () => {
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
-  });
+  }, 30_000);
 
   it('fails closed when replay clock state is corrupt', () => {
     const root = mkdtempSync(join(tmpdir(), 'drop-replay-corrupt-'));
