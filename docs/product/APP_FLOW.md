@@ -196,7 +196,7 @@ Contrat : [requester-mcp](../../openspec/specs/requester-mcp/spec.md), exigences
 
 Contrat : [node](../../openspec/specs/node/spec.md), exigences « Contenu exact de la carte de consentement », « Écran de relecture champ par champ » ; [owner-app](../../openspec/specs/owner-app/spec.md), « Panneau servi par le Node ».
 
-1. **Existant** : sur macOS, une notification « Julie a besoin d'aide » avec le titre de la capacité en sous-titre ; elle ne contient pas l'URL du panneau (D18). Dans l'app, elle porte l'icône de l'app et un clic ouvre le panneau (T4.14, `packages/node/src/notify.ts`). Le badge de l'onglet Demandes compte les décisions en attente.
+1. **Existant** : sur macOS, une notification « Julie a besoin d'aide » avec le titre de la capacité en sous-titre ; elle ne contient pas l'URL du panneau (D18). Dans l'app, elle porte l'icône de l'app et un clic ouvre le panneau (T4.14, `packages/node/src/notify.ts`) ; depuis T4.30, « Voir » ouvre la carte complète de cette demande et « Refuser » la refuse par le Node, jamais « Autoriser » (`apps/desktop/src-tauri/src/notifications.rs`). Le badge de l'onglet Demandes compte les décisions en attente.
 2. **Existant** : le propriétaire clique l'icône ; le panneau s'ouvre sous elle (`main.rs`, `toggle_panel`).
 3. **Existant** : la carte montre qui demande et par quel agent, la question entre guillemets, « Pourquoi », ce que le demandeur « recevra » et ce qu'il « ne recevra jamais », puis le coût s'il existe, « Expire dans mm:ss » et, si besoin, « Sensibilité haute » (T4.14, `packages/desktop-ui/src/panel/requests.tsx`, `ApprovalCard`).
 4. **Existant** : trois choix : « Pas maintenant » (par défaut au clavier, T4.14), « Refuser », « Autoriser une fois », plus « Répondre moi-même » (T4.3). Le panneau annonce le résultat (« Demande autorisée une fois. ») et place le focus sur lui.
@@ -328,6 +328,6 @@ Relevés le 10 octobre 2026. Au 11 octobre : E1, E2, E3 et E5 sont corrigés par
 - **E2, Existant** : `PRODUCT.md` et le commentaire de `main.rs` disent que la personne décide dans le panneau après un lien `drop://pair` ; le panneau accepte l'invitation dès l'ouverture, sans clic.
 - **E3, Existant** : la spec node prévoit le retrait de champs à la relecture, et `docs/GUIDE.md` dit que la propriétaire peut « retirer des champs ». Seule la page historique `/` le permet ; le panneau propose seulement « Envoyer » ou « Ne pas envoyer ».
 - **E4, Existant** : le panneau et la passerelle portent le parcours `drop://link`, mais le profil privé, seul profil créé par l'app Mac, le refuse (`daemon.ts`).
-- **E5, Existant** : la spec node dit qu'un clic sur la notification ouvre l'UI locale ; la notification ne porte pas d'URL (D18) et rien ne relie ce clic au panneau.
+- **E5, Résolu** (T4.14, T4.30) : la notification ne porte toujours pas d'URL (D18) ; dans l'app Mac, un clic ou « Voir » ouvre le panneau sur la carte de la demande.
 - **E6, Existant** : `docs/GUIDE.md` liste quatre outils MCP ; le serveur en expose six (`packages/requester-mcp/src/server.ts`).
 - **E7, Existant** : `docs/ONBOARDING.md` dit que partager une source exige de choisir outils, données, modèle et approbateur ; l'interrupteur du panneau partage en un clic avec les outils en lecture seule par défaut.

@@ -5,13 +5,15 @@
 // emit no click, v2.tauri.app/learn/system-tray), the bundled program names, and single instance on Windows and Linux.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod notifications;
+
 use std::fs;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpStream;
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStderr, ChildStdout, Command, Stdio};
 #[cfg(target_os = "macos")]
-use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::AtomicU64;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::thread;
@@ -31,6 +33,8 @@ use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
 use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_updater::{Update, UpdaterExt};
 use url::Url;
+
+use notifications::{DenyOutcome, NotificationAction, RequestKind, Step};
 
 const DEFAULT_RELAY: &str = "ws://127.0.0.1:7780/v1";
 
@@ -548,14 +552,17 @@ fn api_port() -> Result<u16, &'static str> {
         .ok_or("E_CONFIG")
 }
 
-fn panel_url(port: u16, extra: &[(&str, String)]) -> Option<Url> {
+/// The node's local token, which every call to its API carries.
+fn local_token() -> Option<String> {
     let token = fs::read_to_string(drop_home().join("local-token")).ok()?;
     let token = token.trim();
-    if token.is_empty() {
-        return None;
-    }
+    (!token.is_empty()).then(|| token.to_string())
+}
+
+fn panel_url(port: u16, extra: &[(&str, String)]) -> Option<Url> {
+    let token = local_token()?;
     let mut url = Url::parse(&format!("http://127.0.0.1:{port}/app")).ok()?;
-    url.query_pairs_mut().append_pair("token", token);
+    url.query_pairs_mut().append_pair("token", &token);
     for (key, value) in extra {
         url.query_pairs_mut().append_pair(key, value);
     }
@@ -854,63 +861,102 @@ fn show_workspace(app: &AppHandle) {
 
 /// Notifications handed over by the daemon (`DROP_NOTIFY=shell`, T4.14): one JSON object per line. Anything else
 /// on stdout is ignored. Peer text arrives as JSON strings and stays plain notification text, cut at 200 characters.
+/// Since T4.30 the line also names the request, for the « Voir » and « Refuser » actions.
 fn relay_notifications(app: AppHandle, stdout: ChildStdout) {
     thread::spawn(move || {
         // Split on bytes: one malformed line must not stop the reader and close the daemon's stdout.
         for raw in BufReader::new(stdout).split(b'\n').map_while(Result::ok) {
-            let line = String::from_utf8_lossy(&raw);
-            let Ok(value) = serde_json::from_str::<serde_json::Value>(&line) else {
-                continue;
-            };
-            let Some(notice) = value.get("dropNotify") else {
-                continue;
-            };
-            let text = |key: &str| {
-                notice
-                    .get(key)
-                    .and_then(serde_json::Value::as_str)
-                    .map(|s| s.chars().take(200).collect::<String>())
-            };
-            if let (Some(title), Some(subtitle)) = (text("title"), text("subtitle")) {
-                show_notification(&app, title, subtitle);
+            if let Some(notice) = notifications::parse_notice(&String::from_utf8_lossy(&raw)) {
+                show_notification(&app, notice);
             }
         }
     });
 }
 
-/// Notifications waiting for a click at once; beyond this, new ones are shown without waiting.
+/// Identifies a notification that names no request (a daemon older than T4.30).
 #[cfg(target_os = "macos")]
-static WAITING: AtomicUsize = AtomicUsize::new(0);
-#[cfg(target_os = "macos")]
-const MAX_WAITING: usize = 8;
-#[cfg(target_os = "macos")]
-static IDENTITY: std::sync::Once = std::sync::Once::new();
+static NOTICES: AtomicU64 = AtomicU64::new(0);
 
-/// Shown under the app's identity, hence its icon; a click opens the panel where it last was.
+/// Shown under the app's identity, hence its icon (UserNotifications, T4.30).
 #[cfg(target_os = "macos")]
-fn show_notification(app: &AppHandle, title: String, body: String) {
-    let app = app.clone();
-    let identifier = app.config().identifier.clone();
-    thread::spawn(move || {
-        IDENTITY.call_once(|| {
-            if let Err(error) = mac_notification_sys::set_application(&identifier) {
-                eprintln!("E_NOTIFY cannot use the app identity: {error}");
-            }
-        });
-        let wait = WAITING.fetch_add(1, Ordering::SeqCst) < MAX_WAITING;
-        let mut options = mac_notification_sys::Notification::new();
-        options.wait_for_click(wait);
-        match mac_notification_sys::send_notification(&title, None, &body, Some(&options)) {
-            Ok(mac_notification_sys::NotificationResponse::Click) => show_panel(&app, None),
-            Ok(_) => {}
-            Err(error) => eprintln!("E_NOTIFY {error}"),
-        }
-        WAITING.fetch_sub(1, Ordering::SeqCst);
-    });
+fn show_notification(_app: &AppHandle, notice: notifications::Notice) {
+    notifications::mac::show(&notice, NOTICES.fetch_add(1, Ordering::SeqCst));
 }
 
+/// Windows and Linux: no notification yet (docs/RELEASE.md); the panel and `drop pending` show every request.
 #[cfg(not(target_os = "macos"))]
-fn show_notification(_app: &AppHandle, _title: String, _body: String) {}
+fn show_notification(_app: &AppHandle, _notice: notifications::Notice) {}
+
+/// What the owner chose on a notification (T4.30). Never an authorization: there is no such action.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn on_notification_action(
+    app: &AppHandle,
+    action: NotificationAction,
+    request: Option<(RequestKind, String)>,
+) {
+    match notifications::step_for(action, request) {
+        Step::OpenRequest(drop_id) => open_request(app, &drop_id),
+        Step::OpenPanel => show_panel(app, None),
+        Step::Deny(drop_id) => deny_from_notification(app, &drop_id),
+        Step::Nothing => {}
+    }
+}
+
+/// The node's port, once the daemon the app launched answers.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn ready_port(app: &AppHandle) -> Option<u16> {
+    if !app.state::<Daemon>().ready.load(Ordering::SeqCst) {
+        return None;
+    }
+    // A poisoned lock reads as no port: a notification action never panics.
+    app.state::<Daemon>()
+        .verified_port
+        .lock()
+        .ok()
+        .and_then(|port| *port)
+}
+
+/// « Voir »: the panel on the full card of that request, whose text the notification had to cut. A panel already on
+/// the node's page only gets the request in its address fragment, so nothing reloads and a draft answer survives;
+/// otherwise it loads with `?request=`.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn open_request(app: &AppHandle, drop_id: &str) {
+    let port = ready_port(app);
+    if let (Some(window), Some(port)) = (app.get_webview_window("panel"), port) {
+        let loaded = window.url().ok().is_some_and(|url| {
+            url.host_str() == Some("127.0.0.1") && url.port() == Some(port) && url.path() == "/app"
+        });
+        match notifications::landing_script(drop_id) {
+            Some(script) if loaded => {
+                let _ = window.eval(&script);
+            }
+            _ => {
+                if let Some(url) = panel_url(port, &[("request", drop_id.to_string())]) {
+                    let _ = window.navigate(url);
+                }
+            }
+        }
+    }
+    show_panel(app, None);
+}
+
+/// « Refuser »: the node's refusal route, the card's own decision path. A request that no longer waits is ignored
+/// with its stable code; when the node cannot be reached, the panel opens so the owner sees the card still waits.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn deny_from_notification(app: &AppHandle, drop_id: &str) {
+    let port = ready_port(app);
+    let outcome = match (port, local_token()) {
+        (Some(port), Some(token)) => notifications::deny(port, &token, drop_id),
+        _ => DenyOutcome::Failed("E_NOTIFY_UNREACHABLE"),
+    };
+    let (code, open) = notifications::after_deny(&outcome);
+    if let Some(code) = code {
+        log_error(&code, "notification Refuser did not apply");
+    }
+    if open {
+        open_request(app, drop_id);
+    }
+}
 
 fn toggle_panel(app: &AppHandle, near: PhysicalPosition<f64>) {
     if let Some(window) = app.get_webview_window("panel") {
@@ -1123,6 +1169,9 @@ fn build_panel(app: &tauri::App) -> tauri::Result<tauri::WebviewWindow> {
         .title("drop")
         .inner_size(PANEL_WIDTH, PANEL_HEIGHT)
         .resizable(false)
+        // The panel shows requests: kept out of screen sharing and captures (T4.30). macOS: NSWindow sharingType
+        // none; Windows: WDA_EXCLUDEFROMCAPTURE; Linux has no such setting (tao 0.37 ignores it there).
+        .content_protected(true)
         .visible(false);
     #[cfg(target_os = "macos")]
     let builder = builder
@@ -1185,6 +1234,17 @@ fn main() {
             let updates = app.config().plugins.0.contains_key("updater");
             if updates {
                 handle.plugin(tauri_plugin_updater::Builder::new().build())?;
+            }
+
+            // The delegate and the « Voir » and « Refuser » category exist before the first notification (T4.30).
+            #[cfg(target_os = "macos")]
+            {
+                let actions = handle.clone();
+                if !notifications::mac::install(Box::new(move |action, request| {
+                    on_notification_action(&actions, action, request);
+                })) {
+                    log_error("E_NOTIFY_UNBUNDLED", "notifications need the app bundle");
+                }
             }
 
             let window = build_panel(app)?;

@@ -123,7 +123,8 @@ Source : `apps/desktop/web/index.html`.
 
 - **Existant** : « Julie a besoin d'aide » avec le titre de la capacité en sous-titre, et « Résultat à relire avant envoi » avec le titre (`packages/node/src/daemon.ts`).
 - **Existant** : le texte des pairs passe en argument, jamais dans le script, et la notification ne contient pas le jeton (D18, `notify.ts`).
-- **Existant** : aucune notification sous Linux ; aucun lien prouvé entre un clic sur la notification et le panneau (écart E5).
+- **Existant** : aucune notification sous Windows et Linux ; dans l'app Mac, un clic ouvre le panneau (T4.14).
+- **Existant (T4.30)** : dans l'app Mac, la notification d'une décision porte deux actions, « Voir » et « Refuser », jamais « Autoriser », puisqu'elle coupe le texte du pair à 200 caractères. « Voir » et un clic ouvrent le panneau sur la carte complète, le focus sur « Pas maintenant ». « Refuser » passe par le chemin de décision de la carte et ne vaut que si la demande attend encore ; sinon il est ignoré avec `E_NOT_PENDING` ou `E_EXPIRED`. Niveau d'interruption ordinaire : un mode Concentration la garde pour plus tard. Le panneau est exclu du partage d'écran sur macOS et Windows (`content_protected`).
 
 ### 3.10 Diagnostic de « Ton espace » (T4.37)
 

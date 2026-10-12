@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs.
 import { cn } from '../lib/utils.ts';
 import { ConnectAgentsCard, InviteCard, LinkCard } from './deep-links.tsx';
 import { connectionStatus, failureText } from './logic.ts';
+import { readRequestEntry, requestEntry } from './notification-entry.ts';
 import { RequestsTab, editing, type RequestsData } from './requests.tsx';
 import { TeamTab } from './team.tsx';
 import { ToolsTab, loadTools } from './tools.tsx';
@@ -60,6 +61,8 @@ function readDeepLink(): { invitation: string | null; link: LinkRequest | null }
 
 export default function PanelApp() {
   const deepLink = useMemo(readDeepLink, []);
+  const [requestOpened, setRequestOpened] = useState(readRequestEntry);
+  const requestLanded = useRef(false);
   const [tab, setTab] = useState<Tab>('requests');
   const [status, setStatus] = useState<PanelStatus | null | 'down'>(null);
   const [requests, setRequests] = useState<RequestsData | null>(null);
@@ -148,6 +151,31 @@ export default function PanelApp() {
   useEffect(() => {
     refreshRequests();
   }, [refreshRequests]);
+
+  // « Voir » on a panel already open (T4.30): the app sets `#request=`; the panel lands without reloading.
+  useEffect(() => {
+    const onHash = () => {
+      const dropId = readRequestEntry();
+      if (!dropId) return;
+      requestLanded.current = false;
+      setRequestOpened(dropId);
+      refreshRequests();
+    };
+    window.addEventListener('hashchange', onHash);
+    return () => {
+      window.removeEventListener('hashchange', onHash);
+    };
+  }, [refreshRequests]);
+
+  // Opened from a request notification (T4.30): land on that card once its requests are loaded.
+  useEffect(() => {
+    if (!requestOpened || !requests || requestLanded.current) return;
+    requestLanded.current = true;
+    setTab('requests');
+    const landing = requestEntry(requests.pending, requestOpened);
+    if ('focus' in landing) focusTo(landing.focus);
+    if ('notice' in landing) actions.info(landing.notice);
+  }, [requestOpened, requests, focusTo, actions]);
 
   // Opened from a drop://pair link: show who invites, then pair only after « Rejoindre ». The code stays in memory.
   useEffect(() => {
