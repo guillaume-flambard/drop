@@ -119,6 +119,11 @@ describe('join page (T4.23)', () => {
     }
     expect(html).toContain(`content="default-src 'none'; script-src 'sha256-${hash}'`);
     expect(html).not.toContain('{{');
+    // A GitHub draft release is invisible to invited testers: no dead public download.
+    expect(html).toContain('La bêta est encore privée.');
+    expect(html).not.toContain('github.com/memolabs-dev/drop/releases/latest');
+    expect(html).not.toContain('join-downloads');
+
     expect((await fetch(`${preview.url}/demarrer.html`)).headers.get('content-security-policy')).toContain(
       "script-src 'none'",
     );

@@ -48,6 +48,17 @@
         <li class="install-card">
           <h2><span class="step-number">1</span> Installe drop</h2>
           <p id="join-recommended" class="join-muted">Choisis le fichier de ton système sur la page des versions.</p>
+          <!-- if:beta -->
+          <div class="note" role="status">
+            <p>
+              <strong>La bêta est encore privée.</strong> Les installateurs sont actuellement distribués
+              individuellement aux testeurs, et les versions GitHub restent en brouillon. Demande à la personne qui t'a
+              invité de te transmettre un installateur de test. Garde cette page ouverte : après installation, tu
+              pourras reprendre ton invitation à l'étape 2.
+            </p>
+          </div>
+          <!-- /if:beta -->
+          <!-- if:open -->
           <ul class="join-downloads">
             <li data-os="mac">
               <a class="button" href="https://github.com/memolabs-dev/drop/releases/latest"
@@ -65,6 +76,7 @@
               >
             </li>
           </ul>
+          <!-- /if:open -->
           <p class="join-muted">
             Les fichiers viennent de la page des versions de drop sur GitHub. Déjà installé ? Passe à l'étape 2.
           </p>
