@@ -27,7 +27,7 @@ import {
   sendInOrder,
   type IrohOptions,
 } from '../src/iroh.ts';
-import { renderPanel } from '../src/panel.ts';
+import { renderPanel } from '../src/workspace.ts';
 import { MemoryStore, startMesh, until } from './helpers.ts';
 
 const root = join(fileURLToPath(import.meta.url), '..', '..', '..', '..');

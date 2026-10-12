@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { applyOnboarding, manualOnboarding, previewOnboarding } from '../src/onboarding.ts';
-import { renderPanel } from '../src/panel.ts';
+import { connectionStatus, onboardingMessage } from '../../desktop-ui/src/panel/logic.ts';
 import { expectPrivateMode } from '../../../test/private-mode.ts';
 
 function cursorPlan(options: Parameters<typeof previewOnboarding>[0]) {
@@ -282,7 +282,12 @@ describe('local agent onboarding (T3.3)', () => {
       serverSource: f.source,
     });
     expect(result[0]).toMatchObject({ state: 'connected', restartRequired: true });
-    expect(renderPanel()).toContain("status.relayConnected ? ' · connecté' : ' · hors ligne'");
+    // The panel reports the restart with the result, and the team state apart, in its header (T4.24).
+    const message = onboardingMessage([{ agent: 'cursor', detail: 'Configuration modifiée' }], 'connect');
+    expect(message).toContain('Cursor : Configuration modifiée');
+    expect(message).toContain('à vérifier après relance');
+    expect(connectionStatus({ displayName: 'Julie', relayConnected: false }).text).toBe('Julie · hors ligne');
+    expect(connectionStatus({ displayName: 'Julie', relayConnected: true }).text).toBe('Julie · connecté');
   });
 
   it('keeps only three private backups for repeated connections and disconnections', async () => {

@@ -1,6 +1,7 @@
 /**
- * Compiles React/Radix/shadcn-style desktop UI as offline assets.
- * Compressed JS/CSS are embedded in the single Node distribution.
+ * Compiles React/Radix/shadcn-style desktop UI as offline assets: the workspace window (`src/main.tsx`) and the menu
+ * bar panel (`src/panel/main.tsx`, T4.24) share one stylesheet. Compressed JS/CSS are embedded in the single Node
+ * distribution.
  * Usage: node scripts/build-desktop-ui.ts [--check]
  * With --check nothing is written: the committed assets must decode to exactly the freshly built JS and CSS.
  * The decoded content is compared, not the gzip bytes, which differ between zlib builds of each system.
@@ -14,13 +15,37 @@ import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 
 /** The JS and CSS a generated module embeds, decoded; empty when the module is absent. */
-function embedded(module: string): { js: Buffer; css: Buffer } {
+function embedded(module: string): { js: Buffer; panelJs: Buffer; css: Buffer } {
   const decode = (name: string): Buffer => {
     const block = new RegExp('export const ' + name + ' =\\n\\[([\\s\\S]*?)\\]').exec(module)?.[1] ?? '';
     const base64 = [...block.matchAll(/'([A-Za-z0-9+/=]*)'/g)].map((match) => match[1]).join('');
     return base64 ? gunzipSync(Buffer.from(base64, 'base64')) : Buffer.alloc(0);
   };
-  return { js: decode('workspaceJsGzipBase64'), css: decode('workspaceCssGzipBase64') };
+  return {
+    js: decode('workspaceJsGzipBase64'),
+    panelJs: decode('panelJsGzipBase64'),
+    css: decode('workspaceCssGzipBase64'),
+  };
+}
+
+/** One browser bundle, minified, self-contained: no import is left for the page to fetch. */
+async function compile(entry: string): Promise<Uint8Array> {
+  const built = await build({
+    entryPoints: [entry],
+    platform: 'browser',
+    target: ['es2022'],
+    format: 'iife',
+    jsx: 'automatic',
+    bundle: true,
+    minify: true,
+    sourcemap: false,
+    legalComments: 'none',
+    write: false,
+    logLevel: 'warning',
+  });
+  const output = built.outputFiles[0]?.contents;
+  if (!output || output.length === 0) throw new Error('E_WORKSPACE_BUILD: frontend JavaScript missing');
+  return output;
 }
 
 export async function buildDesktopUi(
@@ -31,21 +56,8 @@ export async function buildDesktopUi(
   const out = join(repoRoot, 'packages', 'node', 'src', 'workspace-assets.generated.ts');
   const temp = mkdtempSync(join(tmpdir(), 'drop-desktop-ui-'));
   try {
-    const built = await build({
-      entryPoints: [join(uiRoot, 'src', 'main.tsx')],
-      platform: 'browser',
-      target: ['es2022'],
-      format: 'iife',
-      jsx: 'automatic',
-      bundle: true,
-      minify: true,
-      sourcemap: false,
-      legalComments: 'none',
-      write: false,
-      logLevel: 'warning',
-    });
-    const bundle = built.outputFiles[0]?.contents;
-    if (!bundle || bundle.length === 0) throw new Error('E_WORKSPACE_BUILD: frontend JavaScript missing');
+    const bundle = await compile(join(uiRoot, 'src', 'main.tsx'));
+    const panel = await compile(join(uiRoot, 'src', 'panel', 'main.tsx'));
     const tailwindCli = join(uiRoot, 'node_modules', '@tailwindcss', 'cli', 'dist', 'index.mjs');
     const cssPath = join(temp, 'workspace.css');
     execFileSync(process.execPath, [tailwindCli, '-i', join(uiRoot, 'src', 'styles.css'), '-o', cssPath, '--minify'], {
@@ -67,6 +79,9 @@ export async function buildDesktopUi(
       'export const workspaceJsGzipBase64 =\n' +
       chunks(bundle) +
       ';\n' +
+      'export const panelJsGzipBase64 =\n' +
+      chunks(panel) +
+      ';\n' +
       'export const workspaceCssGzipBase64 =\n' +
       chunks(css) +
       ';\n';
@@ -79,14 +94,20 @@ export async function buildDesktopUi(
     })();
     if (check) {
       const committed = embedded(previous);
-      if (!committed.js.equals(Buffer.from(bundle)) || !committed.css.equals(css)) {
+      if (
+        !committed.js.equals(Buffer.from(bundle)) ||
+        !committed.panelJs.equals(Buffer.from(panel)) ||
+        !committed.css.equals(css)
+      ) {
         throw new Error('E_WORKSPACE_STALE: rebuild with node scripts/build-desktop-ui.ts and commit the result');
       }
     } else if (previous !== next) writeFileSync(out, next);
     process.stdout.write(
       'Drop UI: React + Radix built offline (' +
         String(bundle.length) +
-        ' JS bytes, ' +
+        ' workspace JS bytes, ' +
+        String(panel.length) +
+        ' panel JS bytes, ' +
         String(css.length) +
         ' CSS bytes)\n',
     );

@@ -1,6 +1,6 @@
 # Raccorder ses agents en deux confirmations
 
-**Existant : T3.3 est livrée, vérifiée sur fixtures, en attente de recette manuelle.** La change est archivée ([vérification](../openspec/changes/archive/2026-10-09-t3-3-local-agent-onboarding/proof/verification.md)) ; la recette humaine sur un Mac de test reste à faire. Le panneau local (`packages/node/src/panel.ts`) permet d'analyser les treize clients de D55 (T4.5, D66, `packages/capabilities/src/clients.ts`), de les sélectionner, puis de confirmer l'ajout. Depuis T4.22 (D84, D85), les treize se raccordent automatiquement sur macOS, Windows et Linux ; la configuration à copier ne reste qu'en secours, avec sa raison, quand drop ne peut pas écrire. L'app Mac est signée et notarisée ; sa recette sur un Mac propre reste à faire (T3.4). L'expérience dans la barre de menus n'est donc pas encore validée sur une installation neuve.
+**Existant : T3.3 est livrée, vérifiée sur fixtures, en attente de recette manuelle.** La change est archivée ([vérification](../openspec/changes/archive/2026-10-09-t3-3-local-agent-onboarding/proof/verification.md)) ; la recette humaine sur un Mac de test reste à faire. Le panneau local (`packages/desktop-ui/src/panel/`) permet d'analyser les treize clients de D55 (T4.5, D66, `packages/capabilities/src/clients.ts`), de les sélectionner, puis de confirmer l'ajout. Depuis T4.22 (D84, D85), les treize se raccordent automatiquement sur macOS, Windows et Linux ; la configuration à copier ne reste qu'en secours, avec sa raison, quand drop ne peut pas écrire. L'app Mac est signée et notarisée ; sa recette sur un Mac propre reste à faire (T3.4). L'expérience dans la barre de menus n'est donc pas encore validée sur une installation neuve.
 
 ## Ce que couvrent les deux confirmations
 
@@ -84,9 +84,9 @@ Si le bouton ne fait rien, la page donne le code à copier : dans drop, Mon espa
 
 Refus possibles, chacun avec son code : invitation illisible (`E_INVITE`), expirée (`E_INVITE_EXPIRED`), modifiée depuis son envoi (`E_INVITE_SIG`), déjà utilisée (`E_INVITE_USED`), relais non autorisé sur ce poste (`E_INVITE_RELAY` : `ws:` seulement vers une adresse privée, `wss:` vers une adresse privée ou un nom DNS, puis la liste de la politique d'organisation), configuration de drop verrouillée par une autre opération (`E_LOCKED`) ou modifiée pendant « Rejoindre » (`E_CONFLICT`) ; dans ces deux derniers cas l'invitation reste valable et il suffit de réessayer.
 
-Un lien `drop://pair` (T4.14) ouvre la même carte. Le panneau de la barre de menus donne encore ce lien-là et ne propose pas « Connecter mes agents » après « Rejoindre » : il passe à React dans un autre chantier (T4.31).
+Un lien `drop://pair` (T4.14) ouvre la même carte (`packages/desktop-ui/src/panel/`). Le panneau de la barre de menus, passé à React en T4.24, donne encore ce lien-là et ne propose pas « Connecter mes agents » après « Rejoindre » : ces suites restent dans T4.31.
 
-**Partager un outil, ce qui existe.** Dans « Mes outils », chaque serveur MCP partageable d'un agent installé porte un interrupteur « Partager … ». Un clic suffit (`packages/node/src/panel.ts`, `packages/node/src/share.ts`) :
+**Partager un outil, ce qui existe.** Dans « Mes outils », chaque serveur MCP partageable d'un agent installé porte un interrupteur « Partager … ». Un clic suffit (`packages/desktop-ui/src/panel/`, `packages/node/src/share.ts`) :
 
 - la capacité publiée est `mcp.answer` sur ce serveur, nommée « mon » suivi du genre ou du nom du serveur ;
 - les outils retenus sont ceux que le serveur marque lui-même en lecture seule (`readOnlyHint`) ; si aucun ne l'est, le partage est refusé et le message d'erreur liste les outils disponibles ;
