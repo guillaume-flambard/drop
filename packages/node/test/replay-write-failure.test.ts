@@ -23,8 +23,22 @@ vi.mock('node:fs', async (importOriginal) => {
 import { DropHome } from '../src/home.ts';
 
 const NOW = 1_791_460_000_000;
+const WINDOWS = process.platform === 'win32';
 /** Windows skips folder syncs (syncDirectory), so the digest's file sync comes third there. */
-const DIGEST_FILE_SYNC = process.platform === 'win32' ? 3 : 5;
+const DIGEST_FILE_SYNC = WINDOWS ? 3 : 5;
+/**
+ * Syncs made by one claim that prunes expired markers: clock, digest, pruned folder, marker, digest, each file sync
+ * followed by its folder sync except on Windows, which keeps only the four file syncs.
+ */
+const PRUNING_CLAIM_SYNCS = WINDOWS ? 4 : 9;
+/** Syncs made by the first claim on a fresh home: journal, clock, digest, version, journal removal, marker, digest. */
+const FIRST_CLAIM_SYNCS = WINDOWS ? 6 : 13;
+/**
+ * Every test here makes real durable writes, and Windows flushes each file to disk (FlushFileBuffers). On a loaded
+ * Windows runner the loops below took up to 8.2 s against a 5 s default (T4.34). The tests are synchronous, so vitest
+ * cannot stop them early: the timeout only judges the duration once they end, and a hang is not caught either way.
+ */
+const DURABLE_WRITE_TIMEOUT_MS = 20_000;
 
 afterEach(() => {
   fsyncFault.always = false;
@@ -32,7 +46,7 @@ afterEach(() => {
   fsyncFault.calls = 0;
 });
 
-describe('replay clock write failures', () => {
+describe('replay clock write failures', { timeout: DURABLE_WRITE_TIMEOUT_MS }, () => {
   it('does not accumulate temporary files when durable writes repeatedly fail', () => {
     const root = mkdtempSync(join(tmpdir(), 'drop-replay-fsync-'));
     fsyncFault.always = true;
@@ -98,49 +112,54 @@ describe('replay clock write failures', () => {
     expect(home.claimDrop(uuidv7(at + 2), at + 2)).toBe('claimed');
   }
 
-  it('keeps admitting after a transient sync failure at any step of a claim that prunes expired markers', () => {
-    // Each step of the claim in turn: clock, digest, pruned folder, marker. None may leave the store refusing for good.
-    for (let step = 1; step <= 12; step += 1) {
-      const root = mkdtempSync(join(tmpdir(), 'drop-replay-prune-fault-'));
-      try {
-        const home = new DropHome(root);
-        expect(home.claimDrop(uuidv7(NOW), NOW)).toBe('claimed');
-        expect(home.claimDrop(uuidv7(NOW + 1), NOW + 1)).toBe('claimed');
-        const later = NOW + REPLAY_WINDOW_MS + 60_000;
-        const dropId = uuidv7(later);
+  function withHome(prefix: string, run: (home: DropHome) => void): void {
+    const root = mkdtempSync(join(tmpdir(), prefix));
+    try {
+      run(new DropHome(root));
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+
+  /**
+   * Breaks each sync of one claim in turn, on a home brought by `prepare` to the state under test (it returns the time
+   * of the claim). The steps are counted on a fault-free claim from the same state, so every sync this platform makes
+   * fails once, each refusal is the injected one, and no iteration runs without a fault.
+   */
+  function expectRecoveryAtEverySyncStep(prefix: string, prepare: (home: DropHome) => number, syncs: number): void {
+    withHome(prefix, (home) => {
+      const at = prepare(home);
+      fsyncFault.calls = 0;
+      expect(home.claimDrop(uuidv7(at), at)).toBe('claimed');
+      expect(fsyncFault.calls).toBe(syncs);
+    });
+    for (let step = 1; step <= syncs; step += 1) {
+      withHome(prefix, (home) => {
+        const at = prepare(home);
+        const dropId = uuidv7(at);
         fsyncFault.calls = 0;
         fsyncFault.failOn.add(step);
-        try {
-          home.claimDrop(dropId, later);
-        } catch {
-          // Refused by the injected failure; what matters is the next admission.
-        }
+        expect(() => home.claimDrop(dropId, at), `sync ${String(step)}`).toThrow('injected fsync failure');
         fsyncFault.failOn.clear();
-        expectAdmissionRecovered(home, dropId, later + 10);
-      } finally {
-        rmSync(root, { recursive: true, force: true });
-      }
+        expectAdmissionRecovered(home, dropId, at + 10);
+      });
     }
+  }
+
+  it('keeps admitting after a transient sync failure at any step of a claim that prunes expired markers', () => {
+    // Each step of the claim in turn: clock, digest, pruned folder, marker. None may leave the store refusing for good.
+    expectRecoveryAtEverySyncStep(
+      'drop-replay-prune-fault-',
+      (home) => {
+        expect(home.claimDrop(uuidv7(NOW), NOW)).toBe('claimed');
+        expect(home.claimDrop(uuidv7(NOW + 1), NOW + 1)).toBe('claimed');
+        return NOW + REPLAY_WINDOW_MS + 60_000;
+      },
+      PRUNING_CLAIM_SYNCS,
+    );
   });
 
   it('keeps admitting after a transient sync failure at any step of the first claim on a fresh home', () => {
-    for (let step = 1; step <= 10; step += 1) {
-      const root = mkdtempSync(join(tmpdir(), 'drop-replay-fresh-fault-'));
-      try {
-        const home = new DropHome(root);
-        const dropId = uuidv7(NOW);
-        fsyncFault.calls = 0;
-        fsyncFault.failOn.add(step);
-        try {
-          home.claimDrop(dropId, NOW);
-        } catch {
-          // Refused by the injected failure; what matters is the next admission.
-        }
-        fsyncFault.failOn.clear();
-        expectAdmissionRecovered(home, dropId, NOW + 10);
-      } finally {
-        rmSync(root, { recursive: true, force: true });
-      }
-    }
+    expectRecoveryAtEverySyncStep('drop-replay-fresh-fault-', () => NOW, FIRST_CLAIM_SYNCS);
   });
 });
