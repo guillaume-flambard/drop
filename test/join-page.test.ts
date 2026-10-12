@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { runInNewContext } from 'node:vm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createInvite, encodeInvite, generateIdentity } from '../packages/protocol/src/index.ts';
-import { collectSite, startSite } from '../scripts/site.ts';
+import { collectSite, joinCsp, startSite } from '../scripts/site.ts';
 
 interface Stub {
   textContent: string;
@@ -94,7 +94,7 @@ describe('join page (T4.23)', () => {
   beforeAll(async () => {
     assets = await collectSite({ installs: 'beta', contact: '' });
     html = assets.get('/join.html')?.toString('utf8') ?? '';
-    script = /<script>([\s\S]*?)<\/script>/.exec(html)?.[1] ?? '';
+    script = /<script>([\s\S]*?)<\/script[^>]*>/i.exec(html)?.[1] ?? '';
     preview = await startSite(assets, 0);
   });
 
@@ -130,6 +130,21 @@ describe('join page (T4.23)', () => {
       ).toBe(true);
     }
     expect(html).not.toMatch(/<(?:link|script|img)\b[^>]*(?:src|href)="https?:/);
+  });
+
+  it('pins a join page only when it holds exactly one plain inline script, whatever the case of any other', () => {
+    expect(joinCsp('<p></p><script>run()</script>')).toContain("script-src 'sha256-");
+    for (const page of [
+      '<script>run()</script><SCRIPT>steal()</SCRIPT>',
+      '<script>run()</script><script type="module">steal()</script>',
+      '<script>run()</script><script>steal()</script >',
+      '<script>run()</script><Script src="/x.js"></Script>',
+      '<script defer>run()</script>',
+      '<script>run()</script><script>never closed',
+      '<p>no script</p>',
+    ]) {
+      expect(() => joinCsp(page), page).toThrow('E_SITE_JOIN');
+    }
   });
 
   it('never sends the invite anywhere and writes names as text only', () => {

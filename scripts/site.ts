@@ -58,11 +58,13 @@ const JOIN_PAGES = new Set(['/join.html', '/join/index.html']);
  * the fragment cannot leave the page. `frame-ancestors` only works as a header, so the meta copy goes without it.
  */
 export function joinCsp(html: string, header = true): string {
-  const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)];
-  if (scripts.length !== 1 || /<script\b[^>]*\bsrc=/i.test(html))
-    throw new Error('E_SITE_JOIN: one inline script expected');
+  // Every opening tag counts, whatever its case or attributes, so a second script cannot slip past the count; the one
+  // allowed is a plain `<script>` with a closing tag.
+  const opened = html.match(/<script\b/gi) ?? [];
+  const plain = /<script>([\s\S]*?)<\/script[^>]*>/i.exec(html);
+  if (opened.length !== 1 || !plain) throw new Error('E_SITE_JOIN: one inline script expected');
   const hash = createHash('sha256')
-    .update(scripts[0]?.[1] ?? '', 'utf8')
+    .update(plain[1] ?? '', 'utf8')
     .digest('base64');
   return [
     "default-src 'none'",
