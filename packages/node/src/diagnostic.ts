@@ -9,6 +9,7 @@ import { existsSync } from 'node:fs';
 import { arch, platform, release } from 'node:os';
 import { join } from 'node:path';
 import { DropError } from '@drop/protocol';
+import { scanSecrets } from '@drop/runner';
 import {
   APP_LOG,
   DAEMON_LOG,
@@ -125,7 +126,10 @@ function section(raw: string[], keep: number, options: DiagnosticOptions): Secti
   const lines: string[] = [];
   let removed = 0;
   for (const line of raw.slice(-keep)) {
-    const redacted = redactLogLineDetailed(line, { known: options.known ?? [], home: options.home });
+    const redacted = redactLogLineDetailed(line, {
+      known: [...(options.known ?? []), options.root],
+      home: options.home,
+    });
     const shown = redacted.replaced ? undefined : readable(redacted.line);
     if (shown === undefined || logKinds(shown).length > 0) {
       removed += 1;
@@ -147,7 +151,14 @@ export function buildDiagnostic(options: DiagnosticOptions): Diagnostic {
   const dir = logsDir(options.root);
   const logPath = join(dir, DAEMON_LOG);
   const appPath = join(dir, APP_LOG);
-  const shown = (path: string): string => redactText(path, { home: options.home });
+  // DROP_HOME may be outside os.homedir(), e.g. a Windows temporary profile or a portable install.
+  // Never export its raw absolute path: it may contain usernames or long high-entropy components.
+  const shown = (path: string): string => {
+    const relative = path.slice(options.root.length).replace(/^[/\\]+/, '');
+    const label =
+      options.root.endsWith('/.drop') || options.root.endsWith('\\.drop') ? join('~', '.drop') : '<DROP_HOME>';
+    return redactText(join(label, relative), { home: options.home });
+  };
   const { status } = options;
   const now = new Date(options.now?.() ?? Date.now()).toISOString();
   // Oldest first: a log from before T4.37, the previous file, then the current one.
@@ -185,7 +196,7 @@ export function buildDiagnostic(options: DiagnosticOptions): Diagnostic {
     removedSentence(removed),
     '',
   ].join('\n');
-  if (logKinds(text).length > 0)
+  if (scanSecrets(text).length > 0 || logKinds(text).length > 0)
     throw new DropError('E_SECRET_DETECTED', 'Le diagnostic ressemble encore à un secret : rien n’est affiché.');
   return { text, removed, logDir: dir, logPath };
 }

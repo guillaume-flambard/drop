@@ -109,6 +109,14 @@ describe('redacted diagnostic (T4.37)', () => {
     expect(diagnostic.logPath).toBe(join(logsDir(home.root), DAEMON_LOG));
   });
 
+  it('never exports a custom DROP_HOME outside the account home, including a long path', () => {
+    const foreignRoot = join(tmpdir(), 'Portable-Q2pj1fwZvABXy8T7K0G96rhLaEDCb39nFvMn5sTw', '.drop');
+    const text = buildDiagnostic({ root: foreignRoot, home: join(tmpdir(), 'different-home'), status }).text;
+    expect(text).not.toContain(foreignRoot);
+    expect(text).toContain(join('~', '.drop', 'logs', 'daemon.log'));
+    expect(scanSecrets(text)).toEqual([]);
+  });
+
   it('serves the diagnostic and opens the logs folder only with the token', async () => {
     const { home } = await newHome();
     const opened: string[] = [];
