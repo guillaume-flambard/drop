@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { existsSync, readFileSync, unwatchFile, watchFile } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { createServer } from 'node:http';
 import { createServer as createTlsServer } from 'node:https';
@@ -266,9 +266,31 @@ export async function startRelay(config: RelayConfig, options: RelayOptions = {}
     }
     revoked = next;
   };
+  // Polled here rather than with fs.watchFile: watchFile never reports a file whose first check, run on the libuv
+  // thread pool, completes after the file was written, so a revocation written while the relay starts on a busy
+  // machine was missed until the file changed again. The signature is read before the file, so a write in between
+  // shows at the next check.
+  const revocationSignature = (): string => {
+    try {
+      const stats = settings.revokedPath ? statSync(settings.revokedPath, { throwIfNoEntry: false }) : undefined;
+      return stats
+        ? `${String(stats.ino)}:${String(stats.size)}:${String(stats.mtimeMs)}:${String(stats.ctimeMs)}`
+        : 'absent';
+    } catch {
+      // Unreadable for now (permissions, a vanished directory): read again, which logs E_SCHEMA, once it changes.
+      return 'unreadable';
+    }
+  };
+  let revocationSeen = revocationSignature();
   applyRevocations();
-  if (settings.revokedPath)
-    watchFile(settings.revokedPath, { interval: options.revocationPollMs ?? 2000 }, applyRevocations);
+  const revocationPoller = settings.revokedPath
+    ? setInterval(() => {
+        const signature = revocationSignature();
+        if (signature === revocationSeen) return;
+        revocationSeen = signature;
+        applyRevocations();
+      }, options.revocationPollMs ?? 2000)
+    : undefined;
   // HTTP answers only GET /health (for the deploy probe and uptime monitoring); /v1 upgrades to WebSocket. With tls,
   // the relay serves https and wss itself.
   // The probe also names the commit the relay was built from, so "is the deployed relay the one we meant to serve?" is
@@ -520,7 +542,7 @@ export async function startRelay(config: RelayConfig, options: RelayOptions = {}
         close: () =>
           new Promise<void>((done) => {
             clearInterval(pinger);
-            if (settings.revokedPath) unwatchFile(settings.revokedPath, applyRevocations);
+            clearInterval(revocationPoller);
             for (const client of server.clients) client.terminate();
             server.close(() => {
               http.close(() => {
