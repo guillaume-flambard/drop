@@ -662,7 +662,12 @@ describe('onboarding configuration read (T4.42)', () => {
       rmSync(zed);
       execFileSync('mkfifo', [zed]);
       // A writer that shows up 5 s later: an open without O_NONBLOCK would wait for it, then refuse the pipe anyway.
-      const writer = spawn('sh', ['-c', 'sleep 5; exec 3>"$0"', zed], { stdio: 'ignore' });
+      // Node rather than a shell, and the path as an argument: no command line is built from it.
+      const writer = spawn(
+        process.execPath,
+        ['-e', "setTimeout(() => require('node:fs').openSync(process.argv[1], 'w'), 5000)", zed],
+        { stdio: 'ignore' },
+      );
       const exited = new Promise<void>((resolve) => {
         writer.once('exit', () => {
           resolve();

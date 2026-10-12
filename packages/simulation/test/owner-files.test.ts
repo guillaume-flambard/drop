@@ -2,9 +2,11 @@ import { execFileSync } from 'node:child_process';
 import {
   chmodSync,
   closeSync,
+  fstatSync,
   linkSync,
   mkdirSync,
   mkdtempSync,
+  openSync,
   readdirSync,
   readFileSync,
   statSync,
@@ -50,6 +52,16 @@ describe('campaign files readable by their owner only (T4.26)', () => {
   });
 });
 
+/** Content and mode read through one descriptor, so the file checked is the file read. */
+function contentAndMode(path: string): { text: string; mode: number } {
+  const fd = openSync(path, 'r');
+  try {
+    return { text: readFileSync(fd, 'utf8'), mode: fstatSync(fd).mode };
+  } finally {
+    closeSync(fd);
+  }
+}
+
 /** Plants a symbolic link, or says the system will not let this user create one (Windows without Developer Mode). */
 function plantLink(target: string, path: string, type?: 'dir'): boolean {
   try {
@@ -67,7 +79,7 @@ describe('campaign writes never follow a planted link (T4.42)', () => {
     const elsewhere = mkdtempSync(join(tmpdir(), 'drop-sim-victim-'));
     const victim = join(elsewhere, 'victim.txt');
     writeFileSync(victim, 'keep me', { mode: 0o644 });
-    const before = statSync(victim).mode;
+    const before = contentAndMode(victim);
     if (plantLink(victim, join(dir, 'report.json'))) {
       expect(() => {
         writeOwnerOnly(join(dir, 'report.json'), 'overwritten');
@@ -85,8 +97,7 @@ describe('campaign writes never follow a planted link (T4.42)', () => {
     expect(() => {
       appendOwnerOnly(join(dir, 'events.jsonl'), 'appended');
     }).toThrow('E_SIM_FILE');
-    expect(readFileSync(victim, 'utf8')).toBe('keep me');
-    expect(statSync(victim).mode).toBe(before);
+    expect(contentAndMode(victim)).toEqual({ ...before, text: 'keep me' });
     // A directory in place of a file is refused too, and a plain file is still written.
     mkdirSync(join(dir, 'plan.json'));
     expect(() => {

@@ -128,7 +128,9 @@ export function ownerOnlyDir(path: string): void {
   }
   let fd: number;
   try {
-    fd = openSync(path, constants.O_RDONLY | constants.O_DIRECTORY | NO_FOLLOW);
+    // Without O_CREAT the mode is never applied; it is written out so that no open of a bench path, even read-only,
+    // reads as a creation open to others (CodeQL js/insecure-temporary-file). The directory is narrowed below.
+    fd = openSync(path, constants.O_RDONLY | constants.O_DIRECTORY | NO_FOLLOW, 0o700);
   } catch (error) {
     // A link answers ELOOP or ENOTDIR depending on the system and which flag it checks first; either way it is refused.
     const code = (error as NodeJS.ErrnoException).code;
