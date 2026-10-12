@@ -100,6 +100,56 @@ Windows, signature Authenticode (les deux sont requis) :
 
 Le serveur d'horodatage par défaut est `http://timestamp.digicert.com` (`WINDOWS_TIMESTAMP_URL` le change). Un certificat neuf, même signé, garde un avertissement SmartScreen jusqu'à ce qu'il gagne une réputation ; depuis 2024 un certificat EV n'y échappe plus non plus (doc Tauri). Les certificats délivrés après juin 2023 vivent sur un module matériel ou dans un service en ligne (Azure Artifact Signing, par exemple) : il faudra alors passer par `signCommand` au lieu d'un `.pfx`. Même signé, `drop-iroh.exe` ne l'est pas encore (reste à faire).
 
+## Mises à jour signées multiplateformes (canal stable)
+
+Le code du client Updater est présent dans la coque Tauri. Une application ne l'active que si elle est
+construite avec `--updates`. Le contrôle de la nouvelle version est automatique au démarrage et
+toutes les six heures ; **l'installation reste proposée dans le menu de Drop** (pas de redémarrage
+silencieux pendant une demande). Le mode d'installation Windows est `passive`.
+
+La signature Tauri est obligatoire, indépendante de la notarisation Apple et de la signature Authenticode.
+Ne jamais ajouter la clé privée, son mot de passe, ni un fichier `.key` au dépôt.
+
+1. Générer une paire de clés Tauri, une seule fois sur une machine de confiance :
+   `npx --yes @tauri-apps/cli@2.12.1 signer generate -w ~/.tauri/drop-updater.key`.
+   Saisir un mot de passe fort, conserver une sauvegarde sûre du fichier privé et du mot de passe.
+2. Ajouter uniquement le contenu de `~/.tauri/drop-updater.key.pub` dans
+   `apps/desktop/updater.pub`, et le committer. Ne jamais changer cette clé publique pour les
+   installations déjà distribuées sans organiser une transition : elles refuseraient les mises à jour.
+3. Dans les secrets GitHub Actions de **ce dépôt uniquement**, ajouter
+   `TAURI_SIGNING_PRIVATE_KEY` (contenu du fichier privé) et
+   `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`.
+4. Le workflow `release desktop`, sur un tag `vX.Y.Z`, produit cinq archives signées :
+   deux pour macOS (`.app.tar.gz`), une NSIS Windows (`.exe`) et deux AppImage Linux.
+   Les entrées du manifeste ciblent précisément le format (`-app`, `-nsis`, `-appimage`) :
+   les installations MSI et Debian ne reçoivent donc pas accidentellement un autre format.
+   Chaque build produit un fragment avec signature liée à la version ; le job de publication exige
+   cinq fragments distincts, identiques en version, et une URL d'archive dans **ce dépôt**.
+   Il ajoute `latest.json` et les archives signées à la **release GitHub en brouillon**.
+5. Après les tests manuels, **publier la release stable sur GitHub**. Les builds Drop déjà équipées
+   de l'Updater interrogent alors
+   `https://github.com/memolabs-dev/drop/releases/latest/download/latest.json`.
+   Les artefacts sont téléchargés directement depuis la release correspondante, sous signature
+   Tauri. Une release en brouillon, ou marquée prerelease, n'est pas le canal stable.
+
+Pour les essais avec mise à jour via l'app, installer **NSIS** sous Windows et **AppImage** sous Linux. Les paquets MSI et Debian restent destinés à l'installation ou au déploiement administré : leur propre circuit de mise à jour n'est pas configuré ici.
+
+Aucune mise à jour ne sera proposée aux installations existantes construites **sans** `--updates`.
+Pour elles, une réinstallation manuelle unique est nécessaire avant d'activer les mises à jour.
+Sans les deux secrets de signature Tauri, le workflow continue à produire les installeurs mais
+**n'annonce aucune mise à jour** : ne pas communiquer ces builds comme « auto-update ready ».
+
+Le canal `stable` décrit ici n'est **pas** un canal bêta : un essai privé avec mises à jour fréquentes
+exige un endpoint/flux bêta distinct et un choix explicite du canal à l'installation, sans exposer
+une préversion à tous les utilisateurs stables. La vérification de mise à jour contacte GitHub ;
+elle n'est pas compatible avec un profil hors réseau sans consentement à cet endpoint.
+
+Avant de distribuer à des amis, tester sur de vraies machines une montée de version (données et
+identité conservées), une signature altérée (refus), l'absence de réseau et l'installation pendant
+une demande en cours. Une build CI réussie seule ne suffit pas. Sur macOS, distribuer de préférence
+une app Developer ID **notarisée**, sous Windows un installateur Authenticode signé : la signature
+Tauri ne remplace ni Gatekeeper ni SmartScreen.
+
 ## Installer, par système
 
 ### macOS (13 Ventura ou plus récent)

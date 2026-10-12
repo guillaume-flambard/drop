@@ -21,6 +21,8 @@ on:
       - apps/desktop/**
       - crates/drop-iroh/**
       - scripts/build-desktop.ts
+      - scripts/desktop-updates.ts
+      - scripts/merge-desktop-updates.ts
       - scripts/build-mac.ts
       - scripts/desktop-smoke.ts
       - scripts/drop-iroh-notice.ts
@@ -98,10 +100,11 @@ jobs:
       PLATFORM: ${{ matrix.platform }}
       # Signing runs only when every secret it needs exists; the values never reach a log.
       APPLE_SIGNING: >-
-        ${{ secrets.APPLE_CERTIFICATE != '' && secrets.APPLE_CERTIFICATE_PASSWORD != '' &&
+        ${{ github.event_name != 'pull_request' && secrets.APPLE_CERTIFICATE != '' && secrets.APPLE_CERTIFICATE_PASSWORD != '' &&
         secrets.APPLE_SIGNING_IDENTITY != '' && secrets.APPLE_API_ISSUER != '' && secrets.APPLE_API_KEY != '' &&
         secrets.APPLE_API_PRIVATE_KEY != '' }}
-      WINDOWS_SIGNING: ${{ secrets.WINDOWS_CERTIFICATE != '' && secrets.WINDOWS_CERTIFICATE_PASSWORD != '' }}
+      WINDOWS_SIGNING: ${{ github.event_name != 'pull_request' && secrets.WINDOWS_CERTIFICATE != '' && secrets.WINDOWS_CERTIFICATE_PASSWORD != '' }}
+      UPDATE_SIGNING: ${{ github.event_name != 'pull_request' && secrets.TAURI_SIGNING_PRIVATE_KEY != '' && secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD != '' }}
     defaults:
       run:
         shell: bash
@@ -174,16 +177,21 @@ jobs:
 
       - name: Build
         env:
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_SIGNING_IDENTITY: ${{ github.event_name != 'pull_request' && secrets.APPLE_SIGNING_IDENTITY || '' }}
+          APPLE_API_ISSUER: ${{ github.event_name != 'pull_request' && secrets.APPLE_API_ISSUER || '' }}
+          APPLE_API_KEY: ${{ github.event_name != 'pull_request' && secrets.APPLE_API_KEY || '' }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ github.event_name != 'pull_request' && secrets.TAURI_SIGNING_PRIVATE_KEY || '' }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ github.event_name != 'pull_request' && secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD || '' }}
+          DROP_RELEASE_TAG: ${{ needs.meta.outputs.tag }}
         run: |
+          update_args=()
+          if [ "$UPDATE_SIGNING" = true ]; then update_args=(--updates); fi
           if [ "$PLATFORM" = macos ] && [ "$APPLE_SIGNING" = true ]; then
-            node scripts/build-desktop.ts --release --sign "$APPLE_SIGNING_IDENTITY"
+            node scripts/build-desktop.ts --release --sign "$APPLE_SIGNING_IDENTITY" "${update_args[@]}"
           elif [ "$PLATFORM" = macos ]; then
-            node scripts/build-desktop.ts --release --unsigned
+            node scripts/build-desktop.ts --release --unsigned "${update_args[@]}"
           else
-            node scripts/build-desktop.ts --release
+            node scripts/build-desktop.ts --release "${update_args[@]}"
           fi
           ls -l dist/desktop
 
@@ -228,6 +236,15 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+      - name: Upload signed updater artifacts
+        if: env.UPDATE_SIGNING == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: updates-${{ matrix.label }}
+          path: dist/updates/
+          if-no-files-found: error
+          retention-days: 14
+
   # Draft only, in this repository only: write access is granted here and nowhere else.
   release:
     name: draft release
@@ -241,12 +258,35 @@ jobs:
       contents: write # create the draft release and upload its assets
       id-token: write # Sigstore certificate for the attestations
       attestations: write # store the attestations
+    env:
+      UPDATE_SIGNING: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' && secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD != '' }}
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          package-manager-cache: false
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: desktop-*
           path: release
           merge-multiple: true
+      - name: Download signed updates
+        if: env.UPDATE_SIGNING == 'true'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: updates-*
+          path: signed-updates
+          merge-multiple: true
+      - name: Assemble the complete updater feed
+        if: env.UPDATE_SIGNING == 'true'
+        env:
+          DROP_RELEASE_VERSION: ${{ needs.meta.outputs.version }}
+        run: |
+          node scripts/merge-desktop-updates.ts release/latest.json signed-updates/*.json
+          find signed-updates -maxdepth 1 -type f ! -name '*.json' -exec cp {} release/ \;
       - name: Checksums
         working-directory: release
         run: |
