@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { mkdir, open, readFile, rm, stat, writeFile, type FileHandle } from 'node:fs/promises';
+import { constants, mkdir, open, readFile, rm, writeFile, type FileHandle } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { dirname, extname, join, posix, resolve } from 'node:path';
 import { pipeline } from 'node:stream/promises';
@@ -187,30 +187,47 @@ function releaseFailed(res: ServerResponse, name: string, error: unknown): void 
   else res.destroy();
 }
 
+/** Absent, or not a file where a file was expected: the release is simply not there (404). */
+const NOT_THERE = new Set(['ENOENT', 'ENOTDIR', 'EISDIR']);
+
 async function serveRelease(res: ServerResponse, method: string, releasesDir: string, name: string): Promise<boolean> {
   const path = join(releasesDir, name);
-  const info = await stat(path).catch(() => undefined);
-  if (!info?.isFile()) return false;
-  // Open before answering: a file that cannot be read still gets a status line.
+  // Opened first, then checked through the handle: the file checked is the file sent (T4.26, CodeQL
+  // js/file-system-race). Open before answering: a file that cannot be read still gets a status line. O_NONBLOCK keeps
+  // a named pipe from holding the request; its type then refuses it.
   let file: FileHandle;
   try {
-    file = await open(path, 'r');
+    file = await open(path, constants.O_RDONLY | ('O_NONBLOCK' in constants ? constants.O_NONBLOCK : 0));
   } catch (error) {
+    if (error instanceof Error && 'code' in error && NOT_THERE.has(String(error.code))) return false;
+    releaseFailed(res, name, error);
+    return true;
+  }
+  let size: number;
+  try {
+    const info = await file.stat();
+    if (!info.isFile()) {
+      await file.close();
+      return false;
+    }
+    size = info.size;
+  } catch (error) {
+    await file.close();
     releaseFailed(res, name, error);
     return true;
   }
   res.writeHead(200, {
     'Content-Type': contentTypes[extname(name)] ?? 'application/octet-stream',
-    'Content-Length': info.size,
+    'Content-Length': size,
     'Cache-Control': 'no-cache',
   });
-  if (method === 'HEAD') {
+  if (method === 'HEAD' || size === 0) {
     await file.close();
     res.end();
     return true;
   }
-  // The stream closes the handle when it ends or fails.
-  await pipeline(file.createReadStream(), res).catch((error: unknown) => {
+  // The stream closes the handle when it ends or fails. Never more than announced, even if the file grew meanwhile.
+  await pipeline(file.createReadStream({ start: 0, end: size - 1 }), res).catch((error: unknown) => {
     releaseFailed(res, name, error);
   });
   return true;
