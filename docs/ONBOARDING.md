@@ -77,12 +77,12 @@ Côté invité :
 1. Ouvrir le lien. La page affiche « Guillaume t'invite dans l'équipe Atelier », reconnaît le système et propose le téléchargement (page des versions de drop sur GitHub). Elle n'envoie rien.
 2. Installer drop et l'ouvrir une fois.
 3. Cliquer sur « J'ai installé drop : rejoindre l'équipe ». drop s'ouvre sur la carte de confirmation : qui invite, quelle équipe, « Rejoindre » ou « Refuser ». Rien n'est envoyé avant « Rejoindre ».
-4. « Rejoindre » : un poste qui n'a encore rejoint personne passe au relais de l'invitation, y est admis par le ticket, puis apparaît dans l'équipe. Un poste déjà relié garde son relais.
+4. « Rejoindre » : un poste qui n'a encore rejoint personne et qui est encore sur le relais de bouclage par défaut (`ws://127.0.0.1:7780/v1`) passe au relais de l'invitation, y est admis par le ticket, puis apparaît dans l'équipe. Un poste déjà relié, ou réglé à la main sur un autre relais, garde son relais (T4.33). Le relais adopté n'entre pas dans les destinations privées (`network.origins`) : seul le Node lui parle, jamais le modèle ni un serveur MCP ; `config.json` porte alors `relayAdopted: true`.
 5. Connecter ses agents (Agents, « Analyser cet ordinateur », puis « Connecter »), comme décrit plus haut.
 
 Si le bouton ne fait rien, la page donne le code à copier : dans drop, Mon espace, Équipe, « J'ai reçu une invitation », coller le code ou le lien entier. En ligne de commande : `drop join <code-ou-lien>`.
 
-Refus possibles, chacun avec son code : invitation illisible (`E_INVITE`), expirée (`E_INVITE_EXPIRED`), modifiée depuis son envoi (`E_INVITE_SIG`), déjà utilisée (`E_INVITE_USED`), relais non autorisé sur ce poste (`E_INVITE_RELAY` : `ws:` seulement vers une adresse privée, `wss:` vers une adresse privée ou un nom DNS, puis la liste de la politique d'organisation).
+Refus possibles, chacun avec son code : invitation illisible (`E_INVITE`), expirée (`E_INVITE_EXPIRED`), modifiée depuis son envoi (`E_INVITE_SIG`), déjà utilisée (`E_INVITE_USED`), relais non autorisé sur ce poste (`E_INVITE_RELAY` : `ws:` seulement vers une adresse privée, `wss:` vers une adresse privée ou un nom DNS, puis la liste de la politique d'organisation), configuration de drop verrouillée par une autre opération (`E_LOCKED`) ou modifiée pendant « Rejoindre » (`E_CONFLICT`) ; dans ces deux derniers cas l'invitation reste valable et il suffit de réessayer.
 
 Un lien `drop://pair` (T4.14) ouvre la même carte (`packages/desktop-ui/src/panel/`). Le panneau de la barre de menus, passé à React en T4.24, donne encore ce lien-là et ne propose pas « Connecter mes agents » après « Rejoindre » : ces suites restent dans T4.31.
 

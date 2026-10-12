@@ -1,4 +1,16 @@
-import type { DropStatus } from '../types.ts';
+import type { DropStatus, InternetMode } from '../types.ts';
+
+// A Record over the union: a new mode without a label fails the typecheck instead of showing "Non configurée".
+const internetModes: Record<InternetMode, string> = {
+  off: 'Réseau local',
+  direct: 'Directe',
+  relay: 'Relais privé',
+  n0: 'Relais public de test',
+};
+
+export function internetModeLabel(mode: InternetMode | undefined): string {
+  return mode ? internetModes[mode] : 'Non configurée';
+}
 
 export function initials(name: string): string {
   return (

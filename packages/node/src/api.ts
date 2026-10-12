@@ -206,6 +206,9 @@ const INVITE_ERRORS: Record<string, string> = {
   E_INVITE_SIG: 'Cette invitation a été modifiée depuis son envoi. Demande un nouveau lien à la personne.',
   E_INVITE_USED: 'Cette invitation a déjà servi. Demande un nouveau lien.',
   E_INVITE_RELAY: 'Le relais de cette invitation n’est pas autorisé sur cet ordinateur.',
+  E_LOCKED:
+    'Une autre opération modifie la configuration de drop. Réessaie dans un instant : l’invitation reste valable.',
+  E_CONFLICT: 'La configuration de drop a changé pendant que tu rejoignais. Réessaie : l’invitation reste valable.',
 };
 
 function inviteError(res: ServerResponse, error: unknown): void {

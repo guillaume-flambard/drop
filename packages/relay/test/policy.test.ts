@@ -184,3 +184,64 @@ describe('enterprise policy (T4.10)', () => {
     expect(health).toBe(200);
   }, 30_000);
 });
+
+describe('relay client switch (T4.33)', () => {
+  // Two openssl runs are slow on some runners, as above: one certificate serves both relays.
+  it('keeps the extra certificate authority for the same host only, never for a relay on another host', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'drop-relay-switch-'));
+    chmodSync(dir, 0o700);
+    cleanups.push(() => {
+      rmSync(dir, { recursive: true, force: true });
+    });
+    const keyPath = join(dir, 'relay.key');
+    const certPath = join(dir, 'relay.crt');
+    // Ephemeral self-signed certificate for both names of this machine: no private key is committed or printed.
+    execFileSync(
+      'openssl',
+      [
+        'req',
+        '-x509',
+        '-newkey',
+        'rsa:2048',
+        '-nodes',
+        '-days',
+        '1',
+        '-subj',
+        '/CN=drop-relay-test',
+        '-addext',
+        'subjectAltName=IP:127.0.0.1,DNS:localhost',
+        '-keyout',
+        keyPath,
+        '-out',
+        certPath,
+      ],
+      { stdio: 'ignore' },
+    );
+    const identity = await generateIdentity('Julie');
+    const witness = await generateIdentity('Witness');
+    const start = async () => {
+      const relay = await startRelay(
+        { port: 0, allowedNodeIds: [identity.nodeId, witness.nodeId], tls: { certPath, keyPath } },
+        { logger: () => undefined },
+      );
+      cleanups.push(() => relay.close());
+      return relay;
+    };
+    const first = await start();
+    const second = await start();
+    const ca = readFileSync(certPath);
+    const node = client(first, identity, undefined, first.url, ca);
+    await node.instance.waitReady();
+    // Same host, another relay: the authority given for this host still applies.
+    node.instance.switchUrl(second.url);
+    await until(() => node.instance.connected && node.instance.url === second.url);
+    // Another host name, served by a certificate of that same authority: the authority stays behind.
+    const elsewhere = second.url.replace('127.0.0.1', 'localhost');
+    node.instance.switchUrl(elsewhere);
+    // A fresh client given the authority reaches that very URL: only the dropped authority keeps the first one out.
+    const control = client(second, witness, undefined, elsewhere, ca);
+    await control.instance.waitReady();
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(node.instance.connected).toBe(false);
+  }, 30_000);
+});

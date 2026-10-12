@@ -1,10 +1,11 @@
-import { existsSync, mkdtempSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   createInvite,
   decodeInvite,
+  DropError,
   encodeInvite,
   generateIdentity,
   isDropError,
@@ -15,8 +16,8 @@ import {
 import { startRelay } from '@drop/relay';
 import { startDaemon, type Daemon } from '../src/daemon.ts';
 import { NodeEngine } from '../src/engine.ts';
-import { DropHome, NodeConfigSchema, type NodeConfig } from '../src/home.ts';
-import { privateConfig } from '../src/private-config.ts';
+import { DEFAULT_RELAY_URL, DropHome, NodeConfigSchema, type NodeConfig } from '../src/home.ts';
+import { privateConfig, switchRelay } from '../src/private-config.ts';
 
 const cleanups: (() => Promise<void>)[] = [];
 afterEach(async () => {
@@ -100,8 +101,9 @@ describe('one-link join (T4.23)', () => {
     const owner = await serve(ownerHome);
     await owner.relay.waitReady();
     owner.engine.createTeam('Atelier');
-    // Julie's app was opened before the link: a private identity on the loopback default, where no relay runs.
-    const julieHome = newHome(julie, privateConfig('ws://127.0.0.1:9/v1', 'human', 0));
+    // Julie's app was opened before the link: a private identity on the loopback default relay.
+    const julieHome = newHome(julie, privateConfig(DEFAULT_RELAY_URL, 'human', 0));
+    const originsBefore = julieHome.config().network?.origins;
     const lines: string[] = [];
     const newcomer = await serve(julieHome, lines);
 
@@ -113,17 +115,16 @@ describe('one-link join (T4.23)', () => {
     const preview = await post(newcomer, julieHome, '/ui/pair/preview', { code: link });
     expect(preview.json).toMatchObject({ displayName: 'Guillaume', team: 'Atelier', relay: 'adopt' });
     // Nothing moved before « Rejoindre ».
-    expect(julieHome.config().relayUrl).toBe('ws://127.0.0.1:9/v1');
-    expect(newcomer.relay.url).toBe('ws://127.0.0.1:9/v1');
+    expect(julieHome.config().relayUrl).toBe(DEFAULT_RELAY_URL);
+    expect(newcomer.relay.url).toBe(DEFAULT_RELAY_URL);
 
     const joined = await post(newcomer, julieHome, '/ui/pair', { code: link });
     expect(joined.json).toMatchObject({ nodeId: guillaume.nodeId, relay: 'adopt', next: 'connect_agents' });
     await until(() => newcomer.engine.peers().some((peer) => peer.nodeId === guillaume.nodeId));
-    expect(julieHome.config()).toMatchObject({ profile: 'private', relayUrl: relay.url });
-    // The old loopback relay leaves the private destinations, the new literal one joins them.
-    expect([...(julieHome.config().network?.origins ?? [])].sort()).toEqual(
-      ['http://127.0.0.1:11434', new URL(relay.url).origin].sort(),
-    );
+    expect(julieHome.config()).toMatchObject({ profile: 'private', relayUrl: relay.url, relayAdopted: true });
+    // The adopted relay is only the relay (T4.33): the private destinations stay what the owner had.
+    expect(julieHome.config().network?.origins).toEqual(originsBefore);
+    expect(julieHome.config().network?.origins).not.toContain(new URL(relay.url).origin);
     expect(newcomer.relay.connected).toBe(true);
     expect(existsSync(join(julieHome.root, 'admission.json'))).toBe(false);
     await until(() => (owner.engine.team()?.members ?? []).some((member) => member.nodeId === julie.nodeId));
@@ -140,7 +141,7 @@ describe('one-link join (T4.23)', () => {
   it('keeps the relay of a node that already joined someone, and refuses a relay it may not adopt (E_INVITE_RELAY)', async () => {
     const guillaume = await generateIdentity('Guillaume');
     const julie = await generateIdentity('Julie');
-    const julieHome = newHome(julie, privateConfig('ws://127.0.0.1:9/v1', 'human', 0));
+    const julieHome = newHome(julie, privateConfig(DEFAULT_RELAY_URL, 'human', 0));
     const newcomer = await serve(julieHome);
     const before = readFileSync(join(julieHome.root, 'config.json'), 'utf8');
     for (const relayUrl of ['ws://drop.memolabs.dev/v1', 'wss://8.8.8.8/v1']) {
@@ -157,7 +158,7 @@ describe('one-link join (T4.23)', () => {
     const elsewhere = encodeInvite(await createInvite(guillaume, 'wss://drop.memolabs.dev/v1'));
     expect((await post(newcomer, julieHome, '/ui/pair/preview', { code: elsewhere })).json.relay).toBe('kept');
     expect((await post(newcomer, julieHome, '/ui/pair', { code: elsewhere })).json.relay).toBe('kept');
-    expect(julieHome.config().relayUrl).toBe('ws://127.0.0.1:9/v1');
+    expect(julieHome.config().relayUrl).toBe(DEFAULT_RELAY_URL);
   });
 
   it('accepts a link once even on two quick « Rejoindre », and moves no relay while a pairing is pending', async () => {
@@ -284,5 +285,93 @@ describe('one-link join (T4.23)', () => {
     clock.now += 24 * 3_600_000 + 1;
     await request(natha, late.oneTimeToken);
     expect(restarted.peers().map((peer) => peer.displayName)).toEqual(['Julie']);
+  });
+});
+
+describe('join hardening (T4.33)', () => {
+  it('adopts a relay only from the default loopback relay: a relay set by hand is kept', async () => {
+    const guillaume = await generateIdentity('Guillaume');
+    const julie = await generateIdentity('Julie');
+    // A fresh node, no peer and no team, whose owner chose an internal relay with drop init --relay.
+    const julieHome = newHome(julie, privateConfig('ws://10.0.0.9:7780/v1', 'human', 0));
+    const lines: string[] = [];
+    const newcomer = await serve(julieHome, lines);
+    const before = readFileSync(join(julieHome.root, 'config.json'), 'utf8');
+    const code = encodeInvite(await createInvite(guillaume, 'wss://drop.memolabs.dev/v1'));
+    expect((await post(newcomer, julieHome, '/ui/pair/preview', { code })).json.relay).toBe('kept');
+    const joined = await post(newcomer, julieHome, '/ui/pair', { code });
+    expect(joined).toMatchObject({ status: 200, json: { nodeId: guillaume.nodeId, relay: 'kept' } });
+    expect(readFileSync(join(julieHome.root, 'config.json'), 'utf8')).toBe(before);
+    expect(newcomer.relay.url).toBe('ws://10.0.0.9:7780/v1');
+    // The pairing request still leaves, through every path this node has.
+    expect(lines.some((line) => line.includes('invite_accepted') && line.includes('relay_kept'))).toBe(true);
+    expect(lines.some((line) => line.includes('relay_adopted'))).toBe(false);
+  });
+
+  it('switching relay keeps every listed origin and never lists the adopted relay', async () => {
+    const julie = await generateIdentity('Julie');
+    const origins = ['ws://127.0.0.1:7780', 'http://127.0.0.1:11434', 'http://10.20.0.4:8080'];
+    const home = newHome(julie, privateConfig(DEFAULT_RELAY_URL, 'human', 0, { origins }));
+    const adopted = switchRelay(home, 'ws://10.0.0.5:7780/v1');
+    expect(adopted).toMatchObject({ relayUrl: 'ws://10.0.0.5:7780/v1', relayAdopted: true });
+    expect(adopted.network?.origins).toEqual(origins);
+    // A restart reads it back: the marker alone exempts the adopted literal relay from being a listed origin.
+    expect(home.config()).toMatchObject({ relayUrl: 'ws://10.0.0.5:7780/v1', relayAdopted: true });
+    expect(home.config().network?.origins).toEqual(origins);
+    expect(() => NodeConfigSchema.parse({ ...adopted, relayAdopted: undefined })).toThrow();
+  });
+
+  it('answers E_LOCKED or E_CONFLICT, not E_INVITE_RELAY, when config.json cannot be rewritten, and keeps the invite usable', async () => {
+    const guillaume = await generateIdentity('Guillaume');
+    const julie = await generateIdentity('Julie');
+    const julieHome = newHome(julie, privateConfig(DEFAULT_RELAY_URL, 'human', 0));
+    const lines: string[] = [];
+    const newcomer = await serve(julieHome, lines);
+    const before = readFileSync(join(julieHome.root, 'config.json'), 'utf8');
+    const code = encodeInvite(await createInvite(guillaume, 'ws://127.0.0.1:9/v1'));
+    // Another operation holds the configuration lock.
+    const lock = join(julieHome.root, '.private-migration.lock');
+    writeFileSync(lock, JSON.stringify({ pid: process.pid }), { mode: 0o600 });
+    const locked = await post(newcomer, julieHome, '/ui/pair', { code });
+    expect(locked).toMatchObject({ status: 400, json: { error: 'E_LOCKED', code: 'E_LOCKED' } });
+    expect(String(locked.json.message)).not.toContain(code);
+    expect(String(locked.json.message)).not.toBe('');
+    expect(readFileSync(join(julieHome.root, 'config.json'), 'utf8')).toBe(before);
+    expect(lines.some((line) => line.includes('"code":"E_LOCKED"'))).toBe(true);
+    expect(lines.some((line) => line.includes('invite_accepted'))).toBe(false);
+    rmSync(lock);
+    const joined = await post(newcomer, julieHome, '/ui/pair', { code });
+    expect(joined).toMatchObject({ status: 200, json: { relay: 'adopt' } });
+    expect(julieHome.config().relayUrl).toBe('ws://127.0.0.1:9/v1');
+
+    // The same for a configuration that changed during the rewrite, through the engine's own refusal.
+    const marc = await generateIdentity('Marc');
+    const home = newHome(
+      marc,
+      NodeConfigSchema.parse({ profile: 'legacy', relayUrl: DEFAULT_RELAY_URL, ownerKind: 'human' }),
+    );
+    const sent: Envelope[] = [];
+    let conflict = true;
+    const engine = new NodeEngine({
+      identity: marc,
+      ownerKind: 'human',
+      store: home,
+      capabilities: [],
+      transport: {
+        send: (envelope) => {
+          sent.push(envelope);
+          return Promise.resolve('delivered');
+        },
+      },
+      relayPlan: (_url, fresh) => (fresh ? 'adopt' : 'kept'),
+      adoptRelay: () =>
+        conflict ? Promise.reject(new DropError('E_CONFLICT', 'E_CONFLICT configuration changed')) : Promise.resolve(),
+    });
+    const other = encodeInvite(await createInvite(guillaume, 'wss://team.example/v1'));
+    expect(await refusal(engine.join(other))).toBe('E_CONFLICT');
+    expect(sent).toHaveLength(0);
+    conflict = false;
+    expect((await engine.join(other)).relay).toBe('adopt');
+    expect(sent).toHaveLength(1);
   });
 });

@@ -9,7 +9,7 @@ import {
   repoAnswer,
   type ConnectOptions,
 } from '@drop/capabilities';
-import { DropError, NodeIdSchema, policyExpired, relayUrlAllowed } from '@drop/protocol';
+import { DropError, isDropError, NodeIdSchema, policyExpired, relayUrlAllowed } from '@drop/protocol';
 import { RelayClient } from '@drop/relay';
 import { NodeEngine, type InboxItem, type RelayOutcome } from './engine.ts';
 import { detectAgents } from './detect.ts';
@@ -19,7 +19,7 @@ import { isAgentKind, ShareError, shareDetected } from './share.ts';
 import { OAuthSignIns, oauthRedirect, oauthStore, openInBrowser, runtimeOAuth } from './oauth.ts';
 import { runAgentCall } from './assistant.ts';
 import { startLocalApi, type LocalApi } from './api.ts';
-import type { DropHome } from './home.ts';
+import { DEFAULT_RELAY_URL, type DropHome } from './home.ts';
 import { notify } from './notify.ts';
 import { LanService } from './lan.ts';
 import { mdnsDiscovery } from './lan-mdns.ts';
@@ -101,11 +101,12 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
   const store = oauthStore(home);
   const signIns = new OAuthSignIns({ store, redirectUrl });
   const oauth: ConnectOptions = { oauth: (serverUrl) => runtimeOAuth(store, redirectUrl())(serverUrl) };
-  // The relay this node uses now: a node that joins its first team adopts that team's relay (T4.23, D95).
+  // The relay this node uses now: a node that joins its first team adopts that team's relay (T4.23, D95), but only from
+  // the default loopback relay; a relay its owner set by hand is theirs to change (T4.33).
   let relayUrl = config.relayUrl;
   const relayPlan = (url: string, fresh: boolean): RelayOutcome => {
     if (url === relayUrl) return 'same';
-    if (!fresh) return 'kept';
+    if (!fresh || relayUrl !== DEFAULT_RELAY_URL) return 'kept';
     // ws only to a literal private address, wss to such an address or a DNS name; then the organization's list.
     if (!relayUrlAllowed(url)) throw new DropError('E_INVITE_RELAY', 'E_INVITE_RELAY relay not allowed');
     if (policy && !relayAllowed(policy.policy, url))
@@ -166,7 +167,9 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
     adoptRelay: (url) => {
       try {
         switchRelay(home, url);
-      } catch {
+      } catch (error) {
+        // The lock held elsewhere or a file changed meanwhile says so (T4.33); anything else is a relay not adopted.
+        if (isDropError(error, 'E_LOCKED') || isDropError(error, 'E_CONFLICT')) throw error;
         throw new DropError('E_INVITE_RELAY', 'E_INVITE_RELAY relay not adopted');
       }
       relayUrl = url;

@@ -1,0 +1,14 @@
+{
+  "phase": "READY_FOR_MANUAL_ACCEPTANCE",
+  "scope": "T4.33 : durcissement du lien unique (relais adopté hors des destinations, origines conservées, vraie cause E_LOCKED/E_CONFLICT, autorité ca liée à l'hôte, adoption depuis le relais par défaut seulement, domaine drop-invite-v1|)",
+  "requirements": { "total": 8, "covered": 8 },
+  "acceptance": { "total": 9, "verified": 9, "pending": 0, "failed": 0 },
+  "todos": { "p0_open": 0, "p1_open": 0 },
+  "risks": { "critical_open": 0, "high_open": 0 },
+  "verification": {
+    "status": "PASS",
+    "evidence": "evidence.md",
+    "manual": "revue de la PR par Guillaume ; parcours réel au banc maison T4.6c"
+  },
+  "ready_for_manual_acceptance": true
+}

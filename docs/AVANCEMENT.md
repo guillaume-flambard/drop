@@ -37,7 +37,7 @@ L'ordre et les statuts font foi dans [TASKS](TASKS.md). Les preuves de chaque t�
 - Préparer le relais déjà en place sur le VPS (T4.6a) et le lien unique pour rejoindre l'équipe en deux clics (T4.23).
 - Construire l'app Windows (T3.7), puis tester à quatre : VPS, Mac et deux PC Windows (T4.6c).
 - Construire l'app Linux (T3.8) et mener le design au niveau impeccable (T4.24).
-- Écrire le protocole de l'essai en profil privé (T4.6b). L'ancien protocole des [essais](essais/README.md) est historique.
+- Protocole de l'essai en profil privé écrit (T4.6b) : [essais](essais/README.md) et [fiche d'accord](essais/fiche-accord.md), en attente d'acceptation.
 - Si l'essai inclut le partage par modèle : qualifier un modèle (T3.2) et choisir outils, modèle et approbateur depuis le panneau (T4.16).
 
 ### Reste avant le lancement

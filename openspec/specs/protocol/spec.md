@@ -176,7 +176,7 @@ Pour chiffrer, un Node SHALL dériver sa paire X25519 de sa paire Ed25519 avec `
 - **THEN** `identity.json` contient exactement ces champs et son mode est `0600`
 
 ### Requirement: Code d'invitation
-`drop invite` SHALL produire un code d'invitation valant le base64url de `{ relayUrl, nodeId, displayName, oneTimeToken, expiresAt, admission?, team?, iroh?, sig }`, avec une expiration de 24 h : c'est un lien envoyé par message, ouvert plus tard (D26). `sig` MUST signer en Ed25519, par la clé de `nodeId`, le JSON canonique des autres champs (D95). Un code non signé, modifié, expiré ou piégé MUST être refusé avec un code stable (`E_INVITE`, `E_INVITE_EXPIRED`, `E_INVITE_SIG`).
+`drop invite` SHALL produire un code d'invitation valant le base64url de `{ relayUrl, nodeId, displayName, oneTimeToken, expiresAt, admission?, team?, iroh?, sig }`, avec une expiration de 24 h : c'est un lien envoyé par message, ouvert plus tard (D26). `sig` MUST signer en Ed25519, par la clé de `nodeId`, les autres champs (D95), sous un domaine propre (T4.33). Un code non signé, modifié, expiré ou piégé MUST être refusé avec un code stable (`E_INVITE`, `E_INVITE_EXPIRED`, `E_INVITE_SIG`).
 
 #### Scenario: Contenu du code
 <!-- openspec-guard:test="cards, receipts, invites, lifecycle, schemas > encodes invites that expire after a day" -->
@@ -716,3 +716,19 @@ Un relais SHALL être admissible si c'est `ws:` vers une adresse privée ou de b
 <!-- openspec-guard:test="configuration hygiene (T4.15) > lists E_QUEUE_FULL among the stable error codes" -->
 - **WHEN** on lit `ERROR_CODES`
 - **THEN** la liste contient `E_QUEUE_FULL`
+
+### Requirement: Domaine de signature des invitations
+La signature d'une invitation SHALL porter sur `drop-invite-v1|` suivi du JSON canonique des autres champs, comme la politique d'organisation signe sous `drop-policy-v1|` : aucune autre signature drop ne peut passer pour une invitation (T4.33). Une signature sans ce domaine MUST être refusée avec `E_INVITE_SIG`.
+
+#### Scenario: AC: signature sous le domaine des invitations
+<!-- openspec-guard:test="invite hardening (T4.33) > signs under the drop-invite-v1| domain: a bare or foreign-domain signature does not verify (E_INVITE_SIG)" -->
+- **WHEN** une invitation porte la signature de son Node sur le JSON canonique nu (format de T4.23), ou sur ce JSON précédé d'un autre domaine comme `drop-policy-v1|`
+- **THEN** elle est refusée avec `E_INVITE_SIG`, et seule la signature précédée de `drop-invite-v1|` est acceptée
+
+### Requirement: Codes de verrou et de conflit
+`ERROR_CODES` SHALL contenir `E_LOCKED` et `E_CONFLICT`, que le Node rend quand `config.json` est verrouillé par une autre opération ou a changé pendant sa réécriture (T4.33).
+
+#### Scenario: AC: verrou et conflit dans la liste
+<!-- openspec-guard:test="invite hardening (T4.33) > lists E_LOCKED and E_CONFLICT among the stable error codes" -->
+- **WHEN** on lit `ERROR_CODES`
+- **THEN** la liste contient `E_LOCKED` et `E_CONFLICT`
