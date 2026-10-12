@@ -68,6 +68,7 @@ export {
   stripJsonc,
   type ClientHost,
   type ClientId,
+  type ReadConfigOptions,
   type ClientPlatform,
   type ClientSpec,
   type ConfigLayout,

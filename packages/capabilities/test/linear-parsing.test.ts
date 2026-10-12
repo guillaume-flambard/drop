@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -180,5 +180,25 @@ describe('configuration files read through one descriptor (T4.26)', () => {
       execFileSync('mkfifo', [fifo]);
       expect(() => readConfigText(fifo)).toThrow('E_CONFIG_TYPE');
     }
+  });
+});
+
+describe('configuration files read without following a link (T4.42)', () => {
+  it('refuses a linked file with E_CONFIG_SYMLINK when links are not followed, and still follows one by default', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'config-link-'));
+    const target = join(dir, 'dotfiles.json');
+    const link = join(dir, 'config.json');
+    writeFileSync(target, '{"b": 2}');
+    try {
+      symlinkSync(target, link);
+    } catch (error) {
+      // Windows without Developer Mode may not create links: nothing to refuse then.
+      if ((error as NodeJS.ErrnoException).code === 'EPERM') return;
+      throw error;
+    }
+    expect(readConfigText(link)).toBe('{"b": 2}');
+    expect(() => readConfigText(link, undefined, { followLinks: false })).toThrow('E_CONFIG_SYMLINK');
+    expect(readConfigText(target, undefined, { followLinks: false })).toBe('{"b": 2}');
+    expect(readConfigText(join(dir, 'absent.json'), undefined, { followLinks: false })).toBeUndefined();
   });
 });

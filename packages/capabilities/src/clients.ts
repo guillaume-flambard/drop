@@ -1,4 +1,4 @@
-import { closeSync, constants, existsSync, fstatSync, openSync, readdirSync, readSync } from 'node:fs';
+import { closeSync, constants, existsSync, fstatSync, lstatSync, openSync, readdirSync, readSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, posix, win32 } from 'node:path';
 import { REQUESTER_AGENTS } from '@drop/protocol';
@@ -480,24 +480,46 @@ export function clientInstalled(client: ClientId, probe: InstallProbe): boolean 
 export const MAX_GLOBAL_CONFIG_BYTES = 16 * 1024 * 1024;
 export const MAX_PROJECT_CONFIG_BYTES = 1024 * 1024;
 
+export interface ReadConfigOptions {
+  /**
+   * False refuses a path that is itself a symbolic link with `E_CONFIG_SYMLINK`, before anything is read: onboarding
+   * writes back what it reads, and never follows a client file linked elsewhere (T4.22). Default true.
+   */
+  followLinks?: boolean;
+}
+
 /**
  * Reads a configuration file only if it is a regular file of bounded size: a cloned repo may carry a symlink to
  * /dev/zero or a huge file, and reading it must never hang or exhaust the daemon (T4.5 review). Absent: undefined.
  */
-export function readConfigText(path: string, maxBytes: number = MAX_GLOBAL_CONFIG_BYTES): string | undefined {
+export function readConfigText(
+  path: string,
+  maxBytes: number = MAX_GLOBAL_CONFIG_BYTES,
+  options: ReadConfigOptions = {},
+): string | undefined {
+  const noFollow = options.followLinks === false;
   let fd: number;
   try {
     // Opened once, then checked and read through that descriptor: the file checked is the file read (T4.26, CodeQL
     // js/file-system-race). O_NONBLOCK makes opening a named pipe return at once; its type then refuses it.
-    fd = openSync(path, constants.O_RDONLY | ('O_NONBLOCK' in constants ? constants.O_NONBLOCK : 0));
+    const flags =
+      constants.O_RDONLY |
+      ('O_NONBLOCK' in constants ? constants.O_NONBLOCK : 0) |
+      (noFollow && 'O_NOFOLLOW' in constants ? constants.O_NOFOLLOW : 0);
+    fd = openSync(path, flags);
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
     if (code === 'ENOENT') return undefined;
     // Windows refuses to open a directory at all, where macOS and Linux open it and fstat tells.
     if (code === 'EISDIR') throw new Error('E_CONFIG_TYPE', { cause: error });
+    // O_NOFOLLOW on a link: ELOOP on macOS and Linux.
+    if (noFollow && code === 'ELOOP') throw new Error('E_CONFIG_SYMLINK', { cause: error });
     throw error;
   }
   try {
+    // Windows has no O_NOFOLLOW: a link there is refused once the file is open, before anything is read.
+    if (noFollow && !('O_NOFOLLOW' in constants) && lstatSync(path).isSymbolicLink())
+      throw new Error('E_CONFIG_SYMLINK');
     const stats = fstatSync(fd);
     if (!stats.isFile()) throw new Error('E_CONFIG_TYPE');
     if (stats.size > maxBytes) throw new Error('E_CONFIG_TOO_LARGE');

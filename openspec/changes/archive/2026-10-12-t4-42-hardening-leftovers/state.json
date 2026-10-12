@@ -1,0 +1,14 @@
+{
+  "phase": "READY_FOR_MANUAL_ACCEPTANCE",
+  "scope": "T4.42 : lecture des configurations de l'onboarding sans blocage, écritures du banc sans suivre de lien, démarrage parallèle du banc",
+  "requirements": { "total": 3, "covered": 3 },
+  "acceptance": { "total": 9, "verified": 9, "pending": 0, "failed": 0 },
+  "todos": { "p0_open": 0, "p1_open": 0 },
+  "risks": { "critical_open": 0, "high_open": 0 },
+  "verification": {
+    "status": "PASS",
+    "evidence": "evidence.md",
+    "manual": "Guillaume lance le banc (simulation run) sur un dossier de travail réutilisé et constate le démarrage plus court ; la CI test-windows confirme le comportement Windows"
+  },
+  "ready_for_manual_acceptance": true
+}

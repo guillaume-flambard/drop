@@ -6,12 +6,10 @@ import {
   chmodSync,
   copyFileSync,
   existsSync,
-  fstatSync,
   fsyncSync,
   lstatSync,
   mkdirSync,
   openSync,
-  readFileSync,
   readdirSync,
   renameSync,
   statSync,
@@ -30,6 +28,7 @@ import {
   defaultProbe,
   executableNames,
   MAX_GLOBAL_CONFIG_BYTES,
+  readConfigText,
   type AgentKind,
   type ClientHost,
   type ClientPlatform,
@@ -162,28 +161,11 @@ function cliPath(agent: AgentKind, probe: InstallProbe): string | undefined {
 }
 
 /**
- * A regular file of bounded size, never through a symlink; undefined when absent. Opened without following a link
- * where the system allows it, then checked and read through the same descriptor.
+ * A client file as onboarding reads it: through the shared reader (one descriptor, O_NONBLOCK so a named pipe is
+ * refused at once, bounded read), never through a link (T4.22, T4.42).
  */
 function readConfig(path: string): string | undefined {
-  let fd: number | undefined;
-  try {
-    // Opened first, then checked through the descriptor: no window between a check and the read.
-    fd = openSync(path, constants.O_RDONLY | ('O_NOFOLLOW' in constants ? constants.O_NOFOLLOW : 0));
-    // Windows has no O_NOFOLLOW: a link there is refused once the file is open, before anything is read.
-    if (!('O_NOFOLLOW' in constants) && lstatSync(path).isSymbolicLink()) throw new Error('E_CONFIG_SYMLINK');
-    const stats = fstatSync(fd);
-    if (!stats.isFile()) throw new Error('E_CONFIG_TYPE');
-    if (stats.size > MAX_GLOBAL_CONFIG_BYTES) throw new Error('E_CONFIG_TOO_LARGE');
-    return readFileSync(fd, 'utf8');
-  } catch (error) {
-    const code = (error as NodeJS.ErrnoException).code;
-    if (code === 'ENOENT') return undefined;
-    if (code === 'ELOOP') throw new Error('E_CONFIG_SYMLINK', { cause: error });
-    throw error;
-  } finally {
-    if (fd !== undefined) closeSync(fd);
-  }
+  return readConfigText(path, MAX_GLOBAL_CONFIG_BYTES, { followLinks: false });
 }
 
 function record(value: unknown): Record<string, unknown> {
