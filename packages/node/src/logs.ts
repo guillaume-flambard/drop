@@ -3,7 +3,7 @@
  * system header, and every line redacted in the writing itself. The secret scanner of the runner decides what looks
  * like a secret; a line it still recognizes after redaction is never written as is.
  */
-import { createHash } from 'node:crypto';
+import { createHmac, randomBytes } from 'node:crypto';
 import {
   chmodSync,
   closeSync,
@@ -77,8 +77,11 @@ export interface RedactOptions {
   now?: () => number;
 }
 
+// A process-local keyed fingerprint lets users correlate redactions in the same run without
+// exposing a short, offline-bruteforceable hash of a potentially weak password.
+const REDACTION_FINGERPRINT_KEY = randomBytes(32);
 function marker(word: string): string {
-  return `[expurgé #${createHash('sha256').update(word, 'utf8').digest('hex').slice(0, 8)}]`;
+  return `[expurgé #${createHmac('sha256', REDACTION_FINGERPRINT_KEY).update(word, 'utf8').digest('hex').slice(0, 8)}]`;
 }
 
 /** Long runs of hexadecimal digits, checked again after redaction. */
@@ -117,7 +120,24 @@ function replaceAll(text: string, value: string, by: string): string {
 
 /** Rule 3: from `://` to the last `@` before the next blank or quote. */
 function redactUserinfo(text: string): string {
-  return text.replace(/(:\/\/)([^\s"'<>]*)@/g, (_whole, start: string) => `${start}${REDACTED}@`);
+  // One forward pass: regex backtracking over repeated :// fragments can be quadratic.
+  let result = '';
+  let cursor = 0;
+  while (cursor < text.length) {
+    const scheme = text.indexOf('://', cursor);
+    if (scheme < 0) return result + text.slice(cursor);
+    result += text.slice(cursor, scheme + 3);
+    let end = scheme + 3;
+    while (end < text.length && !/[\s"'<>]/.test(text[end] ?? '')) end += 1;
+    const at = text.lastIndexOf('@', end - 1);
+    if (at >= scheme + 3) {
+      result += REDACTED + '@' + text.slice(at + 1, end);
+    } else {
+      result += text.slice(scheme + 3, end);
+    }
+    cursor = end;
+  }
+  return result;
 }
 
 /** Rule 4: the word after `Bearer` or `Basic`. */
@@ -441,13 +461,23 @@ function firstLine(path: string): string {
 
 /** The lines in the last `bytes` of a file; a partial first line is dropped. */
 export function lastLines(path: string, bytes: number): string[] {
-  // A log that is a link could point at any file of the user: never read through it.
-  if (lstatSync(path).isSymbolicLink()) throw new Error('E_LOG log is a symbolic link');
+  // Open first (O_NOFOLLOW on POSIX), then validate the opened descriptor and the named file.
+  // A pre-open lstat would allow a symlink swap between the check and open.
   const fd = openSync(path, fsConstants.O_RDONLY | NOFOLLOW);
   let buffer: Buffer;
   let start: number;
   try {
-    const size = fstatSync(fd).size;
+    const opened = fstatSync(fd);
+    const named = lstatSync(path);
+    if (
+      !opened.isFile() ||
+      !named.isFile() ||
+      opened.dev !== named.dev ||
+      (process.platform !== 'win32' && opened.ino !== named.ino)
+    ) {
+      throw new Error('E_LOG log changed or is a symbolic link');
+    }
+    const size = opened.size;
     start = Math.max(0, size - bytes);
     buffer = Buffer.alloc(size - start);
     readSync(fd, buffer, 0, buffer.length, start);

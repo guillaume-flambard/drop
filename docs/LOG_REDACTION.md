@@ -38,7 +38,7 @@ Liste fermée, protégée avant ces deux règles, parce que drop en a besoin pou
   courts pour la règle 7, sans protection particulière.
 
 Tout le reste qui ressemble à une clé est masqué, identifiants de Node compris. Le Node remplace par
-`[expurgé #<8 hex du SHA-256>]` (même valeur, même empreinte, pour suivre un pair d'une ligne à l'autre) ; la coque, sans
+`[expurgé #<8 hex HMAC-SHA-256>]` (même valeur, même empreinte pendant le processus, pour suivre un pair d'une ligne à l'autre ; secret aléatoire en mémoire, non conservé) ; la coque, sans
 fonction de hachage, par `[expurgé]`.
 
 ## Au-delà de cette règle, dans le Node seulement

@@ -38,7 +38,12 @@ describe('desktop logs (T4.37)', () => {
     expect(rust).toContain('tauri::generate_handler![retry_daemon, open_logs]');
     expect(rust).toContain('fn open_logs()');
     // The page itself: run its script in a document, as the panel window would.
-    document.documentElement.innerHTML = page.replace(/<script>[\s\S]*<\/script>/, '');
+    // The HTML is a trusted local fixture, not user HTML. Split its sole script explicitly;
+    // this is not an HTML sanitizer and avoids an unsafe regex mistaken for one.
+    const scriptStart = page.indexOf('<script>');
+    const scriptEnd = page.lastIndexOf('</script>');
+    if (scriptStart < 0 || scriptEnd <= scriptStart) throw new Error('test fixture: missing inline script');
+    document.documentElement.innerHTML = page.slice(0, scriptStart) + page.slice(scriptEnd + '</script>'.length);
     window.history.replaceState(
       null,
       '',
@@ -62,7 +67,7 @@ describe('desktop logs (T4.37)', () => {
       },
     });
     // The page's own script, run against this document's globals.
-    runInThisContext(/<script>([\s\S]*)<\/script>/.exec(page)?.[1] ?? '');
+    runInThisContext(page.slice(scriptStart + '<script>'.length, scriptEnd));
     const box = document.getElementById('log-box');
     const path = document.getElementById('log-path');
     expect(box?.hidden).toBe(false);
