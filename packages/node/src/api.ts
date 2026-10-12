@@ -265,6 +265,9 @@ function dropErrorStatus(
 export function startLocalApi(options: LocalApiOptions): Promise<LocalApi> {
   if (!options.token.trim()) return Promise.reject(new Error('E_TOKEN local token empty'));
   const { engine } = options;
+  // Count accepted local write requests before reading their async bodies.
+  // The maintenance lease is granted only when this count is zero.
+  let activeApiWrites = 0;
   const now = options.now ?? Date.now;
   let boundPort = options.port;
 
@@ -325,6 +328,10 @@ export function startLocalApi(options: LocalApiOptions): Promise<LocalApi> {
       return;
     }
     if ((req.method ?? 'GET') === 'GET' && url.pathname === '/oauth/callback' && localHost(req)) {
+      if (engine.preparingUpdate()) {
+        json(res, 503, { error: 'E_UPDATE_IN_PROGRESS' });
+        return;
+      }
       const state = url.searchParams.get('state') ?? '';
       const code = url.searchParams.get('code') ?? '';
       if (url.searchParams.has('error')) {
@@ -349,6 +356,21 @@ export function startLocalApi(options: LocalApiOptions): Promise<LocalApi> {
     }
     const method = req.method ?? 'GET';
     const path = url.pathname;
+
+    if (method === 'POST' && path === '/_shell/update-prepare' && options.shellInstance) {
+      const ready = activeApiWrites === 0 && engine.prepareUpdate();
+      json(res, ready ? 200 : 409, { ready });
+      return;
+    }
+    if (method === 'POST' && path === '/_shell/update-cancel' && options.shellInstance) {
+      engine.cancelUpdate();
+      json(res, 200, { cancelled: true });
+      return;
+    }
+    if (engine.preparingUpdate() && method !== 'GET' && method !== 'HEAD') {
+      json(res, 503, { error: 'E_UPDATE_IN_PROGRESS', message: 'Drop redémarre. Réessaie dans un instant.' });
+      return;
+    }
 
     if (method === 'GET' && path === '/peers') {
       json(res, 200, { peers: engine.peers() });
@@ -878,23 +900,34 @@ export function startLocalApi(options: LocalApiOptions): Promise<LocalApi> {
   };
 
   const server = createServer((req, res) => {
-    handle(req, res).catch((error: unknown) => {
-      if (error instanceof BodyError && !res.headersSent) {
-        // The rest of a body too large is never read: the connection closes rather than serve another request.
-        if (error.code === 'E_TOO_LARGE') res.setHeader('Connection', 'close');
-        json(res, error.code === 'E_TOO_LARGE' ? 413 : 400, { error: error.code, message: error.message });
-        return;
-      }
-      // The path only: the query may carry the local token, the body anything at all.
-      log({
-        event: 'api_request_failed',
-        code: isDropError(error) ? error.code : 'E_INTERNAL',
-        reason: error instanceof Error ? error.name : typeof error,
-        path: (req.url ?? '/').split('?')[0]?.slice(0, 120) ?? '/',
+    const path = (req.url ?? '').split('?')[0] ?? '';
+    const isWrite =
+      req.method !== undefined &&
+      !['GET', 'HEAD', 'OPTIONS'].includes(req.method) &&
+      path !== '/_shell/update-prepare' &&
+      path !== '/_shell/update-cancel';
+    if (isWrite) activeApiWrites += 1;
+    void handle(req, res)
+      .catch((error: unknown) => {
+        if (error instanceof BodyError && !res.headersSent) {
+          // The rest of a body too large is never read: the connection closes rather than serve another request.
+          if (error.code === 'E_TOO_LARGE') res.setHeader('Connection', 'close');
+          json(res, error.code === 'E_TOO_LARGE' ? 413 : 400, { error: error.code, message: error.message });
+          return;
+        }
+        // The path only: the query may carry the local token, the body anything at all.
+        log({
+          event: 'api_request_failed',
+          code: isDropError(error) ? error.code : 'E_INTERNAL',
+          reason: error instanceof Error ? error.name : typeof error,
+          path: (req.url ?? '/').split('?')[0]?.slice(0, 120) ?? '/',
+        });
+        if (!res.headersSent) json(res, 500, { error: 'internal' });
+        else res.end();
+      })
+      .finally(() => {
+        if (isWrite) activeApiWrites -= 1;
       });
-      if (!res.headersSent) json(res, 500, { error: 'internal' });
-      else res.end();
-    });
   });
 
   return new Promise((resolve, reject) => {
