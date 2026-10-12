@@ -36,7 +36,7 @@ vient des démarrages à froid qui se recouvrent.
 | `pnpm -r lint`, `pnpm -r typecheck` | verts (après fusion d'`origin/main`, puis après les retours de revue) |
 | `pnpm -r test`, suite complète après fusion d'`origin/main` | 94 fichiers, 689 tests verts |
 | après les retours de revue : `simulation`, `linear-parsing.test.ts`, `clients-auto.test.ts` | 10 fichiers, 51 tests verts |
-| `openspec validate t4-42-hardening-leftovers --strict` | valide |
+| `openspec validate t4-42-hardening-leftovers --strict`, puis `openspec validate --all --strict` après archivage | valide ; 20 éléments valides (les nouvelles exigences sont scindées pour rester sous 500 caractères) |
 | `openspec-guard@0.3.0 check --require-selector --baseline … --fail-on fail` | vert : 483 critères liés, dont les 7 nouveaux ; `--update-baseline` ne change pas la baseline |
 | revue adverse indépendante (agent séparé, diff seul) | 1 défaut bloquant (tube nommé aux écritures du banc) et 8 remarques ; corrigés ou consignés dans `design.md` |
 | `review` (gstack) | aucun défaut restant après correction |
