@@ -22,7 +22,7 @@ export type SendOutcome = 'delivered' | 'queued' | 'E_SCHEMA' | 'E_TOO_LARGE' | 
 
 /** Outbound-only connection to the relay: the node never listens on a port (AGENTS.md). Reconnects with backoff. */
 export class RelayClient {
-  private readonly options: RelayClientOptions;
+  private options: RelayClientOptions;
   private socket: WebSocket | undefined;
   private ready = false;
   private closed = false;
@@ -69,6 +69,31 @@ export class RelayClient {
     this.socket = undefined;
     previous?.terminate();
     this.open();
+  }
+
+  /** The relay this client connects to. */
+  get url(): string {
+    return this.options.url;
+  }
+
+  /**
+   * Moves to another relay (T4.23): a node that joins its first team adopts the team's relay without a restart.
+   * Messages awaiting an acknowledgement from the old relay are reported offline, so the sender queues them again.
+   */
+  switchUrl(url: string): void {
+    if (url === this.options.url) return;
+    this.options = { ...this.options, url };
+    clearTimeout(this.reconnectTimer);
+    const previous = this.socket;
+    this.socket = undefined;
+    const wasReady = this.ready;
+    this.ready = false;
+    for (const resolve of this.pending.values()) resolve('offline');
+    this.pending.clear();
+    previous?.terminate();
+    if (wasReady) this.options.onStatus?.('disconnected');
+    this.backoffMs = this.options.minBackoffMs ?? 1_000;
+    if (!this.closed) this.open();
   }
 
   close(): void {

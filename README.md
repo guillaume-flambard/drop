@@ -30,29 +30,16 @@ The dated progress report is [docs/AVANCEMENT.md](docs/AVANCEMENT.md) (in French
 
 ## How it works
 
-```mermaid
-sequenceDiagram
-    participant A as Requester's agent
-    participant RN as Requester's node
-    participant OW as Owner's node
-    actor O as Owner
-    A->>RN: request_drop(capability, input, purpose) over MCP
-    RN->>OW: signed and encrypted request (LAN, iroh or your relay)
-    OW->>O: consent card: who asks, why, what can leave
-    O->>OW: allow once, deny or not now
-    Note over OW: runs only the tools the capability fixed,<br/>validates the output schema, scans for secrets
-    opt sensitive capability
-        OW->>O: review the answer, remove fields, send or discard
-    end
-    OW->>RN: encrypted answer and signed receipt
-    RN->>A: result, framed as untrusted data
-```
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/one-question-dark.svg">
+  <img src="docs/diagrams/one-question.svg" alt="Sequence of one question: the requester's agent asks over MCP, the requester's node signs and encrypts it, the relay forwards what it cannot read, the owner sees a consent card and allows once, the capability runs with fixed tools and checked output, and only the answer and a signed receipt come back. A refusal, a delay or an expiry returns a status and nothing runs." width="960">
+</picture>
 
 1. The owner publishes a **capability**: a contract that fixes the input, the output schema, the tools allowed, the budget and who approves. Nothing is shared by default.
 2. The requester's agent picks a capability from the team catalog and asks a question with a stated purpose.
 3. The owner decides once: allow once, deny or not now. No answer before expiry means no run.
 4. The owner's node runs the capability with the tools fixed in advance. The model never decides permissions.
-5. The output is validated against its schema and passed through a secret scanner. Invalid output is rejected, not repaired.
+5. The output is validated against its schema and passed through a secret scanner. Invalid output is rejected, not repaired. For a sensitive capability, the owner reviews the answer, can remove fields, then sends or discards it.
 6. The requester receives the answer. Both sides keep a signed receipt with hashes and metadata, never the content.
 
 A longer walkthrough with diagrams is in [the guide](docs/GUIDE.md) (in French).
@@ -114,6 +101,13 @@ Agent setup, manual MCP configuration and the thirteen supported clients are des
 
 ## Repository layout
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/architecture-overview-dark.svg">
+  <img src="docs/diagrams/architecture-overview.svg" alt="Architecture on one computer: the Tauri desktop app shows the React workspace served by the local drop node; coding agents connect to the node over MCP; capabilities run only after consent and call the owner's own tools; nodes reach a teammate through an encrypted link: a relay, iroh or the local network." width="960">
+</picture>
+
+How the desktop app, the node and the interface fit together is described in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (in French).
+
 | Path                        | What it holds                                                                  |
 | --------------------------- | ------------------------------------------------------------------------------ |
 | `packages/protocol`         | zod schemas, identity, signatures, encryption, receipts                        |
@@ -164,6 +158,18 @@ Internal documentation is written in French.
 ## Roadmap
 
 [docs/TASKS.md](docs/TASKS.md) (in French) is the single source for order and dependencies. Next steps, in short: close the pending security reviews, finish the Mac app, ship Windows and Linux apps, a one-link invitation to join a team, then a trial with pairs of colleagues who actually work together. Public launch, packages and the product name come after.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/roadmap-phases-dark.svg">
+  <img src="docs/diagrams/roadmap-phases.svg" alt="Roadmap in task order: shipped so far, then the need measurement and security reviews, Windows and Linux apps, the one-link join, panel design and home bench, then the trial in pairs of colleagues, then the tasks before a public launch." width="960">
+</picture>
+
+The one-link join is a target flow, still in progress (T4.23):
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/join-two-clicks-dark.svg">
+  <img src="docs/diagrams/join-two-clicks.svg" alt="Target flow, in progress (T4.23): the inviter copies one link, the link page detects the system and offers the download, the app opens with the invite and relay filled in, then the new member clicks Join and Connect my agents." width="960">
+</picture>
 
 ## Contributing
 

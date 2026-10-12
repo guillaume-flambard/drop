@@ -16,5 +16,5 @@
 
 ## 4. Vérification et clôture
 
-- [ ] 4.1 Vérifier tests, lint, types, OpenSpec et garde, puis revue fonctionnelle et sécurité du diff.
+- [x] 4.1 Vérifier tests, lint, types, OpenSpec et garde, puis revue fonctionnelle et sécurité du diff.
 - [ ] 4.2 Jouer la recette Mac réelle, consigner les preuves AC-MAC, risques et travail restant, archiver et committer si les gates sont verts.

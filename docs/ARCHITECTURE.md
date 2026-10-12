@@ -11,8 +11,8 @@ L'app de bureau est la même sur macOS, Windows et Linux. Elle a trois couches.
 3. **React et shadcn/ui forment l'interface** (`packages/desktop-ui`). Elle est compilée hors ligne, embarquée dans le Node et affichée dans une fenêtre de Tauri.
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="diagrams/architecture-dark.svg">
-  <img src="diagrams/architecture.svg" alt="Schéma de l'architecture : la coque Tauri démarre le Node local et affiche l'interface React qu'il sert ; l'agent local passe par requester-mcp ; le Node parle au relais et, en option, à Internet par drop-iroh.">
+  <source media="(prefers-color-scheme: dark)" srcset="diagrams/architecture-overview-dark.svg">
+  <img src="diagrams/architecture-overview.svg" alt="Schéma de l'architecture sur un poste : l'app de bureau Tauri affiche l'espace de travail React servi par le Node local ; les agents de code se branchent au Node par MCP ; les capacités ne s'exécutent qu'après consentement et appellent les outils du propriétaire ; les Nodes joignent un collègue par un lien chiffré : un relais, iroh ou le réseau local." width="960">
 </picture>
 
 ## Qui fait quoi

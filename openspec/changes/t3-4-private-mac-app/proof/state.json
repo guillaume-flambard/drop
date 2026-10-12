@@ -16,17 +16,52 @@
     "3.1": "PARTIAL",
     "3.2": "PARTIAL",
     "3.3": "DONE",
-    "4.1": "PARTIAL",
+    "4.1": "DONE",
     "4.2": "TODO"
   },
   "risks": [
-    { "id": "R-1", "severity": "high", "status": "mitigated_pending_review", "description": "La coque vérifie sa session sur loopback et conserve le port vérifié avant de construire l'URL avec jeton ; collision observée sans navigation vers le processus occupant. Revue formelle et course résiduelle de remplacement de processus à examiner." },
-    { "id": "R-2", "severity": "high", "status": "open", "description": "Aucun paquet signé/notarisé n'a encore été installé et testé sur un Mac propre." },
-    { "id": "R-3", "severity": "medium", "status": "mitigated_pending_manual", "description": "Le panneau garde le focus après décision et diffère le rafraîchissement SSE pendant une interaction ; VoiceOver et WKWebView réels restent à qualifier." },
-    { "id": "R-4", "severity": "medium", "status": "open", "description": "Le retour arrière manuel peut être incompatible avec les migrations de l'état anti-rejeu sans instantané complet cohérent." },
-    { "id": "R-5", "severity": "high", "status": "closed", "description": "Une panne pendant la fenêtre de démarrage après réponse HTTP produisait E_START sans utiliser la borne de reprise. Le chemin E_START consomme maintenant les deux mêmes tentatives ; essai isolé avec configuration invalide : deux réessais puis E_RESTART." },
-    { "id": "R-6", "severity": "medium", "status": "mitigated_pending_manual", "description": "Une erreur de jeton ou de WebView après santé du Node était remplacée par E_RESTART. La coque arrête maintenant le Node avec E_TOKEN/E_PANEL ; un jeton vide donne E_TOKEN seul et aucun listener dans l'essai isolé. Le WebView réel reste à vérifier." },
-    { "id": "R-7", "severity": "high", "status": "closed", "description": "L'API Node autonome refusait un jeton local vide ; corrigé et vérifié dans T3.4a (tests, binaire, relectures ciblées)." }
+    {
+      "id": "R-1",
+      "severity": "high",
+      "status": "mitigated_pending_review",
+      "description": "La coque vérifie sa session sur loopback et conserve le port vérifié avant de construire l'URL avec jeton ; collision observée sans navigation vers le processus occupant. Revue formelle et course résiduelle de remplacement de processus à examiner."
+    },
+    {
+      "id": "R-2",
+      "severity": "high",
+      "status": "open",
+      "description": "Aucun paquet signé/notarisé n'a encore été installé et testé sur un Mac propre."
+    },
+    {
+      "id": "R-3",
+      "severity": "medium",
+      "status": "mitigated_pending_manual",
+      "description": "Le panneau garde le focus après décision et diffère le rafraîchissement SSE pendant une interaction ; VoiceOver et WKWebView réels restent à qualifier."
+    },
+    {
+      "id": "R-4",
+      "severity": "medium",
+      "status": "open",
+      "description": "Le retour arrière manuel peut être incompatible avec les migrations de l'état anti-rejeu sans instantané complet cohérent."
+    },
+    {
+      "id": "R-5",
+      "severity": "high",
+      "status": "closed",
+      "description": "Une panne pendant la fenêtre de démarrage après réponse HTTP produisait E_START sans utiliser la borne de reprise. Le chemin E_START consomme maintenant les deux mêmes tentatives ; essai isolé avec configuration invalide : deux réessais puis E_RESTART."
+    },
+    {
+      "id": "R-6",
+      "severity": "medium",
+      "status": "mitigated_pending_manual",
+      "description": "Une erreur de jeton ou de WebView après santé du Node était remplacée par E_RESTART. La coque arrête maintenant le Node avec E_TOKEN/E_PANEL ; un jeton vide donne E_TOKEN seul et aucun listener dans l'essai isolé. Le WebView réel reste à vérifier."
+    },
+    {
+      "id": "R-7",
+      "severity": "high",
+      "status": "closed",
+      "description": "L'API Node autonome refusait un jeton local vide ; corrigé et vérifié dans T3.4a (tests, binaire, relectures ciblées)."
+    }
   ],
   "verification": {
     "typescript": "passed_338_of_338_35_files_lint_typecheck_2026-10-09",
@@ -40,10 +75,15 @@
     "release": "blocked_missing_notarization_credentials_and_manual_clean_Mac_recipe"
   },
   "remaining": [
-    "Exécuter la recette veille et le bouton Réessayer dans le WebView réel",
-    "Exécuter la recette VoiceOver et focus sur le vrai WebView",
-    "Configurer les justificatifs Apple, construire un paquet signé/notarisé et l'installer sur un Mac propre",
-    "Jouer le refus, le hors ligne, le paquet altéré et le retour arrière",
-    "Terminer les revues formelles et la garde canonique après synchronisation des specs"
+    "Recette veille/réveil réelle : bloquée sur l'environnement (sommeil empêché par assertions actives, réveil planifié nécessitant les droits root). Recette humaine.",
+    "Cliquer « Réessayer » dans le vrai WebView : chemin présent et budget testé, mais bouton non qualifié (automatisation d'app native expirée précédemment).",
+    "Recette VoiceOver et focus sur le vrai WebView.",
+    "Construire puis installer le paquet notarisé sur un Mac propre.",
+    "Jouer le refus, le hors ligne, le paquet altéré et le retour arrière.",
+    "Écrire la justification de l'entitlement com.apple.security.cs.allow-unsigned-executable-memory du Node embarqué (dette de durcissement, aucun constat de vulnérabilité)."
+  ],
+  "lastVerified": "2026-10-12",
+  "notes": [
+    "2026-10-12 : gates verts (lint, typecheck, validate 18/18, garde 419 reliés/0 incertain). /review du PR #8 conforme, /cso 1791760833297-b0a8d6b05a6b3097 terminé sans constat soutenu, complétude partial. Ligne périmée de l'index (« archiver la preuve de notarisation ») corrigée : preuve déjà consignée le 10 octobre."
   ]
 }

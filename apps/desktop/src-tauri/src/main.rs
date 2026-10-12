@@ -102,7 +102,9 @@ fn drop_command(app: &AppHandle, args: &[&str]) -> Command {
     command
 }
 
-/// First launch: a private identity named after the Mac's user, on an explicitly configured or loopback relay. Joining a team comes with an invite link.
+/// First launch: a private identity named after the Mac's user, on an explicitly configured or loopback relay. Joining a
+/// team comes with an invite link (T4.23): on « Rejoindre », a node that joined nobody yet moves to the invite's relay,
+/// checked by the node, so a link opened before or after this first launch lands on the same team.
 fn ensure_identity(app: &AppHandle) -> Result<(), &'static str> {
     if drop_home().join("identity.json").exists() {
         return Ok(());
@@ -563,9 +565,63 @@ fn retry_daemon(app: AppHandle) {
     app.state::<Daemon>().retry.store(true, Ordering::SeqCst);
 }
 
-/// `drop://pair?code=…` joins a team; `drop://link?session=…&gateway=…&client=…&client_id=…&redirect=…` asks to link
-/// an assistant such as Claude or ChatGPT (T2.13). Either way the panel opens with the request and the user decides
-/// there; for a link it shows the domain the answers return to, which the gateway checks against the session (D71).
+/// The longest `drop://` link the app accepts: an invite with its admission ticket and iroh addresses fits well under.
+const MAX_LINK_CHARS: usize = 4096;
+
+/// Whether a `drop://` link is one the panel handles: `join` and `pair` (an invite), `link` (an assistant).
+fn handled_link(url: &Url) -> bool {
+    url.scheme() == "drop"
+        && matches!(url.host_str(), Some("join" | "pair" | "link"))
+        && url.as_str().len() <= MAX_LINK_CHARS
+}
+
+/// What the panel receives for a link, as query parameters of its own local URL. `drop://join?invite=…` (the join
+/// page's button, T4.23) and `drop://pair?code=…` (T4.14) both open the confirmation card: the node checks the invite
+/// and shows who invites before anything is sent. `drop://link?session=…&gateway=…&client=…&client_id=…&redirect=…`
+/// asks to link an assistant such as Claude or ChatGPT (T2.13); the panel shows the domain the answers return to,
+/// which the gateway checks against the session (D71). Anything else gives nothing.
+fn panel_params(link: &Url) -> Vec<(&'static str, String)> {
+    if !handled_link(link) {
+        return vec![];
+    }
+    let param = |name: &str| {
+        link.query_pairs()
+            .find(|(key, _)| key == name)
+            .map(|(_, value)| value.into_owned())
+    };
+    let invite = |value: Option<String>| {
+        value
+            .filter(|code| {
+                !code.is_empty()
+                    && code
+                        .bytes()
+                        .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
+            })
+            .map(|code| vec![("pair", code)])
+            .unwrap_or_default()
+    };
+    match link.host_str() {
+        Some("join") => invite(param("invite")),
+        Some("pair") => invite(param("code")),
+        Some("link") => match (param("session"), param("gateway")) {
+            (Some(session), Some(gateway)) => vec![
+                ("link", session),
+                ("gateway", gateway),
+                (
+                    "client",
+                    param("client").unwrap_or_else(|| "Un assistant".to_string()),
+                ),
+                ("clientId", param("client_id").unwrap_or_default()),
+                ("redirect", param("redirect").unwrap_or_default()),
+            ],
+            _ => vec![],
+        },
+        _ => vec![],
+    }
+}
+
+/// Opens each handled `drop://` link in the panel, where the user decides. Before the daemon is ready (first launch,
+/// or a link that started the app), links wait in a short queue and open once it is.
 fn open_links(app: &AppHandle, urls: Vec<Url>) {
     if !app.state::<Daemon>().ready.load(Ordering::SeqCst) {
         let daemon = app.state::<Daemon>();
@@ -574,10 +630,7 @@ fn open_links(app: &AppHandle, urls: Vec<Url>) {
             if queue.len() >= 8 {
                 break;
             }
-            if url.scheme() == "drop"
-                && matches!(url.host_str(), Some("pair" | "link"))
-                && url.as_str().len() <= 4096
-            {
+            if handled_link(&url) {
                 queue.push(url);
             }
         }
@@ -593,33 +646,7 @@ fn open_links(app: &AppHandle, urls: Vec<Url>) {
         return;
     };
     for link in urls {
-        if link.scheme() != "drop" {
-            continue;
-        }
-        let param = |name: &str| {
-            link.query_pairs()
-                .find(|(key, _)| key == name)
-                .map(|(_, value)| value.into_owned())
-        };
-        let extra: Vec<(&str, String)> = match link.host_str() {
-            Some("pair") => param("code")
-                .map(|code| vec![("pair", code)])
-                .unwrap_or_default(),
-            Some("link") => match (param("session"), param("gateway")) {
-                (Some(session), Some(gateway)) => vec![
-                    ("link", session),
-                    ("gateway", gateway),
-                    (
-                        "client",
-                        param("client").unwrap_or_else(|| "Un assistant".to_string()),
-                    ),
-                    ("clientId", param("client_id").unwrap_or_default()),
-                    ("redirect", param("redirect").unwrap_or_default()),
-                ],
-                _ => vec![],
-            },
-            _ => vec![],
-        };
+        let extra = panel_params(&link);
         if extra.is_empty() {
             continue;
         }
@@ -939,6 +966,32 @@ mod tests {
             bootstrap_relay(Some("wss://10.0.0.2/v1".to_string())),
             "wss://10.0.0.2/v1"
         );
+    }
+
+    #[test]
+    fn join_and_pair_links_open_the_invite_confirmation() {
+        let url = |text: &str| Url::parse(text).expect("test URL");
+        let code = "eyJyZWxheVVybCI6IndzczovL2Ryb3AubWVtb2xhYnMuZGV2L3YxIn0";
+        assert_eq!(
+            panel_params(&url(&format!("drop://join?invite={code}"))),
+            vec![("pair", code.to_string())]
+        );
+        assert_eq!(
+            panel_params(&url(&format!("drop://pair?code={code}"))),
+            vec![("pair", code.to_string())]
+        );
+        // Not a code, no code, an unknown host, another scheme or an oversized link: nothing opens.
+        for refused in [
+            "drop://join?invite=%3Cscript%3E".to_string(),
+            "drop://join".to_string(),
+            format!("drop://other?invite={code}"),
+            format!("https://drop.memolabs.dev/join?invite={code}"),
+            format!("drop://join?invite={}", "a".repeat(MAX_LINK_CHARS)),
+        ] {
+            assert!(panel_params(&url(&refused)).is_empty(), "{refused}");
+        }
+        assert!(handled_link(&url(&format!("drop://join?invite={code}"))));
+        assert!(!handled_link(&url("drop://settings")));
     }
 
     #[test]

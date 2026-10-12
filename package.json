@@ -10,8 +10,8 @@
   "scripts": {
     "site:build": "node scripts/site.ts build",
     "site:preview": "node scripts/site.ts preview",
-    "lint": "eslint . --max-warnings 0 && prettier --check .",
-    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "eslint . --max-warnings 0 && prettier --check . --cache --cache-strategy content",
+    "typecheck": "tsc --noEmit -p tsconfig.json --incremental --tsBuildInfoFile node_modules/.cache/drop/tsc.tsbuildinfo",
     "test": "vitest run",
     "format": "prettier --write .",
     "format:check": "prettier --check ."

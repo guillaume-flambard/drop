@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>What is shipped, what comes next</title>
+  <!-- Font source: system (drop profile). No web font request; stacks fall back to platform faces. -->
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --color-paper:   #f8f8f7;
+      --color-ink:     #27262b;
+      --color-muted:   #605d66;
+      --color-accent:  #6660aa;
+      --font-sans:     'Geist', system-ui, sans-serif;
+      --font-serif:    'Instrument Serif', 'Noto Serif', serif;
+      --font-mono:     'Geist Mono', ui-monospace, monospace;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      background: var(--color-paper);
+      color: var(--color-ink);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem 2rem;
+    }
+
+    .frame { max-width: 1200px; width: 100%; min-width: 0; }
+    .diagram-container { width: 100%; overflow-x: auto; }
+
+    .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--color-muted);
+      margin-bottom: 0.5rem;
+    }
+
+    h1 {
+      font-family: var(--font-serif);
+      font-size: clamp(1.5rem, 2.4vw + 0.75rem, 2rem);
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+      color: var(--color-ink);
+      margin-bottom: 1.5rem;
+    }
+
+    svg { width: 100%; min-width: 960px; display: block; }
+    @media print {
+      .diagram-container { overflow-x: visible; }
+      svg { min-width: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">Timeline · drop · from docs/TASKS.md</p>
+    <h1>What is shipped, what comes next</h1>
+
+    <div class="diagram-container">
+<svg viewBox="0 0 960 424" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="roadmap-phases-title roadmap-phases-desc">
+<title id="roadmap-phases-title">drop roadmap</title>
+<desc id="roadmap-phases-desc">Roadmap of drop in task order: shipped so far are the signed protocol, relay and consent, the private profile with 13 agents connected, local network and iroh links, hand answers and published facts, and the notarized Mac app with the React workspace; next come the need measurement and security reviews, Windows and Linux apps, the one-link join, panel design and home bench, then the trial in pairs of colleagues, then the tasks before a public launch.</desc>
+<defs>
+<marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#605d66"/></marker>
+<marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#6660aa"/></marker>
+<marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#3b6390"/></marker>
+</defs>
+<rect width="100%" height="100%" fill="#f8f8f7"/>
+<path d="M 48,56 V 48 H 396 V 56" fill="none" stroke="rgba(39,38,43,0.3)" stroke-width="0.8"/>
+<rect x="196" y="40" width="52" height="14" rx="2" fill="#f8f8f7"/>
+<text x="222" y="51" fill="#605d66" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.14em">SHIPPED</text>
+<path d="M 428,56 V 48 H 708 V 56" fill="none" stroke="rgba(39,38,43,0.3)" stroke-width="0.8"/>
+<rect x="496" y="40" width="144" height="14" rx="2" fill="#f8f8f7"/>
+<text x="568" y="51" fill="#605d66" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.14em">NEXT, BEFORE THE TRIAL</text>
+<path d="M 724,56 V 48 H 796 V 56" fill="none" stroke="rgba(39,38,43,0.3)" stroke-width="0.8"/>
+<rect x="740" y="40" width="40" height="14" rx="2" fill="#f8f8f7"/>
+<text x="760" y="51" fill="#6660aa" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.14em">TRIAL</text>
+<path d="M 812,56 V 48 H 912 V 56" fill="none" stroke="rgba(39,38,43,0.3)" stroke-width="0.8"/>
+<rect x="818" y="40" width="88" height="14" rx="2" fill="#f8f8f7"/>
+<text x="862" y="51" fill="#605d66" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.14em">BEFORE LAUNCH</text>
+<line x1="40" y1="200" x2="412" y2="200" stroke="#27262b" stroke-width="1"/>
+<line x1="412" y1="200" x2="920" y2="200" stroke="#605d66" stroke-width="1" stroke-dasharray="4,3"/>
+<line x1="412" y1="184" x2="412" y2="216" stroke="#27262b" stroke-width="1"/>
+<rect x="284" y="173" width="120" height="12" rx="2" fill="#f8f8f7"/>
+<text x="344" y="182" fill="#27262b" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">TODAY · OCT 11, 2026</text>
+<line x1="72" y1="192" x2="72" y2="144" stroke="rgba(39,38,43,0.3)" stroke-width="1"/>
+<text x="56" y="106" fill="#27262b" font-size="12" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="start">Signed protocol,</text>
+<text x="56" y="121" fill="#27262b" font-size="12" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="start">relay, consent</text>
+<text x="56" y="136" fill="#605d66" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="start">encrypted · receipts</text>
+<circle cx="72" cy="200" r="4" fill="#27262b"/>
+<line x1="168" y1="208" x2="168" y2="256" stroke="rgba(39,38,43,0.3)" stroke-width="1"/>
+<text x="168" y="276" fill="#27262b" font-size="12" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">Private profile,</text>
+<text x="168" y="291" fill="#27262b" font-size="12" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">13 agents connected</text>
+<text x="168" y="306" fill="#605d66" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">T3.1 · T3.3 · T4.22</text>
+<circle cx="168" cy="200" r="4" fill="#27262b"/>
+<line x1="264" y1="192" x2="264" y2="144" stroke="rgba(39,38,43,0.3)" stroke-width="1"/>
+<text x="264" y="106" fill="#27262b" font-size="12" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">Local network, iroh,</text>
+<text x="264" y="121" fill="#27262b" font-size="12" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">hand answers, facts</text>
+<text x="264" y="136" fill="#605d66" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">T4.2 · T4.2b · T4.3 · T4.4</text>
+<circle cx="264" cy="200" r="4" fill="#27262b"/>
+<line x1="360" y1="208" x2="360" y2="256" stroke="rgba(39,38,43,0.3)" stroke-width="1"/>
+<text x="360" y="276" fill="#27262b" font-size="12" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">Notarized Mac app,</text>
+<text x="360" y="291" fill="#27262b" font-size="12" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">React workspace</text>
+<text x="360" y="306" fill="#605d66" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">public repo · CI on 3 OS</text>
+<circle cx="360" cy="200" r="4" fill="#27262b"/>
+<line x1="464" y1="192" x2="464" y2="144" stroke="rgba(39,38,43,0.3)" stroke-width="1"/>
+<text x="464" y="106" fill="#27262b" font-size="12" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">Need measurement,</text>
+<text x="464" y="121" fill="#27262b" font-size="12" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">security reviews</text>
+<text x="464" y="136" fill="#605d66" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">T0.7 · T3.1b · T3.1c · T4.15</text>
+<circle cx="464" cy="200" r="4" fill="#f8f8f7" stroke="#605d66" stroke-width="1.2"/>
+<line x1="560" y1="208" x2="560" y2="256" stroke="rgba(39,38,43,0.3)" stroke-width="1"/>
+<text x="560" y="276" fill="#27262b" font-size="12" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">Windows and</text>
+<text x="560" y="291" fill="#27262b" font-size="12" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">Linux apps</text>
+<text x="560" y="306" fill="#605d66" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">T3.7 · T3.8</text>
+<circle cx="560" cy="200" r="4" fill="#f8f8f7" stroke="#605d66" stroke-width="1.2"/>
+<line x1="656" y1="192" x2="656" y2="144" stroke="rgba(39,38,43,0.3)" stroke-width="1"/>
+<text x="656" y="106" fill="#27262b" font-size="12" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">One-link join,</text>
+<text x="656" y="121" fill="#27262b" font-size="12" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">panel design, bench</text>
+<text x="656" y="136" fill="#605d66" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">T4.23 · T4.24 · T4.6c</text>
+<circle cx="656" cy="200" r="4" fill="#f8f8f7" stroke="#605d66" stroke-width="1.2"/>
+<line x1="760" y1="208" x2="760" y2="256" stroke="rgba(39,38,43,0.3)" stroke-width="1"/>
+<text x="760" y="276" fill="#6660aa" font-size="12" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">Trial in pairs</text>
+<text x="760" y="291" fill="#6660aa" font-size="12" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">of colleagues</text>
+<text x="760" y="306" fill="#605d66" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">T4.6</text>
+<circle cx="760" cy="200" r="6" fill="#6660aa"/>
+<line x1="864" y1="192" x2="864" y2="144" stroke="rgba(39,38,43,0.3)" stroke-width="1"/>
+<text x="904" y="93" fill="#27262b" font-size="12" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="end">Before the</text>
+<text x="904" y="108" fill="#27262b" font-size="12" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="end">public launch</text>
+<text x="904" y="123" fill="#605d66" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="end">T3.1d · T3.1e · T3.5</text>
+<text x="904" y="136" fill="#605d66" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="end">T3.6 · T4.13</text>
+<circle cx="864" cy="200" r="4" fill="#f8f8f7" stroke="#605d66" stroke-width="1.2"/>
+<text x="920" y="332" fill="#6e6b74" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="end" letter-spacing="0.08em">IN ORDER OF DOCS/TASKS.MD · NOT TO SCALE</text>
+<line x1="40" y1="364" x2="920" y2="364" stroke="rgba(39,38,43,0.1)" stroke-width="0.8"/>
+<text x="40" y="380" fill="#605d66" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" letter-spacing="0.18em">LEGEND</text>
+<circle cx="47" cy="395" r="4" fill="#27262b"/>
+<text x="60" y="398" fill="#605d66" font-size="8.5" font-family="'Geist', system-ui, sans-serif">Shipped, on main</text>
+<circle cx="187" cy="395" r="4" fill="#f8f8f7" stroke="#605d66" stroke-width="1.2"/>
+<text x="200" y="398" fill="#605d66" font-size="8.5" font-family="'Geist', system-ui, sans-serif">To do, task IDs from docs/TASKS.md</text>
+<circle cx="407" cy="395" r="6" fill="#6660aa"/>
+<text x="420" y="398" fill="#605d66" font-size="8.5" font-family="'Geist', system-ui, sans-serif">Next milestone</text>
+<line x1="540" y1="387" x2="540" y2="403" stroke="#27262b" stroke-width="1"/>
+<text x="552" y="398" fill="#605d66" font-size="8.5" font-family="'Geist', system-ui, sans-serif">Today</text>
+</svg>
+    </div>
+  </div>
+</body>
+</html>
