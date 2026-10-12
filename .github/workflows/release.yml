@@ -259,7 +259,14 @@ jobs:
           $installed = Join-Path $env:LOCALAPPDATA 'drop'
           Get-ChildItem $installed
           if (-not (Test-Path (Join-Path $installed 'drop-desktop.exe'))) { throw 'drop-desktop.exe is not installed' }
-          Get-AuthenticodeSignature (Join-Path $installed 'drop-desktop.exe') | Format-List Status, SignerCertificate
+          $appSignature = Get-AuthenticodeSignature (Join-Path $installed 'drop-desktop.exe')
+          $appSignature | Format-List Status, SignerCertificate
+          if ($env:WINDOWS_SIGNING -eq 'true') {
+            $setupSignature = Get-AuthenticodeSignature $setup.FullName
+            if ($appSignature.Status -ne 'Valid' -or $setupSignature.Status -ne 'Valid') {
+              throw 'E_RELEASE_TRUST: the installed app or its NSIS installer is not Authenticode-valid'
+            }
+          }
           node scripts/desktop-smoke.ts $installed
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Smoke test the Linux packages
@@ -365,4 +372,6 @@ jobs:
           TAG: ${{ needs.meta.outputs.tag }}
         run: |
           test -s release/latest.json
+          # Refuse publishing to friends while macOS is ad-hoc signed or Windows is unsigned.
+          node scripts/release-publication-guard.ts release
           gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease=false

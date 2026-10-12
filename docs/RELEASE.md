@@ -146,7 +146,10 @@ Ne jamais ajouter la clé privée, son mot de passe, ni un fichier `.key` au dé
    `DROP_RELEASE_AUTO_PUBLISH=true` pour activer la publication **automatique**
    des futures releases stables déclenchées par un tag protégé `vX.Y.Z`, mais **jamais**
    celles des exécutions manuelles de test. Laisser la variable absente ou `false`
-   tant que la première mise à jour réelle n'a pas été qualifiée. Les builds Drop déjà équipées
+   tant que la première mise à jour réelle n'a pas été qualifiée. Même une fois activée,
+   la publication est bloquée si les deux builds Mac ne sont pas signées/notarisées
+   **ou** si l'installateur Windows n'est pas authentiquement signé :
+   le contrôle des cinq manifestes est assuré par `scripts/release-publication-guard.ts`. Les builds Drop déjà équipées
    de l'Updater interrogent alors
    `https://github.com/memolabs-dev/drop/releases/latest/download/latest.json`.
    Les artefacts sont téléchargés directement depuis la release correspondante, sous signature
