@@ -409,10 +409,13 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
 
   if (options.notifications ?? true) {
     engine.on('approval', (item: Extract<InboxItem, { kind: 'approval' }>) => {
-      notify(`${item.requestedBy.displayName} a besoin d'aide`, item.card.title);
+      notify(`${item.requestedBy.displayName} a besoin d'aide`, item.card.title, {
+        dropId: item.dropId,
+        kind: 'approval',
+      });
     });
     engine.on('review', (item: Extract<InboxItem, { kind: 'review' }>) => {
-      notify('Résultat à relire avant envoi', item.title);
+      notify('Résultat à relire avant envoi', item.title, { dropId: item.dropId, kind: 'review' });
     });
   }
 

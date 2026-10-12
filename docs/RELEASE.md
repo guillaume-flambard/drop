@@ -145,8 +145,8 @@ L'icône s'affiche dans la barre du bureau par le protocole AppIndicator : KDE, 
 ## Reste à faire
 
 - Recette sur de vraies machines : Windows 10 et 11, Ubuntu GNOME et KDE, X11 et Wayland, Mac Intel. Installer, ouvrir le panneau depuis l'icône, redémarrer la session, tuer l'app depuis le gestionnaire de tâches et vérifier que le daemon s'arrête.
-- Windows : notifications natives (le daemon les passe à l'app, qui ne les affiche que sur macOS), droits du dossier `.drop` (le mode `0600` ne vaut rien sous Windows, il faut des ACL), signature de `drop-iroh.exe`.
-- Linux : enregistrer `drop://` à l'exécution pour l'AppImage (`register_all`, flux d'invitation), notifications natives.
+- Windows : notifications natives, avec « Voir » et « Refuser » comme sur macOS (T4.30 ; le daemon les passe à l'app, qui ne les affiche que sur macOS), droits du dossier `.drop` (le mode `0600` ne vaut rien sous Windows, il faut des ACL), signature de `drop-iroh.exe`.
+- Linux : enregistrer `drop://` à l'exécution pour l'AppImage (`register_all`, flux d'invitation), notifications natives (actions seulement si le serveur de notifications annonce `actions`), panneau sans protection contre la capture (aucun réglage sous Linux).
 - Mises à jour signées pour Windows et Linux (aujourd'hui macOS seulement).
 - Ajouter les secrets de signature, puis refaire une release.
 
