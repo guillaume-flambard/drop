@@ -121,8 +121,13 @@ Ne jamais ajouter la clé privée, son mot de passe, ni un fichier `.key` au dé
    `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`.
 4. Le workflow `release desktop`, sur un tag `vX.Y.Z`, produit cinq archives signées :
    deux pour macOS (`.app.tar.gz`), une NSIS Windows (`.exe`) et deux AppImage Linux.
-   Les entrées du manifeste ciblent précisément le format (`-app`, `-nsis`, `-appimage`) :
-   les installations MSI et Debian ne reçoivent donc pas accidentellement un autre format.
+   Les entrées du manifeste portent les cibles standards reconnues par le client Tauri
+   (`darwin-aarch64`, `darwin-x86_64`, `windows-x86_64`, `linux-x86_64`,
+   `linux-aarch64`). Sans un `target()` personnalisé dans le client Rust, des suffixes
+   `-nsis` ou `-appimage` empêcheraient toute détection de mise à jour.
+   Le canal n'est qualifié que pour les installations **NSIS** et **AppImage** :
+   une application installée par MSI ou Debian doit suivre un déploiement administré,
+   et n'est pas encore qualifiée pour recevoir un installeur d'un autre format.
    Chaque build produit un fragment avec signature liée à la version ; le job de publication exige
    cinq fragments distincts, identiques en version, et une URL d'archive dans **ce dépôt**.
    Il ajoute `latest.json` et les archives signées à la **release GitHub en brouillon**.

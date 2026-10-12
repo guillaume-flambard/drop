@@ -36,11 +36,11 @@ describe('desktop updater artifacts', () => {
   });
 
   it('maps macOS, Windows and Linux to Tauri v2 runtime target names', () => {
-    expect(updateTarget('macos', 'arm64')).toBe('darwin-aarch64-app');
-    expect(updateTarget('macos', 'x64')).toBe('darwin-x86_64-app');
-    expect(updateTarget('windows', 'x64')).toBe('windows-x86_64-nsis');
-    expect(updateTarget('linux', 'x64')).toBe('linux-x86_64-appimage');
-    expect(updateTarget('linux', 'arm64')).toBe('linux-aarch64-appimage');
+    expect(updateTarget('macos', 'arm64')).toBe('darwin-aarch64');
+    expect(updateTarget('macos', 'x64')).toBe('darwin-x86_64');
+    expect(updateTarget('windows', 'x64')).toBe('windows-x86_64');
+    expect(updateTarget('linux', 'x64')).toBe('linux-x86_64');
+    expect(updateTarget('linux', 'arm64')).toBe('linux-aarch64');
     expect(() => updateTarget('windows', 'arm64')).toThrow(/E_UPDATE_PLATFORM/);
   });
 
@@ -53,9 +53,7 @@ describe('desktop updater artifacts', () => {
         bundleRoot: '/tmp/tauri/bundle',
         installers: [{ name, path: `/tmp/tauri/bundle/${name}` }],
       });
-    expect(sample('macos', 'arm64', 'drop_0.2.0_aarch64.dmg').artifact).toBe(
-      'drop-0.2.0-darwin-aarch64-app.app.tar.gz',
-    );
+    expect(sample('macos', 'arm64', 'drop_0.2.0_aarch64.dmg').artifact).toBe('drop-0.2.0-darwin-aarch64.app.tar.gz');
     expect(sample('windows', 'x64', 'drop_0.2.0_x64-setup.exe').signaturePath).toContain('-setup.exe.sig');
     expect(sample('linux', 'x64', 'drop_0.2.0_amd64.AppImage').artifact).toBe('drop_0.2.0_amd64.AppImage');
     expect(() => sample('windows', 'x64', 'drop_0.2.0_x64.msi')).toThrow(/E_UPDATE_BUNDLE/);
@@ -68,13 +66,13 @@ describe('desktop updater artifacts', () => {
       target: UPDATE_TARGETS[0],
       version: '0.2.0',
       signature: signature('0.2.0'),
-      artifact: 'drop-0.2.0-darwin-aarch64-app.app.tar.gz',
+      artifact: 'drop-0.2.0-darwin-aarch64.app.tar.gz',
       tag: 'v0.2.0',
       notes: 'Fixes',
       pubDate: date,
     };
-    expect(updateFragment(base).platforms['darwin-aarch64-app']?.url).toBe(
-      'https://github.com/memolabs-dev/drop/releases/download/v0.2.0/drop-0.2.0-darwin-aarch64-app.app.tar.gz',
+    expect(updateFragment(base).platforms['darwin-aarch64']?.url).toBe(
+      'https://github.com/memolabs-dev/drop/releases/download/v0.2.0/drop-0.2.0-darwin-aarch64.app.tar.gz',
     );
     expect(() => updateFragment({ ...base, tag: 'v0.3.0' })).toThrow(/E_UPDATE_VERSION/);
     expect(() => updateFragment({ ...base, artifact: '../fake.exe' })).toThrow(/E_UPDATE_ASSET/);
@@ -103,7 +101,7 @@ describe('desktop updater artifacts', () => {
     otherVersion.version = '0.3.0';
     expect(() => mergeUpdateFragments(different)).toThrow(/E_UPDATE_VERSION/);
     const hostile = structuredClone(fragments);
-    const entry = hostile.at(0)?.platforms['darwin-aarch64-app'];
+    const entry = hostile.at(0)?.platforms['darwin-aarch64'];
     if (!entry) throw new Error('test setup: missing mac updater entry');
     entry.url = 'https://not-our-repository.example/installer';
     expect(() => mergeUpdateFragments(hostile)).toThrow(/E_UPDATE_URL/);

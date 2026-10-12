@@ -10,11 +10,11 @@ const VERSION = /^[0-9]+\.[0-9]+\.[0-9]+$/;
 const BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
 
 export const UPDATE_TARGETS = [
-  'darwin-aarch64-app',
-  'darwin-x86_64-app',
-  'windows-x86_64-nsis',
-  'linux-x86_64-appimage',
-  'linux-aarch64-appimage',
+  'darwin-aarch64',
+  'darwin-x86_64',
+  'windows-x86_64',
+  'linux-x86_64',
+  'linux-aarch64',
 ] as const;
 export type UpdateTarget = (typeof UPDATE_TARGETS)[number];
 export interface UpdateFragment {
@@ -27,8 +27,10 @@ export interface UpdateFragment {
 export function updateTarget(platform: DesktopPlatform, arch: string): UpdateTarget {
   const suffix =
     arch === 'arm64' || arch === 'aarch64' ? 'aarch64' : arch === 'x64' || arch === 'x86_64' ? 'x86_64' : '';
-  const bundle = platform === 'macos' ? 'app' : platform === 'windows' ? 'nsis' : 'appimage';
-  const target = `${platform === 'macos' ? 'darwin' : platform}-${suffix}-${bundle}`;
+  // Keep the exact default target reported by tauri_plugin_updater::target().
+  // Adding -nsis/-appimage here without configuring a Rust custom target
+  // silently prevents every client from finding its update.
+  const target = `${platform === 'macos' ? 'darwin' : platform}-${suffix}`;
   if (!UPDATE_TARGETS.includes(target as UpdateTarget))
     throw new Error(`E_UPDATE_PLATFORM: unsupported ${platform}/${arch}`);
   // No Windows arm64 build or updater is advertised.
