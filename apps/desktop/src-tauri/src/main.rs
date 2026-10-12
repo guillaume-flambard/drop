@@ -262,16 +262,6 @@ fn log_error(code: &str, detail: &str) {
     }
 }
 
-/// An app.log from before T4.37, in DROP_HOME, moves into the logs folder; the node deletes it after 14 days.
-fn move_legacy_app_log() {
-    let legacy = drop_home().join("app.log");
-    if legacy.is_file() {
-        if let Ok(dir) = ensure_logs_dir() {
-            let _ = fs::rename(&legacy, dir.join("app.log.legacy"));
-        }
-    }
-}
-
 /// What the daemon writes on stderr outside its own log (with DROP_LOG=file, only what the runtime prints before or
 /// outside JavaScript) reaches daemon.log as JSON, after the shell's redaction. The node turns that file over: each
 /// line opens the file by its path, so it follows a rotation.
@@ -1004,7 +994,6 @@ fn main() {
                 _ => {}
             });
 
-            move_legacy_app_log();
             let ready = handle.clone();
             thread::spawn(move || supervise(ready));
 

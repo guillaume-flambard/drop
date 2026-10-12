@@ -5,12 +5,12 @@
  * local token, configuration, peers, team, invites, receipts, facts and requests are never read here.
  */
 import { spawn } from 'node:child_process';
-import { closeSync, existsSync, openSync, readSync, statSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { arch, platform, release } from 'node:os';
 import { join } from 'node:path';
 import { DropError } from '@drop/protocol';
 import { scanSecrets } from '@drop/runner';
-import { APP_LOG, DAEMON_LOG, jsonObject, logsDir, redactLogLineDetailed, redactText } from './logs.ts';
+import { APP_LOG, DAEMON_LOG, jsonObject, lastLines, logsDir, redactLogLineDetailed, redactText } from './logs.ts';
 import { ENGINE_VERSION } from './version.ts';
 
 /** What the daemon knows of its own state; nothing that names a person or a machine. */
@@ -50,20 +50,7 @@ const TAIL_BYTES = 256 * 1024;
 
 /** The last lines of a file, reading at most TAIL_BYTES from its end; none when it is missing. */
 function tail(path: string): string[] {
-  if (!existsSync(path)) return [];
-  const size = statSync(path).size;
-  const start = Math.max(0, size - TAIL_BYTES);
-  const buffer = Buffer.alloc(size - start);
-  const fd = openSync(path, 'r');
-  try {
-    readSync(fd, buffer, 0, buffer.length, start);
-  } finally {
-    closeSync(fd);
-  }
-  const lines = buffer.toString('utf8').split('\n');
-  // A read that starts inside a line drops that partial line.
-  if (start > 0) lines.shift();
-  return lines.map((line) => line.replace(/\r$/, '')).filter((line) => line.trim() !== '');
+  return existsSync(path) ? lastLines(path, TAIL_BYTES) : [];
 }
 
 function value(item: unknown): string {

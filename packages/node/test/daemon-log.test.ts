@@ -97,7 +97,9 @@ describe('daemon log (T4.37)', () => {
       { env },
     );
     // A daemon.log left by a version before T4.37, emptied at each start, moves into the logs folder.
-    writeFileSync(join(home, 'daemon.log'), '{"event":"before_t4_37"}\n');
+    // Logs left by a version before T4.37 move into the logs folder, redacted on the way.
+    writeFileSync(join(home, 'daemon.log'), JSON.stringify({ event: 'before_t4_37', reason: ANTHROPIC }) + '\n');
+    writeFileSync(join(home, 'app.log'), JSON.stringify({ at: 1, code: 'E_UPDATE_CHECK', detail: GITHUB }) + '\n');
     const file = join(logsDir(home), DAEMON_LOG);
     const headers = (): number =>
       existsSync(file) ? lines(file).filter((line) => line.includes('"log_header"')).length : 0;
@@ -124,8 +126,14 @@ describe('daemon log (T4.37)', () => {
     expect(headers()).toBe(2);
     const header = JSON.parse(second[first.length] ?? '{}') as Record<string, unknown>;
     expect(header).toMatchObject({ event: 'log_header', reason: 'start', app: '0.9.1', engine: ENGINE_VERSION });
-    expect(readFileSync(join(logsDir(home), 'daemon.log.legacy'), 'utf8')).toContain('before_t4_37');
+    const legacy = readFileSync(join(logsDir(home), 'daemon.log.legacy'), 'utf8');
+    expect(legacy).toContain('before_t4_37');
+    expect(legacy).not.toContain(ANTHROPIC);
+    const appLegacy = readFileSync(join(logsDir(home), 'app.log.legacy'), 'utf8');
+    expect(appLegacy).toContain('E_UPDATE_CHECK');
+    expect(appLegacy).not.toContain(GITHUB);
     expect(existsSync(join(home, 'daemon.log'))).toBe(false);
+    expect(existsSync(join(home, 'app.log'))).toBe(false);
   }, 60_000);
 
   it('rotates by size and by age, keeps three files and deletes those older than fourteen days', () => {

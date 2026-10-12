@@ -328,6 +328,22 @@ function firstLine(path: string): string {
   }
 }
 
+/** The lines in the last `bytes` of a file; a partial first line is dropped. */
+export function lastLines(path: string, bytes: number): string[] {
+  const size = statSync(path).size;
+  const start = Math.max(0, size - bytes);
+  const buffer = Buffer.alloc(size - start);
+  const fd = openSync(path, 'r');
+  try {
+    readSync(fd, buffer, 0, buffer.length, start);
+  } finally {
+    closeSync(fd);
+  }
+  const lines = buffer.toString('utf8').split('\n');
+  if (start > 0) lines.shift();
+  return lines.map((line) => line.replace(/\r$/, '')).filter((line) => line.trim() !== '');
+}
+
 function tighten(path: string, mode: number): void {
   try {
     chmodSync(path, mode);
@@ -443,7 +459,13 @@ export class DaemonLog {
   private rotate(): void {
     this.close();
     const shifted = this.shift();
-    this.open();
+    try {
+      this.open();
+    } catch {
+      // The file cannot be reopened (disk, rights): lines go to the fallback rather than throw into the daemon.
+      this.fd = undefined;
+      return;
+    }
     if (shifted) {
       this.append(systemHeader(this.options.header, 'rotate', this.now()));
       return;
@@ -452,15 +474,29 @@ export class DaemonLog {
     this.retryAt = this.now() + 60_000;
   }
 
+  /**
+   * Logs from before T4.37 (DROP_HOME/daemon.log, DROP_HOME/app.log) were written without this redaction: their last
+   * 256 KiB move into the logs folder as `<name>.legacy`, redacted line by line, so that everything in the folder the
+   * owner may open or send has been redacted. The originals are then removed.
+   */
   private moveLegacy(): void {
-    const legacy = join(this.options.root, DAEMON_LOG);
-    try {
-      if (!existsSync(legacy) || !statSync(legacy).isFile()) return;
-      const target = join(this.dir, `${DAEMON_LOG}.legacy`);
-      renameSync(legacy, target);
-      tighten(target, 0o600);
-    } catch {
-      // Left where it was: the next start tries again.
+    for (const name of [DAEMON_LOG, APP_LOG]) {
+      const legacy = join(this.options.root, name);
+      try {
+        if (!existsSync(legacy) || !statSync(legacy).isFile()) continue;
+        const target = join(this.dir, `${name}.legacy`);
+        const lines = lastLines(legacy, 256 * 1024).map((line) => redactLogLine(line, this.redaction()));
+        const fd = openSync(target, 'w', 0o600);
+        try {
+          writeSync(fd, lines.map((line) => line + '\n').join(''));
+        } finally {
+          closeSync(fd);
+        }
+        tighten(target, 0o600);
+        unlinkSync(legacy);
+      } catch {
+        // Left where it was: the next start tries again.
+      }
     }
   }
 
