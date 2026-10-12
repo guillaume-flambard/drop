@@ -1,6 +1,8 @@
-// drop for macOS (T2.4, D26): a menu bar icon, the node daemon running in the background, and the panel the daemon
-// serves on 127.0.0.1, shown in a small window under the icon. The app holds no logic of its own: everything the panel
-// does goes through the node's local API, protected by its token.
+// drop on macOS, Windows and Linux (T2.4, D26, T3.7, T3.8): a menu bar or notification area icon, the node daemon
+// running in the background, and the panel the daemon serves on 127.0.0.1, shown in a small window near the icon. The
+// app holds no logic of its own: everything the panel does goes through the node's local API, protected by its token.
+// What differs per system stays in this file behind `cfg(target_os = ...)`: the icon, how the panel opens (Linux icons
+// emit no click, v2.tauri.app/learn/system-tray), the bundled program names, and single instance on Windows and Linux.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::fs;
@@ -18,10 +20,12 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tauri::image::Image;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+#[cfg(target_os = "macos")]
 use tauri::window::{Effect, EffectState, EffectsBuilder};
+#[cfg(target_os = "macos")]
+use tauri::ActivationPolicy;
 use tauri::{
-    ActivationPolicy, AppHandle, Manager, PhysicalPosition, RunEvent, WebviewUrl,
-    WebviewWindowBuilder, WindowEvent,
+    AppHandle, Manager, PhysicalPosition, RunEvent, WebviewUrl, WebviewWindowBuilder, WindowEvent,
 };
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
 use tauri_plugin_deep_link::DeepLinkExt;
@@ -35,6 +39,7 @@ fn bootstrap_relay(configured: Option<String>) -> String {
 }
 const PANEL_WIDTH: f64 = 380.0;
 const PANEL_HEIGHT: f64 = 620.0;
+#[cfg(target_os = "macos")]
 const PANEL_RADIUS: f64 = 12.0;
 const TRAY: &str = "drop";
 /// The app looks for an update at launch, then this often (D70).
@@ -61,21 +66,39 @@ fn instance_marker() -> String {
     format!("{}-{nanos}", std::process::id())
 }
 
+/// The user's home: `HOME` on macOS and Linux, `USERPROFILE` on Windows, which is what Node's `os.homedir()` returns
+/// there too, so the app and a `drop` run in a terminal share one `.drop` folder (packages/node/src/home.ts).
+fn user_home() -> PathBuf {
+    let variable = if cfg!(windows) { "USERPROFILE" } else { "HOME" };
+    PathBuf::from(std::env::var(variable).unwrap_or_default())
+}
+
 fn drop_home() -> PathBuf {
     if let Ok(home) = std::env::var("DROP_HOME") {
         return PathBuf::from(home);
     }
-    PathBuf::from(std::env::var("HOME").unwrap_or_default()).join(".drop")
+    user_home().join(".drop")
 }
+
+/// The bundled Node runtime: Windows only runs it as an .exe (scripts/build-desktop.ts names it so). drop-iroh sits
+/// next to it, where the node looks for it (packages/node/src/iroh.ts, irohBinary()).
+const NODE_PROGRAM: &str = if cfg!(windows) { "node.exe" } else { "node" };
 
 /// `node drop.mjs <args>` from the app's own resources, with DROP_HOME set.
 fn drop_command(app: &AppHandle, args: &[&str]) -> Command {
     let resources = app.path().resource_dir().expect("resource dir");
-    let mut command = Command::new(resources.join("node"));
+    let mut command = Command::new(resources.join(NODE_PROGRAM));
     command
         .arg(resources.join("drop.mjs"))
         .args(args)
         .env("DROP_HOME", drop_home());
+    // Node is a console program: without this flag Windows opens a console window for each run of the daemon.
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
     command
 }
 
@@ -401,16 +424,34 @@ fn supervise(app: AppHandle) {
     }
 }
 
+/// Where the panel goes for a click on the icon at `click`, in physical pixels: centred on the click, under it when the
+/// icon sits at the top of the screen (the macOS menu bar), above it when there is room, as with the Windows taskbar at
+/// the bottom. Never off the left or top edge.
+fn panel_position(click: PhysicalPosition<f64>, scale: f64, prefer_above: bool) -> PhysicalPosition<f64> {
+    let x = (click.x - PANEL_WIDTH * scale / 2.0).max(0.0);
+    let gap = 8.0 * scale;
+    let above = click.y - PANEL_HEIGHT * scale - gap;
+    let y = if prefer_above && above >= 0.0 {
+        above
+    } else {
+        click.y + gap
+    };
+    PhysicalPosition::new(x, y)
+}
+
 fn show_panel(app: &AppHandle, near: Option<PhysicalPosition<f64>>) {
     let Some(window) = app.get_webview_window("panel") else {
         return;
     };
     if let Some(position) = near {
-        let scale = window.scale_factor().unwrap_or(2.0);
-        let x = position.x - PANEL_WIDTH * scale / 2.0;
-        let _ = window.set_position(PhysicalPosition::new(x.max(0.0), position.y + 8.0 * scale));
+        let scale = window.scale_factor().unwrap_or(1.0);
+        let _ = window.set_position(panel_position(position, scale, cfg!(windows)));
+    } else if !cfg!(target_os = "macos") {
+        // Opened from the menu (always so on Linux): no click position, the middle of the screen.
+        let _ = window.center();
     }
     let _ = window.show();
+    let _ = window.unminimize();
     let _ = window.set_focus();
 }
 
@@ -619,11 +660,12 @@ fn open_links(app: &AppHandle, urls: Vec<Url>) {
 }
 
 /// The icon's menu; with an update pending it starts with "Mettre à jour vers x.y.z", greyed out while installing.
+/// The same menu on the three systems; on Linux it is the only way in, since the icon emits no click.
 fn set_tray_menu(app: &AppHandle, update: Option<&str>, installing: bool) -> tauri::Result<()> {
-    let open = MenuItem::with_id(app, "open", "Ouvrir drop", true, None::<&str>)?;
-    let workspace = MenuItem::with_id(app, "workspace", "Ouvrir mon espace…", true, None::<&str>)?;
+    let open = MenuItem::with_id(app, "open", "Ouvrir le panneau", true, None::<&str>)?;
+    let workspace = MenuItem::with_id(app, "workspace", "Ouvrir mon espace", true, None::<&str>)?;
     let retry = MenuItem::with_id(app, "retry", "Réessayer le démarrage", true, None::<&str>)?;
-    let quit = MenuItem::with_id(app, "quit", "Quitter drop", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", "Quitter", true, None::<&str>)?;
     let menu = match update {
         Some(version) => {
             let label = if installing {
@@ -685,8 +727,51 @@ fn install_update(app: &AppHandle) {
     });
 }
 
+/// The panel window. macOS: a popover under the menu bar icon, with the system's material. Windows: a borderless panel
+/// above the taskbar icon. Linux: a normal small window in the middle of the screen, since the icon gives no position
+/// and Wayland lets no app place its windows; its title bar also gives it a close button.
+fn build_panel(app: &tauri::App) -> tauri::Result<tauri::WebviewWindow> {
+    let builder = WebviewWindowBuilder::new(app, "panel", WebviewUrl::App("index.html".into()))
+        .title("drop")
+        .inner_size(PANEL_WIDTH, PANEL_HEIGHT)
+        .resizable(false)
+        .visible(false);
+    #[cfg(target_os = "macos")]
+    let builder = builder
+        .decorations(false)
+        .always_on_top(true)
+        .skip_taskbar(true)
+        // A popover material with rounded corners, like the system menu bar extras.
+        .transparent(true)
+        .shadow(true)
+        .effects(
+            EffectsBuilder::new()
+                .effect(Effect::Popover)
+                .state(EffectState::Active)
+                .radius(PANEL_RADIUS)
+                .build(),
+        );
+    #[cfg(windows)]
+    let builder = builder
+        .decorations(false)
+        .always_on_top(true)
+        .skip_taskbar(true)
+        .shadow(true);
+    #[cfg(target_os = "linux")]
+    let builder = builder.decorations(true).skip_taskbar(false);
+    builder.build()
+}
+
 fn main() {
-    let app = tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    // First plugin, as the docs require: a second launch (the Start menu, a login item racing the user, a drop:// link)
+    // hands its arguments to the running app and exits, so there is never a second daemon or a second icon. With the
+    // deep-link feature the plugin passes a link on to the deep-link handler below before this callback runs.
+    #[cfg(any(windows, target_os = "linux"))]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+        show_panel(app, None);
+    }));
+    let app = builder
         .invoke_handler(tauri::generate_handler![retry_daemon])
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_autostart::init(
@@ -704,53 +789,51 @@ fn main() {
         })
         .manage(PendingUpdate(Mutex::new(None)))
         .setup(|app| {
+            // A menu bar app: no Dock icon.
+            #[cfg(target_os = "macos")]
             app.set_activation_policy(ActivationPolicy::Accessory);
             let handle = app.handle().clone();
-            // Only a build made with the update key carries the updater config (scripts/build-mac.ts --updates).
+            // Only a build made with the update key carries the updater config (scripts/build-desktop.ts --updates).
             let updates = app.config().plugins.0.contains_key("updater");
             if updates {
                 handle.plugin(tauri_plugin_updater::Builder::new().build())?;
             }
 
-            let window =
-                WebviewWindowBuilder::new(app, "panel", WebviewUrl::App("index.html".into()))
-                    .title("drop")
-                    .inner_size(PANEL_WIDTH, PANEL_HEIGHT)
-                    .resizable(false)
-                    .decorations(false)
-                    .always_on_top(true)
-                    .skip_taskbar(true)
-                    // A popover material with rounded corners, like the system menu bar extras.
-                    .transparent(true)
-                    .shadow(true)
-                    .effects(
-                        EffectsBuilder::new()
-                            .effect(Effect::Popover)
-                            .state(EffectState::Active)
-                            .radius(PANEL_RADIUS)
-                            .build(),
-                    )
-                    .visible(false)
-                    .build()?;
+            let window = build_panel(app)?;
             *handle
                 .state::<Daemon>()
                 .splash_url
                 .lock()
                 .expect("splash URL") = Some(window.url()?);
             let hide_on_blur = window.clone();
-            window.on_window_event(move |event| {
-                if let WindowEvent::Focused(false) = event {
+            window.on_window_event(move |event| match event {
+                WindowEvent::Focused(false) => {
                     let _ = hide_on_blur.hide();
                 }
+                // Alt+F4 on Windows, the title bar's close button on Linux: the panel hides and stays, or the icon
+                // would have nothing left to open. Only « Quitter » ends the app.
+                WindowEvent::CloseRequested { api, .. } => {
+                    api.prevent_close();
+                    let _ = hide_on_blur.hide();
+                }
+                _ => {}
             });
 
             let ready = handle.clone();
             thread::spawn(move || supervise(ready));
 
+            // macOS draws the black template drop in the menu bar's colours; the notification areas of Windows and
+            // Linux show the colour icon, readable on a light or dark bar.
+            #[cfg(target_os = "macos")]
+            let icon = Image::from_bytes(include_bytes!("../icons/tray.png"))?;
+            #[cfg(not(target_os = "macos"))]
+            let icon = Image::from_bytes(include_bytes!("../icons/32x32.png"))?;
             TrayIconBuilder::with_id(TRAY)
-                .icon(Image::from_bytes(include_bytes!("../icons/tray.png"))?)
-                .icon_as_template(true)
+                .icon(icon)
+                .icon_as_template(cfg!(target_os = "macos"))
                 .tooltip("drop")
+                // A left click opens the panel on macOS and Windows, the right click the menu. Linux ignores this:
+                // any click opens the menu.
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| match event.id().as_ref() {
                     "open" => show_panel(app, None),
@@ -784,8 +867,10 @@ fn main() {
             if let Ok(Some(urls)) = app.deep_link().get_current() {
                 open_links(&handle, urls);
             }
-            // Starts with the session, like a menu bar app should; the user can turn it off in System Settings. Only the
-            // release build registers itself: a debug build must not end up in the developer's login items.
+            // Starts with the session, like a menu bar app should: a login item on macOS, the Run key of the current user
+            // on Windows, an XDG autostart entry on Linux (the AppImage's own path when run from one). The user can turn
+            // it off in the system settings. Only the release build registers itself: a debug build must not end up in
+            // the developer's login items.
             if !cfg!(debug_assertions) {
                 let _ = app.autolaunch().enable();
             }
@@ -859,6 +944,19 @@ mod tests {
             restart_after_run(false, MAX_RESTARTS, Duration::from_secs(1)),
             None
         );
+    }
+
+    #[test]
+    fn the_panel_opens_under_a_top_icon_and_above_a_bottom_one() {
+        // A macOS menu bar icon at the top: under it, centred.
+        let top = panel_position(PhysicalPosition::new(1000.0, 24.0), 2.0, false);
+        assert_eq!((top.x, top.y), (1000.0 - PANEL_WIDTH, 24.0 + 16.0));
+        // A Windows taskbar icon at the bottom of a 1080 px screen: above it.
+        let bottom = panel_position(PhysicalPosition::new(1800.0, 1060.0), 1.0, true);
+        assert_eq!(bottom.y, 1060.0 - PANEL_HEIGHT - 8.0);
+        // A taskbar at the top: no room above, so under it; never past the left edge.
+        let high = panel_position(PhysicalPosition::new(20.0, 30.0), 1.0, true);
+        assert_eq!((high.x, high.y), (0.0, 38.0));
     }
 
     #[test]

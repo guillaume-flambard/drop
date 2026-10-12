@@ -1,7 +1,7 @@
 [package]
-name = "drop-mac"
+name = "drop-desktop"
 version = "0.1.0"
-description = "drop, dans la barre de menus"
+description = "drop, dans la barre de menus ou la zone de notification"
 edition = "2021"
 rust-version = "1.90"
 
@@ -22,3 +22,8 @@ lto = true
 
 [target.'cfg(target_os = "macos")'.dependencies]
 mac-notification-sys = "0.6.15"
+
+# Windows and Linux start a new process for each launch and each drop:// link: the first instance keeps the daemon and
+# receives the links of the others (v2.tauri.app/plugin/deep-linking, "single instance").
+[target.'cfg(any(windows, target_os = "linux"))'.dependencies]
+tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }

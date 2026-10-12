@@ -1,6 +1,7 @@
 // Attribution inventory of the drop-iroh program (T4.2b, D68): every crate it links, its license, and each license
 // text shipped by those crates, identical texts written once. iroh's BSD-3 notice (code derived from Tailscale) is
-// among them. Usage: node scripts/drop-iroh-notice.ts <output file>
+// among them. Usage: node scripts/drop-iroh-notice.ts <output file> [<target triple>]
+// The linked crates depend on the target (Windows links its own system crates): by default, the host of the build.
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
@@ -14,7 +15,9 @@ interface Metadata {
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const output = process.argv[2];
-if (!output) throw new Error('usage: node scripts/drop-iroh-notice.ts <output file>');
+if (!output) throw new Error('usage: node scripts/drop-iroh-notice.ts <output file> [<target triple>]');
+const target = process.argv[3] ?? /^host: (\S+)$/m.exec(execFileSync('rustc', ['-vV'], { encoding: 'utf8' }))?.[1];
+if (!target) throw new Error('E_NOTICE_TARGET: rustc -vV names no host target');
 const metadata = JSON.parse(
   execFileSync(
     'cargo',
@@ -24,7 +27,7 @@ const metadata = JSON.parse(
       '1',
       '--locked',
       '--filter-platform',
-      'aarch64-apple-darwin',
+      target,
       '--manifest-path',
       join(root, 'crates', 'drop-iroh', 'Cargo.toml'),
     ],
