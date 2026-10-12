@@ -1,0 +1,7 @@
+# Known vulnerabilities accepted for pnpm-lock.yaml, each with its reason (T4.26). Read by OSV-Scanner and by the
+# OpenSSF Scorecard Vulnerabilities check. Review on the date below, or as soon as a fixed version exists.
+
+[[IgnoredVulns]]
+id = "GHSA-vfj7-8cjw-p6xm"
+ignoreUntil = 2027-01-12
+reason = "braces 3.0.3: no fixed version published. Only a dev dependency of packages/desktop-ui: the file watcher of the Tailwind CLI (@parcel/watcher, through micromatch) used by its CSS build, on patterns written in this repository. Nothing at run time, no outside input."
