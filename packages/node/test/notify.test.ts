@@ -44,3 +44,37 @@ describe('notifications (T4.14)', () => {
     });
   });
 });
+
+describe('notifications (T4.30)', () => {
+  it('AC names the request in the line handed to the app, so its actions reach the right card', async () => {
+    const { notify } = await import('../src/notify.ts');
+    const writes: string[] = [];
+    const spy = vi.spyOn(process.stdout, 'write').mockImplementation((chunk: string | Uint8Array) => {
+      writes.push(String(chunk));
+      return true;
+    });
+    process.env.DROP_NOTIFY = 'shell';
+    const dropId = '0199c5a0-0000-7000-8000-000000000001';
+    try {
+      notify('Julie a besoin d’aide', 'Résumer les erreurs de production', { dropId, kind: 'approval' });
+      notify('Résultat à relire avant envoi', 'État des tickets', { dropId, kind: 'review' });
+    } finally {
+      spy.mockRestore();
+    }
+    expect(writes.map((line) => JSON.parse(line) as unknown)).toEqual([
+      {
+        dropNotify: {
+          title: 'Julie a besoin d’aide',
+          subtitle: 'Résumer les erreurs de production',
+          dropId,
+          kind: 'approval',
+        },
+      },
+      { dropNotify: { title: 'Résultat à relire avant envoi', subtitle: 'État des tickets', dropId, kind: 'review' } },
+    ]);
+    // osascript, outside the app, offers no action: the identifier never reaches it.
+    delete process.env.DROP_NOTIFY;
+    notify('Julie a besoin d’aide', 'Résumer les erreurs de production', { dropId, kind: 'approval' });
+    expect(execFile.mock.calls[0]?.[1]).not.toContain(dropId);
+  });
+});

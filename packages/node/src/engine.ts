@@ -198,6 +198,9 @@ export interface TeamMemberView {
 
 export type Agent = RequestedBy['agent'];
 
+/** Why a decision on a card is refused (T4.30): it no longer waits, or it expired. */
+export type DecisionRefusal = 'E_NOT_PENDING' | 'E_EXPIRED';
+
 /** Something the local human must decide: an approval or, for high sensitivity, a review before sending. */
 export type InboxItem =
   | {
@@ -987,14 +990,28 @@ export class NodeEngine extends EventEmitter {
   // ---- approver ----------------------------------------------------------------------------------------------
 
   async decide(dropId: string, decision: 'allow_once' | 'deny' | 'not_now'): Promise<boolean> {
+    return (await this.decideApproval(dropId, decision)).ok;
+  }
+
+  /**
+   * The one decision path of an approval, for the card and for a notification's « Refuser » (T4.30): it holds only
+   * while the request still waits here, under the same identifier, not expired and not decided yet. Otherwise nothing
+   * is sent and the refusal carries a stable code: E_NOT_PENDING (unknown, decided, or not an approval), E_EXPIRED.
+   */
+  async decideApproval(
+    dropId: string,
+    decision: 'allow_once' | 'deny' | 'not_now',
+  ): Promise<{ ok: true } | { ok: false; code: DecisionRefusal }> {
     const item = this.inbox.get(dropId);
-    if (item?.kind !== 'approval') return false;
+    if (item?.kind !== 'approval') return { ok: false, code: 'E_NOT_PENDING' };
+    // The tick removes expired cards each second; a decision in between is refused all the same.
+    if (item.expiresAt <= this.now()) return { ok: false, code: 'E_EXPIRED' };
     this.inbox.delete(dropId);
     this.changed();
     const message: Message = { type: 'approval_decision', dropId, decision, decidedAt: this.now() };
     if (item.executor === this.identity.nodeId) await this.onApprovalDecision(this.identity.nodeId, message);
     else await this.send(item.executor, message);
-    return true;
+    return { ok: true };
   }
 
   /**
