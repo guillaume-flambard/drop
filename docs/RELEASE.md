@@ -28,7 +28,7 @@ node scripts/build-desktop.ts --release --unsigned # macOS sans identité Apple 
 
 ## Sortir une version
 
-1. Monter `version` dans `apps/desktop/src-tauri/tauri.conf.json` (trois nombres `x.y.z` : l'installeur MSI n'accepte pas de suffixe). Faire passer ce changement par une PR, puis la fusionner.
+1. Monter `version` dans `apps/desktop/src-tauri/tauri.conf.json` (trois nombres `x.y.z`, une version unique pour les cinq architectures). Faire passer ce changement par une PR, puis la fusionner.
 2. Sur le commit fusionné de `main`, créer et pousser le tag :
    ```sh
    git tag v0.2.0
@@ -48,10 +48,8 @@ Une PR qui touche la coque, ses scripts de build ou `drop-iroh` lance les mêmes
 | `drop_<version>_aarch64.dmg`                        | macOS 13 ou plus, Apple Silicon | Image disque avec `drop.app`                                         |
 | `drop_<version>_x64.dmg`                            | macOS 13 ou plus, Intel         | Image disque avec `drop.app`                                         |
 | `drop_<version>_x64-setup.exe`                      | Windows 10 et 11, x64           | Installeur NSIS, pour l'utilisateur courant, sans droits administrateur |
-| `drop_<version>_x64_en-US.msi`                      | Windows 10 et 11, x64           | Paquet MSI, pour un déploiement géré par un administrateur            |
 | `drop_<version>_amd64.AppImage`                     | Linux x64                       | Programme autonome, sans installation                                 |
-| `drop_<version>_amd64.deb`                          | Debian, Ubuntu x64              | Paquet Debian                                                         |
-| `drop_<version>_aarch64.AppImage`, `drop_<version>_arm64.deb` | Linux arm64            | Les mêmes pour ARM 64 bits                                            |
+| `drop_<version>_aarch64.AppImage`                  | Linux arm64                     | Programme autonome ARM64                                          |
 | `drop-build-manifest-<système>-<arch>.json`         | tous                            | Version, version de Node, empreintes des programmes embarqués, niveau de signature |
 | `SHA256SUMS.txt`                                    | tous                            | Empreinte SHA-256 de chaque fichier                                   |
 
@@ -59,7 +57,7 @@ Vérifier un fichier téléchargé :
 
 ```sh
 sha256sum -c SHA256SUMS.txt --ignore-missing           # Linux ; macOS : shasum -a 256 -c
-gh attestation verify drop_0.2.0_amd64.deb -R memolabs-dev/drop
+gh attestation verify drop_0.2.0_amd64.AppImage -R memolabs-dev/drop
 ```
 
 Sous Windows : `Get-FileHash .\drop_0.2.0_x64-setup.exe` puis comparer avec la ligne de `SHA256SUMS.txt`.
@@ -70,7 +68,7 @@ Sous Windows : `Get-FileHash .\drop_0.2.0_x64-setup.exe` puis comparer avec la l
 | ------- | ----------------------------------------------------------------------------------------- | --------------------------------------------------- |
 | macOS   | Signature ad hoc, non notarisée : macOS demande une autorisation à la première ouverture | Developer ID et notarisation Apple, ticket agrafé   |
 | Windows | Non signé : SmartScreen avertit au premier lancement                                       | Installeurs et `drop-desktop.exe` signés Authenticode |
-| Linux   | Non signé, comme la plupart des AppImage et des `.deb` hors dépôt                           | Sans objet                                          |
+| Linux   | Non signé, comme la plupart des AppImage hors dépôt                           | Sans objet                                          |
 
 Dans tous les cas, `SHA256SUMS.txt` et les attestations de provenance (signées par GitHub, Sigstore) prouvent que le fichier sort de ce dépôt et de ce workflow.
 
@@ -137,8 +135,9 @@ Ne jamais ajouter la clé privée, son mot de passe, ni un fichier `.key` au dé
    `linux-aarch64`). Sans un `target()` personnalisé dans le client Rust, des suffixes
    `-nsis` ou `-appimage` empêcheraient toute détection de mise à jour.
    Le canal n'est qualifié que pour les installations **NSIS** et **AppImage** :
-   une application installée par MSI ou Debian doit suivre un déploiement administré,
-   et n'est pas encore qualifiée pour recevoir un installeur d'un autre format.
+   seuls NSIS et AppImage sont construits pour éviter tout changement implicite
+   de format d'installation. Les paquets MSI et Debian nécessiteraient une
+   filière administrée dédiée, distincte des releases auto-updatables.
    Chaque build produit un fragment avec signature liée à la version ; le job de publication exige
    cinq fragments distincts, identiques en version, et une URL d'archive dans **ce dépôt**.
    Il ajoute `latest.json` et les archives signées à la **release GitHub en brouillon**.
@@ -153,7 +152,7 @@ Ne jamais ajouter la clé privée, son mot de passe, ni un fichier `.key` au dé
    Les artefacts sont téléchargés directement depuis la release correspondante, sous signature
    Tauri. Une release en brouillon, ou marquée prerelease, n'est pas le canal stable.
 
-Pour les essais avec mise à jour via l'app, installer **NSIS** sous Windows et **AppImage** sous Linux. Les paquets MSI et Debian restent destinés à l'installation ou au déploiement administré : leur propre circuit de mise à jour n'est pas configuré ici.
+Pour les essais avec mise à jour via l'app, installer **NSIS** sous Windows et **AppImage** sous Linux. Les releases ne génèrent pas de MSI ou de Debian : cela évite de déclencher l'installation silencieuse d'un format différent depuis ces canaux. Une filière de déploiement administré distincte pourra être créée plus tard.
 
 Aucune mise à jour ne sera proposée aux installations existantes construites **sans** `--updates`.
 Pour elles, une réinstallation manuelle unique est nécessaire avant d'activer les mises à jour.
@@ -196,7 +195,6 @@ L'icône de goutte apparaît dans la barre des menus : clic pour le panneau.
 2. L'installation se fait pour l'utilisateur courant, dans `%LOCALAPPDATA%\drop`, sans droits administrateur. Si WebView2 manque (rare sur Windows 10 à jour, toujours présent sur Windows 11), l'installeur le télécharge : il faut alors Internet.
 3. drop démarre avec la session. L'icône est dans la zone de notification, à droite de la barre des tâches (parfois derrière la flèche « Afficher les icônes cachées ») : clic gauche pour le panneau, clic droit pour le menu.
 
-Le `.msi` sert à un administrateur qui déploie sur plusieurs postes ; il installe pour toute la machine.
 
 ### Linux (x64 ou arm64, X11 ou Wayland)
 
@@ -209,7 +207,6 @@ chmod +x drop_<version>_amd64.AppImage
 
 Une AppImage demande FUSE 2 : `sudo apt install libfuse2` sur Ubuntu 22.04 et Debian 12, `libfuse2t64` sur Ubuntu 24.04. La build vise Ubuntu 22.04 et toute distribution aussi récente (glibc 2.35).
 
-Paquet Debian ou Ubuntu : `sudo apt install ./drop_<version>_amd64.deb` (apt installe WebKitGTK et la bibliothèque d'icône).
 
 L'icône s'affiche dans la barre du bureau par le protocole AppIndicator : KDE, Xfce, Cinnamon et Ubuntu l'affichent d'emblée ; GNOME de base demande l'extension « AppIndicator and KStatusNotifierItem Support ». Sous Linux, l'icône n'émet pas de clic (doc Tauri) : tout passe par son menu, « Ouvrir le panneau », « Ouvrir mon espace », « Réessayer le démarrage », « Quitter ». Le panneau s'ouvre alors au milieu de l'écran, dans une petite fenêtre normale.
 
@@ -218,7 +215,7 @@ L'icône s'affiche dans la barre du bureau par le protocole AppIndicator : KDE, 
 - **Menu de l'icône** : « Ouvrir le panneau », « Ouvrir mon espace », « Réessayer le démarrage », « Quitter », plus « Mettre à jour vers x.y.z » sur une build Mac à mises à jour.
 - **Démarrage avec la session** (build de release seulement) : élément d'ouverture sur macOS, clé `Run` de l'utilisateur sous Windows, entrée `~/.config/autostart` sous Linux (le chemin de l'AppImage quand l'app en vient). Désactivable dans les réglages du système.
 - **Une seule instance** sous Windows et Linux : relancer l'app, ou ouvrir un lien `drop://` pendant qu'elle tourne, passe la main à l'instance déjà ouverte, qui montre son panneau. Jamais deux daemons.
-- **Liens `drop://`** : enregistrés à l'installation par le `.dmg` (macOS), le `.deb`, l'installeur NSIS et le `.msi`. Une AppImage les enregistre pour l'utilisateur à chaque lancement (`~/.local/share/applications/drop-desktop-handler.desktop`, masqué des menus, par `register_all` du plugin deep-link) ; un échec va dans `~/.drop/app.log` avec `E_DEEP_LINK` (T4.31).
+- **Liens `drop://`** : enregistrés à l'installation par le `.dmg` (macOS) et l'installeur NSIS. Une AppImage les enregistre pour l'utilisateur à chaque lancement (`~/.local/share/applications/drop-desktop-handler.desktop`, masqué des menus, par `register_all` du plugin deep-link) ; un échec va dans `~/.drop/app.log` avec `E_DEEP_LINK` (T4.31).
 - **Le daemon meurt avec l'app** sur les trois systèmes, même si l'app est tuée : il lit un tube que seule l'app tient ouvert (T4.18). Le test `packages/node/test/lifecycle.test.ts` tue le processus parent sur Linux, Windows et macOS en CI ; le test de fumée de chaque paquet le vérifie avec le Node embarqué.
 - **Fermer le panneau** (Alt+F4, bouton de la barre de titre sous Linux) le cache seulement ; seul « Quitter » arrête drop.
 - Les données restent dans `~/.drop` (`%USERPROFILE%\.drop` sous Windows), comme pour `drop` en ligne de commande.
@@ -227,7 +224,7 @@ L'icône s'affiche dans la barre du bureau par le protocole AppIndicator : KDE, 
 
 - Recette sur de vraies machines : Windows 10 et 11, Ubuntu GNOME et KDE, X11 et Wayland, Mac Intel. Installer, ouvrir le panneau depuis l'icône, redémarrer la session, tuer l'app depuis le gestionnaire de tâches et vérifier que le daemon s'arrête.
 - Windows : notifications natives, avec « Voir » et « Refuser » comme sur macOS (T4.30 ; le daemon les passe à l'app, qui ne les affiche que sur macOS), droits du dossier `.drop` (le mode `0600` ne vaut rien sous Windows, il faut des ACL), signature de `drop-iroh.exe`.
-- Linux : notifications natives (actions seulement si le serveur de notifications annonce `actions`), panneau sans protection contre la capture (aucun réglage sous Linux) ; recette du lien `drop://join` avec une AppImage et un `.deb` (T4.31).
+- Linux : notifications natives (actions seulement si le serveur de notifications annonce `actions`), panneau sans protection contre la capture (aucun réglage sous Linux) ; recette du lien `drop://join` avec une AppImage (T4.31).
 - Mises à jour signées pour Windows et Linux (aujourd'hui macOS seulement).
 - Ajouter les secrets de signature, puis refaire une release.
 
@@ -235,10 +232,10 @@ L'icône s'affiche dans la barre du bureau par le protocole AppIndicator : KDE, 
 
 - Tauri 2, GitHub Actions : https://v2.tauri.app/distribute/pipelines/github/
 - Tauri 2, prérequis (paquets Linux, WebView2) : https://v2.tauri.app/start/prerequisites/
-- Tauri 2, installeur Windows (NSIS, MSI, WebView2) : https://v2.tauri.app/distribute/windows-installer/
+- Tauri 2, installeur Windows (NSIS, WebView2) : https://v2.tauri.app/distribute/windows-installer/
 - Tauri 2, signature Windows : https://v2.tauri.app/distribute/sign/windows/
 - Tauri 2, signature et notarisation macOS, signature ad hoc : https://v2.tauri.app/distribute/sign/macos/
-- Tauri 2, AppImage et Debian : https://v2.tauri.app/distribute/appimage/ et https://v2.tauri.app/distribute/debian/
+- Tauri 2, AppImage : https://v2.tauri.app/distribute/appimage/
 - Tauri 2, icône système (pas de clic sous Linux) : https://v2.tauri.app/learn/system-tray/
 - Tauri 2, configuration par plateforme : https://v2.tauri.app/develop/configuration-files/
 - Tauri 2, liens profonds et instance unique : https://v2.tauri.app/plugin/deep-linking/ et https://v2.tauri.app/plugin/single-instance/

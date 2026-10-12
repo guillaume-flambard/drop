@@ -266,9 +266,6 @@ jobs:
         if: matrix.platform == 'linux'
         run: |
           work=$(mktemp -d)
-          dpkg-deb --info dist/desktop/*.deb
-          dpkg-deb -x dist/desktop/*.deb "$work/deb"
-          node scripts/desktop-smoke.ts "$(dirname "$(find "$work/deb" -name drop.mjs | head -n 1)")"
           cp dist/desktop/*.AppImage "$work/drop.AppImage"
           chmod +x "$work/drop.AppImage"
           (cd "$work" && ./drop.AppImage --appimage-extract > /dev/null)

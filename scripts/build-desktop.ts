@@ -7,7 +7,7 @@
 //                                      [--sign "Developer ID Application: …"] [--notary-profile <name>]
 //                                      [--updates] [--notes "…"]
 // - The build embeds the Node that runs this script, so it builds for this machine only: --platform, when given, must
-//   name it (the default). No cross build: MSI needs Windows and AppImage needs the target's architecture (Tauri docs).
+//   name it (the default). No cross build: NSIS needs Windows and AppImage needs the target's architecture (Tauri docs).
 // - Without --release the build is a debug build, for trials only.
 // - macOS --release is signed with a Developer ID and notarized (docs/RELEASE.md); --release --unsigned makes an
 //   optimised build signed ad hoc instead, what CI produces without Apple secrets.
@@ -68,15 +68,9 @@ export function installerKinds(platform: DesktopPlatform): { dir: string; suffix
     case 'macos':
       return [{ dir: 'dmg', suffix: '.dmg' }];
     case 'windows':
-      return [
-        { dir: 'nsis', suffix: '-setup.exe' },
-        { dir: 'msi', suffix: '.msi' },
-      ];
+      return [{ dir: 'nsis', suffix: '-setup.exe' }];
     case 'linux':
-      return [
-        { dir: 'appimage', suffix: '.AppImage' },
-        { dir: 'deb', suffix: '.deb' },
-      ];
+      return [{ dir: 'appimage', suffix: '.AppImage' }];
   }
 }
 
