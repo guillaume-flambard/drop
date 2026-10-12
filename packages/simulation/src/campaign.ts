@@ -262,6 +262,8 @@ export async function runCampaign(options: CampaignOptions): Promise<CampaignRes
   try {
     log(`campaign ${campaign} in ${dir}`);
     // Every node directory is checked before any process starts, top-down from the closed work directory.
+    // The relay's HOME too, though the relay writes nothing there today.
+    ownerOnlyDir(join(dir, 'relay-home'));
     for (let i = 0; i < options.nodes; i += 1) {
       const home = join(dir, `node-${String(i)}`);
       ownerOnlyDir(home);

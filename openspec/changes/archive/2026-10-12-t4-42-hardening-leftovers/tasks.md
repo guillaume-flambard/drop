@@ -28,3 +28,6 @@
 - [x] 4.1 `pnpm -r lint`, `pnpm -r typecheck`, `pnpm -r test`, `openspec validate --strict`, openspec-guard.
 - [x] 4.2 Mesure après correction, entrelacée avec l'ancien code, à charge ambiante et sous charge ajoutée.
 - [x] 4.3 Revue du diff (`review`) et revue de sécurité (`cso`).
+- [x] 4.4 Retours de la revue adverse : `O_NONBLOCK` aux écritures du banc (tube nommé), lien pendant refusé avec
+      `E_SIM_WORK_DIR`, `HOME` du relais fermé, borne non numérique de `inParallel`, commentaire en double retiré ;
+      tests ajoutés.

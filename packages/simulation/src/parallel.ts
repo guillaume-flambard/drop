@@ -22,7 +22,9 @@ export async function inParallel<T, R>(
       }
     }
   };
-  const workers = Math.max(1, Math.min(Math.floor(limit), items.length));
+  // A limit that is not a finite number counts as one: never zero workers, never a silent empty result.
+  const bound = Number.isFinite(limit) ? Math.floor(limit) : 1;
+  const workers = Math.max(1, Math.min(bound, items.length));
   await Promise.all(Array.from({ length: workers }, worker));
   if (failure !== undefined) throw failure.error;
   return results;

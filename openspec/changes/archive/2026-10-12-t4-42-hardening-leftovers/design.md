@@ -25,7 +25,12 @@ cloné peut légitimement lier un fichier de projet).
 
 ### Fichiers du banc : ouvrir sans suivre, contrôler, puis seulement vider
 
-`O_TRUNC` est retiré de l'ouverture : un lien physique serait vidé avant tout contrôle. Après ouverture, le
+`O_TRUNC` est retiré de l'ouverture : un lien physique serait vidé avant tout contrôle. `O_NONBLOCK` y est ajouté, comme
+à la lecture : sans lui, un tube nommé posé sous un nom de fichier bloquait l'ouverture en écriture jusqu'à l'arrivée
+d'un lecteur, et le banc, bloqué dans un appel synchrone, n'exécutait plus ses gestionnaires de SIGTERM (trouvé par la
+revue adverse : 3,8 s d'attente mesurées avec un lecteur retardé). Sans lecteur, l'ouverture échoue avec `ENXIO`,
+traduit en `E_SIM_FILE` ; avec un lecteur, `fstat` refuse le tube. Un fichier ordinaire ignore ce drapeau, y compris
+dans les processus enfants qui héritent des journaux. Après ouverture, le
 descripteur doit être un fichier ordinaire, à un seul lien, de cet utilisateur ; le nom doit désigner ce même fichier
 (`lstat` : pas un lien, même `dev` et `ino` que `fstat`, en `bigint` pour ne rien arrondir). Ce dernier contrôle est
 la seule protection sous Windows, qui n'a pas `O_NOFOLLOW`, et ferme ailleurs la fenêtre d'un renommage. Le refus du
@@ -65,5 +70,9 @@ limite de 30 s, que T4.25 a calibrée.
   dossier après son contrôle et poser un lien à sa place, que les chemins suivants traverseraient. `/tmp` et le
   dossier temporaire par défaut (`mkdtemp`) ne le permettent pas ; Node n'offre pas d'ouverture relative à un
   descripteur de dossier (`openat`) qui fermerait ce cas.
+- **Entrées posées avant le resserrement** : un dossier de cet utilisateur laissé ouvert à d'autres (umask 002 d'une
+  campagne ancienne) peut contenir des entrées posées avant `ownerOnlyDir`. Les écritures du banc les refusent ; les
+  lectures du contrôle de fuite (`filesUnder`) et les fichiers écrits par `drop init` et `drop serve` eux-mêmes
+  (`writePrivate` du Node) restent hors de cette change.
 - **Plus de processus en même temps** au démarrage : au plus un par cœur, donc la mémoire de pointe du démarrage passe
   d'un processus court à `availableParallelism()` processus courts.

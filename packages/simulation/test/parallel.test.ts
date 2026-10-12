@@ -37,7 +37,9 @@ describe('bench start in parallel (T4.42)', () => {
     expect(finished).toEqual([0]);
   });
 
-  it('treats a limit below one as one', async () => {
+  it('treats a limit below one, or not a number, as one, and returns nothing for no items', async () => {
+    expect(await inParallel([], 4, () => Promise.resolve(1))).toEqual([]);
+    expect(await inParallel([1, 2], Number.NaN, (item) => Promise.resolve(item * 2))).toEqual([2, 4]);
     let peak = 0;
     let running = 0;
     await inParallel([1, 2, 3], 0, async () => {

@@ -24,10 +24,14 @@ const OWNER_ONLY = 0o600;
 const OWNER_ONLY_DIR = 0o700;
 // Windows has no O_NOFOLLOW (Node 24 fs, "File open constants"): the name is checked once the file is open instead.
 const NO_FOLLOW = 'O_NOFOLLOW' in constants ? constants.O_NOFOLLOW : 0;
+// A named pipe planted under a file name would block a write-only open until a reader came, and a blocked open stops
+// the signal handlers too: O_NONBLOCK makes it fail at once (ENXIO) or open so that fstat refuses it. Regular files
+// ignore the flag.
+const NON_BLOCK = 'O_NONBLOCK' in constants ? constants.O_NONBLOCK : 0;
 // No O_TRUNC: a file is emptied only after it passed the checks, never at open time.
 const FLAGS = {
-  w: constants.O_WRONLY | constants.O_CREAT | NO_FOLLOW,
-  a: constants.O_WRONLY | constants.O_CREAT | constants.O_APPEND | NO_FOLLOW,
+  w: constants.O_WRONLY | constants.O_CREAT | NO_FOLLOW | NON_BLOCK,
+  a: constants.O_WRONLY | constants.O_CREAT | constants.O_APPEND | NO_FOLLOW | NON_BLOCK,
 } as const;
 
 /** The current user, where the system has one (not on Windows). */
@@ -56,8 +60,10 @@ export function openOwnerOnly(path: string, flags: 'w' | 'a'): number {
   } catch (error) {
     // ELOOP: O_NOFOLLOW met a link (macOS, Linux). A directory under a file name fails with EISDIR, or with an access
     // error on some systems: the name itself says which.
-    if ((error as NodeJS.ErrnoException).code === 'ELOOP')
-      throw refused('E_SIM_FILE', path, 'is a link, not followed', error);
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === 'ELOOP') throw refused('E_SIM_FILE', path, 'is a link, not followed', error);
+    // ENXIO: a named pipe with no reader, opened without blocking.
+    if (code === 'ENXIO') throw refused('E_SIM_FILE', path, 'is not a regular file', error);
     if (kindOf(path) === 'directory') throw refused('E_SIM_FILE', path, 'is a directory', error);
     throw error;
   }
@@ -108,7 +114,9 @@ export function ownerOnlyDir(path: string): void {
   try {
     mkdirSync(path, { recursive: true, mode: OWNER_ONLY_DIR });
   } catch (error) {
-    // A dangling link or a file under that name: the checks below say which.
+    // A dangling link fails here (ENOENT on macOS) without creating its target; a file under that name (EEXIST) is
+    // refused by the checks below.
+    if (kindOf(path) === 'link') throw refused('E_SIM_WORK_DIR', path, 'is a link, not followed', error);
     if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
   }
   if (process.platform === 'win32') {
@@ -122,7 +130,7 @@ export function ownerOnlyDir(path: string): void {
   try {
     fd = openSync(path, constants.O_RDONLY | constants.O_DIRECTORY | NO_FOLLOW);
   } catch (error) {
-    // macOS answers ELOOP for a link, Linux ENOTDIR (O_DIRECTORY is checked first); either way it is refused.
+    // A link answers ELOOP or ENOTDIR depending on the system and which flag it checks first; either way it is refused.
     const code = (error as NodeJS.ErrnoException).code;
     if (code === 'ELOOP' || code === 'ENOTDIR')
       throw refused(

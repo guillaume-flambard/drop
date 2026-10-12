@@ -161,10 +161,6 @@ function cliPath(agent: AgentKind, probe: InstallProbe): string | undefined {
 }
 
 /**
- * A regular file of bounded size, never through a symlink; undefined when absent. Opened without following a link
- * where the system allows it, then checked and read through the same descriptor.
- */
-/**
  * A client file as onboarding reads it: through the shared reader (one descriptor, O_NONBLOCK so a named pipe is
  * refused at once, bounded read), never through a link (T4.22, T4.42).
  */

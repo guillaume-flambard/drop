@@ -1,7 +1,7 @@
 ## MODIFIED Requirements
 
 ### Requirement: Fichiers de campagne réservés au propriétaire
-Le banc SHALL créer chacun de ses fichiers (plan, événements, configuration et journal du relais, journaux des nœuds, journaux et configurations plantés, rapports) en mode 0600, et resserrer à 0600 un fichier qu'une campagne précédente aurait laissé plus large dans un `--work-dir` réutilisé. Aucune écriture de `campaign.ts` MUST NOT contourner ces fonctions. Une écriture MUST NOT suivre un lien : un nom de fichier de campagne qui est un lien symbolique, un second lien physique, un dossier ou le fichier d'un autre utilisateur MUST être refusé avec `E_SIM_FILE` avant d'être tronqué, resserré ou écrit. Chaque dossier où le banc écrit (dossier de travail, dossier de chaque nœud et son `user-home`) SHALL être un vrai dossier de la personne qui lance le banc, fermé aux autres (0700) avant toute écriture ; un lien ou le dossier d'un autre utilisateur MUST être refusé avec `E_SIM_WORK_DIR` avant le lancement de tout processus.
+Le banc SHALL créer chacun de ses fichiers (plan, événements, configuration et journal du relais, journaux des nœuds, journaux et configurations plantés, rapports) en mode 0600, et resserrer à 0600 un fichier qu'une campagne précédente aurait laissé plus large dans un `--work-dir` réutilisé. Aucune écriture de `campaign.ts` MUST NOT contourner ces fonctions. Une écriture MUST NOT suivre un lien : un nom de fichier de campagne qui est un lien symbolique, un second lien physique, un dossier, un tube nommé ou le fichier d'un autre utilisateur MUST être refusé avec `E_SIM_FILE`, sans attendre, avant d'être tronqué, resserré ou écrit. Chaque dossier où le banc écrit (dossier de travail, `HOME` du relais, dossier de chaque nœud et son `user-home`) SHALL être un vrai dossier de la personne qui lance le banc, fermé aux autres (0700) avant toute écriture ; un lien ou le dossier d'un autre utilisateur MUST être refusé avec `E_SIM_WORK_DIR` avant le lancement de tout processus.
 
 #### Scenario: AC: fichiers 0600 même réutilisés
 <!-- openspec-guard:test="campaign files readable by their owner only (T4.26) > creates campaign files 0600 and narrows a file left wider by an earlier run" -->
@@ -15,13 +15,13 @@ Le banc SHALL créer chacun de ses fichiers (plan, événements, configuration e
 
 #### Scenario: AC: lien planté à la place d'un fichier non suivi
 <!-- openspec-guard:test="campaign writes never follow a planted link (T4.42) > refuses to write through a link or a second hard link planted in place of a campaign file, and leaves its target untouched" -->
-- **WHEN** un rapport est un lien symbolique vers un fichier hors du dossier, un journal d'événements est un second lien physique vers ce fichier, et un plan est un dossier
-- **THEN** chaque écriture, ajout ou ouverture est refusé avec `E_SIM_FILE`, le fichier visé garde son contenu et son mode, et un fichier ordinaire s'écrit toujours
+- **WHEN** un rapport est un lien symbolique vers un fichier hors du dossier, un journal d'événements est un second lien physique vers ce fichier, un plan est un dossier et un journal du relais est un tube nommé sans lecteur
+- **THEN** chaque écriture, ajout ou ouverture est refusé avec `E_SIM_FILE`, le tube en moins d'une seconde, le fichier visé garde son contenu et son mode, et un fichier ordinaire s'écrit toujours
 
 #### Scenario: AC: dossier partagé fermé, lien de dossier refusé
 <!-- openspec-guard:test="campaign writes never follow a planted link (T4.42) > keeps every bench directory a real directory of its owner, closed to others, and refuses a planted link" -->
-- **WHEN** le banc prépare un dossier neuf, un dossier laissé en 0777, un dossier de nœud qui est un lien vers un autre dossier, et un dossier qui appartient à un autre utilisateur
-- **THEN** les deux premiers sont en 0700, le lien est refusé avec `E_SIM_WORK_DIR` sans rien créer dans sa cible, et le dossier d'un autre utilisateur est refusé avec `E_SIM_WORK_DIR` (macOS et Linux pour les modes et le propriétaire)
+- **WHEN** le banc prépare un dossier neuf, un dossier laissé en 0777, un dossier de nœud qui est un lien vers un autre dossier, un lien pendant, et un dossier qui appartient à un autre utilisateur
+- **THEN** les deux premiers sont en 0700, les deux liens sont refusés avec `E_SIM_WORK_DIR` sans rien créer dans leur cible, et le dossier d'un autre utilisateur est refusé avec `E_SIM_WORK_DIR` (macOS et Linux pour les modes et le propriétaire)
 
 #### Scenario: AC: campagne refusée sur un dossier de travail piégé
 <!-- openspec-guard:test="simulation campaign work directory (T4.42) > refuses a reused work directory where a node directory is a planted link, before starting any process" -->

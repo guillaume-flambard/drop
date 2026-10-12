@@ -24,10 +24,10 @@ T4.26 (D99) a laissé trois restes, relevés le 12 octobre 2026 :
   `O_NOFOLLOW` (et, sous Windows, le contrôle `lstat` après ouverture) aux protections du lecteur partagé : une seule
   ouverture avec `O_NONBLOCK`, contrôle par le descripteur, lecture bornée même si le fichier grossit. Les codes
   d'erreur restent ceux de T4.22 (`E_CONFIG_SYMLINK`, `E_CONFIG_TYPE`, `E_CONFIG_TOO_LARGE`).
-- **Fichiers du banc** : `openOwnerOnly` ouvre avec `O_NOFOLLOW` et sans `O_TRUNC`, puis refuse avec `E_SIM_FILE` ce
+- **Fichiers du banc** : `openOwnerOnly` ouvre avec `O_NOFOLLOW`, `O_NONBLOCK` (un tube nommé planté ne bloque plus le banc ni ses signaux) et sans `O_TRUNC`, puis refuse avec `E_SIM_FILE` ce
   qui n'est pas un fichier ordinaire de cet utilisateur à un seul lien, ou dont le nom ne désigne plus le fichier
   ouvert ; il ne resserre et ne vide le fichier qu'après ces contrôles.
-- **Dossiers du banc** : nouvelle fonction `ownerOnlyDir`, appliquée au dossier de travail puis à chaque dossier de
+- **Dossiers du banc** : nouvelle fonction `ownerOnlyDir`, appliquée au dossier de travail, au `HOME` du relais, puis à chaque dossier de
   nœud et son `user-home`, avant tout processus : un vrai dossier de l'utilisateur, fermé aux autres (0700) ; un lien
   ou le dossier d'un autre est refusé avec `E_SIM_WORK_DIR`. `campaign.ts` n'appelle plus `mkdirSync`.
 - **Démarrage parallèle** : `init` et `publish` passent par `inParallel`, au plus un processus par cœur ; après un

@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import {
   chmodSync,
   closeSync,
@@ -91,6 +92,16 @@ describe('campaign writes never follow a planted link (T4.42)', () => {
     expect(() => {
       writeOwnerOnly(join(dir, 'plan.json'), '{}');
     }).toThrow('E_SIM_FILE');
+    if (process.platform !== 'win32') {
+      // A named pipe under a file name: refused at once instead of waiting for a reader, so signals still work.
+      execFileSync('mkfifo', [join(dir, 'relay.log')]);
+      const started = performance.now();
+      expect(() => openOwnerOnly(join(dir, 'relay.log'), 'a')).toThrow('E_SIM_FILE');
+      expect(() => {
+        writeOwnerOnly(join(dir, 'relay.log'), 'x');
+      }).toThrow('E_SIM_FILE');
+      expect(performance.now() - started).toBeLessThan(1000);
+    }
     writeOwnerOnly(join(dir, 'report.md'), 'ok');
     expect(readFileSync(join(dir, 'report.md'), 'utf8')).toBe('ok');
   });
@@ -105,6 +116,14 @@ describe('campaign writes never follow a planted link (T4.42)', () => {
         ownerOnlyDir(join(dir, 'node-0'));
       }).toThrow('E_SIM_WORK_DIR');
       expect(readdirSync(elsewhere)).toEqual([]);
+      // A dangling link is refused too, and its target is not created.
+      const missing = join(elsewhere, 'missing');
+      if (plantLink(missing, join(dir, 'node-1'), 'dir')) {
+        expect(() => {
+          ownerOnlyDir(join(dir, 'node-1'));
+        }).toThrow('E_SIM_WORK_DIR');
+        expect(readdirSync(elsewhere)).toEqual([]);
+      }
     }
     if (process.platform !== 'win32') {
       expect(mode(dir)).toBe(0o700);
