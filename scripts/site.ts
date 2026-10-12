@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { mkdir, open, readFile, rm, stat, writeFile, type FileHandle } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { dirname, extname, join, posix, resolve } from 'node:path';
@@ -15,6 +16,9 @@ const sourceFiles: Record<string, string> = {
   'securite.html': 'site/securite.html',
   'guide.html': 'site/guide.html',
   'avancement.html': 'site/avancement.html',
+  // The page a join link opens (T4.23); `join/index.html` serves `/join` from a plain static export too.
+  'join.html': 'site/join.html',
+  'join/index.html': 'site/join.html',
   'styles.css': 'site/styles.css',
   'favicon.svg': 'site/favicon.svg',
   'diagrams/journey.svg': 'docs/diagrams/journey.svg',
@@ -45,6 +49,34 @@ const contentTypes: Record<string, string> = {
 };
 const CSP =
   "default-src 'self'; script-src 'none'; style-src 'self'; img-src 'self'; connect-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'";
+
+/** The pages that run a script: only the join page, which reads the invite from the fragment (T4.23, D95). */
+const JOIN_PAGES = new Set(['/join.html', '/join/index.html']);
+
+/**
+ * The join page's policy: its one inline script, pinned by its SHA-256, and nothing to connect to, so the invite in
+ * the fragment cannot leave the page. `frame-ancestors` only works as a header, so the meta copy goes without it.
+ */
+export function joinCsp(html: string, header = true): string {
+  // Every opening tag counts, whatever its case or attributes, so a second script cannot slip past the count; the one
+  // allowed is a plain `<script>` with a closing tag.
+  const opened = html.match(/<script\b/gi) ?? [];
+  const plain = /<script>([\s\S]*?)<\/script[^>]*>/i.exec(html);
+  if (opened.length !== 1 || !plain) throw new Error('E_SITE_JOIN: one inline script expected');
+  const hash = createHash('sha256')
+    .update(plain[1] ?? '', 'utf8')
+    .digest('base64');
+  return [
+    "default-src 'none'",
+    `script-src 'sha256-${hash}'`,
+    "style-src 'self'",
+    "img-src 'self'",
+    "connect-src 'none'",
+    ...(header ? ["frame-ancestors 'none'"] : []),
+    "base-uri 'none'",
+    "form-action 'none'",
+  ].join('; ');
+}
 
 /**
  * What the home page offers (T2.6, D72). `beta`: ask for access, no download link, while the app is not notarized and
@@ -109,11 +141,14 @@ export async function collectSite(config?: SiteConfig): Promise<Map<string, Buff
   const assets = new Map<string, Buffer>();
   for (const [destination, source] of Object.entries(sourceFiles)) {
     const original = await readFile(join(root, source));
+    const page = source.endsWith('.html') ? renderPage(original.toString('utf8'), settings) : '';
     const data = source.endsWith('.md')
       ? Buffer.from(exportMarkdown(original.toString('utf8')))
-      : source.endsWith('.html')
-        ? Buffer.from(renderPage(original.toString('utf8'), settings))
-        : original;
+      : JOIN_PAGES.has(`/${destination}`)
+        ? Buffer.from(page.replace('{{joinCsp}}', joinCsp(page, false)))
+        : source.endsWith('.html')
+          ? Buffer.from(page)
+          : original;
     assets.set(`/${destination}`, data);
   }
   return assets;
@@ -182,6 +217,9 @@ async function serveRelease(res: ServerResponse, method: string, releasesDir: st
 }
 
 function handler(assets: ReadonlyMap<string, Buffer>, options: ServeOptions) {
+  const pagePolicies = new Map(
+    [...assets].filter(([path]) => JOIN_PAGES.has(path)).map(([path, data]) => [path, joinCsp(data.toString('utf8'))]),
+  );
   return async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'no-referrer');
@@ -205,8 +243,11 @@ function handler(assets: ReadonlyMap<string, Buffer>, options: ServeOptions) {
       return;
     }
     if (path === '/') path = '/index.html';
+    if (path === '/join' || path === '/join/') path = '/join.html';
     const data = assets.get(path);
     if (data) {
+      const policy = pagePolicies.get(path);
+      if (policy) res.setHeader('Content-Security-Policy', policy);
       res.writeHead(200, {
         'Content-Type': contentTypes[extname(path)] ?? 'application/octet-stream',
         'Content-Length': data.length,

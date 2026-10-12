@@ -18,6 +18,10 @@ export const ERROR_CODES = [
   'E_SECRET_DETECTED',
   'E_RUNNER',
   'E_INVITE',
+  'E_INVITE_EXPIRED',
+  'E_INVITE_SIG',
+  'E_INVITE_USED',
+  'E_INVITE_RELAY',
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];

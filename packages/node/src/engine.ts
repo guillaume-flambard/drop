@@ -4,8 +4,9 @@ import {
   DropError,
   createTeam,
   createInvite,
-  decodeInvite,
   encodeInvite,
+  inviteCodeFrom,
+  verifyInvite,
   isDropError,
   isFactCapabilityId,
   HUMAN_ANSWER_OUTPUT_SCHEMA,
@@ -29,6 +30,7 @@ import {
   type Envelope,
   type Funding,
   type Identity,
+  type Invite,
   type Message,
   type MessageOf,
   type NodeId,
@@ -66,7 +68,7 @@ import {
   type StoredFact,
 } from './facts.ts';
 import { applyRedactions, buildCard, implFor, runCapability, validateInput, type CapabilityImpl } from '@drop/runner';
-import type { AgentLink, LinkRequest, Peer, Published, TeamState } from './home.ts';
+import type { AgentLink, InviteState, LinkRequest, Peer, Published, TeamState } from './home.ts';
 
 export const APPROVAL_TTL_MS = 10 * 60_000;
 export const REVIEW_TTL_MS = 10 * 60_000;
@@ -166,6 +168,21 @@ export interface NodeStore {
   /** Iroh addresses of the peers (T4.2b): kept apart, owner-only. */
   irohAddrs?(): Record<string, IrohAddr>;
   saveIrohAddr?(nodeId: string, address: IrohAddr): void;
+  /** Invites issued and accepted (T4.23): absent on stores that predate them, which then keep them in memory only. */
+  inviteState?(): InviteState;
+  saveInviteState?(state: InviteState): void;
+}
+
+/**
+ * What accepting an invite does to this node's relay (T4.23, D95): `same` relay already; `adopt` its relay, since
+ * this node has joined nobody yet; `kept` its own relay, the pairing then going through every path it has.
+ */
+export type RelayOutcome = 'same' | 'adopt' | 'kept';
+
+/** What the confirmation card shows before « Rejoindre » (T4.14, T4.23): nothing is sent to compute it. */
+export interface InvitePreview {
+  invite: Invite;
+  relay: RelayOutcome;
 }
 
 /** One member as the team panel shows them (T2.9): who, which agents, online or not, which capabilities. */
@@ -281,6 +298,13 @@ export interface EngineOptions {
   log?: (entry: EngineLogEntry) => void;
   /** Called with the admission ticket of an invite being accepted, so the node can join the relay with it (T2.1). */
   onAdmission?: (ticket: unknown) => void;
+  /**
+   * The relay an invite would leave this node on (T4.23, D95). `fresh` is true while this node has no peer and no
+   * team. Throws E_INVITE_RELAY for a relay this node may not use. Absent: the node keeps its relay.
+   */
+  relayPlan?: (relayUrl: string, fresh: boolean) => RelayOutcome;
+  /** Moves this node to the invite's relay, after « Rejoindre » and before anything is sent (T4.23). */
+  adoptRelay?: (relayUrl: string) => Promise<void>;
   /** Requester side: mints a capped key per drop so the requester pays the model (D27). */
   funder?: Funder;
   /** Executor side: who pays the model. 'requester' (default, D27) uses the requester's key when one is sent. */
@@ -308,6 +332,8 @@ export class NodeEngine extends EventEmitter {
   private readonly now: () => number;
   private readonly replay = new ReplayCache();
   private readonly invites = new Map<string, number>();
+  /** Invites this node accepted, by the SHA-256 of their token, until they expire (T4.23): a second use is refused. */
+  private readonly usedInvites = new Map<string, number>();
   /** This node's local-network discovery key (T4.2c): from DROP_HOME, or one per process in tests. */
   private readonly lanKey: string;
   private readonly lanKeyBytes: Uint8Array;
@@ -315,6 +341,8 @@ export class NodeEngine extends EventEmitter {
   /** Recent fact requests per peer (T4.4), for FACT_REQUESTS_PER_MINUTE. */
   private readonly factRequests = new Map<NodeId, number[]>();
   private readonly pairing = new Map<NodeId, { token: string; displayName: string; iroh?: IrohAddr }>();
+  /** Joins between their checks and their pairing request: they hold the relay as if already paired (T4.23). */
+  private joining = 0;
   /** This node's iroh addresses while the Internet mode runs (T4.2b). */
   private irohAddress: IrohAddr | undefined;
   private irohAddrsCache: { at: number; addrs: Record<string, IrohAddr> } | undefined;
@@ -344,6 +372,7 @@ export class NodeEngine extends EventEmitter {
     this.options = options;
     this.identity = options.identity;
     this.now = options.now ?? Date.now;
+    this.loadInvites();
   }
 
   // ---- queries -----------------------------------------------------------------------------------------------
@@ -423,15 +452,54 @@ export class NodeEngine extends EventEmitter {
   /** A pairing code that also carries an admission ticket, so a newcomer can join the relay with it (T2.1). */
   async invite(relayUrl: string): Promise<string> {
     const admission = await createAdmission(this.identity, this.now());
-    const invite = createInvite(this.identity, relayUrl, this.now(), admission, this.team()?.team, this.irohAddress);
+    const invite = await createInvite(
+      this.identity,
+      relayUrl,
+      this.now(),
+      admission,
+      this.team()?.team,
+      this.irohAddress,
+    );
     this.invites.set(invite.oneTimeToken, invite.expiresAt);
+    this.saveInvites();
     // Direct paths must let the invitee in now, not at their next refresh (T4.2b live run).
     this.emit('access');
     return encodeInvite(invite);
   }
 
-  async pair(code: string): Promise<NodeId> {
-    const invite = decodeInvite(code, this.now());
+  /**
+   * Checks an invite as pasted or opened (code, join link, `drop://join` or `drop://pair`), without sending anything:
+   * signature (E_INVITE_SIG), dates (E_INVITE_EXPIRED), not this node's own (E_INVITE), not already accepted here
+   * (E_INVITE_USED), and the relay it would leave this node on (E_INVITE_RELAY when that relay is not allowed).
+   */
+  async previewInvite(input: string): Promise<InvitePreview> {
+    const now = this.now();
+    const invite = await verifyInvite(inviteCodeFrom(input), now);
+    if (invite.nodeId === this.identity.nodeId) throw new DropError('E_INVITE', 'this is your own invite');
+    if (this.liveUsedInvites(now).has(sha256Hex(invite.oneTimeToken)))
+      throw new DropError('E_INVITE_USED', 'invite already used');
+    return { invite, relay: this.relayOutcome(invite.relayUrl) };
+  }
+
+  /**
+   * Accepts an invite after « Rejoindre » (T4.14, T4.23): the same checks as the preview, then, on a node that has
+   * joined nobody yet, the move to the invite's relay, and only then the admission ticket and the pairing request.
+   */
+  async join(input: string): Promise<{ nodeId: NodeId; relay: RelayOutcome }> {
+    const { invite } = await this.previewInvite(input);
+    // Nothing else runs until the first await below: a second « Rejoindre » meanwhile finds this invite used, and a
+    // second invite finds this node no longer free to move to another relay.
+    const used = sha256Hex(invite.oneTimeToken);
+    if (this.liveUsedInvites(this.now()).has(used)) throw new DropError('E_INVITE_USED', 'invite already used');
+    const relay = this.relayOutcome(invite.relayUrl);
+    this.usedInvites.set(used, invite.expiresAt);
+    this.joining += 1;
+    try {
+      if (relay === 'adopt') await this.adopt(invite.relayUrl, used);
+    } finally {
+      this.joining -= 1;
+    }
+    this.saveInvites();
     if (invite.admission) this.options.onAdmission?.(invite.admission);
     // Joining a team: the roster arrives from the inviter once paired (T2.9).
     if (invite.team && !this.team()) this.options.store.saveTeam({ team: invite.team, members: [this.selfMember()] });
@@ -447,7 +515,66 @@ export class NodeEngine extends EventEmitter {
       displayName: this.identity.displayName,
       ownerKind: this.options.ownerKind,
     });
-    return invite.nodeId;
+    this.log({ event: 'invite_accepted', peer: invite.nodeId, reason: `relay_${relay}` });
+    return { nodeId: invite.nodeId, relay };
+  }
+
+  async pair(code: string): Promise<NodeId> {
+    return (await this.join(code)).nodeId;
+  }
+
+  /** A refused move leaves the invite unused, so the owner may try it again once the cause is fixed. */
+  private async adopt(relayUrl: string, used: string): Promise<void> {
+    try {
+      await this.options.adoptRelay?.(relayUrl);
+    } catch (error) {
+      this.usedInvites.delete(used);
+      this.log({ event: 'invite_refused', code: 'E_INVITE_RELAY', reason: 'relay_not_adopted' });
+      throw isDropError(error, 'E_INVITE_RELAY') ? error : new DropError('E_INVITE_RELAY', 'relay not adopted');
+    }
+  }
+
+  /**
+   * A node that has joined nobody, with no pairing pending or under way, may still move to the relay of the team it
+   * joins: once it has asked someone, a second invite never moves it away from the relay that answer will come on.
+   */
+  private relayOutcome(relayUrl: string): RelayOutcome {
+    const fresh = this.peers().length === 0 && !this.team() && this.pairing.size === 0 && this.joining === 0;
+    return this.options.relayPlan?.(relayUrl, fresh) ?? 'kept';
+  }
+
+  private loadInvites(): void {
+    let state: InviteState | undefined;
+    try {
+      state = this.options.store.inviteState?.();
+    } catch {
+      // An unreadable file loses the links sent before, never the node: logged, then rewritten at the next invite.
+      this.log({ event: 'invite_state_unreadable', code: 'E_INVITE_STATE' });
+      return;
+    }
+    const now = this.now();
+    for (const [token, expiresAt] of Object.entries(state?.issued ?? {}))
+      if (expiresAt > now) this.invites.set(token, expiresAt);
+    for (const [hash, expiresAt] of Object.entries(state?.used ?? {}))
+      if (expiresAt > now) this.usedInvites.set(hash, expiresAt);
+  }
+
+  private saveInvites(): void {
+    if (!this.options.store.saveInviteState) return;
+    const now = this.now();
+    try {
+      this.options.store.saveInviteState({
+        issued: Object.fromEntries(this.liveInvites(now)),
+        used: Object.fromEntries(this.liveUsedInvites(now)),
+      });
+    } catch {
+      this.log({ event: 'invite_state_unwritable', code: 'E_INVITE_STATE' });
+    }
+  }
+
+  private liveUsedInvites(now: number): Map<string, number> {
+    for (const [hash, expiresAt] of this.usedInvites) if (expiresAt <= now) this.usedInvites.delete(hash);
+    return this.usedInvites;
   }
 
   // ---- linked assistants (T2.13) -----------------------------------------------------------------------------
@@ -1034,6 +1161,7 @@ export class NodeEngine extends EventEmitter {
   private async onPairRequest(from: NodeId, message: MessageOf<'pair_request'>): Promise<void> {
     if (!this.hasInvite(message.oneTimeToken)) return;
     this.invites.delete(message.oneTimeToken);
+    this.saveInvites();
     this.options.store.savePeer({
       nodeId: from,
       displayName: message.displayName,

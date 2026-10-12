@@ -139,9 +139,9 @@ dépôt pour drop.
 | Lot | Ligne |
 | --- | --- |
 | A. Langage visuel unique | T4.24, périmètre précisé |
-| B. Carte de consentement | T4.33 |
-| C. Coque (icône à états, mise à jour, démarrage auto, Dock, fenêtres, supervision) | T4.34 ; l'instance unique est dans T4.31 |
-| D1 à D3. Journaux et diagnostic | T4.35 |
+| B. Carte de consentement | T4.35 |
+| C. Coque (icône à états, mise à jour, démarrage auto, Dock, fenêtres, supervision) | T4.36 ; l'instance unique est dans T4.31 |
+| D1 à D3. Journaux et diagnostic | T4.37 |
 | D6. Premier lancement | à rattacher à T4.23, en cours sur sa branche |
 | Notifications | T4.30 |
 | Bug `n0` de `network.tsx` | corrigé (`fix:`) |
