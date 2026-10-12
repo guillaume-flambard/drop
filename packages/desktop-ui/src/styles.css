@@ -2,6 +2,8 @@
 @source "./**/*.{ts,tsx}";
 /* Tailwind also scans the package folder on its own: words in the README must not become classes. */
 @source not "../README.md";
+/* Component tests use class names in assertions only. */
+@source not "../test";
 
 /* Drop Human V2.2 — shadcn/Radix semantics, warm neutral surfaces.
    No remote fonts, illustrations or decorative model branding. */
@@ -197,5 +199,100 @@ button {
     --border: #c7bccc;
     --input: #d1c4d5;
     --muted-foreground: #e3d8e4;
+  }
+}
+
+/* Menu bar panel (/app, T4.24): the same tokens in a 380 × 620 popover. The desktop window is transparent with the
+   system popover material; the page paints a translucent ground inside it, solid when transparency is reduced. */
+html.drop-panel,
+html.drop-panel body {
+  height: 100%;
+  overflow: hidden;
+  border-radius: 12px;
+  background: transparent;
+}
+html.drop-panel body {
+  background: color-mix(in srgb, var(--background) 92%, transparent);
+  font-size: 13px;
+  line-height: 1.45;
+  letter-spacing: -0.006em;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+html.drop-panel #root {
+  height: 100%;
+  min-height: 0;
+}
+/* One focus mark in the panel: a 2-px accent outline, without the components' extra ring. */
+html.drop-panel :focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  --tw-ring-shadow: 0 0 #0000;
+}
+html.drop-panel button {
+  cursor: default;
+}
+.selectable,
+html.drop-panel code,
+html.drop-panel pre,
+html.drop-panel input,
+html.drop-panel textarea {
+  -webkit-user-select: text;
+  user-select: text;
+}
+.panel-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+  scroll-padding-top: 104px;
+}
+.panel-header {
+  background: color-mix(in srgb, var(--background) 84%, transparent);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  backdrop-filter: blur(20px) saturate(160%);
+}
+.panel-surface {
+  box-shadow: 0 1px 2px rgba(43, 38, 48, 0.04);
+}
+.motion-arrive {
+  animation: motion-arrive 0.24s cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+@keyframes motion-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.99);
+  }
+}
+.panel-breathe {
+  animation: panel-breathe 1.2s ease-in-out infinite alternate;
+}
+@keyframes panel-breathe {
+  to {
+    opacity: 0.5;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .motion-arrive,
+  .panel-breathe {
+    animation: none;
+  }
+  html.drop-panel [class*='scale-'] {
+    scale: none;
+  }
+}
+@media (prefers-reduced-transparency: reduce) {
+  html.drop-panel body,
+  .panel-header {
+    background: var(--background);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+@media (prefers-contrast: more) {
+  html.drop-panel .panel-surface,
+  html.drop-panel [data-slot='button'],
+  html.drop-panel [data-slot='input'],
+  html.drop-panel [data-slot='textarea'] {
+    border-width: 1.5px;
   }
 }

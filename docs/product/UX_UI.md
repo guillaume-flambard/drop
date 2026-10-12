@@ -6,7 +6,7 @@ Ce document décrit les surfaces de drop, les écrans tels qu'ils existent dans 
 
 ## Lire ce document
 
-- **Existant** : présent dans le code. Sauf mention, la source est `packages/node/src/panel.ts`.
+- **Existant** : présent dans le code. Sauf mention, la source est le panneau React `packages/desktop-ui/src/panel/` (T4.24, D90), servi par `packages/node/src/workspace.ts`.
 - **Visé** : cible adoptée, livrée par la tâche citée.
 - **Hypothèse** : supposition non vérifiée, avec son critère.
 
@@ -15,12 +15,12 @@ Ce document décrit les surfaces de drop, les écrans tels qu'ils existent dans 
 ## 1. Principes
 
 1. **Existant** (D46, contraignant) : un panneau Mac discret et familier, en typographie système, avec la palette neutre existante.
-2. **Existant** (D46, couleur changée par D88) : l'accent sert aux actions et aux états, jamais à la décoration. Depuis le 11 octobre 2026, l'accent est violet dans la fenêtre « Ton espace » (React, D87) et dans le panneau Drop Human ; le panneau historique `panel.ts` garde l'ancien vert jusqu'à sa migration (T4.24).
+2. **Existant** (D46, couleur changée par D88) : l'accent sert aux actions et aux états, jamais à la décoration. Depuis le 11 octobre 2026, l'accent est violet dans la fenêtre « Ton espace » (React, D87) et, depuis T4.24 (D90), dans le panneau, construit avec les mêmes composants et jetons.
 3. **Existant** (D46) : le clavier et VoiceOver passent avant toute décoration. Les onglets, l'annonce des résultats et le focus sont décrits en section 6. La recette VoiceOver réelle reste à faire (T3.4).
-4. **Existant** : tout texte écrit par un pair est inséré par `textContent`, jamais comme HTML (fonction `el`, spec owner-app « Texte des pairs inerte »).
+4. **Existant** : tout texte écrit par un pair est rendu comme texte par React, jamais comme HTML ; aucun `dangerouslySetInnerHTML` ni `innerHTML` dans le panneau (spec owner-app « Texte des pairs inerte », vérifié par test).
 5. **Existant** : la carte de décision montre ce qui sort et ce qui ne sort jamais avant de demander une décision : « Julie recevra » et « Julie ne recevra jamais ».
 6. **Existant** : rien n'est partagé sans geste explicite. Raccorder un agent ne partage aucun outil ; « Autoriser une fois » ne donne aucun accès permanent.
-7. **Existant** : le panneau parle seulement à son propre Node, sous la politique de contenu `default-src 'none'` qui interdit polices, images et scripts externes (`packages/node/src/api.ts`).
+7. **Existant** : le panneau parle seulement à son propre Node, sous la politique de contenu `default-src 'none'` : son seul script est autorisé par son empreinte SHA-256, `connect-src 'self'`, ni police, ni image, ni formulaire (`PANEL_CSP`, `packages/node/src/workspace.ts`).
 8. **Hypothèse** : décider prend quelques secondes sans vocabulaire technique (`PRODUCT.md`, principe 3). Critère : temps de décision et erreurs de compréhension mesurés en T4.6.
 
 ## 2. Surfaces
@@ -28,7 +28,7 @@ Ce document décrit les surfaces de drop, les écrans tels qu'ils existent dans 
 | Surface                    | Rôle                                                       | Statut et source                                             |
 | -------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------ |
 | Icône de barre de menus    | Ouvrir ou fermer le panneau, menu de trois actions         | **Existant**, `apps/desktop/src-tauri/src/main.rs`               |
-| Panneau                    | Demandes, Équipe, Mes outils ; servi par le Node sur `/app` | **Existant**, `panel.ts`                                     |
+| Panneau                    | Demandes, Équipe, Mes outils ; servi par le Node sur `/app` | **Existant**, `packages/desktop-ui/src/panel/` (React, D90)  |
 | Page de démarrage          | États de démarrage et codes de diagnostic                  | **Existant**, `apps/desktop/web/index.html`                      |
 | Notifications macOS        | Annoncer une décision ou une relecture en attente          | **Existant**, `packages/node/src/notify.ts`                  |
 | Page historique `/`        | Ancienne UI de consentement, avec retrait de champs        | **Existant**, `packages/node/src/ui.ts`                      |
@@ -47,33 +47,34 @@ Ce document décrit les surfaces de drop, les écrans tels qu'ils existent dans 
 
 ### 3.2 En-tête et onglets
 
-- **Existant** : en-tête collant et translucide (flou de 20 px) avec le mot « drop » et un état à droite. Une fine bordure apparaît dès que le contenu défile dessous.
+- **Existant** : en-tête collant et translucide (flou de 20 px) avec le mot « drop. » (point violet) et un état à droite. Une fine bordure apparaît dès que le contenu défile dessous.
 - **Existant** : l'état commence par « Connexion… », puis « Prénom · connecté » (point vert), « Prénom · hors ligne » (point ambre) ou « Moteur local indisponible » (point rouge orangé). Il est annoncé par une région vivante polie.
-- **Existant** : trois onglets segmentés, « Demandes », « Équipe », « Mes outils ». L'onglet actif a un fond de carte et une ombre légère.
-- **Existant** : un badge sur « Demandes » compte les décisions et relectures en attente ; il disparaît à zéro.
+- **Existant** : trois onglets segmentés (Radix Tabs), « Demandes », « Équipe », « Mes outils ». L'onglet actif a un fond de carte et une ombre légère.
+- **Existant** : un badge violet sur « Demandes » compte les décisions et relectures en attente, lu « 2 en attente » par VoiceOver ; il disparaît à zéro. Le flux en direct le tient à jour quel que soit l'onglet.
 
 ### 3.3 Demandes
 
 Section « À décider ».
 
-- **Existant**, état vide : une carte centrée avec une icône de coche cerclée verte, « Rien à décider » et « Quand un collègue aura besoin d’un de tes outils, sa question arrivera ici avec une notification. »
+- **Existant**, état vide : une carte centrée avec une icône de coche cerclée verte, « Tout est à jour » et « Lorsqu’un collègue aura une question, tu pourras choisir ce qui lui sera transmis. »
 - **Existant**, carte de décision, de haut en bas :
-  - pastille aux initiales du demandeur, « Julie a besoin d’aide », puis « titre de la capacité · via Claude Code » ;
+  - pastille aux initiales du demandeur, « Julie a besoin d’aide » et « via Claude Code », puis le titre de la capacité ;
   - la question entre guillemets français, sur un fond creusé, en 14 px ;
   - « Pourquoi » en gras, suivi de la raison donnée par l'agent ;
   - un registre à deux lignes : coche couleur d'accent et « Julie recevra », puis cadenas gris et « Julie ne recevra jamais », chacune avec sa liste ;
   - le coût s'il existe : « Coût : gratuit », « Coût max : 0,50 $, à ta charge », « … payé par Julie » ou « Coût : à ta charge, non mesuré » ;
-  - les actions : « Pas maintenant » discret à gauche, « Refuser », puis « Autoriser une fois » plein, en couleur d'accent.
+  - « Sensibilité haute : tu reliras le résultat avant envoi. » si la capacité est sensible, puis « Expire dans mm:ss », qui décompte chaque seconde ;
+  - les actions : « Pas maintenant » discret à gauche, « Refuser », puis « Autoriser une fois » plein, en couleur d'accent ; « Répondre moi-même » sous un trait.
 - **Existant** : chaque bouton porte un nom accessible qui inclut le titre, par exemple « Refuser : Résumer les erreurs de production ».
 - **Existant** : une nouvelle carte arrive par un léger glissement de 0,24 s ; une carte décidée s'efface en 0,16 s.
-- **Existant**, carte de relecture : titre, « À relire avant envoi. Rien n’est parti : tu peux envoyer ou garder pour toi. », la sortie champ par champ (nom, valeur), puis « Ne pas envoyer » et « Envoyer » plein.
+- **Existant**, carte de relecture : pastille « À relire », titre, « Ta réponse est prête. Rien n’est parti. Relis les informations avant de choisir. », la sortie champ par champ (nom, valeur) avec une case « Retirer » par champ (un champ retiré est barré), puis « Ne pas envoyer » et « Envoyer » plein.
 - **Existant** : après une action, un bandeau de résultat apparaît et reçoit le focus : « Demande autorisée une fois. », « Demande refusée. », « Demande reportée. », « Réponse envoyée. » ou « Réponse conservée sur ce Mac. »
 
 Section « Mes questions ».
 
-- **Existant** : liste des dix dernières questions envoyées : point d'état, nom du destinataire, titre, et état en toutes lettres.
+- **Existant** : liste des dix dernières questions envoyées : initiales et nom du destinataire, titre, pastille d'état ; chaque ligne se déplie sur une phrase qui décrit l'état actuel, sans frise inventée.
 - **Existant** : états affichés : envoyée, en attente, acceptée, en cours, relue, reçue, refusée, pas maintenant, expirée, échouée.
-- **Existant** : couleurs d'état : vert pour reçue, rouge orangé pour refusée ou échouée, neutre pour expirée et pas maintenant, ambre pour le reste.
+- **Existant** : couleurs d'état : vert pour reçue, rouge pour refusée ou échouée, neutre pour expirée et pas maintenant, ambre pour le reste.
 
 ### 3.4 Équipe
 
@@ -83,8 +84,8 @@ Section « Mes questions ».
 
 ### 3.5 Mes outils
 
-- **Existant**, « Connecter mes agents » : deux étapes numérotées (« Analyse locale des treize clients MCP compatibles, dans leurs fichiers documentés seulement. » puis « Choisis puis confirme les connecteurs à ajouter. Aucun outil ne sera partagé. ») et le bouton « 1. Analyser ce Mac ».
-- **Existant** : après l'analyse, une ligne par agent trouvé. Prêt : case cochée. Déjà raccordé : « Retirer ce connecteur ». Conflit ou erreur : texte en couleur d'alerte, traduit, avec le code entre parenthèses.
+- **Existant**, « Connecter mes agents » : deux étapes numérotées (« Analyse locale des treize clients MCP compatibles, dans leurs fichiers documentés seulement. » puis « Choisis puis confirme les connecteurs à ajouter. Aucun outil ne sera partagé. ») et le bouton « 1. Analyser cet ordinateur ».
+- **Existant** : après l'analyse, une ligne par agent trouvé. Prêt : case cochée. Déjà raccordé : « Retirer ce connecteur », confirmé dans une boîte de dialogue. Conflit ou erreur : texte en couleur d'alerte, traduit, avec le code entre parenthèses.
 - **Existant** : « 2. Connecter les agents sélectionnés », bouton plein sur toute la largeur.
 - **Existant**, état vide : « Aucun des treize clients détecté » et « Tu peux ajouter manuellement le connecteur MCP drop dans ton agent. »
 - **Existant**, voie manuelle : une ligne d'aide permanente, puis après l'analyse une carte « Configuration manuelle » avec l'entrée JSON et « Copie cette entrée dans la configuration MCP de ton agent, puis relance-le. Cela ne partage aucun outil. »
@@ -94,7 +95,7 @@ Section « Mes questions ».
 
 ### 3.6 Liens profonds
 
-- **Existant**, `drop://pair` : le panneau accepte l'invitation dès son ouverture et affiche « Invitation acceptée : tu rejoins l’équipe dans quelques secondes. », ou « Ce lien d’invitation n’est plus valable. Demande-en un nouveau. » Aucun bouton de confirmation (écart E2 dans [APP_FLOW](APP_FLOW.md)).
+- **Existant** (T4.14), `drop://pair` : le panneau montre qui invite et l'équipe, comme texte, avec « Refuser » (focus par défaut) et « Rejoindre » ; seul « Rejoindre » appaire, puis l'onglet Équipe s'ouvre sur « Invitation acceptée : tu rejoins l’équipe dans quelques secondes. ». Un lien périmé affiche « Ce lien d’invitation n’est plus valable. Demande-en un nouveau. »
 - **Existant**, `drop://link` : carte « Autoriser Claude à demander à ton équipe ? », explication, avertissement en couleur d'alerte si la passerelle n'est pas reconnue, puis « Refuser » et « Autoriser ». En profil privé, l'autorisation échoue (écart E4).
 - **Existant** : le code d'invitation et les paramètres de liaison sont retirés de l'adresse dès la lecture ; le jeton local y reste (`history.replaceState`).
 
@@ -104,8 +105,9 @@ Section « Mes questions ».
 - **Existant**, erreur de chargement : bandeau `role="alert"` « Impossible de charger cette section. Vérifie que drop est ouvert, puis réessaie. » et « Réessayer ».
 - **Existant**, action refusée : bandeau d'alerte avec le message du Node, ou « Action impossible. Réessaie dans un instant. »
 - **Existant**, hors ligne : point ambre dans l'en-tête ; la liste de l'équipe marque chaque membre hors ligne.
-- **Existant**, mise à jour en direct : un flux SSE rafraîchit l'onglet Demandes. Si le focus est dans le contenu, le rafraîchissement attend que le focus en sorte, pour ne pas déplacer la personne.
-- **Existant**, bouton en cours : opacité réduite et curseur d'attente pendant l'appel.
+- **Existant**, mise à jour en direct : un flux SSE rafraîchit les demandes, le badge et l'état de l'en-tête. Si le focus est dans un champ, le rafraîchissement attend qu'il en sorte ; React garde brouillons et dépliages en place.
+- **Existant**, bouton en cours : inactif et à opacité réduite pendant l'appel.
+- **Existant**, bandeau de résultat : il prend le focus, se ferme par « Fermer le message » et disparaît au changement d'onglet.
 
 ### 3.8 Page de démarrage
 
@@ -192,22 +194,22 @@ Surface locale du paquet de simulation, hors panneau. React Flow est candidat, l
 
 ## 6. Accessibilité
 
-- **Existant** : onglets en `role="tablist"`, `tab` et `tabpanel`, avec tabindex mobile ; flèches gauche et droite, Début et Fin changent d'onglet et gardent le focus.
+- **Existant** : onglets Radix en `role="tablist"`, `tab` et `tabpanel`, avec tabindex mobile ; flèches gauche et droite, Début et Fin changent d'onglet et gardent le focus (test de composant).
 - **Existant** : une région vivante cachée annonce chaque résultat d'action ; l'état de connexion a sa propre région polie.
-- **Existant** : après une action, le focus va au bandeau de résultat, sinon au premier titre ou bouton du contenu. Observé en prévisualisation 380 × 620 (`openspec/changes/t3-4-private-mac-app/proof/verification.md`).
-- **Existant** : interrupteurs en `role="switch"` avec `aria-checked` ; icônes en `aria-hidden` ; champs invalides en `aria-invalid` ; erreurs en `role="alert"`.
+- **Existant** : après une action, le focus va au bandeau de résultat ; dans la réponse humaine, il suit le geste (zone de texte, « Envoyer », « Retirer » du fichier). Vérifié par les tests de composants et en prévisualisation 380 × 620 dans Chromium.
+- **Existant** : interrupteurs et cases Radix (`role="switch"`, `role="checkbox"`, `aria-checked`) ; icônes en `aria-hidden` ; champs invalides en `aria-invalid` ; erreurs en `role="alert"`.
 - **Existant** : contour de focus visible de 2 px en couleur d'accent.
 - **Existant** : respect de « réduire les animations », « réduire la transparence » (fond plein, sans flou) et « augmenter le contraste » (bordures plus foncées et plus épaisses).
 - **Existant** : apparence claire et sombre selon le système (`color-scheme: light dark`).
 - **Existant** : le texte des questions, des champs et du code reste sélectionnable ; le reste de l'interface ne l'est pas, comme un panneau Mac.
-- **Visé** (T3.4) : recette VoiceOver dans le vrai WKWebView, focus de chaque chemin de décision, relecture et zoom ; ce n'est pas encore prouvé.
-- **Existant** : la spec node demande « Pas maintenant » comme bouton par défaut au clavier ; le panneau n'en fixe pas (écart E1). Dans l'ordre de tabulation, « Pas maintenant » vient pourtant en premier.
+- **Visé** (T3.4, T4.24 seconde partie) : recette VoiceOver dans le vrai WKWebView, puis WebView2 et WebKitGTK : focus de chaque chemin de décision, relecture et zoom ; ce n'est pas encore prouvé.
+- **Existant** : « Pas maintenant » est le bouton par défaut au clavier : sans focus ailleurs, il le prend à l'arrivée d'une carte, et Entrée émet `not_now` (écart E1 levé par T4.24).
 
 ## 7. Jetons de design
 
-### 7.1 Fenêtre « Ton espace » (React et composants shadcn/ui, D87, D88)
+### 7.1 Jetons communs à la fenêtre « Ton espace » et au panneau (React et composants shadcn/ui, D87, D88, D90)
 
-**Existant**, valeurs de `packages/desktop-ui/src/styles.css`, compilées et servies par le Node, sans police ni ressource externe.
+**Existant**, valeurs de `packages/desktop-ui/src/styles.css`, compilées et servies par le Node, sans police ni ressource externe. Le panneau et la fenêtre partagent la même feuille de style.
 
 | Jeton                | Clair     | Sombre    | Usage                                   |
 | -------------------- | --------- | --------- | --------------------------------------- |
@@ -226,30 +228,15 @@ Surface locale du paquet de simulation, hors panneau. React Flow est candidat, l
 
 Rayon de base `0.875rem`. Icônes Lucide. Typographie système, corps 14 px sur 1,5.
 
-### 7.2 Panneau historique (`panel.ts`)
+### 7.2 Panneau (`packages/desktop-ui/src/panel/`, T4.24)
 
+**Existant**, mêmes jetons que 7.1, appliqués sous `html.drop-panel`. Captures fictives claires et sombres dans [screenshots/react-panel](screenshots/react-panel/).
 
-**Existant**, valeurs de `panel.ts`. La page de démarrage reprend les mêmes couleurs principales, avec une bordure sombre `#4B4944`.
+- **Existant**, surface : la fenêtre de 380 × 620 est transparente avec le matériau popover du système ; la page peint `--background` à 92 % par-dessus, l'en-tête à 84 % avec un flou de 20 px. « Réduire la transparence » rend les deux pleins, sans flou.
+- **Existant**, rayons : fenêtre 12 px, cartes et listes 16 px, citation, champs et blocs de code 12 px, boutons 10 px, onglet actif 8 px, pastilles en pilule.
+- **Existant**, typographie : police système, corps 13 px sur 1,45 ; mot « drop. » 21 px gras ; titre de carte et citation 14 px ; titres de section, texte discret et registre 12 px ; coût, états et compte à rebours 11 px en chiffres tabulaires ; code 11 px en chasse fixe.
+- **Existant**, focus : contour de 2 px en `--primary`, décalé de 2 px, sans l'anneau des composants.
+- **Existant**, contraste augmenté : bordures de `--border` et `--input` plus foncées (7.1) et de 1,5 px sur cartes, boutons et champs.
+- **Existant**, mouvement : arrivée de carte 0,24 s en `cubic-bezier(.23, 1, .32, 1)`, départ 0,16 s (fondu et réduction à 98 %), blocs de chargement qui respirent ; tout est coupé par « réduire les animations ».
+- **Existant**, icônes : Lucide (coche, cadenas, bouclier, horloge, crayon), toujours en `aria-hidden`.
 
-| Jeton           | Clair     | Sombre    | Usage                                         |
-| --------------- | --------- | --------- | --------------------------------------------- |
-| `--ground`      | `#F7F6F3` | `#1C1C1B` | Fond, mélangé à 88 % avec la transparence     |
-| `--well`        | `#EFEDE8` | `#232321` | Fonds creusés : citation, champs, onglets     |
-| `--card`        | `#FFFFFF` | `#2A2A28` | Cartes et listes                              |
-| `--ink`         | `#1A1A19` | `#F2F1EE` | Texte principal                               |
-| `--soft`        | `#55534E` | `#C9C6BE` | Texte secondaire                              |
-| `--mute`        | `#6B6862` | `#A29F97` | Texte discret                                 |
-| `--line`        | `#E4E2DC` | `#34332F` | Séparateurs                                   |
-| `--edge`        | `#DAD8D2` | `#43413C` | Bordures                                      |
-| `--accent`      | `#0E5F58` | `#5CC2B5` | Actions principales, focus, partage actif     |
-| `--accent-on`   | `#FFFFFF` | `#122923` | Texte sur l'accent                            |
-| `--accent-soft` | `#E3EFEC` | `#23403C` | Pastilles d'initiales, bandeau d'information  |
-| `--ok`          | `#2E8B57` | `#5FBF85` | État réussi, en ligne                         |
-| `--wait`        | `#B7791F` | `#E0A93B` | État en attente, hors ligne                   |
-| `--warn`        | `#9A3412` | `#F0A27A` | Erreur, refus, alerte                         |
-
-- **Existant**, rayons : fenêtre 12 px, cartes et listes 10 px, citation, champs et onglets 8 px, boutons et champs de saisie 7 px, onglet actif 6 px, interrupteurs et pastilles en pilule.
-- **Existant**, typographie : police système (`-apple-system`), corps 13 px sur 1,4 ; mot « drop » 15 px gras ; citation 14 px ; titres de section, texte discret et registre 12 px ; états et coût 11 px ; badge 10 px ; code 11 px en `ui-monospace`. Chiffres tabulaires pour le badge et le coût.
-- **Existant**, page de démarrage : corps 14 px sur 1,5, titre 21 px, bouton de 40 px de haut et 9 px de rayon.
-- **Existant**, mouvement : courbe de sortie `cubic-bezier(.23, 1, .32, 1)`, arrivée de carte 0,24 s, départ 0,16 s, interrupteur 0,2 s.
-- **Existant**, icônes : jeu Phosphor « regular » (licence MIT), trois tracés inline : coche, cadenas, coche cerclée.

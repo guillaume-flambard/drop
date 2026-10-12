@@ -1,11 +1,11 @@
+import { createHash } from 'node:crypto';
 import { request } from 'node:http';
 import { Script } from 'node:vm';
 import { afterEach, describe, expect, it } from 'vitest';
 import { generateIdentity } from '@drop/protocol';
 import { startLocalApi, type AdminHooks, type LocalApi } from '../src/api.ts';
 import { NodeEngine } from '../src/engine.ts';
-import { renderPanel } from '../src/panel.ts';
-import { renderWorkspace, WORKSPACE_CSP } from '../src/workspace.ts';
+import { PANEL_CSP, renderPanel, renderWorkspace, WORKSPACE_CSP } from '../src/workspace.ts';
 import { MemoryStore } from './helpers.ts';
 
 const TOKEN = 'panel-token-0123456789abcdefghijklmn';
@@ -121,9 +121,15 @@ describe('menu bar panel and its admin routes (T2.4)', () => {
     });
     const page = await call(port, 'GET', `/app?token=${TOKEN}`, undefined, false);
     expect(page.status).toBe(200);
-    expect(page.headers['content-security-policy']).toBe(
-      "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'",
-    );
+    // The panel is served like the workspace: its one inline script allowed by its hash, nothing else (T4.24).
+    expect(page.headers['content-security-policy']).toBe(PANEL_CSP);
+    expect(PANEL_CSP).toMatch(/^default-src 'none'; script-src 'sha256-[^']+'; /);
+    expect(PANEL_CSP).toContain("connect-src 'self'");
+    expect(PANEL_CSP).not.toContain("script-src 'unsafe-inline'");
+    expect(page.headers['referrer-policy']).toBe('no-referrer');
+    expect(page.headers['cache-control']).toBe('no-store');
+    const inline = /<script>([\s\S]*?)<\/script>/i.exec(page.text)?.[1] ?? '';
+    expect(PANEL_CSP).toContain("'sha256-" + createHash('sha256').update(inline, 'utf8').digest('base64') + "'");
     const workspace = await call(port, 'GET', `/workspace?token=${TOKEN}`, undefined, false);
     expect(workspace.status).toBe(200);
     expect(workspace.headers['content-security-policy']).toBe(WORKSPACE_CSP);
@@ -164,51 +170,11 @@ describe('menu bar panel and its admin routes (T2.4)', () => {
     expect((await call(port, 'POST', '/ui/admin/link', { ...link, redirect: 'claude.ai' })).status).toBe(200);
     expect(calls.at(-1)).toBe('link Claude (claude.ai)');
   });
-
-  it('offers to sign in when a shared server needs OAuth, and links only an https sign-in page (T2.17)', () => {
-    const html = renderPanel();
-    expect(html).toContain("if (error.code === 'E_SHARE_OAUTH') signInOffer");
-    expect(html).toContain("api('POST', '/ui/admin/connect', offer)");
-    expect(html).toContain("if (signInLink.indexOf('https://') === 0)");
-  });
-
-  it('names the domain a linked assistant returns to, and warns when it is neither Claude nor ChatGPT', () => {
-    const html = renderPanel();
-    expect(html).toContain('var knownHosts = ["claude.ai","chatgpt.com","chat.openai.com"];');
-    expect(html).toContain('qui n’est ni Claude ni ChatGPT');
-    expect(html).toContain('clientId: request.clientId, redirect: request.redirect');
-  });
-
-  it('inserts what peers wrote as text only', () => {
-    const html = renderPanel();
-    expect(html).not.toContain('innerHTML');
-    expect(html).not.toContain('insertAdjacentHTML');
-    expect(html).toContain('node.textContent = a[key]');
-    expect(html).toContain('1. Analyser cet ordinateur');
-    expect(html).toContain('2. Connecter les agents sélectionnés');
-    expect(html).toContain('Configuration manuelle');
-    expect(html).toContain('hors ligne');
-    const script = /<script>([\s\S]*?)<\/script>/i.exec(html)?.[1];
-    expect(script).toBeDefined();
-    expect(() => new Script(script ?? '')).not.toThrow();
-  });
-
-  it('reports a failed invite, unlink or link copy instead of leaving its promise unhandled', () => {
-    const html = renderPanel();
-    const between = (start: string, end: string) =>
-      html.slice(html.indexOf(start), html.indexOf(end, html.indexOf(start)));
-    expect(between("api('POST', '/ui/invite')", "'Inviter quelqu’un dans l’équipe'")).toContain(
-      "function (error) { notice = error.message; announce('Action impossible. ' + notice); render(true); }",
-    );
-    expect(between("api('POST', '/ui/admin/unlink'", "'Retirer')")).toContain(
-      "function (error) { notice = error.message; announce('Action impossible. ' + notice); render(true); }",
-    );
-    expect(between('navigator.clipboard.writeText(link)', "'Copier le lien'")).toContain("class: 'notice error'");
-  });
 });
 
 describe('menu bar panel and its admin routes (T4.14)', () => {
-  it('previews an invitation without pairing and pairs only after Rejoindre', async () => {
+  // The panel side (nothing paired before « Rejoindre ») is covered in packages/desktop-ui/test/panel.test.tsx.
+  it('previews an invitation without pairing, behind the token', async () => {
     const { createInvite, encodeInvite } = await import('@drop/protocol');
     const julie = await generateIdentity('Julie');
     const sent: unknown[] = [];
@@ -264,168 +230,6 @@ describe('menu bar panel and its admin routes (T4.14)', () => {
     expect(sent).toHaveLength(0);
     expect((await call(api.port, 'POST', '/ui/pair/preview', undefined, false)).status).toBe(401);
     expect((await call(api.port, 'POST', '/ui/pair/preview', { code: 'not-a-code' })).status).toBe(400);
-    const html = renderPanel();
-    expect(html).toContain("'/ui/pair/preview'");
-    // The one pairing call lives inside inviteCard, the « Rejoindre » handler; nothing pairs at load.
-    const pairCalls = html.split("api('POST', '/ui/pair', undefined").length - 1;
-    expect(pairCalls).toBe(1);
-    const inviteCard = html.slice(html.indexOf('function inviteCard(view)'));
-    const handler = inviteCard.slice(0, inviteCard.indexOf("'Rejoindre'"));
-    expect(handler).toContain("api('POST', '/ui/pair', undefined");
-  });
-
-  it('renders expiry, high sensitivity, a default Pas maintenant and per-field redaction', () => {
-    const html = renderPanel();
-    expect(html).toContain('Expire dans ');
-    expect(html).toContain('Sensibilité haute : tu reliras le résultat avant envoi.');
-    // The keyboard default is « Pas maintenant », never « Autoriser ».
-    expect(html).toMatch(/autofocus: 'autofocus', 'data-focus': item\.dropId \+ ':not_now'/);
-    expect(html).not.toMatch(/autofocus: 'autofocus', 'data-focus': item\.dropId \+ ':allow'/);
-    expect(html).toContain("el('b', { text: 'Pourquoi : ' })");
-    expect(html).toContain("text: who + ' recevra :'");
-    expect(html).toContain("text: who + ' ne recevra jamais :'");
-    expect(html).toContain(
-      "removals.forEach(function (removal) { if (removal.box.checked) form.append('redact', removal.key); });",
-    );
-    const script = /<script>([\s\S]*?)<\/script>/i.exec(html)?.[1];
-    expect(() => new Script(script ?? '')).not.toThrow();
-  });
-});
-
-describe('menu bar panel (T4.3)', () => {
-  it('offers to answer by hand, keeps the ledger visible and reviews the answer before sending', () => {
-    const html = renderPanel();
-    const card = html.slice(html.indexOf('function approvalCard(item)'), html.indexOf('function fresh(dropId)'));
-    expect(card).toContain("'Répondre moi-même'");
-    // The composer lives inside the decision card, after the ledger, which stays in place while writing.
-    expect(card.indexOf("text: who + ' recevra :'")).toBeLessThan(card.indexOf('composer(item, who)'));
-    const composer = html.slice(html.indexOf('function attach(item'), html.indexOf('function approvalCard(item)'));
-    expect(composer).toContain("maxlength: '8000'");
-    expect(composer).toContain("accept: '.txt,.md,.csv,.json,.log,text/plain,text/markdown,text/csv,application/json'");
-    expect(composer).toContain("'Relire la réponse'");
-    expect(composer).toContain(": who + ' recevra exactement :'");
-    // The first real recipient is named from the local peer store when the capability lives elsewhere (T4.3 review).
-    expect(composer).toContain("'Ta réponse part chez ' + item.executorName");
-    // The review shows the file content itself, as text only, and refuses a file that is not UTF-8.
-    expect(composer).toContain(
-      "el('pre', { class: 'filepreview', tabindex: '0', 'aria-label': 'Contenu de ' + draft.file.name, text: draft.file.content })",
-    );
-    expect(composer).toContain("content.indexOf('\\uFFFD') !== -1");
-    expect(composer).toContain("focusTo(item.dropId + ':send')");
-    expect(html).toContain('if (!pending.some(function (item) { return item.dropId === id; })) delete drafts[id];');
-    // Only « Envoyer », in the review step, posts the answer; a draft survives the live refresh.
-    expect(composer.split("api('POST', '/ui/answer'").length).toBe(2);
-    const send = composer.slice(composer.indexOf('function sendAnswer('));
-    expect(send).toContain("api('POST', '/ui/answer'");
-    const builder = composer.slice(composer.indexOf('function composer(item, who)'));
-    const review = builder.slice(builder.indexOf("if (draft.stage === 'review')"), builder.indexOf('var counter'));
-    const write = builder.slice(builder.indexOf('var counter'));
-    expect(review).toContain("'Envoyer'");
-    expect(review).toContain('sendAnswer(item, draft');
-    expect(write).not.toContain("'Envoyer'");
-    expect(write).not.toContain('sendAnswer(');
-    expect(html).toContain('var drafts = {};');
-    expect(composer).toContain('drafts[item.dropId]');
-    expect(html).toContain('E_SECRET_DETECTED:');
-    expect(html).toContain('E_TOO_LARGE:');
-    const script = /<script>([\s\S]*?)<\/script>/i.exec(html)?.[1];
-    expect(() => new Script(script ?? '')).not.toThrow();
-  });
-});
-
-describe('menu bar panel (T4.4)', () => {
-  it('lists what I publish with add, edit and retire, and greys out an expired fact', () => {
-    const html = renderPanel();
-    const section = html.slice(
-      html.indexOf('function factsSection(view, data)'),
-      html.indexOf('function renderTools(view)'),
-    );
-    expect(section).toContain("el('h2', { text: 'Ce que je publie' })");
-    expect(section).toContain("'Publier un fait'");
-    expect(section).toContain("'Modifier'");
-    expect(section).toContain("api('POST', '/ui/facts/' + fact.factId + '/retire', {})");
-    // Expired or retired facts are greyed out and say so.
-    expect(section).toContain("class: 'card' + (fact.live ? '' : ' faded')");
-    expect(section).toContain("fact.status === 'retired' ? 'Retiré' : fact.live ? null : 'Expiré'");
-    expect(section).toContain("' · servi ' + fact.served + ' fois'");
-    // Statements and sources are inserted as text only.
-    expect(section).toContain("el('p', { class: 'quote', text: fact.statement })");
-    expect(section).not.toContain('innerHTML');
-    const form = html.slice(
-      html.indexOf('function factForm(peers)'),
-      html.indexOf('function factsSection(view, data)'),
-    );
-    expect(form).toContain("api('POST', draft.factId ? '/ui/facts/' + draft.factId : '/ui/facts', body)");
-    expect(form).toContain("'Tous mes pairs appairés'");
-    expect(form).toContain("'Des personnes choisies'");
-    expect(html).toContain("var facts = api('GET', '/ui/facts').catch(function () { return null; });");
-    expect(section).toContain("'Impossible de lire tes faits publiés.");
-    // Editing keeps the fact's own duration instead of resetting it.
-    expect(section).toContain('validDays: Math.max(1, Math.round((fact.validTo - fact.publishedAt) / 86400000))');
-    expect(html).toContain('.card.faded { opacity: .55; }');
-    const script = /<script>([\s\S]*?)<\/script>/i.exec(html)?.[1];
-    expect(() => new Script(script ?? '')).not.toThrow();
-  });
-});
-
-describe('menu bar panel (T4.5)', () => {
-  it('analyses thirteen clients, separates global and project configurations, and shows manual steps', () => {
-    const html = renderPanel();
-    expect(html).not.toContain('quatre agents');
-    expect(html).toContain(
-      "'Analyse locale des treize clients MCP compatibles, dans leurs fichiers documentés seulement.'",
-    );
-    expect(html).toContain("'Aucun des treize clients détecté'");
-    // Analysis reads the clients and the projects together.
-    expect(html).toContain("api('GET', '/ui/admin/projects')");
-    // Steps and a snippet appear only as a fallback, as text (T4.22).
-    expect(html).toContain("plan.manual ? el('details', {}, el('summary', { text: 'Secours : à faire toi-même' }),");
-    expect(html).toContain("el('code', { text: plan.manual.snippet })");
-    const projects = html.slice(
-      html.indexOf('function projectsSection(view, projects)'),
-      html.indexOf('function renderTools(view)'),
-    );
-    expect(projects).toContain("el('h2', { text: 'Configurations par projet' })");
-    expect(projects).toContain("api('POST', '/ui/admin/projects', { dir: dir.value.trim() })");
-    expect(projects).toContain("api('POST', '/ui/admin/projects/remove', { dir: project.dir })");
-    expect(projects).toContain("project.sources.indexOf('added') !== -1");
-    for (const label of [
-      'OpenCode',
-      'Gemini CLI',
-      'Devin Desktop',
-      'Zed',
-      'goose',
-      'VS Code',
-      'Cline',
-      'Roo Code',
-      'JetBrains AI',
-    ])
-      expect(html).toContain(`'${label}'`);
-    const script = /<script>([\s\S]*?)<\/script>/i.exec(html)?.[1];
-    expect(() => new Script(script ?? '')).not.toThrow();
-  });
-});
-
-describe('Drop Human V2 panel (presentation, no protocol changes)', () => {
-  it('injects the human palette, preserves the system theme, and remains self-contained', () => {
-    const html = renderPanel();
-    expect(html).toContain('--ground: #fbfaf8');
-    expect(html).toContain('--accent: #5656a9');
-    expect(html).toContain('@media (prefers-color-scheme: dark)');
-    expect(html).not.toContain('fonts.googleapis.com');
-  });
-
-  it('describes only the outbound state that the Node actually exposes', () => {
-    const html = renderPanel();
-    expect(html).toContain('function outboundSentence(drop)');
-    expect(html).toContain('Tu attends ');
-    expect(html).toContain('La réponse est arrivée. Retrouve-la dans ton assistant.');
-    expect(html).toContain("el('details', { class: 'activity-item' })");
-    expect(html).toContain('expandedOutbounds[drop.dropId]');
-    // An expandable current status is honest; a historic timeline would require a new backend API.
-    expect(html).not.toContain('42 %');
-    const script = /<script>([\s\S]*?)<\/script>/i.exec(html)?.[1];
-    expect(() => new Script(script ?? '')).not.toThrow();
   });
 });
 
@@ -443,19 +247,18 @@ describe('workspace window — local management UI (Human V2)', () => {
   });
 });
 
-describe('menu bar panel (T4.22)', () => {
-  it('connects every client without a copy step and explains the fallback only when a write is impossible', () => {
+describe('menu bar panel page (T4.24)', () => {
+  it('embeds the compiled React panel, with no external resource and no Tauri IPC', () => {
     const html = renderPanel();
-    expect(html).not.toContain('E_MANUAL_ONLY');
-    expect(html).not.toContain('drop n’écrit pas dans ce client');
-    expect(html).not.toContain("plan.state === 'manual'");
-    for (const code of [
-      'E_CONFIG_LOCKED',
-      'E_CONFIG_UNDOCUMENTED',
-      'E_CLI_SHIM_UNSAFE',
-      'E_CONFIG_INVALID_OR_UNREADABLE',
-    ])
-      expect(html).toContain(`${code}: '`);
-    expect(html).toContain('1. Analyser cet ordinateur');
+    expect(html).toContain('<html lang="fr" class="drop-panel">');
+    expect(html).toContain('<div id="root">');
+    expect(html).not.toContain('<script src=');
+    expect(html).not.toContain('<link');
+    expect(html).not.toContain('window.__TAURI_INTERNALS__');
+    expect(html).not.toContain('fonts.googleapis.com');
+    const script = /<script>([\s\S]*?)<\/script>/i.exec(html)?.[1];
+    expect(() => new Script(script ?? '')).not.toThrow();
+    // The panel and the workspace are two bundles under two hashes.
+    expect(PANEL_CSP).not.toBe(WORKSPACE_CSP);
   });
 });

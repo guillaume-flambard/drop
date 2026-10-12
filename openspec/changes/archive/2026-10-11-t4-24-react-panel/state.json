@@ -1,0 +1,14 @@
+{
+  "phase": "READY_FOR_MANUAL_ACCEPTANCE",
+  "scope": "T4.24 partie 1 : panneau de la barre de menus en React et shadcn/ui, jetons violets, CSP à empreinte, parité complète avec l'ancien panneau",
+  "requirements": { "total": 4, "covered": 4 },
+  "acceptance": { "total": 18, "verified": 18, "pending": 0, "failed": 0 },
+  "todos": { "p0_open": 0, "p1_open": 0 },
+  "risks": { "critical_open": 0, "high_open": 0 },
+  "verification": {
+    "status": "PASS",
+    "evidence": "evidence.md",
+    "manual": "recette visuelle de Guillaume, puis recette WKWebView, WebView2, WebKitGTK et VoiceOver (T4.24 partie 2)"
+  },
+  "ready_for_manual_acceptance": true
+}

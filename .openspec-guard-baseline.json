@@ -683,14 +683,6 @@
       "file": "openspec/specs/node/spec.md"
     },
     {
-      "id": "sg_11a686e58131cc54",
-      "reason": "missing-selector",
-      "verdict": "fail",
-      "capability": "node",
-      "scenario": "Entrée au clavier",
-      "file": "openspec/specs/node/spec.md"
-    },
-    {
       "id": "sg_2a32fb2e2d669cd5",
       "reason": "missing-selector",
       "verdict": "fail",
@@ -896,14 +888,6 @@
       "verdict": "fail",
       "capability": "node",
       "scenario": "Linux",
-      "file": "openspec/specs/node/spec.md"
-    },
-    {
-      "id": "sg_a1f8f94ffb006439",
-      "reason": "missing-selector",
-      "verdict": "fail",
-      "capability": "node",
-      "scenario": "AC: l'UI échappe une entrée contenant script",
       "file": "openspec/specs/node/spec.md"
     },
     {
