@@ -46,8 +46,10 @@ const PANEL_HEIGHT: f64 = 620.0;
 #[cfg(target_os = "macos")]
 const PANEL_RADIUS: f64 = 12.0;
 const TRAY: &str = "drop";
-/// The app looks for an update at launch, then this often (D70).
+/// Remote checks are infrequent; an already detected update is applied only after sustained idle.
 const UPDATE_CHECK_EVERY: Duration = Duration::from_secs(6 * 60 * 60);
+const UPDATE_IDLE_POLL: Duration = Duration::from_secs(60);
+const UPDATE_MIN_IDLE: Duration = Duration::from_secs(5 * 60);
 
 struct Daemon {
     child: Mutex<Option<Child>>,
@@ -1317,6 +1319,104 @@ fn check_for_update(app: &AppHandle) {
     }
 }
 
+/// The local daemon is the authority on unfinished work. If it cannot confirm that no consent,
+/// execution, outgoing delivery or unconfirmed request is in flight, automatic installation waits.
+fn local_update_ready(app: &AppHandle) -> bool {
+    let state = app.state::<Daemon>();
+    if !state.ready.load(Ordering::SeqCst) || state.stopping.load(Ordering::SeqCst) {
+        return false;
+    }
+    if !state
+        .pending_links
+        .lock()
+        .map(|links| links.is_empty())
+        .unwrap_or(false)
+    {
+        return false;
+    }
+    // A person with an open panel or workspace is using Drop. Never silently restart it.
+    for label in ["panel", "workspace"] {
+        if let Some(window) = app.get_webview_window(label) {
+            if window.is_visible().unwrap_or(true) {
+                return false;
+            }
+        }
+    }
+    let port = match state.verified_port.lock() {
+        Ok(port) => match *port {
+            Some(port) => port,
+            None => return false,
+        },
+        Err(_) => return false,
+    };
+    let Some(token) = local_token() else {
+        return false;
+    };
+    // A corrupted token file must never become HTTP header injection.
+    if !token
+        .bytes()
+        .all(|byte| byte.is_ascii_alphanumeric() || b"-_".contains(&byte))
+    {
+        return false;
+    }
+    let Ok(mut socket) = TcpStream::connect(("127.0.0.1", port)) else {
+        return false;
+    };
+    let _ = socket.set_read_timeout(Some(Duration::from_secs(2)));
+    let _ = socket.set_write_timeout(Some(Duration::from_secs(2)));
+    let request = format!(
+        "GET /_shell/update-ready HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nAuthorization: Bearer {token}\r\nConnection: close\r\n\r\n"
+    );
+    if socket.write_all(request.as_bytes()).is_err() {
+        return false;
+    }
+    let mut response = String::new();
+    if socket.take(4096).read_to_string(&mut response).is_err() {
+        return false;
+    }
+    let Some((headers, body)) = response.split_once("\r\n\r\n") else {
+        return false;
+    };
+    headers.starts_with("HTTP/1.1 200 ")
+        && serde_json::from_str::<serde_json::Value>(body)
+            .ok()
+            .and_then(|value| value.get("ready").and_then(serde_json::Value::as_bool))
+            == Some(true)
+}
+
+/// Updater remains nonblocking: a silent install is allowed only after several consecutive
+/// idle polls, not just an instantaneous gap between two requests.
+fn maintain_updates(app: &AppHandle) {
+    let mut checked_at: Option<Instant> = None;
+    let mut idle_since: Option<Instant> = None;
+    while !app.state::<Daemon>().stopping.load(Ordering::SeqCst) {
+        if checked_at
+            .map(|time| time.elapsed() >= UPDATE_CHECK_EVERY)
+            .unwrap_or(true)
+        {
+            check_for_update(app);
+            checked_at = Some(Instant::now());
+        }
+        let has_update = app
+            .state::<PendingUpdate>()
+            .0
+            .lock()
+            .map(|pending| pending.is_some())
+            .unwrap_or(false);
+        if has_update && local_update_ready(app) {
+            let since = idle_since.get_or_insert_with(Instant::now);
+            if since.elapsed() >= UPDATE_MIN_IDLE {
+                // Keep a manual install menu for immediate, intentional updates.
+                install_update(app);
+                idle_since = None;
+            }
+        } else {
+            idle_since = None;
+        }
+        thread::sleep(UPDATE_IDLE_POLL);
+    }
+}
+
 /// Downloads the pending update, checks its signature, replaces the app, then restarts it with its daemon.
 fn install_update(app: &AppHandle) {
     let Some(update) = app.state::<PendingUpdate>().0.lock().unwrap().take() else {
@@ -1512,10 +1612,7 @@ fn main() {
             }
             if updates {
                 let checker = handle.clone();
-                thread::spawn(move || loop {
-                    check_for_update(&checker);
-                    thread::sleep(UPDATE_CHECK_EVERY);
-                });
+                thread::spawn(move || maintain_updates(&checker));
             }
             Ok(())
         })

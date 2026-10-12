@@ -290,9 +290,10 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-  # Draft only, in this repository only: write access is granted here and nowhere else.
+  # Release job writes drafts only by default; opt-in auto-publication follows all five signed builds and checks.
+  # Write access is granted here and nowhere else.
   release:
-    name: draft release
+    name: assemble signed release
     needs: [meta, build]
     if: >-
       github.repository == 'memolabs-dev/drop' &&
@@ -358,3 +359,13 @@ jobs:
           flags=(--draft --target "$GITHUB_SHA" --title "drop $VERSION" --notes-file notes.md)
           if [ "$PRERELEASE" = true ]; then flags+=(--prerelease); fi
           gh release create "$TAG" release/* --repo "$GITHUB_REPOSITORY" "${flags[@]}"
+      # Deliberately off until the signed N -> N+1 bench has passed on physical devices.
+      # Once enabled, a protected vX.Y.Z tag becomes a published stable release without manual clicks.
+      - name: Automatically publish the verified stable release (explicit opt-in)
+        if: github.event_name == 'push' && vars.DROP_RELEASE_AUTO_PUBLISH == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.meta.outputs.tag }}
+        run: |
+          test -s release/latest.json
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease=false

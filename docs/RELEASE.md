@@ -103,9 +103,20 @@ Le serveur d'horodatage par défaut est `http://timestamp.digicert.com` (`WINDOW
 ## Mises à jour signées multiplateformes (canal stable)
 
 Le code du client Updater est présent dans la coque Tauri. Une application ne l'active que si elle est
-construite avec `--updates`. Le contrôle de la nouvelle version est automatique au démarrage et
-toutes les six heures ; **l'installation reste proposée dans le menu de Drop** (pas de redémarrage
-silencieux pendant une demande). Le mode d'installation Windows est `passive`.
+construite avec `--updates`. Le contrôle de version est automatique au démarrage et toutes les
+six heures. Quand une nouvelle version signée est détectée, l'app garde l'option manuelle dans
+le menu, mais peut également **l'installer seule après cinq minutes d'inactivité confirmée** :
+aucun panneau ou espace de travail ouvert, aucune demande entrante en attente, aucune exécution,
+aucun message en file d'envoi et aucune demande sortante non terminée. Le Node expose ce verdict
+par `GET /_shell/update-ready`, réservé à la coque locale authentifiée. Si une vérification échoue,
+l'installation attend ; la détection continue périodiquement. Sur Windows le mode
+`passive` montre une courte fenêtre de progression. Le processus est redémarré après remplacement.
+
+Cette vérification protège les cas d'activité connus **mais ne constitue pas un verrou atomique** :
+une nouvelle demande peut théoriquement arriver entre le dernier contrôle d'inactivité et
+l'installation. Le test réel de montée de version et les essais en concurrence restent des
+prérequis avant de promettre une mise à jour sans interruption. L'app ne modifie pas d'office
+l'identité, les permissions ou le stockage anti-rejeu du Node.
 
 La signature Tauri est obligatoire, indépendante de la notarisation Apple et de la signature Authenticode.
 Ne jamais ajouter la clé privée, son mot de passe, ni un fichier `.key` au dépôt.
@@ -131,7 +142,12 @@ Ne jamais ajouter la clé privée, son mot de passe, ni un fichier `.key` au dé
    Chaque build produit un fragment avec signature liée à la version ; le job de publication exige
    cinq fragments distincts, identiques en version, et une URL d'archive dans **ce dépôt**.
    Il ajoute `latest.json` et les archives signées à la **release GitHub en brouillon**.
-5. Après les tests manuels, **publier la release stable sur GitHub**. Les builds Drop déjà équipées
+5. Après les tests manuels, **publier la release stable sur GitHub**. Quand la recette
+   N → N+1 est validée sur de vraies machines, définir la variable de dépôt Actions
+   `DROP_RELEASE_AUTO_PUBLISH=true` pour activer la publication **automatique**
+   des futures releases stables déclenchées par un tag protégé `vX.Y.Z`, mais **jamais**
+   celles des exécutions manuelles de test. Laisser la variable absente ou `false`
+   tant que la première mise à jour réelle n'a pas été qualifiée. Les builds Drop déjà équipées
    de l'Updater interrogent alors
    `https://github.com/memolabs-dev/drop/releases/latest/download/latest.json`.
    Les artefacts sont téléchargés directement depuis la release correspondante, sous signature
