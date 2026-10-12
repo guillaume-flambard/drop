@@ -26,6 +26,15 @@ export interface RelayClientOptions {
   maxBackoffMs?: number;
 }
 
+/** Same host name, whatever the port or path; an unreadable URL is never the same host. */
+function sameHost(a: string, b: string): boolean {
+  try {
+    return new URL(a).hostname === new URL(b).hostname;
+  } catch {
+    return false;
+  }
+}
+
 export type SendOutcome = 'delivered' | 'queued' | 'E_SCHEMA' | 'E_TOO_LARGE' | 'E_RATE' | 'E_QUEUE_FULL' | 'offline';
 
 /** Why the client gave up a connection: no acknowledgement, no frame for a heartbeat interval, or no `ready`. */
@@ -126,10 +135,13 @@ export class RelayClient {
   /**
    * Moves to another relay (T4.23): a node that joins its first team adopts the team's relay without a restart.
    * Messages awaiting an acknowledgement from the old relay are reported offline, so the sender queues them again.
+   * An extra certificate authority replaces the default ones (Node.js `tls`, option `ca`): it was given for the old
+   * relay's host and never vouches for another host, which gets the default authorities back (T4.33).
    */
   switchUrl(url: string): void {
     if (url === this.options.url) return;
-    this.options = { ...this.options, url };
+    const { ca, ...rest } = this.options;
+    this.options = sameHost(this.options.url, url) && ca ? { ...rest, url, ca } : { ...rest, url };
     clearTimeout(this.reconnectTimer);
     const previous = this.socket;
     this.socket = undefined;
