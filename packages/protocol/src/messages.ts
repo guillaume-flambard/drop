@@ -39,7 +39,10 @@ export const RequestedBySchema = z.object({
 });
 export type RequestedBy = z.infer<typeof RequestedBySchema>;
 
-/** Who pays and how much, shown to the approver before deciding. The capability owner always pays (D21). */
+/**
+ * Who pays and how much, shown to the approver before deciding. The owner pays (D21) unless the requester sends a capped
+ * key (D27); in the private profile the owner always pays and a received key is refused (D40).
+ */
 export const ConsentCostSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('free') }),
   z.object({ kind: z.literal('capped'), maxUsd: z.number().positive() }),

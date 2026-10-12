@@ -27,7 +27,7 @@ const LOCAL_MODEL_ORIGIN = 'http://127.0.0.1:11434';
 
 /**
  * A relay at a literal private address is also an internal host the runner may reach (T3.1); a relay named by DNS
- * (D89) is only the relay: it never joins the destinations a model or an MCP server may be called at.
+ * (D95) is only the relay: it never joins the destinations a model or an MCP server may be called at.
  */
 function literalOrigin(relayUrl: string): string[] {
   const url = new URL(relayUrl);
@@ -35,7 +35,7 @@ function literalOrigin(relayUrl: string): string[] {
 }
 
 /**
- * Moves this node to the relay of the invite it is accepting (T4.23, D89), while the daemon runs: only config.json
+ * Moves this node to the relay of the invite it is accepting (T4.23, D95), while the daemon runs: only config.json
  * changes, through a temporary file renamed over it, and only if nobody changed it meanwhile (E_CONFLICT). The old
  * relay's origin leaves the private destinations when this config had added it; the new one joins if literal.
  * Returns the new configuration; the schema refuses a relay the profile does not allow.
@@ -101,7 +101,11 @@ function replace(home: DropHome, expected: string, content: string): void {
 export function migratePrivate(home: DropHome, relayUrl: string, network?: PrivateNetwork): void {
   locked(home, () => {
     const before = readFileSync(join(home.root, 'config.json'), 'utf8');
-    const config = NodeConfigSchema.parse(JSON.parse(before));
+    const raw: unknown = JSON.parse(before);
+    // A file written before profiles existed is a legacy one: read it so, since the schema now defaults to private.
+    const config = NodeConfigSchema.parse(
+      typeof raw === 'object' && raw !== null && !('profile' in raw) ? { ...raw, profile: 'legacy' } : raw,
+    );
     if (config.profile === 'private') throw new Error('E_CONFLICT already private');
     const after = `${JSON.stringify(privateConfig(relayUrl, config.ownerKind, config.apiPort, network), null, 2)}\n`;
     writeFileSync(join(home.root, recordName), `${JSON.stringify({ before, after })}\n`, { mode: 0o600, flag: 'wx' });

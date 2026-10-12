@@ -33,7 +33,7 @@ des questions envoyées par ce Node.
 - **THEN** chaque action atteint le Node dans cet ordre ; une demande de partage incomplète est refusée (400), une demande sans jeton aussi (401)
 
 ### Requirement: App de la barre de menus
-L’app SHALL embarquer Node et `drop.mjs`, créer une identité au premier lancement avec un relais local ou explicitement configuré, lancer le daemon et l’arrêter en quittant, y compris quand la coque est tuée. Le panneau et les liens d’appairage restent locaux. Le bootstrap MUST NOT sélectionner de lui-même le relais public : seul le Node, au clic sur « Rejoindre », adopte le relais d’une invitation (D89). Seule la version finale s’inscrit au démarrage de session.
+L’app SHALL embarquer Node et `drop.mjs`, créer une identité au premier lancement avec un relais local ou explicitement configuré, lancer le daemon et l’arrêter en quittant, y compris quand la coque est tuée. Le panneau et les liens d’appairage restent locaux. Le bootstrap MUST NOT sélectionner de lui-même le relais public : seul le Node, au clic sur « Rejoindre », adopte le relais d’une invitation (D95). Seule la version finale s’inscrit au démarrage de session.
 
 #### Scenario: Premier lancement
 <!-- openspec-guard:test="private bundled bootstrap > initializes a fresh private home without starting the imported MCP executable" -->

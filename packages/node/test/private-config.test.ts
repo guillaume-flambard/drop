@@ -16,7 +16,7 @@ describe('private configuration', () => {
     const config = privateConfig('ws://127.0.0.1:7780/v1', 'human', 7781);
     expect(config).toMatchObject({ profile: 'private', payer: 'owner', gateways: [] });
     expect(config.funding).toBeUndefined();
-    // D89: a team relay named by DNS is allowed over TLS only, and never joins the runner's destinations.
+    // D95: a team relay named by DNS is allowed over TLS only, and never joins the runner's destinations.
     expect(privateConfig('wss://drop.memolabs.dev/v1', 'human', 7781).network?.origins).toEqual([
       'http://127.0.0.1:11434',
     ]);
@@ -36,7 +36,7 @@ describe('private configuration', () => {
     const home = new DropHome(root);
     home.init(
       await generateIdentity('Owner'),
-      NodeConfigSchema.parse({ relayUrl: 'wss://drop.memolabs.dev/v1', ownerKind: 'human' }),
+      NodeConfigSchema.parse({ profile: 'legacy', relayUrl: 'wss://drop.memolabs.dev/v1', ownerKind: 'human' }),
     );
     const before = readFileSync(join(root, 'config.json'), 'utf8');
     writeFileSync(join(root, 'private-migration.json'), JSON.stringify({ before, after: 'not committed' }), {
@@ -57,7 +57,7 @@ describe('private configuration', () => {
     const home = new DropHome(root);
     home.init(
       await generateIdentity('Owner'),
-      NodeConfigSchema.parse({ relayUrl: 'wss://drop.memolabs.dev/v1', ownerKind: 'human' }),
+      NodeConfigSchema.parse({ profile: 'legacy', relayUrl: 'wss://drop.memolabs.dev/v1', ownerKind: 'human' }),
     );
     home.publish({
       capabilityId: 'repo.answer',

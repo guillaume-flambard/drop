@@ -14,10 +14,15 @@ La passerelle grand public (`https://drop.memolabs.dev/mcp`, T2.13, D31) n'est p
 ## Vérifier l'état
 
 ```sh
-curl -s https://drop.memolabs.dev/health                # relais : {"ok":true,…}
+curl -s https://drop.memolabs.dev/health                # relais : {"ok":true,"nodes":1,"build":"<sha>"}
 curl -sI https://drop.memolabs.dev/                     # site : 200
 curl -sI https://drop.memolabs.dev/updates/latest.json  # 404 tant qu'aucune version n'est publiée
 ```
+
+`build` est le commit dont l'image a été construite (D91) : `git ls-remote origin <sha>` dit si c'est celui que vous
+entendez faire tourner. `unknown` signifie qu'aucun commit n'a été inscrit à la construction ; `nodes` est le nombre de
+Connections en place, pas le nombre de membres admis. La sonde ne dit jamais « à jour » : elle donne le fait, la
+comparaison vous appartient.
 
 Puis, depuis un Mac : `drop invite` chez un membre et `drop pair` chez un nouveau venu absent de l'allowlist (T2.1).
 

@@ -68,7 +68,7 @@ Les sauvegardes locales sont privées, versionnées et limitées à trois par fi
 
 ## Après le raccordement
 
-### Rejoindre une équipe par un seul lien (T4.23, D89)
+### Rejoindre une équipe par un seul lien (T4.23, D95)
 
 Côté inviteur, « Inviter quelqu'un » (Mon espace, Équipe) ou `drop invite --link` donne un lien de la forme `https://drop.memolabs.dev/join#<invitation>`. Il vaut 24 h, sert une seule fois, pour une seule personne. L'invitation est signée par le Node de l'inviteur et porte son nom, celui de l'équipe, l'adresse du relais (`wss://drop.memolabs.dev/v1` pour l'essai) et un ticket d'admission à ce relais. Elle est dans la partie du lien après `#`, qu'un navigateur n'envoie jamais au site. Le Node de l'inviteur garde ses invitations vivantes : un lien envoyé reste valable si son Mac redémarre.
 
@@ -84,7 +84,7 @@ Si le bouton ne fait rien, la page donne le code à copier : dans drop, Mon espa
 
 Refus possibles, chacun avec son code : invitation illisible (`E_INVITE`), expirée (`E_INVITE_EXPIRED`), modifiée depuis son envoi (`E_INVITE_SIG`), déjà utilisée (`E_INVITE_USED`), relais non autorisé sur ce poste (`E_INVITE_RELAY` : `ws:` seulement vers une adresse privée, `wss:` vers une adresse privée ou un nom DNS, puis la liste de la politique d'organisation).
 
-Un lien `drop://pair` (T4.14) ouvre la même carte. Le panneau de la barre de menus donne encore ce lien-là et ne propose pas « Connecter mes agents » après « Rejoindre » : il passe à React dans un autre chantier (T4.25).
+Un lien `drop://pair` (T4.14) ouvre la même carte. Le panneau de la barre de menus donne encore ce lien-là et ne propose pas « Connecter mes agents » après « Rejoindre » : il passe à React dans un autre chantier (T4.31).
 
 **Partager un outil, ce qui existe.** Dans « Mes outils », chaque serveur MCP partageable d'un agent installé porte un interrupteur « Partager … ». Un clic suffit (`packages/node/src/panel.ts`, `packages/node/src/share.ts`) :
 

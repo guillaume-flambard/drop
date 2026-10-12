@@ -174,7 +174,7 @@ export interface NodeStore {
 }
 
 /**
- * What accepting an invite does to this node's relay (T4.23, D89): `same` relay already; `adopt` its relay, since
+ * What accepting an invite does to this node's relay (T4.23, D95): `same` relay already; `adopt` its relay, since
  * this node has joined nobody yet; `kept` its own relay, the pairing then going through every path it has.
  */
 export type RelayOutcome = 'same' | 'adopt' | 'kept';
@@ -299,7 +299,7 @@ export interface EngineOptions {
   /** Called with the admission ticket of an invite being accepted, so the node can join the relay with it (T2.1). */
   onAdmission?: (ticket: unknown) => void;
   /**
-   * The relay an invite would leave this node on (T4.23, D89). `fresh` is true while this node has no peer and no
+   * The relay an invite would leave this node on (T4.23, D95). `fresh` is true while this node has no peer and no
    * team. Throws E_INVITE_RELAY for a relay this node may not use. Absent: the node keeps its relay.
    */
   relayPlan?: (relayUrl: string, fresh: boolean) => RelayOutcome;
@@ -392,9 +392,11 @@ export class NodeEngine extends EventEmitter {
     outbox: number;
     replay: number;
     invites: number;
+    factRequests: number;
   } {
     return {
       invites: this.invites.size,
+      factRequests: [...this.factRequests.values()].reduce((total, window) => total + window.length, 0),
       replay: this.replay.size(),
       executing: this.executing.size,
       completedErrors: this.completedErrors.size,
@@ -1247,7 +1249,12 @@ export class NodeEngine extends EventEmitter {
       await this.refuse(from, message.dropId, 'E_SCHEMA', 'Entrée invalide.');
       return;
     }
-    if (!(await this.admit(from, message.dropId, now))) return;
+    const refusal = this.admission(from, message.dropId, now);
+    if (refusal) {
+      await this.refuse(from, message.dropId, refusal.code, refusal.message);
+      return;
+    }
+    // No await between the admission above and this insertion: see admission().
     const drop: ExecutorDrop = {
       dropId: message.dropId,
       requester: from,
@@ -1310,8 +1317,12 @@ export class NodeEngine extends EventEmitter {
     this.changed();
   }
 
-  /** Anti-replay claim and execution capacity, shared by capabilities and facts; false once a refusal was sent. */
-  private async admit(from: NodeId, dropId: string, now: number): Promise<boolean> {
+  /**
+   * Anti-replay claim and execution capacity, shared by capabilities and facts: the refusal to send, or undefined when
+   * admitted. Synchronous on purpose: the caller must put the drop in `executing` before its next await, so that
+   * envelopes handled concurrently can never all pass the capacity check and overshoot the cap (T3.1c review).
+   */
+  private admission(from: NodeId, dropId: string, now: number): { code: DropErrorCode; message: string } | undefined {
     if (this.options.store.claimDrop) {
       let claim: DropClaim;
       try {
@@ -1336,10 +1347,7 @@ export class NodeEngine extends EventEmitter {
           peer: from,
         });
       }
-      if (claim !== 'claimed') {
-        await this.refuse(from, dropId, CLAIM_ERRORS[claim].code, CLAIM_ERRORS[claim].message);
-        return false;
-      }
+      if (claim !== 'claimed') return CLAIM_ERRORS[claim];
     }
     if (this.executing.size >= MAX_ACTIVE_EXECUTING_DROPS) {
       this.log({
@@ -1349,10 +1357,9 @@ export class NodeEngine extends EventEmitter {
         dropId,
         peer: from,
       });
-      await this.refuse(from, dropId, CLAIM_ERRORS.capacity.code, CLAIM_ERRORS.capacity.message);
-      return false;
+      return CLAIM_ERRORS.capacity;
     }
-    return true;
+    return undefined;
   }
 
   // ---- published facts (T4.4, D65) ---------------------------------------------------------------------------
@@ -1471,9 +1478,14 @@ export class NodeEngine extends EventEmitter {
   /** At most FACT_REQUESTS_PER_MINUTE per peer: served without a decision, facts must not drain the owner's sends. */
   private factRateExceeded(from: NodeId, now: number): boolean {
     const recent = (this.factRequests.get(from) ?? []).filter((at) => at > now - FACT_WINDOW_MS);
+    // A refused request is not recorded: the window stays at most the limit long, whatever the peer's rate.
+    if (recent.length >= FACT_REQUESTS_PER_MINUTE) {
+      this.factRequests.set(from, recent);
+      return true;
+    }
     recent.push(now);
     this.factRequests.set(from, recent);
-    return recent.length > FACT_REQUESTS_PER_MINUTE;
+    return false;
   }
 
   /** Served without a consent card: publishing was the owner's consent (D65). Same refusal whatever the reason. */
@@ -1484,8 +1496,9 @@ export class NodeEngine extends EventEmitter {
       return this.refuse(from, dropId, 'E_SCHEMA', 'Entrée invalide.');
     if (this.factRateExceeded(from, now))
       return this.refuse(from, dropId, 'E_RATE', 'Trop de demandes de faits : réessaie dans une minute.');
-    if (!(await this.admit(from, dropId, now))) return;
-    // Read again after the await: a retire or an edit made meanwhile wins.
+    const refusal = this.admission(from, dropId, now);
+    if (refusal) return this.refuse(from, dropId, refusal.code, refusal.message);
+    // Read again after the claim, still before any await: a retire or an edit already stored wins.
     const entry = this.servableFact(from, message, this.now());
     if (!entry) return this.refuse(from, dropId, 'E_SCHEMA', 'Fait indisponible.');
     const { fact } = entry.signed;

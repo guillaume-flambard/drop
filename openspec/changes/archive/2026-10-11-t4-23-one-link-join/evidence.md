@@ -35,5 +35,5 @@ Exécutées le 11 octobre 2026 sur la branche `t4-23-one-link-join`, macOS (Appl
 ## Non prouvé ici
 
 - Parcours sur de vrais postes : il demande le relais et la page déployés sur le VPS (T4.6a) et une release publiée ; prévu au banc maison (T4.6c).
-- Sous Windows et Linux, un lien `drop://` lance un nouveau processus : sans le plugin `single-instance` (T4.25), le bouton de la page n'atteint pas une app déjà ouverte. Non observé, déduit de la documentation Tauri.
-- Panneau de la barre de menus : son bouton « Inviter » donne encore `drop://pair` (T4.25).
+- Sous Windows et Linux, un lien `drop://` lance un nouveau processus : sans le plugin `single-instance` (T4.31), le bouton de la page n'atteint pas une app déjà ouverte. Non observé, déduit de la documentation Tauri.
+- Panneau de la barre de menus : son bouton « Inviter » donne encore `drop://pair` (T4.31).

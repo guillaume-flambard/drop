@@ -11,6 +11,8 @@ export const ERROR_CODES = [
   'E_DENIED',
   'E_NOT_NOW',
   'E_RATE',
+  /** The relay holds no more deferred envelopes for that recipient (maxQueuePerNode or maxQueueBytes). */
+  'E_QUEUE_FULL',
   'E_BUDGET',
   'E_OUTPUT_INVALID',
   'E_SECRET_DETECTED',

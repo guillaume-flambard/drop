@@ -12,7 +12,7 @@ import { isUnsafeLabel } from './text-guards.ts';
 /** A day: an invite is a link sent by message, opened later (D26). It used to be 15 minutes. */
 export const INVITE_TTL_MS = ADMISSION_TTL_MS;
 
-/** The page a join link opens (T4.23, D89). The invite rides in the fragment, which no browser sends to a server. */
+/** The page a join link opens (T4.23, D95). The invite rides in the fragment, which no browser sends to a server. */
 export const DEFAULT_JOIN_PAGE = 'https://drop.memolabs.dev/join';
 
 /** An encoded invite longer than this is refused before decoding: it also has to fit in a `drop://` link. */
@@ -27,7 +27,7 @@ const LabelSchema = (max: number) =>
     .max(max)
     .refine((value) => !isUnsafeLabel(value), 'unsafe label');
 
-/** Shape only: whether this relay may be adopted is `relayUrlAllowed`'s, applied where the URL is used (D89). */
+/** Shape only: whether this relay may be adopted is `relayUrlAllowed`'s, applied where the URL is used (D95). */
 const InviteRelaySchema = z
   .string()
   .max(512)

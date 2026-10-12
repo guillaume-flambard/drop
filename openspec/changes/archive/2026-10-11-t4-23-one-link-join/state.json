@@ -8,7 +8,7 @@
   "verification": {
     "status": "PASS",
     "evidence": "evidence.md",
-    "manual": "parcours réel au banc maison T4.6c, une fois le relais et la page déployés sur le VPS (T4.6a) et une release publiée ; single-instance Windows et Linux en T4.25"
+    "manual": "parcours réel au banc maison T4.6c, une fois le relais et la page déployés sur le VPS (T4.6a) et une release publiée ; single-instance Windows et Linux en T4.31"
   },
   "ready_for_manual_acceptance": true
 }

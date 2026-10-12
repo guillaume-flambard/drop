@@ -50,7 +50,7 @@ const contentTypes: Record<string, string> = {
 const CSP =
   "default-src 'self'; script-src 'none'; style-src 'self'; img-src 'self'; connect-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'";
 
-/** The pages that run a script: only the join page, which reads the invite from the fragment (T4.23, D89). */
+/** The pages that run a script: only the join page, which reads the invite from the fragment (T4.23, D95). */
 const JOIN_PAGES = new Set(['/join.html', '/join/index.html']);
 
 /**

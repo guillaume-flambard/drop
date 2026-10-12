@@ -66,7 +66,7 @@ Chaque étape est **Existant** ; le test « end to end, in memory: relay and thr
 - **Existant** : treize clients détectés (`packages/capabilities/src/clients.ts`), sept raccordés automatiquement et six par configuration à copier (T4.5).
 - **Existant** : la file du relais vit en mémoire et se perd au redémarrage (`packages/relay/src/server.ts:134`) ; la file hors ligne du Node est volatile (`docs/PRIVATE_PROFILE.md`, section « Exploiter le relais »).
 - **Existant** : un seul relais configuré par Node ; réseau local (T4.2) et iroh (T4.2b) passent avant lui.
-- **Existant** : T3.1b est implémentée avec revue formelle en attente (`openspec/changes/t3-1b-replay-storage-bounds/proof/state.json`) ; T3.1c est `blocked` par un constat CSO HIGH ([index][tasks]). Ces deux lignes restent des prérequis de sécurité avant tout pilote.
+- **Existant** : T3.1b et T3.1c sont closes le 11 octobre 2026 après revue finale (`openspec/changes/archive/2026-10-11-t3-1b-replay-storage-bounds/proof/verification.md`, `openspec/changes/archive/2026-10-11-t3-1c-replay-store-hardening/proof/verification.md`) ; le constat CSO HIGH de mémoire est clos par revue et tests, l'audit CSO restant partiel ([index][tasks]). Les suites T3.1d, T3.1e et T3.1f restent des prérequis avant tout pilote.
 
 ## 3. Architecture visée par phase
 

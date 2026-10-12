@@ -30,7 +30,10 @@ describe('joining the relay by invitation (T2.1)', () => {
     cleanups.push(() => relay.close());
     const daemon = async (identity: typeof vps): Promise<{ home: DropHome; daemon: Daemon }> => {
       const home = new DropHome(join(mkdtempSync(join(tmpdir(), 'drop-home-')), 'home'));
-      home.init(identity, NodeConfigSchema.parse({ relayUrl: relay.url, ownerKind: 'human', apiPort: 0 }));
+      home.init(
+        identity,
+        NodeConfigSchema.parse({ profile: 'legacy', relayUrl: relay.url, ownerKind: 'human', apiPort: 0 }),
+      );
       const started = await startDaemon(home, { apiPort: 0, notifications: false, log: () => undefined });
       cleanups.push(() => started.stop());
       return { home, daemon: started };

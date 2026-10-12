@@ -15,4 +15,8 @@ COPY scripts/site.ts scripts/mac-updates.ts ./scripts/
 COPY docs ./docs
 USER node
 ENV NODE_ENV=production
+# The commit this image was built from (D91): the relay reports it on /health so a deployment is verifiable without
+# server access. CI passes the SHA; a build that does not leaves the relay answering "unknown".
+ARG DROP_BUILD=unknown
+ENV DROP_BUILD=$DROP_BUILD
 CMD ["node", "packages/relay/src/cli.ts", "serve", "--config=/config/relay.config.json"]

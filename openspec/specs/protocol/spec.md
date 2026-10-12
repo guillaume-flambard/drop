@@ -176,7 +176,7 @@ Pour chiffrer, un Node SHALL dériver sa paire X25519 de sa paire Ed25519 avec `
 - **THEN** `identity.json` contient exactement ces champs et son mode est `0600`
 
 ### Requirement: Code d'invitation
-`drop invite` SHALL produire un code d'invitation valant le base64url de `{ relayUrl, nodeId, displayName, oneTimeToken, expiresAt, admission?, team?, iroh?, sig }`, avec une expiration de 24 h : c'est un lien envoyé par message, ouvert plus tard (D26). `sig` MUST signer en Ed25519, par la clé de `nodeId`, le JSON canonique des autres champs (D89). Un code non signé, modifié, expiré ou piégé MUST être refusé avec un code stable (`E_INVITE`, `E_INVITE_EXPIRED`, `E_INVITE_SIG`).
+`drop invite` SHALL produire un code d'invitation valant le base64url de `{ relayUrl, nodeId, displayName, oneTimeToken, expiresAt, admission?, team?, iroh?, sig }`, avec une expiration de 24 h : c'est un lien envoyé par message, ouvert plus tard (D26). `sig` MUST signer en Ed25519, par la clé de `nodeId`, le JSON canonique des autres champs (D95). Un code non signé, modifié, expiré ou piégé MUST être refusé avec un code stable (`E_INVITE`, `E_INVITE_EXPIRED`, `E_INVITE_SIG`).
 
 #### Scenario: Contenu du code
 <!-- openspec-guard:test="cards, receipts, invites, lifecycle, schemas > encodes invites that expire after a day" -->
@@ -702,9 +702,17 @@ Le lien à envoyer SHALL être `https://drop.memolabs.dev/join#<code>` (ou la pa
 - **THEN** le Node en tire le même code, et refuse un lien `drop://link`, une page sans fragment ou un texte quelconque
 
 ### Requirement: Relais admissible
-Un relais SHALL être admissible si c'est `ws:` vers une adresse privée ou de bouclage littérale, ou `wss:` vers une telle adresse ou un nom DNS, sans identifiants, requête ni fragment, sans adresse publique littérale ni écriture non canonique, en 512 caractères au plus (T4.23, D89).
+Un relais SHALL être admissible si c'est `ws:` vers une adresse privée ou de bouclage littérale, ou `wss:` vers une telle adresse ou un nom DNS, sans identifiants, requête ni fragment, sans adresse publique littérale ni écriture non canonique, en 512 caractères au plus (T4.23, D95).
 
 #### Scenario: AC: relais admis et refusés
 <!-- openspec-guard:test="invites (T4.23) > allows ws relays on private addresses only and wss relays by DNS name" -->
 - **WHEN** on teste `wss://drop.memolabs.dev/v1`, `ws://127.0.0.1:7780/v1`, puis `ws://drop.memolabs.dev/v1`, `wss://8.8.8.8/v1`, un relais avec identifiants, requête ou fragment, `localhost` ou une adresse hexadécimale
 - **THEN** les deux premiers sont admissibles, les autres non
+
+### Requirement: Codes d'erreur stables partagés
+`ERROR_CODES` SHALL lister chaque code stable qu'un package peut produire ou recevoir, dont `E_QUEUE_FULL`, que le relais renvoie quand la file différée d'un destinataire est pleine.
+
+#### Scenario: AC: file pleine dans la liste
+<!-- openspec-guard:test="configuration hygiene (T4.15) > lists E_QUEUE_FULL among the stable error codes" -->
+- **WHEN** on lit `ERROR_CODES`
+- **THEN** la liste contient `E_QUEUE_FULL`

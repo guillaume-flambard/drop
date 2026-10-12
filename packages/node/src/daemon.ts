@@ -68,6 +68,8 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
   const identity = home.identity();
   const config = home.config();
   const token = home.localToken();
+  // peers.json and team.json written by a version before T4.15 may still be readable by others.
+  home.securePrivateFiles();
   const log = options.log ?? ((line: string) => process.stderr.write(`${line}\n`));
   /** A structured log line: a timestamp, an event and a stable code, never a payload. */
   const logEntry = (entry: object): void => {
@@ -99,7 +101,7 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
   const store = oauthStore(home);
   const signIns = new OAuthSignIns({ store, redirectUrl });
   const oauth: ConnectOptions = { oauth: (serverUrl) => runtimeOAuth(store, redirectUrl())(serverUrl) };
-  // The relay this node uses now: a node that joins its first team adopts that team's relay (T4.23, D89).
+  // The relay this node uses now: a node that joins its first team adopts that team's relay (T4.23, D95).
   let relayUrl = config.relayUrl;
   const relayPlan = (url: string, fresh: boolean): RelayOutcome => {
     if (url === relayUrl) return 'same';

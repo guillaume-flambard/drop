@@ -12,7 +12,7 @@ Version honnête convenue avec Guillaume : une app signée ne peut pas porter un
 - **Page `/join`** du site : statique, sans ressource externe, un seul script épinglé par son empreinte dans la CSP, `connect-src 'none'`. Elle lit le fragment, affiche « Guillaume t'invite dans l'équipe Atelier », propose le téléchargement du système détecté (page des versions GitHub), un bouton « J'ai installé drop : rejoindre l'équipe » qui ouvre `drop://join?invite=…`, et le code à copier en secours.
 - **App** : `drop://join?invite=…` ouvre la carte de confirmation existante (T4.14), y compris au premier lancement (lien mis en file jusqu'à ce que le Node réponde). Mon espace accepte le code ou le lien collé (« J'ai reçu une invitation »).
 - **Relais adopté au premier « Rejoindre »** : un Node qui n'a encore ni pair ni équipe passe au relais de l'invitation, après vérification (`ws:` seulement vers une adresse privée littérale, `wss:` vers une telle adresse ou un nom DNS, puis la liste de la politique d'organisation). `config.json` est réécrit sous verrou et la connexion change sans redémarrage. Un Node déjà relié garde son relais.
-- **Profil privé** : il accepte un relais nommé par DNS en `wss:` seulement ; ce relais n'entre jamais dans les destinations permises au modèle ou aux serveurs MCP (D89).
+- **Profil privé** : il accepte un relais nommé par DNS en `wss:` seulement ; ce relais n'entre jamais dans les destinations permises au modèle ou aux serveurs MCP (D95).
 - **CLI** : `drop join <code-ou-lien>`, `drop pair` reste un synonyme.
 
 ## Capabilities
@@ -29,9 +29,9 @@ Version honnête convenue avec Guillaume : une app signée ne peut pas porter un
 ## Non-goals
 
 - Noms des fichiers de release : aucune release GitHub n'existe encore et les builds Windows et Linux sont un autre chantier ; la page renvoie vers `releases/latest`.
-- Panneau de la barre de menus : migré vers React par un autre chantier. Son bouton « Inviter » donne encore `drop://pair` et il ne propose pas « Connecter mes agents » après « Rejoindre » ; l'API expose `link` et `next: 'connect_agents'` pour lui (nouvelle ligne T4.25).
+- Panneau de la barre de menus : migré vers React par un autre chantier. Son bouton « Inviter » donne encore `drop://pair` et il ne propose pas « Connecter mes agents » après « Rejoindre » ; l'API expose `link` et `next: 'connect_agents'` pour lui (nouvelle ligne T4.31).
 - Déploiement du site et du relais sur le VPS (T4.6a).
 
 ## Impact
 
-`packages/protocol` (invite, politique de relais, codes), `packages/node` (moteur, API, CLI, daemon, configuration), `packages/relay` (client), `packages/desktop-ui` (Mon espace, équipe), `apps/desktop/src-tauri/src/main.rs` (liens profonds seulement), `site/join.html`, `scripts/site.ts`, docs (`ONBOARDING`, `GUIDE`, `DECISIONS` D89, `TASKS`).
+`packages/protocol` (invite, politique de relais, codes), `packages/node` (moteur, API, CLI, daemon, configuration), `packages/relay` (client), `packages/desktop-ui` (Mon espace, équipe), `apps/desktop/src-tauri/src/main.rs` (liens profonds seulement), `site/join.html`, `scripts/site.ts`, docs (`ONBOARDING`, `GUIDE`, `DECISIONS` D95, `TASKS`).

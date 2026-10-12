@@ -2,7 +2,7 @@
 
 - [x] 1.1 Fragment d'URL hors requête (RFC 9110, section 7.1) et hors `Referer` (Fetch Standard) ; CSP par empreinte ; page Tauri 2 « Deep Linking » (livraison des liens par système, plugin `single-instance`).
 - [x] 1.2 Relecture du code existant : invitation et ticket d'admission (T2.1), carte de confirmation (T4.14), bootstrap de l'app, politique de destinations du profil privé.
-- [x] 1.3 D89 dans `docs/DECISIONS.md`.
+- [x] 1.3 D95 dans `docs/DECISIONS.md`.
 
 ## 2. Tests d'abord
 
@@ -25,4 +25,4 @@
 
 - [x] 4.1 `pnpm -r lint`, `pnpm -r typecheck`, `pnpm -r test`, `node scripts/build-desktop-ui.ts --check`, `cargo test`, `openspec validate --all --strict`, openspec-guard.
 
-Reste hors de cette change : noms des fichiers de release (aucune release), plugin `single-instance` sous Windows et Linux, panneau React (« Inviter » avec le lien https, « Connecter mes agents » après « Rejoindre »), déploiement de la page et du relais sur le VPS (T4.6a). Voir la ligne T4.25.
+Reste hors de cette change : noms des fichiers de release (aucune release), plugin `single-instance` sous Windows et Linux, panneau React (« Inviter » avec le lien https, « Connecter mes agents » après « Rejoindre »), déploiement de la page et du relais sur le VPS (T4.6a). Voir la ligne T4.31.

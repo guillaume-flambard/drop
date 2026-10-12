@@ -93,7 +93,10 @@ describe('one-link join (T4.23)', () => {
     const julie = await generateIdentity('Julie');
     const relay = await startRelay({ port: 0, allowedNodeIds: [guillaume.nodeId] }, { logger: () => undefined });
     cleanups.push(() => relay.close());
-    const ownerHome = newHome(guillaume, NodeConfigSchema.parse({ relayUrl: relay.url, ownerKind: 'human' }));
+    const ownerHome = newHome(
+      guillaume,
+      NodeConfigSchema.parse({ profile: 'legacy', relayUrl: relay.url, ownerKind: 'human' }),
+    );
     const owner = await serve(ownerHome);
     await owner.relay.waitReady();
     owner.engine.createTeam('Atelier');
@@ -160,7 +163,10 @@ describe('one-link join (T4.23)', () => {
   it('answers each refusal with its stable code: modified, expired, own, reused, unreadable', async () => {
     const guillaume = await generateIdentity('Guillaume');
     const julie = await generateIdentity('Julie');
-    const julieHome = newHome(julie, NodeConfigSchema.parse({ relayUrl: 'ws://127.0.0.1:9/v1', ownerKind: 'human' }));
+    const julieHome = newHome(
+      julie,
+      NodeConfigSchema.parse({ profile: 'legacy', relayUrl: 'ws://127.0.0.1:9/v1', ownerKind: 'human' }),
+    );
     const newcomer = await serve(julieHome);
     const code = encodeInvite(await createInvite(guillaume, 'ws://127.0.0.1:9/v1'));
     const raw = JSON.parse(Buffer.from(code, 'base64url').toString('utf8')) as Record<string, unknown>;
@@ -187,7 +193,10 @@ describe('one-link join (T4.23)', () => {
   it('remembers accepted invites across a restart: a reused link stays refused (E_INVITE_USED)', async () => {
     const guillaume = await generateIdentity('Guillaume');
     const julie = await generateIdentity('Julie');
-    const home = newHome(julie, NodeConfigSchema.parse({ relayUrl: 'ws://127.0.0.1:9/v1', ownerKind: 'human' }));
+    const home = newHome(
+      julie,
+      NodeConfigSchema.parse({ profile: 'legacy', relayUrl: 'ws://127.0.0.1:9/v1', ownerKind: 'human' }),
+    );
     const code = encodeInvite(await createInvite(guillaume, 'ws://127.0.0.1:9/v1'));
     const sent: Envelope[] = [];
     await engineOn(julie, home, sent).join(code);
@@ -206,7 +215,10 @@ describe('one-link join (T4.23)', () => {
     const julie = await generateIdentity('Julie');
     const natha = await generateIdentity('Natha');
     const clock = { now: Date.now() };
-    const home = newHome(guillaume, NodeConfigSchema.parse({ relayUrl: 'ws://127.0.0.1:9/v1', ownerKind: 'human' }));
+    const home = newHome(
+      guillaume,
+      NodeConfigSchema.parse({ profile: 'legacy', relayUrl: 'ws://127.0.0.1:9/v1', ownerKind: 'human' }),
+    );
     const sent: Envelope[] = [];
     const first = decodeInvite(await engineOn(guillaume, home, sent, () => clock.now).invite('ws://127.0.0.1:9/v1'));
     const late = decodeInvite(await engineOn(guillaume, home, sent, () => clock.now).invite('ws://127.0.0.1:9/v1'));

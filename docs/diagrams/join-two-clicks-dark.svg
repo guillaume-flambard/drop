@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 960 436" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="join-two-clicks-dark-title join-two-clicks-dark-desc" id="join-two-clicks-dark-root">
+<title id="join-two-clicks-dark-title">Join a team in two clicks</title>
+<desc id="join-two-clicks-dark-desc">Target flow for task T4.23, not built yet: the inviter creates the team and copies one link, the link page detects the system and offers the download, the installed app opens with the invite and relay filled in, then the new member clicks Join and Connect my agents, which detects, connects and sets up their agents.</desc>
+<defs>
+      <style>#join-two-clicks-dark-root { --color-paper:   #222127;
+      --color-ink:     #f3f0f4;
+      --color-muted:   #c1b9c4;
+      --color-accent:  #c2b9fc;
+      --font-sans:     'Geist', system-ui, sans-serif;
+      --font-serif:    'Instrument Serif', 'Noto Serif', serif;
+      --font-mono:     'Geist Mono', ui-monospace, monospace; }
+      #join-two-clicks-dark-root { font-family: var(--font-sans); color: var(--color-ink); }
+      #join-two-clicks-dark-root .diagram-container { width: 100%; overflow-x: auto; }
+      #join-two-clicks-dark-root .diagram-container { overflow-x: visible; }</style>
+<marker id="join-two-clicks-dark-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#c1b9c4"/></marker>
+<marker id="join-two-clicks-dark-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#c2b9fc"/></marker>
+<marker id="join-two-clicks-dark-arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#8fb3e0"/></marker>
+</defs>
+<rect width="100%" height="100%" fill="#222127"/>
+<rect x="40" y="24" width="304" height="20" rx="2" fill="none" stroke="#a9a1ad" stroke-width="0.8" stroke-dasharray="4,3"/>
+<text x="192" y="37" fill="#f3f0f4" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.12em">TARGET FLOW · T4.23 · IN PROGRESS, NOT BUILT YET</text>
+<line x1="40" y1="64" x2="920" y2="64" stroke="#f3f0f4" stroke-opacity="0.22" stroke-width="1"/>
+<line x1="40" y1="160" x2="920" y2="160" stroke="#f3f0f4" stroke-opacity="0.1" stroke-width="1"/>
+<line x1="40" y1="256" x2="920" y2="256" stroke="#f3f0f4" stroke-opacity="0.1" stroke-width="1"/>
+<line x1="40" y1="352" x2="920" y2="352" stroke="#f3f0f4" stroke-opacity="0.22" stroke-width="1"/>
+<line x1="160" y1="64" x2="160" y2="352" stroke="#f3f0f4" stroke-opacity="0.22" stroke-width="1"/>
+<text x="56" y="116" fill="#c1b9c4" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" letter-spacing="0.18em">INVITER</text>
+<text x="56" y="212" fill="#c1b9c4" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" letter-spacing="0.18em">LINK PAGE</text>
+<text x="56" y="308" fill="#c1b9c4" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" letter-spacing="0.18em">NEW MEMBER</text>
+<line x1="282" y1="148" x2="282" y2="172" stroke="#c1b9c4" stroke-width="1.2" marker-end="url(#join-two-clicks-dark-arrow)"/>
+<line x1="282" y1="244" x2="282" y2="268" stroke="#c1b9c4" stroke-width="1.2" marker-end="url(#join-two-clicks-dark-arrow)"/>
+<line x1="372" y1="304" x2="432" y2="304" stroke="#c1b9c4" stroke-width="1.2" marker-end="url(#join-two-clicks-dark-arrow)"/>
+<line x1="612" y1="304" x2="672" y2="304" stroke="#c1b9c4" stroke-width="1.2" marker-end="url(#join-two-clicks-dark-arrow)"/>
+<rect x="290" y="155" width="56" height="12" rx="2" fill="#222127"/>
+<text x="318" y="164" fill="#a9a1ad" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">ONE LINK</text>
+<rect x="290" y="251" width="56" height="12" rx="2" fill="#222127"/>
+<text x="318" y="260" fill="#a9a1ad" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">DOWNLOAD</text>
+<rect x="192" y="76" width="180" height="72" rx="6" fill="#222127"/>
+<rect x="192" y="76" width="180" height="72" rx="6" fill="#f3f0f4" fill-opacity="0.02" stroke="#a9a1ad" stroke-width="1" stroke-dasharray="4,3"/>
+<rect x="200" y="84" width="16" height="12" rx="2" fill="none" stroke="#a9a1ad" stroke-opacity="0.4" stroke-width="0.8"/>
+<text x="208" y="93" fill="#a9a1ad" font-size="7" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">1</text>
+<text x="282" y="115" fill="#f3f0f4" font-size="12" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">Create the team</text>
+<text x="282" y="129" fill="#c1b9c4" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">on Guillaume's Mac</text>
+<text x="282" y="141" fill="#c1b9c4" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">copy one link</text>
+<rect x="192" y="172" width="180" height="72" rx="6" fill="#222127"/>
+<rect x="192" y="172" width="180" height="72" rx="6" fill="#f3f0f4" fill-opacity="0.02" stroke="#a9a1ad" stroke-width="1" stroke-dasharray="4,3"/>
+<rect x="200" y="180" width="16" height="12" rx="2" fill="none" stroke="#a9a1ad" stroke-opacity="0.4" stroke-width="0.8"/>
+<text x="208" y="189" fill="#a9a1ad" font-size="7" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">2</text>
+<text x="282" y="211" fill="#f3f0f4" font-size="12" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">Open the link</text>
+<text x="282" y="225" fill="#c1b9c4" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">detects the system</text>
+<text x="282" y="237" fill="#c1b9c4" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">macOS · Windows · Linux</text>
+<rect x="192" y="268" width="180" height="72" rx="6" fill="#222127"/>
+<rect x="192" y="268" width="180" height="72" rx="6" fill="#f3f0f4" fill-opacity="0.02" stroke="#a9a1ad" stroke-width="1" stroke-dasharray="4,3"/>
+<rect x="200" y="276" width="16" height="12" rx="2" fill="none" stroke="#a9a1ad" stroke-opacity="0.4" stroke-width="0.8"/>
+<text x="208" y="285" fill="#a9a1ad" font-size="7" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">3</text>
+<text x="282" y="307" fill="#f3f0f4" font-size="12" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">Install and open</text>
+<text x="282" y="321" fill="#c1b9c4" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">“Join Guillaume's team”</text>
+<text x="282" y="333" fill="#c1b9c4" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">invite + relay filled in</text>
+<rect x="432" y="268" width="180" height="72" rx="6" fill="#222127"/>
+<rect x="432" y="268" width="180" height="72" rx="6" fill="#c2b9fc" fill-opacity="0.1" stroke="#c2b9fc" stroke-width="1" stroke-dasharray="4,3"/>
+<rect x="440" y="276" width="16" height="12" rx="2" fill="none" stroke="#c2b9fc" stroke-opacity="0.5" stroke-width="0.8"/>
+<text x="448" y="285" fill="#c2b9fc" font-size="7" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">4</text>
+<text x="522" y="307" fill="#f3f0f4" font-size="12" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">Click Join</text>
+<text x="522" y="321" fill="#c1b9c4" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">click 1 of 2</text>
+<text x="522" y="333" fill="#c1b9c4" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">shows up in the team</text>
+<rect x="672" y="268" width="180" height="72" rx="6" fill="#222127"/>
+<rect x="672" y="268" width="180" height="72" rx="6" fill="#c2b9fc" fill-opacity="0.1" stroke="#c2b9fc" stroke-width="1" stroke-dasharray="4,3"/>
+<rect x="680" y="276" width="16" height="12" rx="2" fill="none" stroke="#c2b9fc" stroke-opacity="0.5" stroke-width="0.8"/>
+<text x="688" y="285" fill="#c2b9fc" font-size="7" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">5</text>
+<text x="762" y="307" fill="#f3f0f4" font-size="12" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">Connect my agents</text>
+<text x="762" y="321" fill="#c1b9c4" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">click 2 of 2</text>
+<text x="762" y="333" fill="#c1b9c4" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">detected · connected · set up</text>
+<text x="456" y="196" fill="#f3f0f4" font-size="14" font-style="italic" font-family="'Instrument Serif', 'Noto Serif', serif" text-anchor="start">single-use, dated invite;</text>
+<text x="456" y="214" fill="#f3f0f4" font-size="14" font-style="italic" font-family="'Instrument Serif', 'Noto Serif', serif" text-anchor="start">no secret in the URL</text>
+<path d="M 452,206 Q 420,208 380,208" fill="none" stroke="#f3f0f4" stroke-opacity="0.4" stroke-width="1" stroke-dasharray="4,3"/>
+<circle cx="376" cy="208" r="2" fill="#f3f0f4"/>
+<line x1="40" y1="376" x2="920" y2="376" stroke="#f3f0f4" stroke-opacity="0.1" stroke-width="0.8"/>
+<text x="40" y="392" fill="#c1b9c4" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" letter-spacing="0.18em">LEGEND</text>
+<rect x="40" y="402" width="14" height="10" rx="2" fill="#f3f0f4" fill-opacity="0.02" stroke="#a9a1ad" stroke-width="1" stroke-dasharray="4,3"/>
+<text x="60" y="410" fill="#c1b9c4" font-size="8.5" font-family="'Geist', system-ui, sans-serif">Target step, not built yet</text>
+<rect x="220" y="402" width="14" height="10" rx="2" fill="#c2b9fc" fill-opacity="0.1" stroke="#c2b9fc" stroke-width="1" stroke-dasharray="4,3"/>
+<text x="240" y="410" fill="#c1b9c4" font-size="8.5" font-family="'Geist', system-ui, sans-serif">One of the two clicks</text>
+<line x1="384" y1="407" x2="412" y2="407" stroke="#c1b9c4" stroke-width="1.2" marker-end="url(#join-two-clicks-dark-arrow)"/>
+<text x="420" y="410" fill="#c1b9c4" font-size="8.5" font-family="'Geist', system-ui, sans-serif">Flow</text>
+</svg>

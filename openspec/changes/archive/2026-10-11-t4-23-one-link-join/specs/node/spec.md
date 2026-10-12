@@ -14,7 +14,7 @@
 - **AND** le ticket est effacé du disque de B une fois admis
 
 ### Requirement: Profil privé explicite
-Le Node SHALL proposer un profil privé sans compte externe, passerelle cloud, financement distant automatique, télémétrie, activation de licence ni téléchargement au démarrage. Le relais et les destinations sont choisis localement. Le relais MAY être nommé par DNS, en `wss:` seulement ; il n'entre alors jamais dans les destinations permises au modèle ou aux serveurs MCP (D89). Un relais à adresse littérale MUST rester une origine privée listée.
+Le Node SHALL proposer un profil privé sans compte externe, passerelle cloud, financement distant automatique, télémétrie, activation de licence ni téléchargement au démarrage. Le relais et les destinations sont choisis localement. Le relais MAY être nommé par DNS, en `wss:` seulement ; il n'entre alors jamais dans les destinations permises au modèle ou aux serveurs MCP (D95). Un relais à adresse littérale MUST rester une origine privée listée.
 
 #### Scenario: AC: installation et cycle sans Internet
 <!-- openspec-guard:test="private system > runs two private nodes with internal MCP and model through consent failure and restart" -->

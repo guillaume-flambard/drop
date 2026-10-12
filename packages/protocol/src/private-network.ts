@@ -65,7 +65,7 @@ function isDnsName(host: string): boolean {
 }
 
 /**
- * The relay a node may adopt from an invite or be configured with (T4.23, D89): `ws:` only to a literal private or
+ * The relay a node may adopt from an invite or be configured with (T4.23, D95): `ws:` only to a literal private or
  * loopback address, as before; `wss:` to such an address or to a DNS name, whose TLS certificate the relay client
  * checks. Never credentials, a query or a fragment, never a non-canonical address.
  */
