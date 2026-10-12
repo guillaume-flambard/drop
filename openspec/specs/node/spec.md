@@ -1350,7 +1350,7 @@ Quand `config.json` ne peut être réécrit pour adopter un relais, le refus de 
 - **THEN** elle est refusée avec `E_CAPABILITY_ID`, aucun fichier n'apparaît hors de `DROP_HOME`, et `mcp.answer.figma` reste publiable
 
 ### Requirement: Configurations des clients lues sans blocage
-La lecture des configurations des clients (JSON, JSONC, TOML de Codex, YAML de goose) SHALL prendre un temps linéaire dans la taille du fichier, quelle que soit la ligne qu'il contient, et donner les mêmes valeurs qu'avant T4.26 sur une configuration bien formée. Un fichier de configuration SHALL être ouvert une fois, puis contrôlé (type, taille) et lu par ce même descripteur ; un tube nommé, un dossier ou un fichier trop gros MUST être refusé sans attendre. L'onboarding (aperçu, écriture, contrôles d'avant et d'après écriture) SHALL lire les fichiers des clients par ce même lecteur, sans suivre un lien : un fichier qui est un lien MUST être refusé avec `E_CONFIG_SYMLINK` avant toute lecture.
+La lecture des configurations des clients (JSON, JSONC, TOML de Codex, YAML de goose) SHALL prendre un temps linéaire dans la taille du fichier, quelle que soit la ligne qu'il contient, et donner les mêmes valeurs qu'avant T4.26 sur une configuration bien formée. Un fichier de configuration SHALL être ouvert une fois, puis contrôlé (type, taille) et lu par ce même descripteur ; un tube nommé, un dossier ou un fichier trop gros MUST être refusé sans attendre.
 
 #### Scenario: AC: TOML de Codex en temps linéaire
 <!-- openspec-guard:test="configuration and reply parsing in linear time (T4.26) > reads Codex TOML arrays, inline tables and pairs as before, in linear time on hostile lines" -->
@@ -1366,6 +1366,9 @@ La lecture des configurations des clients (JSON, JSONC, TOML de Codex, YAML de g
 <!-- openspec-guard:test="configuration files read through one descriptor (T4.26) > reads a regular file, refuses a directory or an oversized file, and never waits on a named pipe" -->
 - **WHEN** le chemin d'une configuration désigne un fichier, un fichier absent, un dossier, un fichier plus gros que la borne ou un tube nommé
 - **THEN** le fichier est lu, l'absent donne `undefined`, le dossier et le tube sont refusés à l'instant avec `E_CONFIG_TYPE`, le fichier trop gros avec `E_CONFIG_TOO_LARGE`
+
+### Requirement: Configurations de l'onboarding lues sans lien ni attente
+L'onboarding (aperçu, écriture, contrôles d'avant et d'après écriture) SHALL lire les fichiers des clients par le lecteur partagé des configurations (une ouverture, contrôle et lecture par ce descripteur, tube nommé refusé sans attendre), sans suivre un lien : un fichier qui est un lien MUST être refusé avec `E_CONFIG_SYMLINK` avant toute lecture.
 
 #### Scenario: AC: lien refusé quand il ne doit pas être suivi
 <!-- openspec-guard:test="configuration files read without following a link (T4.42) > refuses a linked file with E_CONFIG_SYMLINK when links are not followed, and still follows one by default" -->

@@ -1,7 +1,7 @@
 ## MODIFIED Requirements
 
 ### Requirement: Fichiers de campagne réservés au propriétaire
-Le banc SHALL créer chacun de ses fichiers (plan, événements, configuration et journal du relais, journaux des nœuds, journaux et configurations plantés, rapports) en mode 0600, et resserrer à 0600 un fichier qu'une campagne précédente aurait laissé plus large dans un `--work-dir` réutilisé. Aucune écriture de `campaign.ts` MUST NOT contourner ces fonctions. Une écriture MUST NOT suivre un lien : un nom de fichier de campagne qui est un lien symbolique, un second lien physique, un dossier, un tube nommé ou le fichier d'un autre utilisateur MUST être refusé avec `E_SIM_FILE`, sans attendre, avant d'être tronqué, resserré ou écrit. Chaque dossier où le banc écrit (dossier de travail, `HOME` du relais, dossier de chaque nœud et son `user-home`) SHALL être un vrai dossier de la personne qui lance le banc, fermé aux autres (0700) avant toute écriture ; un lien ou le dossier d'un autre utilisateur MUST être refusé avec `E_SIM_WORK_DIR` avant le lancement de tout processus.
+Le banc SHALL créer chacun de ses fichiers (plan, événements, configuration et journal du relais, journaux des nœuds, journaux et configurations plantés, rapports) en mode 0600, et resserrer à 0600 un fichier qu'une campagne précédente aurait laissé plus large dans un `--work-dir` réutilisé. Aucune écriture de `campaign.ts` MUST NOT contourner ces fonctions.
 
 #### Scenario: AC: fichiers 0600 même réutilisés
 <!-- openspec-guard:test="campaign files readable by their owner only (T4.26) > creates campaign files 0600 and narrows a file left wider by an earlier run" -->
@@ -13,10 +13,18 @@ Le banc SHALL créer chacun de ses fichiers (plan, événements, configuration e
 - **WHEN** on lit `campaign.ts`
 - **THEN** il n'appelle ni `writeFileSync`, ni `appendFileSync`, ni `openSync`, ni `createWriteStream`, ni `mkdirSync`
 
+## ADDED Requirements
+
+### Requirement: Écritures du banc sans suivre de lien
+Une écriture du banc MUST NOT suivre un lien : un nom de fichier de campagne qui est un lien symbolique, un second lien physique, un dossier, un tube nommé ou le fichier d'un autre utilisateur MUST être refusé avec `E_SIM_FILE`, sans attendre, avant d'être tronqué, resserré ou écrit.
+
 #### Scenario: AC: lien planté à la place d'un fichier non suivi
 <!-- openspec-guard:test="campaign writes never follow a planted link (T4.42) > refuses to write through a link or a second hard link planted in place of a campaign file, and leaves its target untouched" -->
 - **WHEN** un rapport est un lien symbolique vers un fichier hors du dossier, un journal d'événements est un second lien physique vers ce fichier, un plan est un dossier et un journal du relais est un tube nommé sans lecteur
 - **THEN** chaque écriture, ajout ou ouverture est refusé avec `E_SIM_FILE`, le tube en moins d'une seconde, le fichier visé garde son contenu et son mode, et un fichier ordinaire s'écrit toujours
+
+### Requirement: Dossiers du banc fermés aux autres
+Chaque dossier où le banc écrit (dossier de travail, `HOME` du relais, dossier de chaque nœud et son `user-home`) SHALL être un vrai dossier de la personne qui lance le banc, fermé aux autres (0700) avant toute écriture. Un lien ou le dossier d'un autre utilisateur MUST être refusé avec `E_SIM_WORK_DIR` avant le lancement de tout processus.
 
 #### Scenario: AC: dossier partagé fermé, lien de dossier refusé
 <!-- openspec-guard:test="campaign writes never follow a planted link (T4.42) > keeps every bench directory a real directory of its owner, closed to others, and refuses a planted link" -->
@@ -27,8 +35,6 @@ Le banc SHALL créer chacun de ses fichiers (plan, événements, configuration e
 <!-- openspec-guard:test="simulation campaign work directory (T4.42) > refuses a reused work directory where a node directory is a planted link, before starting any process" -->
 - **WHEN** une campagne est lancée dans un `--work-dir` réutilisé dont `node-0` est un lien vers un autre dossier
 - **THEN** elle échoue avec `E_SIM_WORK_DIR` avant de lancer un processus, et rien n'est écrit dans le dossier visé
-
-## ADDED Requirements
 
 ### Requirement: Démarrage parallèle borné
 Le banc SHALL lancer l'`init` de chaque nœud et la publication de chaque propriétaire en parallèle, au plus un processus par cœur (`os.availableParallelism()`), avant de lancer le relais et les nœuds. Après un échec, il MUST ne plus en lancer de nouveau et attendre ceux en cours avant de s'arrêter ; ces processus courts MUST être arrêtés comme les autres sur SIGINT ou SIGTERM.
