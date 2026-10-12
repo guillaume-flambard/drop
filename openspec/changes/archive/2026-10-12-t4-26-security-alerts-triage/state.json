@@ -1,0 +1,14 @@
+{
+  "phase": "READY_FOR_MANUAL_ACCEPTANCE",
+  "scope": "T4.26 : tri des 39 alertes GitHub ouvertes (29 CodeQL, 10 Scorecard), corrections testées ou rejets proposés avec raison",
+  "requirements": { "total": 9, "covered": 9 },
+  "acceptance": { "total": 13, "verified": 13, "pending": 0, "failed": 0 },
+  "todos": { "p0_open": 0, "p1_open": 0 },
+  "risks": { "critical_open": 0, "high_open": 0 },
+  "verification": {
+    "status": "PASS",
+    "evidence": "evidence.md",
+    "manual": "Guillaume rejette dans GitHub les alertes proposées au rejet (tableau de la PR), puis constate après fusion que CodeQL et Scorecard ferment les alertes corrigées"
+  },
+  "ready_for_manual_acceptance": true
+}
