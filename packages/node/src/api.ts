@@ -79,8 +79,14 @@ export interface AdminHooks {
     lan?: string;
     internet?: string;
     policy?: unknown;
+    version?: { app?: string | undefined; engine: string };
+    logDir?: string;
   };
   tools(): unknown;
+  /** The redacted diagnostic (T4.37): a text for the owner to read, then copy and send himself. */
+  diagnostic?(): unknown;
+  /** Opens the logs folder, never DROP_HOME, in the system's file manager. */
+  openLogs?(): Promise<void>;
   share(body: {
     agent: string;
     server: string;
@@ -519,6 +525,42 @@ export function startLocalApi(options: LocalApiOptions): Promise<LocalApi> {
         }
         if (method === 'GET' && path === '/ui/admin/tools') {
           json(res, 200, admin.tools());
+          return;
+        }
+        if (method === 'GET' && path === '/ui/admin/diagnostic' && admin.diagnostic) {
+          try {
+            json(res, 200, admin.diagnostic());
+          } catch (error) {
+            const secret = isDropError(error, 'E_SECRET_DETECTED');
+            log({
+              event: 'diagnostic_failed',
+              code: secret ? 'E_SECRET_DETECTED' : 'E_DIAGNOSTIC',
+              reason: error instanceof Error ? error.name : typeof error,
+            });
+            json(res, secret ? 422 : 500, {
+              error: secret ? 'E_SECRET_DETECTED' : 'E_DIAGNOSTIC',
+              message: secret
+                ? 'Le diagnostic ressemble encore à un secret : rien n’est affiché.'
+                : 'Impossible de préparer le diagnostic. Ouvre le dossier des journaux à la place.',
+            });
+          }
+          return;
+        }
+        if (method === 'POST' && path === '/ui/admin/logs/open' && admin.openLogs) {
+          try {
+            await admin.openLogs();
+            json(res, 200, { ok: true });
+          } catch (error) {
+            log({
+              event: 'logs_open_failed',
+              code: 'E_OPEN',
+              reason: error instanceof Error ? error.name : typeof error,
+            });
+            json(res, 500, {
+              error: 'E_OPEN',
+              message: 'Impossible d’ouvrir le dossier des journaux. Copie son chemin et ouvre-le à la main.',
+            });
+          }
           return;
         }
         if (method === 'GET' && path === '/ui/admin/onboarding') {

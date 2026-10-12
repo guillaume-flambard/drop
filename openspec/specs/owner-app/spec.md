@@ -156,7 +156,7 @@ https.
 - **THEN** le panneau propose « Se connecter à notion », et n'affiche la page de connexion qu'en https
 
 ### Requirement: Panneau accessible
-Le panneau SHALL exposer ses onglets en `tablist`, `tab` et `tabpanel`, que les flèches, Début et Fin parcourent. Il SHALL annoncer chaque résultat d'action dans une région vivante et y déplacer le focus, et annoncer l'état de connexion dans sa propre région polie. Un échec de chargement MUST s'afficher en alerte avec « Réessayer ». Le panneau SHALL suivre les réglages du système : thème clair ou sombre, « réduire les animations », « réduire la transparence » et « augmenter le contraste ».
+Le panneau SHALL exposer ses onglets en `tablist`, `tab` et `tabpanel`, parcourus par les flèches, Début et Fin. Il SHALL annoncer chaque résultat dans une région vivante et y déplacer le focus : la carte après une décision, le bandeau sinon ; l'état de connexion a sa propre région polie. Un échec de chargement MUST s'afficher en alerte avec « Réessayer ». Le panneau SHALL suivre le thème du système, « réduire les animations », « réduire la transparence » et « augmenter le contraste ».
 
 #### Scenario: AC: onglets au clavier
 <!-- openspec-guard:test="menu bar panel (T4.24) > uses tabs with arrow keys, Home and End, and a badge counting what waits" -->
@@ -165,8 +165,8 @@ Le panneau SHALL exposer ses onglets en `tablist`, `tab` et `tabpanel`, que les 
 
 #### Scenario: AC: résultat annoncé et focalisé
 <!-- openspec-guard:test="menu bar panel (T4.24) > announces each result, moves the focus to it, and shows the connection state in its own live region" -->
-- **WHEN** le propriétaire autorise une demande
-- **THEN** le bandeau « Demande autorisée une fois. » reçoit le focus et la région vivante l'annonce, pendant que l'état de connexion garde sa propre région
+- **WHEN** le propriétaire autorise une demande, puis envoie une relecture
+- **THEN** la carte passe à « Autorisée une fois » et reçoit le focus, la région vivante l'annonce, puis le bandeau « Réponse envoyée. » reçoit le focus, pendant que l'état de connexion garde sa propre région
 
 #### Scenario: AC: échec de chargement
 <!-- openspec-guard:test="menu bar panel (T4.24) > shows a load failure as an alert with Réessayer, and a refusal with its translated code" -->
@@ -248,3 +248,69 @@ Sous Windows et Linux, la coque SHALL enregistrer en premier le plugin `single-i
 <!-- openspec-guard:non-testable reason="Comportement du système : à vérifier à la main sous Windows 10 et 11 et sous Ubuntu (AppImage et .deb), au banc maison T4.6c" -->
 - **WHEN** drop tourne sous Windows ou Linux et que la page `/join` ouvre `drop://join?invite=<code>`
 - **THEN** l'instance ouverte montre la carte de confirmation, aucun second daemon ni seconde icône n'apparaît
+
+### Requirement: Journal du moteur gardé par l'app
+L'app SHALL lancer le daemon avec `DROP_LOG=file` et sa propre version dans `DROP_APP_VERSION`, et MUST NOT vider `daemon.log`. Ce que le moteur écrit hors de son journal SHALL arriver dans le même fichier, expurgé par la coque selon la règle du Node (`docs/LOG_REDACTION.md`), jamais à travers un lien. Les erreurs de l'app SHALL aller dans `DROP_HOME/logs/app.log`, expurgées, avec un fichier précédent au-delà de 1 Mio.
+
+#### Scenario: AC: journal jamais vidé par l'app
+<!-- openspec-guard:test="desktop logs (T4.37) > keeps daemon.log: the shell never empties it, hands the node its log and redacts what it writes" -->
+- **WHEN** l'app démarre ou relance le moteur
+- **THEN** elle ouvre `logs/daemon.log` en ajout, jamais en création, passe `DROP_LOG=file` et sa version, et expurge la sortie brute du moteur et ses propres erreurs avant de les écrire
+
+### Requirement: Chemin du journal au démarrage
+En cas d'échec du démarrage, la page de démarrage SHALL afficher, comme texte, le chemin du journal du moteur, avec « Ouvrir le dossier des journaux » et « Copier le chemin ».
+
+#### Scenario: AC: chemin donné par la page de démarrage
+<!-- openspec-guard:test="desktop logs (T4.37) > gives the log path on the start page, as text, with the folder to open" -->
+- **WHEN** le démarrage échoue avec un code
+- **THEN** la page affiche le code, le chemin du journal comme texte, et propose d'ouvrir le dossier des journaux et de copier le chemin
+
+### Requirement: Diagnostic dans mon espace
+Mon espace SHALL avoir une page « Diagnostic » : versions de l'app et du moteur, chemin du dossier des journaux avec « Ouvrir le dossier » et « Copier le chemin », et « Préparer le diagnostic », qui affiche le texte expurgé entier en lecture seule. « Copier le diagnostic » MUST n'apparaître qu'une fois ce texte affiché, et MUST copier exactement ce texte. L'app MUST NOT l'envoyer elle-même.
+
+#### Scenario: AC: version et dossier des journaux
+<!-- openspec-guard:test="workspace diagnostic (T4.37) > shows the versions and the logs path, opens the folder and copies the path" -->
+- **WHEN** le propriétaire ouvre « Diagnostic »
+- **THEN** il voit les versions et le chemin du dossier des journaux, « Ouvrir le dossier » appelle le Node, et « Copier le chemin » copie ce chemin
+
+#### Scenario: AC: diagnostic relu avant copie
+<!-- openspec-guard:test="workspace diagnostic (T4.37) > shows the redacted diagnostic for review before offering to copy it" -->
+- **WHEN** le propriétaire prépare le diagnostic
+- **THEN** le texte s'affiche en entier, avec le nombre de lignes retirées, et seulement alors « Copier le diagnostic » copie ce même texte
+
+### Requirement: Code d'erreur affiché dans l'espace
+Quand une action ou un chargement échoue avec un code stable, Mon espace SHALL afficher une phrase, puis des « Détails techniques » repliables avec le code, le statut HTTP et la route, et « Copier les détails ». Le message reçu MUST être inséré comme texte.
+
+#### Scenario: AC: code reçu affiché
+<!-- openspec-guard:test="workspace diagnostic (T4.37) > shows the code it receives with a sentence and copyable technical details" -->
+- **WHEN** le Node refuse une action avec `{ error: 'E_…', message }`
+- **THEN** l'espace affiche la phrase, et les détails repliés donnent le code, le statut et la route, copiables
+
+### Requirement: Région vivante unique pour les cartes
+Chaque surface qui montre des cartes de consentement (panneau, « Ton espace ») SHALL annoncer leurs changements d'état dans une seule région vivante polie, présente dès le premier rendu ; aucune carte ne porte sa propre région. Après une décision prise sur la carte, le focus SHALL aller sur la carte, puisque ses boutons disparaissent.
+
+#### Scenario: AC: focus et annonce après décision
+<!-- openspec-guard:test="consent card (T4.35) > after a decision the card takes the focus and the single live region announces its state" -->
+- **WHEN** le propriétaire refuse une demande de Julie dans le panneau
+- **THEN** la carte prend le focus et affiche « Refusée » et « Rien n'a été envoyé à Julie. », la région vivante unique l'annonce, et la carte n'a aucune région vivante à elle
+
+### Requirement: Bouton bloqué focalisable
+Pendant qu'une décision part, les boutons de la carte MUST rester focalisables, marqués `aria-disabled`, et décrits par la raison du blocage ; les activer ne MUST rien envoyer. Une réponse illisible MUST s'afficher « Incertaine » sur la carte.
+
+#### Scenario: AC: bouton bloqué focalisable
+<!-- openspec-guard:test="consent card (T4.35) > keeps a blocked button focusable with its reason while the decision is in flight" -->
+- **WHEN** le propriétaire autorise une demande et que le Node n'a pas encore répondu
+- **THEN** le bouton activé garde le focus, les trois boutons sont `aria-disabled` et décrits par « Décision en cours d'envoi : attends sa confirmation. », et un second appui n'envoie rien
+
+#### Scenario: AC: réponse illisible montrée incertaine
+<!-- openspec-guard:test="consent card (T4.35) > shows an unreadable reply as uncertain on the card, never as refused" -->
+- **WHEN** `/ui/decide` répond par une erreur serveur à une autorisation
+- **THEN** la carte affiche « Incertaine » et « Impossible de confirmer ce qui a été envoyé à Julie. », jamais « Rien n'a été envoyé »
+
+### Requirement: Demandes dans Ton espace
+« Ton espace » SHALL offrir une page « Demandes » qui liste les demandes en attente avec la même carte que le panneau (composant partagé de `packages/desktop-ui`, logique dans son module pur), « Répondre moi-même » et les cartes de relecture. La page MUST se tenir à jour par le flux `/ui/events` du Node, sans rechargement, et la navigation SHALL compter les demandes qui attendent. Les décisions passent par les mêmes routes que le panneau.
+
+#### Scenario: AC: décider depuis Ton espace
+<!-- openspec-guard:test="workspace requests (T4.35) > lists pending requests, follows the live stream and decides through the same card as the panel" -->
+- **WHEN** une demande de Julie arrive pendant que « Ton espace » est ouvert, puis que le propriétaire la refuse depuis la page « Demandes »
+- **THEN** la demande apparaît par le flux sans rechargement, la navigation compte une demande, le refus part par `/ui/decide` et la carte affiche « Refusée » avec le focus, annoncée par la seule région vivante de l'espace

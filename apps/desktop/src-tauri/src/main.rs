@@ -10,8 +10,8 @@ mod notifications;
 use std::fs;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpStream;
-use std::path::PathBuf;
-use std::process::{Child, ChildStdout, Command, Stdio};
+use std::path::{Path, PathBuf};
+use std::process::{Child, ChildStderr, ChildStdout, Command, Stdio};
 #[cfg(target_os = "macos")]
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -151,13 +151,526 @@ fn ensure_identity(app: &AppHandle) -> Result<(), &'static str> {
     Ok(())
 }
 
-/// Appends `{ at, code, detail }` to ~/.drop/app.log: the app's own errors, with a stable code (AGENTS.md).
-fn log_error(code: &str, detail: &str) {
-    let at = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
-    let line = serde_json::json!({ "at": at, "code": code, "detail": detail });
-    if let Ok(mut file) = fs::OpenOptions::new().create(true).append(true).open(drop_home().join("app.log")) {
-        let _ = writeln!(file, "{line}");
+/// The logs folder (T4.37): logs only, so the owner can open or send it without the keys that live in DROP_HOME.
+fn logs_dir() -> PathBuf {
+    drop_home().join("logs")
+}
+
+/// The app's own log turns over past this size, keeping one previous file.
+const APP_LOG_MAX_BYTES: u64 = 1024 * 1024;
+/// A raw line of the daemon is cut at this many characters.
+const MAX_STRAY_CHARS: usize = 2000;
+/// At most this many bytes of one raw line are read; the rest of the line is skipped, never held in memory.
+const MAX_STRAY_LINE_BYTES: usize = 8 * 1024;
+/// The node turns daemon.log over at 2 MiB: past this size it no longer does, and the shell stops adding to it.
+const MAX_SHELL_DAEMON_LOG_BYTES: u64 = 8 * 1024 * 1024;
+/// Creates the logs folder, for the owner only on macOS and Linux; a link in its place is refused.
+fn ensure_logs_dir() -> std::io::Result<PathBuf> {
+    let dir = logs_dir();
+    fs::create_dir_all(&dir)?;
+    if fs::symlink_metadata(&dir)?.file_type().is_symlink() {
+        return Err(std::io::Error::other(
+            "E_LOG logs folder is a symbolic link",
+        ));
     }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&dir, fs::Permissions::from_mode(0o700))?;
+    }
+    Ok(dir)
+}
+
+/// Opens a log to append, never to empty it and never through a link; a new file is for the owner only on macOS and
+/// Linux.
+fn open_append(path: &Path) -> std::io::Result<fs::File> {
+    if fs::symlink_metadata(path).is_ok_and(|meta| meta.file_type().is_symlink()) {
+        return Err(std::io::Error::other("E_LOG log is a symbolic link"));
+    }
+    let mut options = fs::OpenOptions::new();
+    options.create(true).append(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    options.open(path)
+}
+
+/// Appends a line; past `cap` bytes the file first becomes `<name>.1`, replacing the previous one.
+fn append_capped(path: &Path, line: &str, cap: u64) -> std::io::Result<()> {
+    let size = fs::symlink_metadata(path)
+        .map(|meta| meta.len())
+        .unwrap_or(0);
+    if size > 0 && size + line.len() as u64 + 1 > cap {
+        let mut previous = path.as_os_str().to_owned();
+        previous.push(".1");
+        let _ = fs::remove_file(&previous);
+        fs::rename(path, &previous)?;
+    }
+    let mut file = open_append(path)?;
+    writeln!(file, "{line}")
+}
+
+/// Appends a raw line of the daemon to daemon.log, unless the file is past `cap` (the node no longer turns it over):
+/// `Ok(false)` then, and nothing is written.
+fn append_stray(path: &Path, line: &str, cap: u64) -> std::io::Result<bool> {
+    let size = fs::symlink_metadata(path)
+        .map(|meta| meta.len())
+        .unwrap_or(0);
+    if size >= cap {
+        return Ok(false);
+    }
+    let mut file = open_append(path)?;
+    writeln!(file, "{line}")?;
+    Ok(true)
+}
+
+/// Reads one line of at most `max` bytes, without its newline; the rest of a longer line is read and dropped.
+/// `None` at the end of the stream.
+fn read_capped_line<R: BufRead>(reader: &mut R, max: usize) -> std::io::Result<Option<Vec<u8>>> {
+    let mut line = Vec::new();
+    let mut seen = false;
+    loop {
+        let available = match reader.fill_buf() {
+            Ok(bytes) => bytes,
+            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(error) => return Err(error),
+        };
+        if available.is_empty() {
+            return Ok(seen.then_some(line));
+        }
+        seen = true;
+        let (used, done) = match available.iter().position(|byte| *byte == b'\n') {
+            Some(index) => (index + 1, true),
+            None => (available.len(), false),
+        };
+        let content = if done { used - 1 } else { used };
+        let room = max.saturating_sub(line.len());
+        line.extend_from_slice(&available[..content.min(room)]);
+        reader.consume(used);
+        if done {
+            return Ok(Some(line));
+        }
+    }
+}
+
+const REDACTED: &str = "[expurgé]";
+/// Rule 5 of docs/LOG_REDACTION.md: the words a secret name contains.
+const NAME_WORDS: [&str; 7] = ["pass", "secret", "token", "key", "auth", "cred", "seed"];
+
+/// The shell's own redaction, for what reaches a log without the node's (T4.37): the daemon's raw stderr (the runtime
+/// failing before or outside JavaScript) and the app's errors. The rule of docs/LOG_REDACTION.md, the same as the
+/// node's `redactText`, checked against the same vectors (test/fixtures/log-redaction-vectors.json): mask by default.
+fn redact_stray(line: &str, token: Option<&str>) -> String {
+    let mut text: String = line.chars().take(MAX_STRAY_CHARS).collect();
+    if let Some(token) = token.filter(|token| token.len() >= 8) {
+        text = text.replace(token, REDACTED);
+    }
+    if text.contains("PRIVATE KEY") {
+        return "[ligne expurgée]".to_string();
+    }
+    let text = redact_userinfo(&text);
+    let text = redact_auth_schemes(&text);
+    let text = redact_named_values(&text);
+    redact_runs(&text)
+}
+
+fn is_name_char(c: Option<&char>) -> bool {
+    c.is_some_and(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '-'))
+}
+
+fn is_word_char(c: Option<&char>) -> bool {
+    c.is_some_and(|c| c.is_ascii_alphanumeric() || *c == '_')
+}
+
+fn is_blank(c: Option<&char>) -> bool {
+    c.is_some_and(|c| c.is_whitespace())
+}
+
+fn starts_with_at(chars: &[char], index: usize, prefix: &str) -> bool {
+    let prefix: Vec<char> = prefix.chars().collect();
+    chars.len() >= index + prefix.len() && chars[index..index + prefix.len()] == prefix[..]
+}
+
+/// Rule 3: from `://` to the last `@` before the next blank or quote.
+fn redact_userinfo(text: &str) -> String {
+    let chars: Vec<char> = text.chars().collect();
+    let mut out = String::with_capacity(text.len());
+    let mut index = 0;
+    while index < chars.len() {
+        if starts_with_at(&chars, index, "://") {
+            out.push_str("://");
+            let start = index + 3;
+            let mut end = start;
+            while end < chars.len()
+                && !chars[end].is_whitespace()
+                && !matches!(chars[end], '"' | '\'' | '<' | '>')
+            {
+                end += 1;
+            }
+            match chars[start..end].iter().rposition(|c| *c == '@') {
+                Some(at) => {
+                    out.push_str(REDACTED);
+                    index = start + at;
+                }
+                None => index = start,
+            }
+            continue;
+        }
+        out.push(chars[index]);
+        index += 1;
+    }
+    out
+}
+
+/// Rule 4: the word after `Bearer` or `Basic`.
+fn redact_auth_schemes(text: &str) -> String {
+    let chars: Vec<char> = text.chars().collect();
+    let mut out = String::with_capacity(text.len());
+    let mut index = 0;
+    while index < chars.len() {
+        let boundary = index == 0 || !is_word_char(chars.get(index - 1));
+        let scheme = ["bearer", "basic"].iter().find_map(|word| {
+            let len = word.len();
+            (boundary
+                && chars.len() >= index + len
+                && chars[index..index + len]
+                    .iter()
+                    .collect::<String>()
+                    .eq_ignore_ascii_case(word))
+            .then_some(len)
+        });
+        if let Some(len) = scheme {
+            let mut start = index + len;
+            while is_blank(chars.get(start)) {
+                start += 1;
+            }
+            let mut end = start;
+            while end < chars.len()
+                && !chars[end].is_whitespace()
+                && !matches!(chars[end], '"' | '\'' | '<' | '>' | ',' | ';')
+            {
+                end += 1;
+            }
+            if start > index + len && end > start {
+                out.extend(&chars[index..start]);
+                out.push_str(REDACTED);
+                index = end;
+                continue;
+            }
+        }
+        out.push(chars[index]);
+        index += 1;
+    }
+    out
+}
+
+/// The quote that opens at `index` (`"`, `'`, `\"`, `\'`), as characters.
+fn quote_at(chars: &[char], index: usize) -> Vec<char> {
+    match (chars.get(index), chars.get(index + 1)) {
+        (Some('"'), _) => vec!['"'],
+        (Some('\''), _) => vec!['\''],
+        (Some('\\'), Some(q)) if matches!(q, '"' | '\'') => vec!['\\', *q],
+        _ => vec![],
+    }
+}
+
+fn find_from(chars: &[char], from: usize, needle: &[char]) -> Option<usize> {
+    if needle.is_empty() || from > chars.len() {
+        return None;
+    }
+    (from..=chars.len().saturating_sub(needle.len()))
+        .find(|&i| chars[i..i + needle.len()] == needle[..])
+}
+
+/// Rule 5: a name holding a secret word, quoted or not, then `=` or `:`, then its whole value.
+fn redact_named_values(text: &str) -> String {
+    let chars: Vec<char> = text.chars().collect();
+    let marker_start: Vec<char> = "[expurgé".chars().collect();
+    let mut out = String::with_capacity(text.len());
+    let mut index = 0;
+    while index < chars.len() {
+        if !is_name_char(chars.get(index)) || (index > 0 && is_name_char(chars.get(index - 1))) {
+            out.push(chars[index]);
+            index += 1;
+            continue;
+        }
+        let mut end = index;
+        while is_name_char(chars.get(end)) {
+            end += 1;
+        }
+        let name: String = chars[index..end].iter().collect();
+        let lower = name.to_ascii_lowercase();
+        let mut rewritten: Option<(String, usize)> = None;
+        if NAME_WORDS.iter().any(|word| lower.contains(word)) {
+            let name_quote = quote_at(&chars, end);
+            let mut before = end + name_quote.len();
+            while is_blank(chars.get(before)) {
+                before += 1;
+            }
+            let separator = chars.get(before).copied();
+            if matches!(separator, Some('=' | ':')) {
+                let equals = separator == Some('=');
+                let mut start = before + 1;
+                while is_blank(chars.get(start)) {
+                    start += 1;
+                }
+                let value_quote = quote_at(&chars, start);
+                let value_start = start + value_quote.len();
+                let name_part = format!("{name}{}", name_quote.iter().collect::<String>());
+                let head: String = chars[index..start].iter().collect();
+                let quote: String = value_quote.iter().collect();
+                if chars[value_start..].starts_with(&marker_start) {
+                    // Already replaced (a known value): only the `=` goes.
+                    let mut stop = chars[value_start..]
+                        .iter()
+                        .position(|c| *c == ']')
+                        .map_or(chars.len(), |p| value_start + p + 1);
+                    if !value_quote.is_empty() && chars[stop..].starts_with(&value_quote) {
+                        stop += value_quote.len();
+                    }
+                    let kept: String = chars[index..stop].iter().collect();
+                    rewritten = Some((
+                        if equals {
+                            format!("{name_part} {REDACTED}")
+                        } else {
+                            kept
+                        },
+                        stop,
+                    ));
+                } else if !value_quote.is_empty() {
+                    let close = find_from(&chars, value_start, &value_quote);
+                    let stop = close.map_or(chars.len(), |c| c + value_quote.len());
+                    let closing = if close.is_some() { quote.as_str() } else { "" };
+                    rewritten = Some((
+                        if equals {
+                            format!("{name_part} {REDACTED}")
+                        } else {
+                            format!("{head}{quote}{REDACTED}{closing}")
+                        },
+                        stop,
+                    ));
+                } else {
+                    let mut stop = start;
+                    while stop < chars.len()
+                        && !chars[stop].is_whitespace()
+                        && !matches!(
+                            chars[stop],
+                            ',' | ';' | '}' | '&' | ')' | ']' | '"' | '\'' | '\\'
+                        )
+                    {
+                        stop += 1;
+                    }
+                    let value: String = chars[start..stop].iter().collect();
+                    // `Authorization: Bearer <value>`: the scheme stays, rule 4 already replaced its value.
+                    let scheme =
+                        value.eq_ignore_ascii_case("bearer") || value.eq_ignore_ascii_case("basic");
+                    if stop > start && !scheme {
+                        rewritten = Some((
+                            if equals {
+                                format!("{name_part} {REDACTED}")
+                            } else {
+                                format!("{head}{REDACTED}")
+                            },
+                            stop,
+                        ));
+                    }
+                }
+            }
+        }
+        match rewritten {
+            Some((text, stop)) => {
+                out.push_str(&text);
+                index = stop;
+            }
+            None => {
+                out.push_str(&name);
+                index = end;
+            }
+        }
+    }
+    out
+}
+
+/// The allowlist of docs/LOG_REDACTION.md, set aside before rules 6 and 7: UUIDs (dropIds) and `E_…` error codes.
+fn allowed_spans(chars: &[char]) -> Vec<bool> {
+    let mut kept = vec![false; chars.len()];
+    let hex = |c: Option<&char>| c.is_some_and(|c| c.is_ascii_hexdigit());
+    let alnum = |c: Option<&char>| c.is_some_and(|c| c.is_ascii_alphanumeric());
+    let mut index = 0;
+    while index < chars.len() {
+        let after_boundary = index == 0 || !alnum(chars.get(index - 1));
+        // 8-4-4-4-12 hexadecimal.
+        if after_boundary && chars.len() >= index + 36 && !alnum(chars.get(index + 36)) {
+            let uuid = (0..36).all(|offset| {
+                let c = chars.get(index + offset);
+                if matches!(offset, 8 | 13 | 18 | 23) {
+                    c == Some(&'-')
+                } else {
+                    hex(c)
+                }
+            });
+            if uuid {
+                kept[index..index + 36].fill(true);
+                index += 36;
+                continue;
+            }
+        }
+        let code_boundary = index == 0 || !is_word_char(chars.get(index - 1));
+        if code_boundary && chars.get(index) == Some(&'E') && chars.get(index + 1) == Some(&'_') {
+            let mut end = index + 2;
+            while chars
+                .get(end)
+                .is_some_and(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || *c == '_')
+            {
+                end += 1;
+            }
+            let len = end - index - 2;
+            if (2..=60).contains(&len) && !is_word_char(chars.get(end)) {
+                kept[index..end].fill(true);
+                index = end;
+                continue;
+            }
+        }
+        index += 1;
+    }
+    kept
+}
+
+/// Rules 6 and 7, with the allowlist set aside: hexadecimal groups split by `:`, `-` or spaces (32 hex digits, one
+/// decimal digit), then runs of 16 key characters mixing letters and digits, or of 32 hexadecimal digits.
+fn redact_runs(text: &str) -> String {
+    let chars: Vec<char> = text.chars().collect();
+    let kept = allowed_spans(&chars);
+    let free = |i: usize| !kept[i];
+    let alnum_at = |i: usize| i < chars.len() && free(i) && chars[i].is_ascii_alphanumeric();
+    let hex_at = |i: usize| i < chars.len() && free(i) && chars[i].is_ascii_hexdigit();
+    // Rule 6.
+    let mut stage: Vec<(char, bool)> = Vec::with_capacity(chars.len());
+    let mut index = 0;
+    while index < chars.len() {
+        if hex_at(index) && (index == 0 || !alnum_at(index - 1)) {
+            let group = |from: usize| {
+                let mut end = from;
+                while hex_at(end) {
+                    end += 1;
+                }
+                end
+            };
+            let first = group(index);
+            let mut ends = vec![];
+            if first - index <= 64 {
+                let mut end = first;
+                while end < chars.len()
+                    && free(end)
+                    && matches!(chars[end], ':' | '-' | ' ')
+                    && hex_at(end + 1)
+                {
+                    let next = group(end + 1);
+                    if next - end - 1 > 64 {
+                        break;
+                    }
+                    ends.push(next);
+                    end = next;
+                }
+            }
+            // The longest series of groups that ends before something other than a letter or a digit.
+            let last = ends.iter().rev().copied().find(|end| !alnum_at(*end));
+            if let Some(end) = last {
+                let span = &chars[index..end];
+                let digits = span.iter().filter(|c| c.is_ascii_hexdigit()).count();
+                if digits >= 32 && span.iter().any(|c| c.is_ascii_digit()) {
+                    stage.extend(REDACTED.chars().map(|c| (c, true)));
+                    index = end;
+                    continue;
+                }
+            }
+        }
+        stage.push((chars[index], kept[index]));
+        index += 1;
+    }
+    // Rule 7.
+    let key_char = |(c, kept): (char, bool)| {
+        !kept && (c.is_ascii_alphanumeric() || matches!(c, '+' | '/' | '=' | '_' | '-'))
+    };
+    let mut out = String::with_capacity(text.len());
+    let mut index = 0;
+    while index < stage.len() {
+        if !key_char(stage[index]) {
+            out.push(stage[index].0);
+            index += 1;
+            continue;
+        }
+        let mut end = index;
+        while end < stage.len() && key_char(stage[end]) {
+            end += 1;
+        }
+        let run: String = stage[index..end].iter().map(|(c, _)| *c).collect();
+        let mixed =
+            run.chars().any(|c| c.is_ascii_alphabetic()) && run.chars().any(|c| c.is_ascii_digit());
+        let hex = run.len() >= 32 && run.chars().all(|c| c.is_ascii_hexdigit());
+        if run.chars().count() >= 16 && (mixed || hex) {
+            out.push_str(REDACTED);
+        } else {
+            out.push_str(&run);
+        }
+        index = end;
+    }
+    out
+}
+
+/// Appends `{ at, code, detail }` to logs/app.log: the app's own errors, with a stable code (AGENTS.md), redacted.
+fn log_error(code: &str, detail: &str) {
+    let at = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let detail = redact_stray(detail, local_token().as_deref());
+    let line = serde_json::json!({ "at": at, "code": code, "detail": detail });
+    if let Ok(dir) = ensure_logs_dir() {
+        let _ = append_capped(&dir.join("app.log"), &line.to_string(), APP_LOG_MAX_BYTES);
+    }
+}
+
+/// What the daemon writes on stderr outside its own log (with DROP_LOG=file, only what the runtime prints before or
+/// outside JavaScript) reaches daemon.log as JSON, after the shell's redaction, each line read up to 8 KiB. The node
+/// turns that file over: each line opens the file by its path, so it follows a rotation. Past 8 MiB (the node no longer
+/// turns it over) the shell stops adding, and says so once in app.log.
+fn capture_stderr(stderr: ChildStderr) {
+    thread::spawn(move || {
+        let mut reader = BufReader::new(stderr);
+        let mut full_reported = false;
+        while let Ok(Some(raw)) = read_capped_line(&mut reader, MAX_STRAY_LINE_BYTES) {
+            let text = String::from_utf8_lossy(&raw);
+            let text = text.trim_end_matches('\r');
+            if text.trim().is_empty() {
+                continue;
+            }
+            let at = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0);
+            let line = redact_stray(text, local_token().as_deref());
+            let entry = serde_json::json!({ "at": at, "event": "daemon_stderr", "line": line });
+            match append_stray(
+                &logs_dir().join("daemon.log"),
+                &entry.to_string(),
+                MAX_SHELL_DAEMON_LOG_BYTES,
+            ) {
+                Ok(true) => full_reported = false,
+                Ok(false) if !full_reported => {
+                    full_reported = true;
+                    log_error(
+                        "E_LOG",
+                        "daemon.log past its limit, daemon stderr lines dropped",
+                    );
+                }
+                Ok(false) => {}
+                Err(_) => log_error("E_LOG", "daemon stderr line not written"),
+            }
+        }
+    });
 }
 
 fn start_daemon(app: &AppHandle, marker: &str, port: u16) -> Result<(), &'static str> {
@@ -167,7 +680,9 @@ fn start_daemon(app: &AppHandle, marker: &str, port: u16) -> Result<(), &'static
     if TcpStream::connect(("127.0.0.1", port)).is_ok() {
         return Err("E_PORT");
     }
-    let log = fs::File::create(drop_home().join("daemon.log")).map_err(|_| "E_LOG")?;
+    // The node writes and turns over logs/daemon.log itself (T4.37); the shell only checks it can append to it.
+    let dir = ensure_logs_dir().map_err(|_| "E_LOG")?;
+    open_append(&dir.join("daemon.log")).map_err(|_| "E_LOG")?;
     let mut command = drop_command(app, &["serve"]);
     // The daemon hands notifications to the app as JSON lines on stdout (T4.14), so they carry the app's icon.
     command.stdout(Stdio::piped()).env("DROP_NOTIFY", "shell");
@@ -176,10 +691,17 @@ fn start_daemon(app: &AppHandle, marker: &str, port: u16) -> Result<(), &'static
     command
         .stdin(Stdio::piped())
         .env("DROP_EXIT_WITH_PARENT", "stdin");
-    command.stderr(log).env("DROP_SHELL_INSTANCE", marker);
+    command
+        .env("DROP_LOG", "file")
+        .env("DROP_APP_VERSION", app.package_info().version.to_string());
+    command.stderr(Stdio::piped());
+    command.env("DROP_SHELL_INSTANCE", marker);
     let mut child = command.spawn().map_err(|_| "E_SPAWN")?;
     if let Some(stdout) = child.stdout.take() {
         relay_notifications(app.clone(), stdout);
+    }
+    if let Some(stderr) = child.stderr.take() {
+        capture_stderr(stderr);
     }
     *app.state::<Daemon>().child.lock().map_err(|_| "E_STATE")? = Some(child);
     Ok(())
@@ -309,7 +831,11 @@ fn show_splash(app: &AppHandle, code: &str) {
         return;
     };
     let mut url = base;
-    url.query_pairs_mut().clear().append_pair("state", code);
+    // The start page names the log to look at or send (T4.37); it shows it only on a failure.
+    url.query_pairs_mut()
+        .clear()
+        .append_pair("state", code)
+        .append_pair("log", &logs_dir().join("daemon.log").to_string_lossy());
     if let Some(window) = app.get_webview_window("panel") {
         let _ = window.navigate(url);
     }
@@ -399,24 +925,28 @@ fn supervise(app: AppHandle) {
                     user_retry || app.state::<Daemon>().retry.swap(false, Ordering::SeqCst);
                 if let Some(next) = restart_after_run(user_retry, restarts, ready_at.elapsed()) {
                     if !user_retry {
-                        eprintln!("drop shell E_HEALTH: retry {next}/{MAX_RESTARTS}");
+                        log_error(
+                            "E_HEALTH",
+                            &format!("daemon stopped answering, retry {next}/{MAX_RESTARTS}"),
+                        );
                     }
                     restarts = next;
                     continue;
                 }
-                eprintln!("drop shell E_RESTART");
+                log_error("E_RESTART", "daemon stopped again, waiting for the user");
                 show_splash(&app, "E_RESTART");
             }
             Err(code) => {
-                eprintln!("drop shell {code}");
+                // Shown by the start page too; written here so a tester's logs say why the engine did not start.
+                log_error(code, "daemon start failed");
                 stop_daemon(&app);
                 if code == "E_START" && restarts < MAX_RESTARTS {
                     restarts += 1;
-                    eprintln!("drop shell E_START: retry {restarts}/{MAX_RESTARTS}");
+                    log_error("E_START", &format!("retry {restarts}/{MAX_RESTARTS}"));
                     continue;
                 }
                 if code == "E_START" {
-                    eprintln!("drop shell E_RESTART");
+                    log_error("E_RESTART", "daemon did not start, waiting for the user");
                 }
                 show_splash(&app, if code == "E_START" { "E_RESTART" } else { code });
             }
@@ -434,7 +964,11 @@ fn supervise(app: AppHandle) {
 /// Where the panel goes for a click on the icon at `click`, in physical pixels: centred on the click, under it when the
 /// icon sits at the top of the screen (the macOS menu bar), above it when there is room, as with the Windows taskbar at
 /// the bottom. Never off the left or top edge.
-fn panel_position(click: PhysicalPosition<f64>, scale: f64, prefer_above: bool) -> PhysicalPosition<f64> {
+fn panel_position(
+    click: PhysicalPosition<f64>,
+    scale: f64,
+    prefer_above: bool,
+) -> PhysicalPosition<f64> {
     let x = (click.x - PANEL_WIDTH * scale / 2.0).max(0.0);
     let gap = 8.0 * scale;
     let above = click.y - PANEL_HEIGHT * scale - gap;
@@ -468,7 +1002,12 @@ fn show_workspace(app: &AppHandle) {
         show_panel(app, None);
         return;
     }
-    let Some(port) = *app.state::<Daemon>().verified_port.lock().expect("verified port") else {
+    let Some(port) = *app
+        .state::<Daemon>()
+        .verified_port
+        .lock()
+        .expect("verified port")
+    else {
         show_panel(app, None);
         return;
     };
@@ -609,6 +1148,32 @@ fn toggle_panel(app: &AppHandle, near: PhysicalPosition<f64>) {
 #[tauri::command]
 fn retry_daemon(app: AppHandle) {
     app.state::<Daemon>().retry.store(true, Ordering::SeqCst);
+}
+
+/// Opens the logs folder from the start page (T4.37), when the node that would do it does not run: the system's file
+/// manager, the folder's path as its only argument, no shell. Never DROP_HOME, which holds the keys.
+#[tauri::command]
+fn open_logs() -> Result<(), String> {
+    let dir = ensure_logs_dir().map_err(|_| "E_LOG".to_string())?;
+    let opener = if cfg!(target_os = "macos") {
+        "open"
+    } else if cfg!(windows) {
+        "explorer.exe"
+    } else {
+        "xdg-open"
+    };
+    let started = Command::new(opener).arg(&dir).spawn();
+    started
+        .map(|mut child| {
+            // Reaped in the background: the file manager's launcher exits at once.
+            thread::spawn(move || {
+                let _ = child.wait();
+            });
+        })
+        .map_err(|error| {
+            log_error("E_OPEN", &error.to_string());
+            "E_OPEN".to_string()
+        })
 }
 
 /// The longest `drop://` link the app accepts: an invite with its admission ticket and iroh addresses fits well under.
@@ -754,7 +1319,9 @@ fn check_for_update(app: &AppHandle) {
 
 /// Downloads the pending update, checks its signature, replaces the app, then restarts it with its daemon.
 fn install_update(app: &AppHandle) {
-    let Some(update) = app.state::<PendingUpdate>().0.lock().unwrap().take() else { return };
+    let Some(update) = app.state::<PendingUpdate>().0.lock().unwrap().take() else {
+        return;
+    };
     let version = update.version.clone();
     let _ = set_tray_menu(app, Some(&version), true);
     let app = app.clone();
@@ -821,7 +1388,7 @@ fn main() {
         show_panel(app, None);
     }));
     let app = builder
-        .invoke_handler(tauri::generate_handler![retry_daemon])
+        .invoke_handler(tauri::generate_handler![retry_daemon, open_logs])
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_autostart::init(
             MacosLauncher::LaunchAgent,
@@ -1061,6 +1628,138 @@ mod tests {
         }
         assert!(handled_link(&url(&format!("drop://join?invite={code}"))));
         assert!(!handled_link(&url("drop://settings")));
+    }
+
+    #[test]
+    fn redact_stray_masks_secrets_and_keeps_paths() {
+        let token = "Qm9vdHN0cmFwLXRva2VuLWZvci10ZXN0cw";
+        let anthropic = format!("sk-ant-api03-{}", "A1b2C3d4".repeat(4));
+        let github = format!("ghp_{}", "a1B2c3D4e5F6".repeat(3));
+        let line = format!(
+            "FATAL ERROR: heap limit token {token} at /Applications/drop.app/Contents/Resources/drop.mjs:12:3 \
+             OPENROUTER_API_KEY=plain-value-123 {anthropic} {github} 0x0000000100c3a4f8"
+        );
+        let out = redact_stray(&line, Some(token));
+        for secret in [
+            token,
+            anthropic.as_str(),
+            github.as_str(),
+            "plain-value-123",
+        ] {
+            assert!(
+                !out.contains(secret),
+                "redacted output still contains a secret"
+            );
+        }
+        // What explains a crash stays: the message, the path and position.
+        assert!(
+            out.starts_with("FATAL ERROR: heap limit token [expurgé] at /Applications/drop.app/")
+        );
+        assert!(out.contains("drop.mjs:12:3"));
+        assert!(out.contains("OPENROUTER_API_KEY [expurgé]"));
+        // Mask by default: a long run of letters and digits goes, even an address.
+        assert!(!out.contains("0x0000000100c3a4f8"));
+        // A key header loses its whole line; a long line is cut.
+        let header = format!("-----BEGIN {} KEY----- abc", "RSA PRIVATE");
+        assert_eq!(redact_stray(&header, None), "[ligne expurgée]");
+        assert_eq!(
+            redact_stray(&"z".repeat(5000), None).chars().count(),
+            MAX_STRAY_CHARS
+        );
+    }
+
+    #[test]
+    fn redact_stray_follows_the_shared_vectors() {
+        // The same vectors as the node's redaction (packages/node/test/daemon-log.test.ts).
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../test/fixtures/log-redaction-vectors.json"
+        ))
+        .expect("vectors");
+        let vectors = fixture["vectors"].as_array().expect("vector list");
+        assert!(vectors.len() >= 18);
+        for vector in vectors {
+            let name = vector["name"].as_str().expect("name");
+            let out = redact_stray(vector["input"].as_str().expect("input"), None);
+            for secret in vector["absent"].as_array().expect("absent") {
+                let secret = secret.as_str().expect("secret");
+                assert!(
+                    !out.contains(secret),
+                    "{name}: sensitive value was not redacted"
+                );
+            }
+            for kept in vector["present"].as_array().expect("present") {
+                let kept = kept.as_str().expect("kept");
+                assert!(out.contains(kept), "{name}: {kept} missing from {out}");
+            }
+        }
+    }
+
+    #[test]
+    fn read_capped_line_keeps_memory_bounded() {
+        let long = "x".repeat(100_000);
+        let input = format!("{long}\nshort\r\nlast");
+        let mut reader = std::io::Cursor::new(input.into_bytes());
+        let first = read_capped_line(&mut reader, 16)
+            .expect("read")
+            .expect("line");
+        assert_eq!(first, b"x".repeat(16));
+        assert_eq!(
+            read_capped_line(&mut reader, 16)
+                .expect("read")
+                .expect("line"),
+            b"short\r"
+        );
+        assert_eq!(
+            read_capped_line(&mut reader, 16)
+                .expect("read")
+                .expect("line"),
+            b"last"
+        );
+        assert!(read_capped_line(&mut reader, 16).expect("read").is_none());
+    }
+
+    #[test]
+    fn append_stray_stops_past_its_cap_and_never_follows_a_link() {
+        let dir = std::env::temp_dir().join(format!("drop-stray-log-{}", instance_marker()));
+        fs::create_dir_all(&dir).expect("test folder");
+        let path = dir.join("daemon.log");
+        assert!(append_stray(&path, "one", 8).expect("first"));
+        assert!(append_stray(&path, "two", 8).expect("second"));
+        assert!(!append_stray(&path, "three", 8).expect("past the cap"));
+        assert_eq!(fs::read_to_string(&path).expect("log"), "one\ntwo\n");
+        #[cfg(unix)]
+        {
+            let victim = dir.join("victim.txt");
+            fs::write(&victim, "untouched\n").expect("victim");
+            let link = dir.join("linked.log");
+            std::os::unix::fs::symlink(&victim, &link).expect("link");
+            assert!(append_stray(&link, "never", 1_000).is_err());
+            assert!(append_capped(&link, "never", 1_000).is_err());
+            assert_eq!(fs::read_to_string(&victim).expect("victim"), "untouched\n");
+        }
+        fs::remove_dir_all(&dir).expect("cleanup");
+    }
+
+    #[test]
+    fn append_capped_keeps_one_previous_file() {
+        let dir = std::env::temp_dir().join(format!("drop-app-log-{}", instance_marker()));
+        fs::create_dir_all(&dir).expect("test folder");
+        let path = dir.join("app.log");
+        for index in 0..10 {
+            append_capped(&path, &format!("line {index} {}", "x".repeat(40)), 120).expect("append");
+        }
+        assert!(fs::metadata(&path).expect("current").len() <= 120);
+        assert!(dir.join("app.log.1").exists());
+        assert!(!dir.join("app.log.2").exists());
+        let current = fs::read_to_string(&path).expect("current");
+        assert!(current.contains("line 9"));
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = fs::metadata(&path).expect("current").permissions().mode() & 0o777;
+            assert_eq!(mode, 0o600);
+        }
+        fs::remove_dir_all(&dir).expect("cleanup");
     }
 
     #[test]

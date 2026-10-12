@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "The panel window: its bundled splash page (web/index.html) invokes only the app command retry_daemon; once started it shows the page the local drop node serves on 127.0.0.1, a remote origin that gets no Tauri IPC.",
+  "description": "The panel window: its bundled splash page (web/index.html) invokes only the app commands retry_daemon and open_logs (the logs folder, T4.37); once started it shows the page the local drop node serves on 127.0.0.1, a remote origin that gets no Tauri IPC.",
   "windows": ["panel"],
   "permissions": ["core:default", "deep-link:default"]
 }

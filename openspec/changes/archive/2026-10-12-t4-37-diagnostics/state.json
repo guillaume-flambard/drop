@@ -1,0 +1,14 @@
+{
+  "phase": "READY_FOR_MANUAL_ACCEPTANCE",
+  "scope": "T4.37 : journal du daemon gardé, tourné, avec en-tête et expurgé à l'écriture ; diagnostic expurgé relu avant copie ; chemin du journal au démarrage ; codes d'erreur dans l'espace",
+  "requirements": { "total": 12, "covered": 12 },
+  "acceptance": { "total": 13, "verified": 13, "pending": 0, "failed": 0 },
+  "todos": { "p0_open": 0, "p1_open": 0 },
+  "risks": { "critical_open": 0, "high_open": 0 },
+  "verification": {
+    "status": "PASS",
+    "evidence": "evidence.md",
+    "manual": "app construite sur macOS, Windows et Linux : copie dans les WebView, ouverture du dossier, page de démarrage en échec (E_PORT), plantage réel du moteur"
+  },
+  "ready_for_manual_acceptance": true
+}
