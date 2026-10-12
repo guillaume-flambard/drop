@@ -78,6 +78,20 @@ jobs:
             echo "tag=$tag"
             echo "prerelease=$prerelease"
           } >> "$GITHUB_OUTPUT"
+      - name: Require signed update publishing on tagged/manual releases
+        if: github.event_name != 'pull_request'
+        env:
+          UPDATE_SIGNING: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' && secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD != '' }}
+        run: |
+          # No draft release may accidentally appear with unsigned updater artifacts.
+          if [ "$UPDATE_SIGNING" != true ]; then
+            echo '::error::Set both TAURI_SIGNING_PRIVATE_KEY and TAURI_SIGNING_PRIVATE_KEY_PASSWORD before creating a release.'
+            exit 1
+          fi
+          if [ ! -s apps/desktop/updater.pub ]; then
+            echo '::error::Missing apps/desktop/updater.pub; distribute the public key with every update-enabled installation.'
+            exit 1
+          fi
 
   build:
     name: build-${{ matrix.label }}
