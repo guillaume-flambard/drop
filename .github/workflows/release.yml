@@ -183,6 +183,22 @@ jobs:
           printf '%s' "$APPLE_API_PRIVATE_KEY" > "$RUNNER_TEMP/AuthKey.p8"
           echo "APPLE_API_KEY_PATH=$RUNNER_TEMP/AuthKey.p8" >> "$GITHUB_ENV"
 
+      - name: Verify Apple Developer ID and notarization credentials before building
+        if: matrix.platform == 'macos' && env.APPLE_SIGNING == 'true'
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+        run: |
+          set -euo pipefail
+          if ! security find-identity -v -p codesigning build.keychain | grep -Fq "$APPLE_SIGNING_IDENTITY"; then
+            echo '::error::Developer ID identity not present in the imported .p12.'
+            exit 1
+          fi
+          xcrun notarytool history --issuer "$APPLE_API_ISSUER" --key-id "$APPLE_API_KEY" \
+            --key "$APPLE_API_KEY_PATH" --output-format json > /dev/null
+          echo 'Apple certificate and notarization credentials are valid.'
+
       - name: Import the Windows code signing certificate (v2.tauri.app/distribute/sign/windows)
         if: matrix.platform == 'windows' && env.WINDOWS_SIGNING == 'true'
         shell: pwsh

@@ -1,0 +1,67 @@
+# An inexpensive preflight: verify real Apple Developer ID and team notarization
+# credentials before spending time on a signed five-platform desktop release.
+name: verify Apple signing
+on:
+  workflow_dispatch: {}
+
+permissions: {}
+
+jobs:
+  apple:
+    if: github.repository == 'memolabs-dev/drop' && github.ref == 'refs/heads/main'
+    runs-on: macos-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Require all six Apple GitHub Actions secrets
+        env:
+          HAS_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE != '' }}
+          HAS_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD != '' }}
+          HAS_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY != '' }}
+          HAS_API_ISSUER: ${{ secrets.APPLE_API_ISSUER != '' }}
+          HAS_API_KEY: ${{ secrets.APPLE_API_KEY != '' }}
+          HAS_PRIVATE_KEY: ${{ secrets.APPLE_API_PRIVATE_KEY != '' }}
+        run: |
+          set -euo pipefail
+          for key in HAS_CERTIFICATE HAS_CERTIFICATE_PASSWORD HAS_SIGNING_IDENTITY HAS_API_ISSUER HAS_API_KEY HAS_PRIVATE_KEY; do
+            if [ "${!key}" != true ]; then
+              echo "::error::$key missing; configure the corresponding Apple secret before running this check."
+              exit 1
+            fi
+          done
+
+      - name: Import certificate and authenticate Apple notarization
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_PRIVATE_KEY: ${{ secrets.APPLE_API_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          umask 077
+          keychain="$RUNNER_TEMP/drop-apple-signing.keychain-db"
+          p12="$RUNNER_TEMP/developer-id.p12"
+          private_key="$RUNNER_TEMP/AuthKey.p8"
+          password="$(openssl rand -hex 24)"
+          cleanup() {
+            security delete-keychain "$keychain" >/dev/null 2>&1 || true
+            rm -f "$p12" "$private_key"
+          }
+          trap cleanup EXIT
+          printf '%s' "$APPLE_CERTIFICATE" | base64 --decode > "$p12"
+          printf '%s' "$APPLE_API_PRIVATE_KEY" > "$private_key"
+          security create-keychain -p "$password" "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          security set-keychain-settings -t 1200 -u "$keychain"
+          security import "$p12" -k "$keychain" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$password" "$keychain"
+          if ! security find-identity -v -p codesigning "$keychain" | grep -Fq "$APPLE_SIGNING_IDENTITY"; then
+            echo '::error::The uploaded .p12 does not contain the requested Developer ID signing identity.'
+            exit 1
+          fi
+          echo 'Developer ID certificate import and identity: OK'
+          xcrun notarytool history --issuer "$APPLE_API_ISSUER" --key-id "$APPLE_API_KEY"             --key "$private_key" --output-format json > /dev/null
+          echo 'App Store Connect TEAM key notarization authentication: OK'
