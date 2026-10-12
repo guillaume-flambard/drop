@@ -1,7 +1,7 @@
 ## MODIFIED Requirements
 
 ### Requirement: Refus explicite du relais côté demandeur
-Le Node MUST traiter `E_RATE`, `E_QUEUE_FULL` ou l'indisponibilité du relais à la demande initiale comme une non-livraison. Il MUST retirer l'entrée locale active, demander la révocation de la clé plafonnée créée pour cette demande et exposer `E_RATE` à l'appelant ; une demande initiale non livrée MUST NOT rester dans la file volatile, et aucun résultat tardif ne doit recréer une demande effacée. Une demande initiale confiée au relais sans réponse (issue `unconfirmed`, spec `relay`) n'est pas une non-livraison : le Node MUST la garder active à l'état `proposed` avec `delivery: 'unconfirmed'`, garder sa clé plafonnée, remettre la même enveloppe dans la file d'envoi et répondre 201 avec `delivery: 'unconfirmed'`. `delivery` MUST disparaître dès qu'un renvoi est acquitté par le relais (`delivered` ou `queued`) ou qu'un message de l'exécuteur sur cette demande arrive (T4.39).
+Le Node MUST traiter `E_RATE`, `E_QUEUE_FULL` ou l'indisponibilité du relais à la demande initiale comme une non-livraison. Il MUST retirer l'entrée locale active, demander la révocation de la clé plafonnée créée pour cette demande et exposer `E_RATE` à l'appelant ; une demande initiale non livrée MUST NOT rester dans la file volatile, et aucun résultat tardif ne doit recréer une demande effacée. Une demande initiale confiée au relais sans réponse (issue `unconfirmed`, spec `relay`) n'est pas une non-livraison : le Node MUST la garder active à l'état `proposed` avec `delivery: 'unconfirmed'`, garder sa clé plafonnée, remettre la même enveloppe dans la file d'envoi et répondre 201 avec `delivery: 'unconfirmed'`. `delivery` MUST disparaître dès qu'un renvoi est acquitté par le relais (`delivered` ou `queued`) ou qu'un message de l'exécuteur sur cette demande arrive (T4.39). Si l'enveloppe renvoyée quitte la file sans confirmation (expirée, refusée pour de bon, abandonnée par le client relais ou évincée), la demande MUST se terminer avec ce qui est su : `expired` avec `E_EXPIRED` à l'expiration, `failed` sinon, `delivery` retiré, clé plafonnée révoquée ; un vrai résultat arrivé ensuite l'emporte encore.
 
 #### Scenario: AC: relais refuse la demande initiale
 <!-- openspec-guard:test="bounded requester memory > releases funding and active memory when the relay returns E_RATE" -->
@@ -47,3 +47,13 @@ Le Node MUST traiter `E_RATE`, `E_QUEUE_FULL` ou l'indisponibilité du relais à
 <!-- openspec-guard:test="unconfirmed drop request (T4.39) > answers 201 with delivery unconfirmed on POST /drops and keeps it on GET /drops/:id" -->
 - **WHEN** `POST /drops` émet une demande dont la réception n'est pas confirmée
 - **THEN** l'API locale répond 201 avec `delivery: 'unconfirmed'`, et `GET /drops/:id` rend le même champ tant qu'il tient
+
+#### Scenario: AC: demande non confirmée expirée
+<!-- openspec-guard:test="unconfirmed drop request (T4.39) > ends an unconfirmed drop request whose resent envelope expires unanswered, and releases its capped key" -->
+- **WHEN** la demande initiale s'est résolue en `unconfirmed` et que son enveloppe expire dans la file sans réponse du relais ni message de l'exécuteur
+- **THEN** la demande passe à `expired` avec `E_EXPIRED`, `delivery` disparaît, la clé plafonnée est révoquée une fois et la file est vide
+
+#### Scenario: AC: renvoi abandonné pour de bon
+<!-- openspec-guard:test="unconfirmed drop request (T4.39) > ends an unconfirmed drop request when the relay client gives its resent envelope up for good" -->
+- **WHEN** le client relais refuse de renvoyer l'enveloppe de la demande (`E_RELAY_TIMEOUT`)
+- **THEN** la demande passe à `failed` avec `E_RUNNER`, `delivery` disparaît et la clé plafonnée est révoquée une fois

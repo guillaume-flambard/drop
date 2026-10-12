@@ -88,6 +88,8 @@ interface PendingSend {
   timer?: NodeJS.Timeout;
   /** The write failed: the frame never left whole, so the relay cannot have it. */
   failed?: boolean;
+  /** How many inbound chunks the connection had read when this send started. */
+  receivedAtSend: number;
 }
 
 /** One frame sent on a connection and not answered yet, in the order sent (T4.39). */
@@ -111,6 +113,8 @@ export class RelayClient {
    */
   private inFlight: InFlight[] = [];
   private ordered = true;
+  /** Inbound chunks read on the current connection: proof that the link carried something after a given moment. */
+  private received = 0;
   /** Acknowledgement give-ups each envelope id caused, bounded; forgotten once it gets an answer (T4.39). */
   private readonly giveUps = new Map<string, number>();
   private readyWaiters: (() => void)[] = [];
@@ -164,7 +168,7 @@ export class RelayClient {
     return new Promise((resolve) => {
       // The same envelope sent again while the first copy waits: the first one is released, never left pending.
       this.settle(id, 'unconfirmed');
-      const entry: PendingSend = { resolve };
+      const entry: PendingSend = { resolve, receivedAtSend: this.received };
       this.pending.set(id, entry);
       this.inFlight.push({ id, bytes: Buffer.byteLength(frame) });
       // Counted from the call, over every byte still unanswered on this connection, this frame included: the relay
@@ -180,15 +184,23 @@ export class RelayClient {
             this.settle(id, 'unconfirmed');
             return;
           }
-          // No answer in time: this connection cannot be trusted with anything else (as on the local network).
-          this.rememberGiveUp(id);
+          // No answer in time: this connection cannot be trusted with anything else (as on the local network). Only a
+          // link that kept carrying bytes while this send waited counts against the envelope: on a link that simply
+          // died, the envelope is not the cause, and a written-off frame never left at all.
+          if (!entry.failed && this.received > entry.receivedAtSend) this.rememberGiveUp(id);
           this.abandon(socket, 'ack');
         },
         base * 2 ** Math.min(gaveUp, MAX_ACK_DOUBLINGS),
       );
       socket.send(frame, (error) => {
-        // Not written whole: the relay cannot have it. Its connection is closing and releases it as offline.
-        if (error && this.pending.get(id) === entry) entry.failed = true;
+        if (!error || this.pending.get(id) !== entry) return;
+        // Not written whole: the relay cannot have it and will not answer it. Its connection is closing and releases
+        // it as offline; meanwhile its bytes no longer count as in flight.
+        entry.failed = true;
+        if (this.socket === socket) {
+          const index = this.inFlight.findIndex((sent) => sent.id === id);
+          if (index >= 0) this.inFlight.splice(index, 1);
+        }
       });
     });
   }
@@ -211,7 +223,8 @@ export class RelayClient {
 
   /**
    * Moves to another relay (T4.23): a node that joins its first team adopts the team's relay without a restart.
-   * Messages awaiting an acknowledgement from the old relay are reported offline, so the sender queues them again.
+   * Messages awaiting an acknowledgement from the old relay are reported unconfirmed, so the sender queues them again;
+   * the give-ups counted against the old relay do not follow to the new one (T4.39).
    * An extra certificate authority replaces the default ones (Node.js `tls`, option `ca`): it was given for the old
    * relay's host and never vouches for another host, which gets the default authorities back (T4.33).
    */
@@ -226,6 +239,7 @@ export class RelayClient {
     this.ready = false;
     this.stopLiveness();
     this.releasePending();
+    this.giveUps.clear();
     previous?.terminate();
     if (wasReady) this.options.onStatus?.('disconnected');
     this.backoffMs = this.options.minBackoffMs ?? 1_000;
@@ -248,6 +262,7 @@ export class RelayClient {
     this.socket = socket;
     this.inFlight = [];
     this.ordered = true;
+    this.received = 0;
     // The network socket under the WebSocket (Node.js `message.socket`): any byte read on it proves the link lives,
     // even in the middle of a frame that takes longer than a heartbeat interval to arrive (T4.39).
     let network: Socket | undefined;
@@ -259,7 +274,9 @@ export class RelayClient {
     }, this.options.connectTimeoutMs ?? CONNECT_TIMEOUT_MS);
     // Any frame proves the connection still carries something: a pong, the relay's own ping, a message.
     const live = () => {
-      if (this.socket === socket) this.alive = true;
+      if (this.socket !== socket) return;
+      this.alive = true;
+      this.received += 1;
     };
     socket.on('open', () => {
       if (this.socket !== socket) return;
@@ -288,13 +305,13 @@ export class RelayClient {
   }
 
   /**
-   * One heartbeat tick: give the socket up if nothing came in since the previous tick, otherwise ping it. A send still
-   * within its delay keeps a silent connection: on a saturated uplink the ping waits behind that send's frame, and the
-   * send's own delay, which counts its bytes, bounds the wait (T4.39).
+   * One heartbeat tick: give the socket up if nothing came in since the previous tick, otherwise ping it. Bytes still in
+   * flight that need more than an interval at the floor rate keep a silent connection: on a saturated uplink the ping
+   * waits behind them, and their own acknowledgement delay, which counts them, bounds the wait (T4.39).
    */
   private beat(socket: WebSocket): void {
     if (this.socket !== socket) return;
-    if (!this.alive && this.pending.size === 0) {
+    if (!this.alive && !this.uplinkBusy()) {
       this.abandon(socket, 'heartbeat');
       return;
     }
@@ -345,6 +362,13 @@ export class RelayClient {
     clearTimeout(this.connectDeadline);
     this.connectDeadline = undefined;
     this.alive = false;
+  }
+
+  /** Unanswered bytes on this connection need more than one heartbeat interval at the floor rate. */
+  private uplinkBusy(): boolean {
+    const bytes = this.inFlight.reduce((sum, sent) => sum + sent.bytes, 0);
+    const floor = this.options.floorBytesPerSecond ?? FLOOR_BYTES_PER_SECOND;
+    return (bytes * 1_000) / floor > (this.options.pingIntervalMs ?? PING_INTERVAL_MS);
   }
 
   /** Every send left waiting: its frame went to a connection that is gone, so the relay may have it (T4.39). */

@@ -16,8 +16,9 @@ T4.39 reprend trois limites laissées ouvertes par T3.1f (D100), notées à la r
 - **Erreur sans identifiant.** Le relais répond à chaque trame `envelope` par exactement une réponse, dans l'ordre de réception (déjà vrai, désormais exigé et testé). Le client attribue une erreur sans identifiant à l'envoi le plus ancien encore sans réponse sur cette connexion, tant que toutes les réponses précédentes sont arrivées dans l'ordre ; sinon il laisse le délai la libérer.
 - **Liaison lente.**
   - Le délai d'acquittement part de l'appel et vaut 15 s plus le temps de transmettre à 32 kbit/s les octets encore sans réponse sur la connexion, ceux de l'envoi compris.
-  - Il double à chaque abandon déjà causé par la même enveloppe (au plus quatre fois la base) ; après quatre abandons, le délai dépassé libère l'envoi en `unconfirmed` sans plus abandonner la connexion.
-  - Côté client, tout octet reçu prouve la connexion vivante, et un intervalle muet n'abandonne pas la connexion tant qu'un envoi attend dans son délai : ce délai borne l'attente.
+  - Il double à chaque abandon déjà causé par la même enveloppe (au plus quatre fois la base) ; après trois abandons causés par la même enveloppe, le client ne l'envoie plus et rend `E_RELAY_TIMEOUT` (journal `ack_retries`).
+  - Un abandon ne compte contre une enveloppe que si la connexion recevait encore des octets pendant qu'elle attendait ; une demande dont l'enveloppe renvoyée quitte la file sans confirmation se termine (`expired` ou `failed`) et libère sa clé.
+  - Côté client, tout octet reçu prouve la connexion vivante, et un intervalle muet n'abandonne pas la connexion tant que les octets encore sans réponse demandent plus d'un intervalle au débit plancher : leur délai borne l'attente.
   - Côté relais, tout octet reçu d'un Node compte comme une réponse au ping.
 
 ## Non-goals

@@ -358,17 +358,42 @@ describe('relay client liveness', () => {
     const envelope = await sealEnvelope(identity, identity.nodeId, { type: 'catalog_request' });
     const first = track(client.send(envelope));
     await written();
-    await vi.advanceTimersByTimeAsync(16_000);
+    // The relay answers the heartbeat's ping: the link lives, only this envelope goes unanswered.
+    await vi.advanceTimersByTimeAsync(15_000);
+    await pause(50);
+    await vi.advanceTimersByTimeAsync(1_000);
     await settle(() => first.outcome === 'unconfirmed');
     await vi.advanceTimersByTimeAsync(1_000);
     await settle(() => connected() === 2);
     const again = track(client.send(envelope));
     await written();
     await vi.advanceTimersByTimeAsync(29_000);
+    await pause(50);
     expect(again.outcome).toBeUndefined();
     await vi.advanceTimersByTimeAsync(2_000);
     await settle(() => again.outcome !== undefined);
     expect(again.outcome).toBe('unconfirmed');
+    expect(logs.filter((entry) => entry.reason === 'ack')).toHaveLength(2);
+  });
+
+  it('does not count a give-up against an envelope when nothing came back while it waited', async () => {
+    fakeTimers();
+    const { identity, client, logs, connected } = await setup(['silent', 'silent']);
+    client.start();
+    await settle(() => connected() === 1);
+    const sealed = await sealEnvelope(identity, identity.nodeId, { type: 'catalog_request' });
+    const big = { ...sealed, pad: 'x'.repeat(200_000) } as typeof sealed;
+    const first = track(client.send(big));
+    await written();
+    await vi.advanceTimersByTimeAsync(67_000);
+    await settle(() => first.outcome === 'unconfirmed');
+    await vi.advanceTimersByTimeAsync(1_000);
+    await settle(() => connected() === 2);
+    // The link carried nothing at all: the envelope is not the cause, so its delay does not double.
+    const again = track(client.send(big));
+    await written();
+    await vi.advanceTimersByTimeAsync(67_000);
+    await settle(() => again.outcome === 'unconfirmed');
     expect(logs.filter((entry) => entry.reason === 'ack')).toHaveLength(2);
   });
 
@@ -378,11 +403,14 @@ describe('relay client liveness', () => {
     client.start();
     await settle(() => connected() === 1);
     const envelope = await sealEnvelope(identity, identity.nodeId, { type: 'catalog_request' });
-    // 15 s, then 30 s, then 60 s (plus the floor-rate allowance), with the growing redial delay in between.
-    for (const [index, wait] of [16_000, 31_000, 61_000].entries()) {
+    // 15 s, then 30 s, then 60 s (plus the floor-rate allowance), with the growing redial delay in between. Each send
+    // starts ten seconds into its connection, so the heartbeat pings the relay, which answers, while the send waits:
+    // the link lives, only this envelope goes unanswered.
+    for (const [index, wait] of [15_500, 30_500, 60_500].entries()) {
+      await vi.advanceTimersByTimeAsync(10_000);
       const sent = track(client.send(envelope));
       await written();
-      await vi.advanceTimersByTimeAsync(wait);
+      await advanceAnswering(wait);
       await settle(() => sent.outcome === 'unconfirmed');
       await vi.advanceTimersByTimeAsync(5_000);
       await settle(() => connected() === index + 2);
@@ -418,6 +446,14 @@ describe('relay client liveness', () => {
     expect(logs).toEqual([expect.objectContaining({ code: 'E_RELAY_TIMEOUT', reason: 'heartbeat' })]);
   });
 });
+
+/** Advances simulated time in 5 s steps, letting the relay's pongs land in real time between them. */
+async function advanceAnswering(ms: number): Promise<void> {
+  for (let left = ms; left > 0; left -= 5_000) {
+    await vi.advanceTimersByTimeAsync(Math.min(5_000, left));
+    await pause(30);
+  }
+}
 
 /** Real time for I/O to land while timers are faked. */
 async function pause(ms: number): Promise<void> {

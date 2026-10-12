@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { generateIdentity, type Envelope } from '@drop/protocol';
+import { generateIdentity, MAX_TTL_MS, type Envelope } from '@drop/protocol';
 import { startLocalApi, type LocalApi } from '../src/api.ts';
 import { NodeEngine, type CatalogEntry } from '../src/engine.ts';
 import { fakeCapability, MemoryStore, startMesh, until, type Mesh } from './helpers.ts';
@@ -86,6 +86,31 @@ describe('unconfirmed drop request (T4.39)', () => {
     expect(changes.length).toBeGreaterThan(0);
     await until(() => m.executor.engine.memoryStats().executing === 1);
     expect(released).toEqual([]);
+  });
+
+  it('ends an unconfirmed drop request whose resent envelope expires unanswered, and releases its capped key', async () => {
+    const { m, released } = await meshWithFunding();
+    vi.spyOn(m.requester.transport, 'send').mockResolvedValueOnce('unconfirmed');
+    const drop = await ask(m);
+    // No word from the executor and no relay answer until the envelope can no longer be accepted.
+    m.clock.now += MAX_TTL_MS + 1_000;
+    await m.requester.engine.flushOutbox();
+    expect(m.requester.engine.drop(drop.dropId)).toMatchObject({ state: 'expired', error: { code: 'E_EXPIRED' } });
+    expect(m.requester.engine.drop(drop.dropId)?.delivery).toBeUndefined();
+    expect(released).toEqual([drop.dropId]);
+    expect(m.requester.engine.memoryStats().outbox).toBe(0);
+  });
+
+  it('ends an unconfirmed drop request when the relay client gives its resent envelope up for good', async () => {
+    const { m, released } = await meshWithFunding();
+    vi.spyOn(m.requester.transport, 'send')
+      .mockResolvedValueOnce('unconfirmed')
+      .mockResolvedValueOnce('E_RELAY_TIMEOUT');
+    const drop = await ask(m);
+    await m.requester.engine.flushOutbox();
+    expect(m.requester.engine.drop(drop.dropId)).toMatchObject({ state: 'failed', error: { code: 'E_RUNNER' } });
+    expect(m.requester.engine.drop(drop.dropId)?.delivery).toBeUndefined();
+    expect(released).toEqual([drop.dropId]);
   });
 
   it('answers 201 with delivery unconfirmed on POST /drops and keeps it on GET /drops/:id', async () => {

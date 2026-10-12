@@ -14,7 +14,7 @@ Le relais SHALL envoyer un ping toutes les 25 s à chaque Node et MUST le décon
 - **THEN** le relais garde la connexion tant que des octets arrivent, puis la coupe après deux pings sans octet ni pong
 
 ### Requirement: Battement de cœur du client relais
-Le client relais (`RelayClient`) SHALL envoyer un ping toutes les 15 s et MUST abandonner la connexion si rien n'est arrivé pendant un intervalle complet, même sans fermeture reçue. Tout octet reçu sur le socket compte (pong, ping, message, ou morceau d'une trame encore incomplète). Tant qu'un envoi attend sa réponse dans son délai d'acquittement, un intervalle muet MUST NOT abandonner la connexion : ce délai borne alors l'attente. La raison journalisée est `heartbeat`.
+Le client relais (`RelayClient`) SHALL envoyer un ping toutes les 15 s et MUST abandonner la connexion si rien n'est arrivé pendant un intervalle complet, même sans fermeture reçue. Tout octet reçu sur le socket compte (pong, ping, message, ou morceau d'une trame encore incomplète). Tant que les octets envoyés et encore sans réponse demandent plus d'un intervalle au débit plancher de 32 kbit/s, un intervalle muet MUST NOT abandonner la connexion : leur délai d'acquittement borne alors l'attente. La raison journalisée est `heartbeat`.
 
 #### Scenario: AC: relais muet sans fermeture
 <!-- openspec-guard:test="relay client liveness > reconnects within two heartbeat intervals when the relay stops answering without closing" -->
@@ -42,7 +42,7 @@ Le client relais (`RelayClient`) SHALL envoyer un ping toutes les 15 s et MUST a
 - **THEN** le client garde la connexion au-delà de 30 s, puis l'abandonne avec la raison `ack` à l'échéance du délai proportionnel à sa taille
 
 ### Requirement: Délai d'acquittement du client relais
-Chaque envoi du client relais MUST recevoir son acquittement ou son erreur dans un délai compté depuis l'appel : 15 s, plus le temps de transmettre à 32 kbit/s (4 000 octets par seconde) les octets envoyés sur cette connexion et encore sans réponse, les siens compris. Ce délai MUST doubler à chaque abandon déjà causé par la même enveloppe, jusqu'à quatre fois sa valeur de base. Sinon la connexion est abandonnée avec la raison `ack`.
+Chaque envoi du client relais MUST recevoir son acquittement ou son erreur dans un délai compté depuis l'appel : 15 s, plus le temps de transmettre à 32 kbit/s (4 000 octets par seconde) les octets envoyés sur cette connexion et encore sans réponse, les siens compris. Ce délai MUST doubler à chaque abandon déjà causé par la même enveloppe, jusqu'à quatre fois sa valeur de base. Sinon la connexion est abandonnée avec la raison `ack`. Un abandon MUST compter contre l'enveloppe seulement si la connexion a reçu des octets pendant que l'envoi attendait et que son écriture n'a pas échoué : sur un lien simplement mort, l'enveloppe n'est pas en cause. Le changement de relais MUST oublier ces comptes.
 
 #### Scenario: AC: envoi sans acquittement libéré
 <!-- openspec-guard:test="relay client liveness > releases a send left without acknowledgement as unconfirmed after 15 s and reconnects" -->
@@ -53,6 +53,11 @@ Chaque envoi du client relais MUST recevoir son acquittement ou son erreur dans 
 <!-- openspec-guard:test="relay client liveness > doubles the acknowledgement delay for an envelope that already caused a give-up" -->
 - **WHEN** la même enveloppe, déjà abandonnée une fois faute d'acquittement, est envoyée de nouveau à un relais qui n'acquitte pas
 - **THEN** elle attend au-delà de 15 s, et son délai dépassé abandonne la connexion au double du premier
+
+#### Scenario: AC: lien mort, enveloppe hors de cause
+<!-- openspec-guard:test="relay client liveness > does not count a give-up against an envelope when nothing came back while it waited" -->
+- **WHEN** une grosse enveloppe est abandonnée faute de réponse sur une connexion qui n'a plus rien reçu, puis renvoyée
+- **THEN** son délai ne double pas
 
 ### Requirement: Abandon d'une connexion par le client relais
 Abandonner une connexion MUST la détruire sans attendre sa fermeture, résoudre chaque envoi en attente par `unconfirmed` (sa trame a été confiée à la connexion et le relais a pu la recevoir), signaler `disconnected`, journaliser le code stable `E_RELAY_TIMEOUT` avec sa raison et planifier la reconnexion avec le délai exponentiel habituel. La fermeture volontaire du client, une fermeture de la connexion et le changement de relais MUST aussi résoudre les envois en attente par `unconfirmed`. Un envoi demandé sans connexion prête, ou dont l'écriture a échoué, MUST se résoudre par `offline` : il n'a pas quitté le Node.

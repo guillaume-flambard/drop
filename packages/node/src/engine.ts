@@ -1078,7 +1078,16 @@ export class NodeEngine extends EventEmitter {
       const [queued] = this.outbox.splice(index, 1);
       if (!queued) continue;
       const { envelope } = queued;
-      if (envelope.exp <= this.now() || this.isStale(queued)) continue;
+      if (envelope.exp <= this.now()) {
+        this.endUnconfirmed(
+          queued,
+          'E_EXPIRED',
+          "La réception de la demande n'a jamais été confirmée avant son expiration.",
+          'expired',
+        );
+        continue;
+      }
+      if (this.isStale(queued)) continue;
       this.outboxInFlight = queued;
       let outcome: string;
       try {
@@ -1097,6 +1106,14 @@ export class NodeEngine extends EventEmitter {
         if (queued.confirms) this.confirmDelivery(queued.confirms);
       } else {
         this.log({ event: 'send_failed', code: outcome, reason: 'flush_rejected', peer: envelope.to });
+        const refusal =
+          outcome === 'E_RELAY_TIMEOUT'
+            ? {
+                code: 'E_RUNNER' as const,
+                message: "Le relais n'a jamais confirmé la réception de la demande, même après plusieurs envois.",
+              }
+            : sendRefusal(outcome);
+        this.endUnconfirmed(queued, refusal.code, refusal.message);
       }
     }
   }
@@ -1718,6 +1735,29 @@ export class NodeEngine extends EventEmitter {
     await this.deliver(drop, applyRedactions(drop.output, message.redactions ?? []));
   }
 
+  /**
+   * A drop request whose delivery was never confirmed leaves the outbox for good (expired, refused, given up or evicted):
+   * the drop ends with what is known, its slot and capped key are released, and a real result still wins (T4.39).
+   */
+  private endUnconfirmed(
+    queued: QueuedEnvelope,
+    code: DropErrorCode,
+    message: string,
+    state: DropState = 'failed',
+  ): void {
+    const dropId = queued.confirms;
+    const drop = dropId ? this.outbound.get(dropId) : undefined;
+    if (!drop?.delivery || drop.result || drop.error) return;
+    delete drop.delivery;
+    drop.state = state;
+    drop.error = { code, message };
+    this.log({ event: 'send_unconfirmed_ended', code, dropId: drop.dropId, peer: drop.executor });
+    this.options.funder?.release(drop.dropId).catch(() => {
+      this.log({ event: 'funding', code: 'E_FUNDING_RELEASE', dropId: drop.dropId });
+    });
+    this.changed();
+  }
+
   /** The relay acknowledged a resent drop request: it is delivered as surely as one acknowledged at once (T4.39). */
   private confirmDelivery(dropId: string): void {
     const drop = this.outbound.get(dropId);
@@ -1929,8 +1969,14 @@ export class NodeEngine extends EventEmitter {
     if (insertAt === -1) this.outbox.push(queued);
     else this.outbox.splice(insertAt, 0, queued);
     if (this.outbox.length + (this.outboxInFlight ? 1 : 0) > MAX_OUTBOX_ENVELOPES) {
-      this.outbox.shift();
+      const evicted = this.outbox.shift();
       this.log({ event: 'send_failed', code: 'E_RATE', reason: 'outbox_capacity' });
+      if (evicted)
+        this.endUnconfirmed(
+          evicted,
+          'E_RATE',
+          "La réception de la demande n'a jamais été confirmée : file d'envoi pleine.",
+        );
     }
   }
 

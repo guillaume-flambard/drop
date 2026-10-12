@@ -26,6 +26,7 @@ D100 avait écarté une issue nouvelle parce qu'elle obligeait à toucher chaque
 - `unconfirmed` repart toujours dans la file d'envoi, que l'appel ait demandé `queueOffline` ou non. Le renvoi porte la même enveloppe, donc le même identifiant : si la première copie est arrivée, l'anti-rejeu du destinataire (`openEnvelope`, `ReplayCache`) écarte la seconde sans effet ; sinon la seconde la remplace.
 - `requestDrop` sur `unconfirmed` : la demande reste dans `outbound`, à l'état `proposed`, avec `delivery: 'unconfirmed'` ; la clé plafonnée est gardée (l'exécuteur en a besoin s'il a reçu la demande) ; l'enveloppe en file porte l'identifiant de la demande (`confirms`). Le moteur journalise `send_unconfirmed` avec l'identifiant de la demande et le pair, sans contenu.
 - `delivery` disparaît quand un renvoi de cette enveloppe reçoit `delivered` ou `queued` (preuve équivalente à celle d'une demande initiale ordinaire), ou quand un message de l'exécuteur sur cette demande arrive (`drop_status`, `drop_result`, `drop_error` : `onRequesterUpdate`).
+- Si l'enveloppe renvoyée quitte la file sans confirmation, la demande se termine avec ce qui est su, sa place et sa clé plafonnée sont libérées : `expired` (`E_EXPIRED`) quand l'enveloppe expire, `failed` quand le relais la refuse pour de bon (`sendRefusal`), quand le client relais l'abandonne (`E_RELAY_TIMEOUT`, rendu `E_RUNNER`) ou quand la file pleine l'évince. Un vrai résultat arrivé ensuite l'emporte encore (`onRequesterUpdate`). Ajouté après la revue adversariale : sans cela, la demande restait `proposed` pour toujours et occupait une place.
 - Une demande initiale `offline` garde son comportement : retirée, clé révoquée, 429.
 
 ### API locale et requester-mcp
@@ -62,6 +63,7 @@ Le délai d'acquittement part de l'appel à `send`, et non plus du rappel d'écr
 - **octets en vol** : la somme des tailles des trames envoyées sur cette connexion et encore sans réponse, celle-ci comprise ; le relais lit les trames dans l'ordre, la dernière attend donc toutes les précédentes ;
 - **4 000 octets par seconde** : 32 kbit/s, un lien mobile dégradé (classe GPRS). Une enveloppe de 256 Kio y passe en 66 s : délai de 81 s, au lieu de 15 s qui échouaient sous 140 kbit/s. Une petite trame garde un délai proche de 15 s ;
 - **n** : le nombre d'abandons `ack` déjà causés par cette enveloppe (même identifiant), au plus 2 : le délai double à chaque renvoi, jusqu'à quatre fois la base. Un lien plus lent que le plancher laisse donc passer l'enveloppe à la deuxième ou troisième tentative.
+- Un abandon ne compte contre l'enveloppe que si la connexion a reçu des octets pendant que l'envoi attendait (le relais vit, mais ne répond pas à cette trame) et que son écriture n'a pas échoué. Sur un lien simplement mort, une petite enveloppe innocente (un `drop_result`, par exemple) n'accumule pas d'abandons qui la feraient refuser plus tard. Le changement de relais oublie les comptes. Ajouté après la revue adversariale.
 
 ### Renvoi borné
 
@@ -70,7 +72,7 @@ Après trois abandons `ack` causés par la même enveloppe, le client ne l'envoi
 ### Battement de cœur
 
 - **Tout octet reçu prouve la connexion vivante.** À l'ouverture, le client écoute l'événement `data` du socket réseau (`response.socket` de l'événement `upgrade` de `ws`, attaché dans `open`, après les écouteurs de `ws`). Une grosse trame entrante qui arrive lentement n'abandonne plus la connexion. Un socket que `ws` ne lit plus (`pause`, cas `CLOSE_WAIT` de T4.6a) n'émet pas `data` : il reste détecté.
-- **Un intervalle muet n'abandonne pas une connexion qui attend un envoi dans son délai.** Sur une voie montante saturée, le ping du client attend derrière la grosse trame et le relais ne pinge que toutes les 25 s. Tant qu'un envoi attend sa réponse, son délai d'acquittement (proportionnel aux octets en vol) borne l'attente ; sans envoi en attente, la règle de T3.1f s'applique.
+- **Un intervalle muet n'abandonne pas une connexion dont la voie montante est occupée.** Sur une voie montante saturée, le ping du client attend derrière la grosse trame et le relais ne pinge que toutes les 25 s. Tant que les octets encore sans réponse demandent plus d'un intervalle au débit plancher (plus de 60 000 octets), leur délai d'acquittement borne l'attente ; sinon la règle de T3.1f s'applique. La revue adversariale a fait restreindre l'exemption à ce cas : n'importe quel envoi en attente suspendait la détection d'un lien mort jusqu'à son délai. Une trame dont l'écriture a échoué sort des octets en vol.
 
 ### Côté relais
 
