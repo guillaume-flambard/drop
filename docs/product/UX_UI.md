@@ -117,12 +117,21 @@ Source : `apps/desktop/web/index.html`.
 - **Existant** : en cas d'échec, « Démarrage interrompu », point rouge orangé, un titre et une explication propres au code, « Réessayer » et « Tu peux aussi choisir « Réessayer le démarrage » dans le menu drop de la barre de menus. Code de diagnostic : E_PORT. »
 - **Existant** : codes couverts : `E_INIT` (identité), `E_CONFIG` (configuration), `E_PORT` (port), `E_LOG` (journal), `E_SPAWN` (moteur introuvable), `E_START` (moteur muet), `E_TOKEN` (jeton), `E_PANEL` (fenêtre), `E_RESTART` (reprise échouée).
 - **Existant** : `E_STATE` est traduit sur cette page depuis T4.14.
+- **Existant** (T4.37) : en cas d'échec, le chemin du journal du moteur s'affiche comme texte, avec « Ouvrir le dossier des journaux » (commande `open_logs` de la coque) et « Copier le chemin ».
 
 ### 3.9 Notifications
 
 - **Existant** : « Julie a besoin d'aide » avec le titre de la capacité en sous-titre, et « Résultat à relire avant envoi » avec le titre (`packages/node/src/daemon.ts`).
 - **Existant** : le texte des pairs passe en argument, jamais dans le script, et la notification ne contient pas le jeton (D18, `notify.ts`).
 - **Existant** : aucune notification sous Linux ; aucun lien prouvé entre un clic sur la notification et le panneau (écart E5).
+
+### 3.10 Diagnostic de « Ton espace » (T4.37)
+
+Source : `packages/desktop-ui/src/views/diagnostic.tsx`, `packages/node/src/diagnostic.ts`.
+
+- **Existant** : une page « Diagnostic » dans la navigation : versions de l'app et du moteur, chemin du dossier `~/.drop/logs` avec « Ouvrir le dossier » et « Copier le chemin ».
+- **Existant** : « Préparer le diagnostic » affiche le texte expurgé entier, en lecture seule, avec le nombre de lignes retirées ; « Copier le diagnostic » n'apparaît qu'ensuite. drop n'envoie rien.
+- **Existant** : une action refusée affiche une phrase, puis « Détails techniques » repliables (code, statut HTTP, route) et « Copier les détails ».
 
 ## 4. Écrans visés
 

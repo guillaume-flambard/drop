@@ -3,11 +3,12 @@ import { dashedValues } from './cli-args.ts';
 import { privateConfig, migratePrivate, rollbackPrivate } from './private-config.ts';
 import { PrivateNetworkSchema } from '@drop/protocol';
 import { readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { parseArgs } from 'node:util';
 import { z } from 'zod';
 import { AGENTS, capabilities, connectMcp, McpAnswerConfigSchema } from '@drop/capabilities';
 import { implFor } from '@drop/runner';
-import { createTeam, generateIdentity, OwnerKindSchema, type ConsentCost } from '@drop/protocol';
+import { createTeam, DropError, generateIdentity, OwnerKindSchema, type ConsentCost } from '@drop/protocol';
 import { startDaemon } from './daemon.ts';
 import { AGENT_LABELS, detectAgents } from './detect.ts';
 import { bundledServer, cursorInstallLink, serverEntry } from './install.ts';
@@ -17,6 +18,8 @@ import { isAgentKind, shareDetected } from './share.ts';
 import { oauthConnect } from './oauth.ts';
 import { DEFAULT_RELAY_URL, DropHome, NodeConfigSchema } from './home.ts';
 import { costLine, terminalText } from './ui.ts';
+import { installDaemonLog, secretValues } from './logs.ts';
+import { appVersion, ENGINE_VERSION } from './version.ts';
 
 const AgentKindSchema = z.enum(AGENTS);
 
@@ -57,6 +60,24 @@ const INSTRUCTIONS = `Si tu es bloqué par une ressource, une donnée ou un cont
 \`list_capabilities\`. Si une capacité correspond, propose à l'utilisateur de l'utiliser et attends son accord avant
 d'appeler \`request_drop\`. Si la réponse est éparpillée entre plusieurs personnes, utilise \`request_drops\` puis
 \`get_drop_results\`, et dis d'où vient chaque information.`;
+
+/** The profile for the log header; a configuration the daemon cannot read fails later, with its own code. */
+function readProfile(home: DropHome): string | undefined {
+  try {
+    return home.config().profile;
+  } catch {
+    return undefined;
+  }
+}
+
+/** The local token, removed from every log line; absent here, the daemon refuses to start with E_TOKEN. */
+function readToken(home: DropHome): string | undefined {
+  try {
+    return home.localToken();
+  } catch {
+    return undefined;
+  }
+}
 
 function fail(message: string): never {
   process.stderr.write(`${message}\n`);
@@ -151,7 +172,30 @@ switch (command) {
     break;
   }
   case 'serve': {
-    const daemon = await startDaemon(home);
+    // Every stderr line of the daemon is redacted before it is written, into DROP_HOME/logs/daemon.log when the app
+    // asks for it with DROP_LOG=file (T4.37). Installed first, so a failed start is logged the same way.
+    installDaemonLog({
+      root: home.root,
+      env: process.env,
+      header: { app: appVersion(), engine: ENGINE_VERSION, profile: readProfile(home) },
+      known: secretValues(process.env, [readToken(home)]),
+      home: homedir(),
+    });
+    let daemon: Awaited<ReturnType<typeof startDaemon>>;
+    try {
+      daemon = await startDaemon(home);
+    } catch (error) {
+      process.stderr.write(
+        `${JSON.stringify({
+          at: new Date().toISOString(),
+          event: 'daemon_start_failed',
+          code: error instanceof DropError ? error.code : 'E_START',
+          name: error instanceof Error ? error.name : typeof error,
+          message: error instanceof Error ? error.message : String(error),
+        })}\n`,
+      );
+      process.exit(1);
+    }
     process.stdout.write(
       // The UI link carries the local token: only show it to a person at a terminal, never to a log collector.
       `drop serve: ${home.identity().displayName} (${home.identity().nodeId})\n${

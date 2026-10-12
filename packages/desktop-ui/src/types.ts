@@ -67,6 +67,10 @@ export interface StatusData {
   relayConnected: boolean;
   internet?: string;
   policy?: { policyId: string };
+  /** The app's and the engine's versions (T4.37); `app` is absent for a node started outside the app. */
+  version?: { app?: string; engine: string };
+  /** The logs folder, DROP_HOME/logs (T4.37). */
+  logDir?: string;
 }
 export interface OnboardingPlan {
   agent: string;

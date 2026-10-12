@@ -110,6 +110,35 @@
         margin-top: 16px;
         color: var(--soft);
       }
+      #log-box {
+        margin-top: 24px;
+        padding-top: 16px;
+        border-top: 1px solid var(--edge);
+      }
+      #log-box p {
+        margin-bottom: 8px;
+      }
+      code {
+        display: block;
+        padding: 8px 10px;
+        border: 1px solid var(--edge);
+        border-radius: 8px;
+        font:
+          12px/1.4 ui-monospace,
+          monospace;
+        overflow-wrap: anywhere;
+        user-select: all;
+      }
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 12px;
+      }
+      button.secondary {
+        color: var(--accent);
+        background: transparent;
+      }
       ::selection {
         background: var(--accent);
         color: var(--ground);
@@ -128,6 +157,15 @@
       <small id="hint" hidden
         >Tu peux aussi choisir « Réessayer le démarrage » dans le menu drop de la barre de menus.</small
       >
+      <div id="log-box" hidden>
+        <p>Le journal du moteur, à joindre si tu demandes de l’aide :</p>
+        <code id="log-path"></code>
+        <div class="actions">
+          <button id="open-logs" type="button" class="secondary">Ouvrir le dossier des journaux</button>
+          <button id="copy-log" type="button" class="secondary">Copier le chemin</button>
+        </div>
+        <small id="log-note" role="status"></small>
+      </div>
     </main>
     <script>
       const states = {
@@ -166,7 +204,10 @@
           'L’app n’a pas pu enregistrer le moteur qu’elle venait de lancer. Quitte puis rouvre drop.',
         ],
       };
-      const code = new URLSearchParams(location.search).get('state');
+      const params = new URLSearchParams(location.search);
+      const code = params.get('state');
+      // The shell names the log on every page it opens (T4.37); it is shown, as text, only when the start failed.
+      const log = params.get('log');
       if (code && states[code]) {
         document.getElementById('state').textContent = 'Démarrage interrompu';
         document.getElementById('status-dot').classList.add('error');
@@ -175,7 +216,31 @@
         document.getElementById('retry').hidden = false;
         document.getElementById('hint').hidden = false;
         document.getElementById('hint').append(' Code de diagnostic : ' + code + '.');
+        if (log) {
+          document.getElementById('log-path').textContent = log;
+          document.getElementById('log-box').hidden = false;
+        }
       }
+      const note = (text) => {
+        document.getElementById('log-note').textContent = text;
+      };
+      document.getElementById('open-logs').addEventListener('click', async () => {
+        try {
+          await window.__TAURI_INTERNALS__.invoke('open_logs');
+          note('Dossier des journaux ouvert.');
+        } catch {
+          note('Ouvre ce dossier à la main : son chemin est ci-dessus.');
+        }
+      });
+      document.getElementById('copy-log').addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(log || '');
+          note('Chemin copié.');
+        } catch {
+          getSelection()?.selectAllChildren(document.getElementById('log-path'));
+          note('Chemin sélectionné : copie-le avec le raccourci du système.');
+        }
+      });
       document.getElementById('retry').addEventListener('click', async () => {
         const button = document.getElementById('retry');
         button.disabled = true;

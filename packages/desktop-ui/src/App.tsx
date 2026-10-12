@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { LayoutGrid, UsersRound, Blocks, Handshake, BookOpenText, Wifi, RefreshCcw } from 'lucide-react';
+import { LayoutGrid, UsersRound, Blocks, Handshake, BookOpenText, Wifi, RefreshCcw, Stethoscope } from 'lucide-react';
 import { Button } from './components/ui/button.tsx';
 import { initials } from './lib/format.ts';
 import { api } from './api.ts';
@@ -10,8 +10,11 @@ import { AgentsView } from './views/agents.tsx';
 import { SharingView } from './views/sharing.tsx';
 import { FactsView } from './views/facts.tsx';
 import { NetworkView } from './views/network.tsx';
+import { DiagnosticView } from './views/diagnostic.tsx';
+import { ErrorNotice } from './components/error-notice.tsx';
+import { describeError, type ErrorInfo } from './lib/errors.ts';
 
-export type Page = 'overview' | 'team' | 'agents' | 'sharing' | 'facts' | 'network';
+export type Page = 'overview' | 'team' | 'agents' | 'sharing' | 'facts' | 'network' | 'diagnostic';
 const pages = [
   { id: 'overview', label: 'Vue d’ensemble', icon: LayoutGrid },
   { id: 'team', label: 'Équipe', icon: UsersRound },
@@ -19,6 +22,7 @@ const pages = [
   { id: 'sharing', label: 'Outils partagés', icon: Handshake },
   { id: 'facts', label: 'Faits publiés', icon: BookOpenText },
   { id: 'network', label: 'Connexion', icon: Wifi },
+  { id: 'diagnostic', label: 'Diagnostic', icon: Stethoscope },
 ] as const;
 
 const empty: WorkspaceData = {
@@ -46,18 +50,18 @@ const subtitles: Record<Page, { title: string; caption: string }> = {
   },
   facts: { title: 'Ce que tu publies', caption: 'Des informations que tu choisis de rendre disponibles à ton équipe.' },
   network: { title: 'Ta connexion', caption: 'Garde le contrôle de la façon dont les appareils communiquent.' },
+  diagnostic: {
+    title: 'Diagnostic',
+    caption: 'La version de drop, ses journaux, et un diagnostic expurgé à envoyer quand quelque chose ne marche pas.',
+  },
 };
-
-function formatError(e: unknown): string {
-  return e instanceof Error ? e.message : 'Une erreur est survenue. Réessaie.';
-}
 
 export default function App() {
   const [page, setPage] = useState<Page>('overview');
   const [data, setData] = useState<WorkspaceData>(empty);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<ErrorInfo | null>(null);
   const [notice, setNotice] = useState('');
   const [version, setVersion] = useState(0);
   const title = subtitles[page];
@@ -88,12 +92,13 @@ export default function App() {
           outbound: extract(4) as { drops: DropStatus[] } | null,
           internet: extract(5) as InternetData | null,
         };
-        if (parts.every((result) => result.status === 'rejected')) setError('Le moteur local ne répond pas. Réessaie.');
+        if (parts.every((result) => result.status === 'rejected'))
+          setError({ sentence: 'Le moteur local ne répond pas. Réessaie.' });
         setData(next);
         setVersion((n) => n + 1);
       })
       .catch((e: unknown) => {
-        setError(formatError(e));
+        setError(describeError(e));
       })
       .finally(() => {
         setLoading(false);
@@ -107,7 +112,7 @@ export default function App() {
   const act = useCallback(
     (task: () => Promise<unknown>, successMessage: string, after?: () => void): void => {
       setBusy(true);
-      setError('');
+      setError(null);
       task()
         .then(() => {
           setNotice(successMessage);
@@ -115,7 +120,7 @@ export default function App() {
           refresh();
         })
         .catch((e: unknown) => {
-          setError(formatError(e));
+          setError(describeError(e));
         })
         .finally(() => {
           setBusy(false);
@@ -127,7 +132,7 @@ export default function App() {
   const toPage = (next: Page) => {
     window.scrollTo({ top: 0, behavior: 'auto' });
     setPage(next);
-    setError('');
+    setError(null);
     setNotice('');
   };
   const username = data.status?.displayName.split(' ')[0] || 'toi';
@@ -146,6 +151,8 @@ export default function App() {
         return <FactsView {...props} />;
       case 'network':
         return <NetworkView {...props} />;
+      case 'diagnostic':
+        return <DiagnosticView {...props} />;
     }
   }, [act, busy, data, loading, page, refresh, version]);
 
@@ -244,21 +251,12 @@ export default function App() {
             </Button>
           </div>
           {error ? (
-            <div
-              role="alert"
-              className="mb-6 flex items-start justify-between gap-4 rounded-xl border border-[#ddb7b8] bg-[#fdf7f7] px-4 py-3 text-[12px] text-[#9b5054] dark:bg-[#482f33] dark:text-[#f0b8b8]"
-            >
-              <span>{error}</span>
-              <button
-                type="button"
-                className="underline"
-                onClick={() => {
-                  setError('');
-                }}
-              >
-                Fermer
-              </button>
-            </div>
+            <ErrorNotice
+              error={error}
+              onClose={() => {
+                setError(null);
+              }}
+            />
           ) : null}
           {notice ? (
             <div

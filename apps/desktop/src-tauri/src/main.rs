@@ -8,8 +8,8 @@
 use std::fs;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpStream;
-use std::path::PathBuf;
-use std::process::{Child, ChildStdout, Command, Stdio};
+use std::path::{Path, PathBuf};
+use std::process::{Child, ChildStderr, ChildStdout, Command, Stdio};
 #[cfg(target_os = "macos")]
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -147,13 +147,155 @@ fn ensure_identity(app: &AppHandle) -> Result<(), &'static str> {
     Ok(())
 }
 
-/// Appends `{ at, code, detail }` to ~/.drop/app.log: the app's own errors, with a stable code (AGENTS.md).
-fn log_error(code: &str, detail: &str) {
-    let at = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
-    let line = serde_json::json!({ "at": at, "code": code, "detail": detail });
-    if let Ok(mut file) = fs::OpenOptions::new().create(true).append(true).open(drop_home().join("app.log")) {
-        let _ = writeln!(file, "{line}");
+/// The logs folder (T4.37): logs only, so the owner can open or send it without the keys that live in DROP_HOME.
+fn logs_dir() -> PathBuf {
+    drop_home().join("logs")
+}
+
+/// The app's own log turns over past this size, keeping one previous file.
+const APP_LOG_MAX_BYTES: u64 = 1024 * 1024;
+/// A raw line of the daemon is cut at this many characters.
+const MAX_STRAY_CHARS: usize = 2000;
+
+/// Creates the logs folder, for the owner only on macOS and Linux.
+fn ensure_logs_dir() -> std::io::Result<PathBuf> {
+    let dir = logs_dir();
+    fs::create_dir_all(&dir)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&dir, fs::Permissions::from_mode(0o700))?;
     }
+    Ok(dir)
+}
+
+/// Opens a log to append, never to empty it; a new file is for the owner only on macOS and Linux.
+fn open_append(path: &Path) -> std::io::Result<fs::File> {
+    let mut options = fs::OpenOptions::new();
+    options.create(true).append(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    options.open(path)
+}
+
+/// Appends a line; past `cap` bytes the file first becomes `<name>.1`, replacing the previous one.
+fn append_capped(path: &Path, line: &str, cap: u64) -> std::io::Result<()> {
+    let size = fs::metadata(path).map(|meta| meta.len()).unwrap_or(0);
+    if size > 0 && size + line.len() as u64 + 1 > cap {
+        let mut previous = path.as_os_str().to_owned();
+        previous.push(".1");
+        let _ = fs::remove_file(&previous);
+        fs::rename(path, &previous)?;
+    }
+    let mut file = open_append(path)?;
+    writeln!(file, "{line}")
+}
+
+/// The local token, removed from every line the shell writes.
+fn local_token() -> Option<String> {
+    let token = fs::read_to_string(drop_home().join("local-token")).ok()?;
+    let token = token.trim().to_string();
+    (!token.is_empty()).then_some(token)
+}
+
+/// The shell's own redaction, for what reaches a log without the node's (T4.37): the daemon's raw stderr (the runtime
+/// failing before or outside JavaScript) and the app's errors. Coarser than the node's: the local token, a line with a
+/// key header, `NAME=value` with a secret name, words starting like a known key, and any long word of letters and
+/// digits without a path separator. The diagnostic redacts again with the full scanner of the node.
+fn redact_stray(line: &str, token: Option<&str>) -> String {
+    let mut text: String = line.chars().take(MAX_STRAY_CHARS).collect();
+    if text.contains("PRIVATE KEY") {
+        return "[ligne expurgée]".to_string();
+    }
+    if let Some(token) = token.filter(|token| token.len() >= 8) {
+        text = text.replace(token, "[expurgé]");
+    }
+    text.split(' ')
+        .map(redact_stray_word)
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn redact_stray_word(word: &str) -> String {
+    if let Some((name, _)) = word.split_once('=') {
+        let upper = name.to_ascii_uppercase();
+        if ["KEY", "TOKEN", "SECRET", "PASSWORD", "PASSPHRASE"]
+            .iter()
+            .any(|secret| upper.contains(secret))
+        {
+            return format!("{name} [expurgé]");
+        }
+    }
+    let core = word.trim_matches(|c: char| !c.is_ascii_alphanumeric());
+    let known_prefix = core.len() >= 20
+        && [
+            "sk-", "ghp_", "gho_", "ghs_", "ghu_", "ghr_", "xox", "AKIA", "eyJ",
+        ]
+        .iter()
+        .any(|prefix| core.starts_with(prefix));
+    let key_like = core.len() >= 24
+        && core.chars().any(|c| c.is_ascii_digit())
+        && core.chars().any(|c| c.is_ascii_alphabetic())
+        && core
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || "-_+=.".contains(c));
+    if known_prefix || key_like {
+        "[expurgé]".to_string()
+    } else {
+        word.to_string()
+    }
+}
+
+/// Appends `{ at, code, detail }` to logs/app.log: the app's own errors, with a stable code (AGENTS.md), redacted.
+fn log_error(code: &str, detail: &str) {
+    let at = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let detail = redact_stray(detail, local_token().as_deref());
+    let line = serde_json::json!({ "at": at, "code": code, "detail": detail });
+    if let Ok(dir) = ensure_logs_dir() {
+        let _ = append_capped(&dir.join("app.log"), &line.to_string(), APP_LOG_MAX_BYTES);
+    }
+}
+
+/// An app.log from before T4.37, in DROP_HOME, moves into the logs folder; the node deletes it after 14 days.
+fn move_legacy_app_log() {
+    let legacy = drop_home().join("app.log");
+    if legacy.is_file() {
+        if let Ok(dir) = ensure_logs_dir() {
+            let _ = fs::rename(&legacy, dir.join("app.log.legacy"));
+        }
+    }
+}
+
+/// What the daemon writes on stderr outside its own log (with DROP_LOG=file, only what the runtime prints before or
+/// outside JavaScript) reaches daemon.log as JSON, after the shell's redaction. The node turns that file over: each
+/// line opens the file by its path, so it follows a rotation.
+fn capture_stderr(stderr: ChildStderr) {
+    thread::spawn(move || {
+        for raw in BufReader::new(stderr).split(b'\n').map_while(Result::ok) {
+            let text = String::from_utf8_lossy(&raw);
+            let text = text.trim_end_matches('\r');
+            if text.trim().is_empty() {
+                continue;
+            }
+            let at = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0);
+            let line = redact_stray(text, local_token().as_deref());
+            let entry = serde_json::json!({ "at": at, "event": "daemon_stderr", "line": line });
+            let written = open_append(&logs_dir().join("daemon.log"))
+                .and_then(|mut file| writeln!(file, "{entry}"));
+            if written.is_err() {
+                log_error("E_LOG", "daemon stderr line not written");
+            }
+        }
+    });
 }
 
 fn start_daemon(app: &AppHandle, marker: &str, port: u16) -> Result<(), &'static str> {
@@ -163,7 +305,9 @@ fn start_daemon(app: &AppHandle, marker: &str, port: u16) -> Result<(), &'static
     if TcpStream::connect(("127.0.0.1", port)).is_ok() {
         return Err("E_PORT");
     }
-    let log = fs::File::create(drop_home().join("daemon.log")).map_err(|_| "E_LOG")?;
+    // The node writes and turns over logs/daemon.log itself (T4.37); the shell only checks it can append to it.
+    let dir = ensure_logs_dir().map_err(|_| "E_LOG")?;
+    open_append(&dir.join("daemon.log")).map_err(|_| "E_LOG")?;
     let mut command = drop_command(app, &["serve"]);
     // The daemon hands notifications to the app as JSON lines on stdout (T4.14), so they carry the app's icon.
     command.stdout(Stdio::piped()).env("DROP_NOTIFY", "shell");
@@ -172,10 +316,17 @@ fn start_daemon(app: &AppHandle, marker: &str, port: u16) -> Result<(), &'static
     command
         .stdin(Stdio::piped())
         .env("DROP_EXIT_WITH_PARENT", "stdin");
-    command.stderr(log).env("DROP_SHELL_INSTANCE", marker);
+    command
+        .env("DROP_LOG", "file")
+        .env("DROP_APP_VERSION", app.package_info().version.to_string());
+    command.stderr(Stdio::piped());
+    command.env("DROP_SHELL_INSTANCE", marker);
     let mut child = command.spawn().map_err(|_| "E_SPAWN")?;
     if let Some(stdout) = child.stdout.take() {
         relay_notifications(app.clone(), stdout);
+    }
+    if let Some(stderr) = child.stderr.take() {
+        capture_stderr(stderr);
     }
     *app.state::<Daemon>().child.lock().map_err(|_| "E_STATE")? = Some(child);
     Ok(())
@@ -302,7 +453,11 @@ fn show_splash(app: &AppHandle, code: &str) {
         return;
     };
     let mut url = base;
-    url.query_pairs_mut().clear().append_pair("state", code);
+    // The start page names the log to look at or send (T4.37); it shows it only on a failure.
+    url.query_pairs_mut()
+        .clear()
+        .append_pair("state", code)
+        .append_pair("log", &logs_dir().join("daemon.log").to_string_lossy());
     if let Some(window) = app.get_webview_window("panel") {
         let _ = window.navigate(url);
     }
@@ -392,24 +547,28 @@ fn supervise(app: AppHandle) {
                     user_retry || app.state::<Daemon>().retry.swap(false, Ordering::SeqCst);
                 if let Some(next) = restart_after_run(user_retry, restarts, ready_at.elapsed()) {
                     if !user_retry {
-                        eprintln!("drop shell E_HEALTH: retry {next}/{MAX_RESTARTS}");
+                        log_error(
+                            "E_HEALTH",
+                            &format!("daemon stopped answering, retry {next}/{MAX_RESTARTS}"),
+                        );
                     }
                     restarts = next;
                     continue;
                 }
-                eprintln!("drop shell E_RESTART");
+                log_error("E_RESTART", "daemon stopped again, waiting for the user");
                 show_splash(&app, "E_RESTART");
             }
             Err(code) => {
-                eprintln!("drop shell {code}");
+                // Shown by the start page too; written here so a tester's logs say why the engine did not start.
+                log_error(code, "daemon start failed");
                 stop_daemon(&app);
                 if code == "E_START" && restarts < MAX_RESTARTS {
                     restarts += 1;
-                    eprintln!("drop shell E_START: retry {restarts}/{MAX_RESTARTS}");
+                    log_error("E_START", &format!("retry {restarts}/{MAX_RESTARTS}"));
                     continue;
                 }
                 if code == "E_START" {
-                    eprintln!("drop shell E_RESTART");
+                    log_error("E_RESTART", "daemon did not start, waiting for the user");
                 }
                 show_splash(&app, if code == "E_START" { "E_RESTART" } else { code });
             }
@@ -563,6 +722,32 @@ fn toggle_panel(app: &AppHandle, near: PhysicalPosition<f64>) {
 #[tauri::command]
 fn retry_daemon(app: AppHandle) {
     app.state::<Daemon>().retry.store(true, Ordering::SeqCst);
+}
+
+/// Opens the logs folder from the start page (T4.37), when the node that would do it does not run: the system's file
+/// manager, the folder's path as its only argument, no shell. Never DROP_HOME, which holds the keys.
+#[tauri::command]
+fn open_logs() -> Result<(), String> {
+    let dir = ensure_logs_dir().map_err(|_| "E_LOG".to_string())?;
+    let opener = if cfg!(target_os = "macos") {
+        "open"
+    } else if cfg!(windows) {
+        "explorer.exe"
+    } else {
+        "xdg-open"
+    };
+    let started = Command::new(opener).arg(&dir).spawn();
+    started
+        .map(|mut child| {
+            // Reaped in the background: the file manager's launcher exits at once.
+            thread::spawn(move || {
+                let _ = child.wait();
+            });
+        })
+        .map_err(|error| {
+            log_error("E_OPEN", &error.to_string());
+            "E_OPEN".to_string()
+        })
 }
 
 /// The longest `drop://` link the app accepts: an invite with its admission ticket and iroh addresses fits well under.
@@ -772,7 +957,7 @@ fn main() {
         show_panel(app, None);
     }));
     let app = builder
-        .invoke_handler(tauri::generate_handler![retry_daemon])
+        .invoke_handler(tauri::generate_handler![retry_daemon, open_logs])
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_autostart::init(
             MacosLauncher::LaunchAgent,
@@ -819,6 +1004,7 @@ fn main() {
                 _ => {}
             });
 
+            move_legacy_app_log();
             let ready = handle.clone();
             thread::spawn(move || supervise(ready));
 
@@ -992,6 +1178,62 @@ mod tests {
         }
         assert!(handled_link(&url(&format!("drop://join?invite={code}"))));
         assert!(!handled_link(&url("drop://settings")));
+    }
+
+    #[test]
+    fn redact_stray_masks_secrets_and_keeps_paths() {
+        let token = "Qm9vdHN0cmFwLXRva2VuLWZvci10ZXN0cw";
+        let anthropic = format!("sk-ant-api03-{}", "A1b2C3d4".repeat(4));
+        let github = format!("ghp_{}", "a1B2c3D4e5F6".repeat(3));
+        let line = format!(
+            "FATAL ERROR: heap limit token {token} at /Applications/drop.app/Contents/Resources/drop.mjs:12:3 \
+             OPENROUTER_API_KEY=plain-value-123 {anthropic} {github} 0x0000000100c3a4f8"
+        );
+        let out = redact_stray(&line, Some(token));
+        for secret in [
+            token,
+            anthropic.as_str(),
+            github.as_str(),
+            "plain-value-123",
+        ] {
+            assert!(!out.contains(secret), "{secret} in {out}");
+        }
+        // What explains a crash stays: the message, the path and position, an address.
+        assert!(
+            out.starts_with("FATAL ERROR: heap limit token [expurgé] at /Applications/drop.app/")
+        );
+        assert!(out.contains("drop.mjs:12:3"));
+        assert!(out.contains("OPENROUTER_API_KEY [expurgé]"));
+        assert!(out.contains("0x0000000100c3a4f8"));
+        // A key header loses its whole line; a long line is cut.
+        let header = format!("-----BEGIN {} KEY----- abc", "RSA PRIVATE");
+        assert_eq!(redact_stray(&header, None), "[ligne expurgée]");
+        assert_eq!(
+            redact_stray(&"a".repeat(5000), None).chars().count(),
+            MAX_STRAY_CHARS
+        );
+    }
+
+    #[test]
+    fn append_capped_keeps_one_previous_file() {
+        let dir = std::env::temp_dir().join(format!("drop-app-log-{}", instance_marker()));
+        fs::create_dir_all(&dir).expect("test folder");
+        let path = dir.join("app.log");
+        for index in 0..10 {
+            append_capped(&path, &format!("line {index} {}", "x".repeat(40)), 120).expect("append");
+        }
+        assert!(fs::metadata(&path).expect("current").len() <= 120);
+        assert!(dir.join("app.log.1").exists());
+        assert!(!dir.join("app.log.2").exists());
+        let current = fs::read_to_string(&path).expect("current");
+        assert!(current.contains("line 9"));
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = fs::metadata(&path).expect("current").permissions().mode() & 0o777;
+            assert_eq!(mode, 0o600);
+        }
+        fs::remove_dir_all(&dir).expect("cleanup");
     }
 
     #[test]

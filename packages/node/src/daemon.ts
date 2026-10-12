@@ -1,3 +1,5 @@
+import { mkdirSync } from 'node:fs';
+import { homedir } from 'node:os';
 import {
   capabilities,
   connectMcp,
@@ -43,6 +45,9 @@ import {
 } from './iroh.ts';
 import { addProject, listProjects, removeProject } from './projects.ts';
 import { switchRelay } from './private-config.ts';
+import { buildDiagnostic, openFolder } from './diagnostic.ts';
+import { logsDir, secretValues } from './logs.ts';
+import { appVersion, ENGINE_VERSION } from './version.ts';
 
 export interface Daemon {
   engine: NodeEngine;
@@ -61,6 +66,8 @@ export interface DaemonOptions {
   apiPort?: number;
   notifications?: boolean;
   log?: (line: string) => void;
+  /** Opens the logs folder in the file manager; tests replace it so that nothing opens. */
+  openFolder?: (dir: string) => Promise<void>;
 }
 
 /** `drop serve`: relay connection with reconnect, local API and UI, runner for published capabilities. */
@@ -301,6 +308,9 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
         relayConnected: relay.connected,
         lan: lan.state(),
         internet: iroh.state(),
+        // Shown in the workspace's « Diagnostic » (T4.37).
+        version: { app: appVersion(), engine: ENGINE_VERSION },
+        logDir: logsDir(home.root),
         ...(policy
           ? {
               policy: {
@@ -312,6 +322,28 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
           : {}),
       }),
       internet: () => ({ settings: internet, available: irohBinary() !== undefined, ...iroh.status() }),
+      // The redacted diagnostic the owner reads, then copies himself (T4.37): states and log ends, nothing else.
+      diagnostic: () =>
+        buildDiagnostic({
+          root: home.root,
+          home: homedir(),
+          known: secretValues(process.env, [token]),
+          status: {
+            appVersion: appVersion(),
+            profile: config.profile,
+            relayConnected: relay.connected,
+            lan: lan.state(),
+            internet: iroh.state(),
+            peers: engine.peers().length,
+            policy: policy !== undefined,
+          },
+        }),
+      // The logs folder only: never DROP_HOME, which holds the keys.
+      openLogs: () => {
+        const dir = logsDir(home.root);
+        mkdirSync(dir, { recursive: true, mode: 0o700 });
+        return (options.openFolder ?? openFolder)(dir);
+      },
       // One change at a time, and never during shutdown: two saves at once must not leave a second program running.
       setInternet: (settings) => {
         internetAllowed(settings);
