@@ -141,11 +141,17 @@ Pour les essais avec mise à jour via l'app, installer **NSIS** sous Windows et 
 
 Aucune mise à jour ne sera proposée aux installations existantes construites **sans** `--updates`.
 Pour elles, une réinstallation manuelle unique est nécessaire avant d'activer les mises à jour.
-Sans la clé publique et les deux secrets de signature Tauri, les vérifications de PR continuent
-à produire des installeurs **sans** Updater, mais le workflow de release (tag ou lancement manuel)
-est volontairement **refusé avant les builds**. Cela évite de publier un brouillon trompeur
-sans paquets de mise à jour. Une première installation destinée aux mises à jour nécessite
-une build produite avec `--updates`; les builds anciennes demandent une réinstallation unique.
+Les builds de PR exercent le **vrai chemin Tauri de signature des paquets**, avec une paire de
+clés **éphémère différente pour chaque runner**. Elles vérifient qu’une archive signée et un
+fragment de manifeste existent, mais **ces builds ne sont pas distribuables comme applications
+auto-updatables** : leur clé publique temporaire ne correspond pas à la clé des releases.
+N'envoyer aux amis que des builds produites par une release avec la véritable clé commune.
+
+Sans la clé publique et les deux secrets de signature Tauri, le workflow de release
+(tag ou lancement manuel) est volontairement **refusé avant les builds**. Cela évite
+de publier un brouillon trompeur sans paquets de mise à jour. Une première installation
+destinée aux mises à jour nécessite une build produite avec `--updates`;
+les builds anciennes demandent une réinstallation unique.
 
 Le canal `stable` décrit ici n'est **pas** un canal bêta : un essai privé avec mises à jour fréquentes
 exige un endpoint/flux bêta distinct et un choix explicite du canal à l'installation, sans exposer

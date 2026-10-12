@@ -155,6 +155,13 @@ jobs:
           rustc --version
       - run: pnpm install --frozen-lockfile
 
+      # PR builds exercise the real signed updater path without production keys.
+      - name: Prepare throwaway updater signing key for PR build
+        if: github.event_name == 'pull_request'
+        run: |
+          npx --yes --package @tauri-apps/cli@2.12.1 tauri signer generate --ci -w .drop-ci-updater.key
+          cp .drop-ci-updater.key.pub apps/desktop/updater.pub
+
       - name: Import the Developer ID certificate (v2.tauri.app/distribute/sign/macos)
         if: matrix.platform == 'macos' && env.APPLE_SIGNING == 'true'
         env:
@@ -199,7 +206,14 @@ jobs:
           DROP_RELEASE_TAG: ${{ needs.meta.outputs.tag }}
         run: |
           update_args=()
-          if [ "$UPDATE_SIGNING" = true ]; then update_args=(--updates); fi
+          if [ "$UPDATE_SIGNING" = true ]; then
+            update_args=(--updates)
+          elif [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            # Disposable per-run signing key: the release workflow never publishes these updates.
+            export TAURI_SIGNING_PRIVATE_KEY="$(cat .drop-ci-updater.key)"
+            unset TAURI_SIGNING_PRIVATE_KEY_PASSWORD
+            update_args=(--updates)
+          fi
           if [ "$PLATFORM" = macos ] && [ "$APPLE_SIGNING" = true ]; then
             node scripts/build-desktop.ts --release --sign "$APPLE_SIGNING_IDENTITY" "${update_args[@]}"
           elif [ "$PLATFORM" = macos ]; then
@@ -208,6 +222,23 @@ jobs:
             node scripts/build-desktop.ts --release "${update_args[@]}"
           fi
           ls -l dist/desktop
+
+      - name: Check the signed update bundle on PR builds
+        if: github.event_name == 'pull_request'
+        run: |
+          test -d dist/updates
+          test "$(find dist/updates -maxdepth 1 -name '*.json' | wc -l | tr -d ' ')" = 1
+          test "$(find dist/updates -maxdepth 1 -type f ! -name '*.json' | wc -l | tr -d ' ')" = 1
+          node -e '
+            const fs = require("node:fs");
+            const dir = "dist/updates";
+            const name = fs.readdirSync(dir).find((value) => value.endsWith(".json"));
+            const manifest = JSON.parse(fs.readFileSync(dir + "/" + name, "utf8"));
+            const entries = Object.entries(manifest.platforms);
+            if (entries.length !== 1 || !entries[0][1].signature || !entries[0][1].url) {
+              throw new Error("E_CI_UPDATE: incomplete signed update");
+            }
+          '
 
       # Each installer is opened the way a tester would, then its bundled Node, drop.mjs and drop-iroh run.
       - name: Smoke test the DMG
