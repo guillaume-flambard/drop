@@ -140,6 +140,10 @@ Ne jamais ajouter la clé privée, son mot de passe, ni un fichier `.key` au dé
    filière administrée dédiée, distincte des releases auto-updatables.
    Chaque build produit un fragment avec signature liée à la version ; le job de publication exige
    cinq fragments distincts, identiques en version, et une URL d'archive dans **ce dépôt**.
+   Avant de créer le brouillon, un vérificateur Rust indépendant (\`crates/drop-update-verify\`)
+   valide **cryptographiquement les octets exacts des cinq archives** avec la clé publique
+   inscrite dans \`apps/desktop/updater.pub\`, et vérifie la version signée. Une archive
+   modifiée ou une clé privée qui ne correspondrait pas à la clé publique bloque la release.
    Il ajoute `latest.json` et les archives signées à la **release GitHub en brouillon**.
 5. Après les tests manuels, **publier la release stable sur GitHub**. Quand la recette
    N → N+1 est validée sur de vraies machines, définir la variable de dépôt Actions

@@ -23,6 +23,7 @@ on:
       - scripts/build-desktop.ts
       - scripts/desktop-updates.ts
       - scripts/merge-desktop-updates.ts
+      - crates/drop-update-verify/**
       - scripts/build-mac.ts
       - scripts/desktop-smoke.ts
       - scripts/drop-iroh-notice.ts
@@ -330,6 +331,12 @@ jobs:
         run: |
           node scripts/merge-desktop-updates.ts release/latest.json signed-updates/*.json
           find signed-updates -maxdepth 1 -type f ! -name '*.json' -exec cp {} release/ \;
+      # Not merely a syntactic .sig check: cryptographically verify the exact shipped
+      # archive bytes against the key committed to the application, before drafting anything.
+      - name: Verify all five production-key updater signatures
+        run: |
+          cargo run --locked --release --manifest-path crates/drop-update-verify/Cargo.toml -- \
+            apps/desktop/updater.pub release/latest.json release
       - name: Checksums
         working-directory: release
         run: |
