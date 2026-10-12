@@ -110,6 +110,12 @@ par `GET /_shell/update-ready`, réservé à la coque locale authentifiée. Si u
 l'installation attend ; la détection continue périodiquement. Sur Windows le mode
 `passive` montre une courte fenêtre de progression. Le processus est redémarré après remplacement.
 
+L'archive est d'abord téléchargée et **vérifiée cryptographiquement**, sans modifier Drop.
+Juste avant son installation, l'app recontrôle toutes les conditions d'inactivité ;
+si une demande ou une fenêtre est apparue pendant le téléchargement, elle conserve la
+mise à jour en attente et recommence une période de calme avant un nouvel essai.
+Une installation demandée manuellement est également reportée si le moteur travaille.
+
 Cette vérification protège les cas d'activité connus **mais ne constitue pas un verrou atomique** :
 une nouvelle demande peut théoriquement arriver entre le dernier contrôle d'inactivité et
 l'installation. Le test réel de montée de version et les essais en concurrence restent des
