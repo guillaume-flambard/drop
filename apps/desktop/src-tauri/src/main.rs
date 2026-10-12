@@ -269,13 +269,6 @@ fn read_capped_line<R: BufRead>(reader: &mut R, max: usize) -> std::io::Result<O
     }
 }
 
-/// The local token, removed from every line the shell writes.
-fn local_token() -> Option<String> {
-    let token = fs::read_to_string(drop_home().join("local-token")).ok()?;
-    let token = token.trim().to_string();
-    (!token.is_empty()).then_some(token)
-}
-
 /// The shell's own redaction, for what reaches a log without the node's (T4.37): the daemon's raw stderr (the runtime
 /// failing before or outside JavaScript) and the app's errors. The node's rules, checked against the same vectors
 /// (test/fixtures/log-redaction-vectors.json): the local token, a line with a key header, URL credentials, the value
