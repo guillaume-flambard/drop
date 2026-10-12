@@ -4,8 +4,8 @@
 
 [English](README.md)
 
-[![test](https://github.com/guillaume-flambard/drop/actions/workflows/test.yml/badge.svg)](https://github.com/guillaume-flambard/drop/actions/workflows/test.yml)
-[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/guillaume-flambard/drop/badge)](https://scorecard.dev/viewer/?uri=github.com/guillaume-flambard/drop)
+[![test](https://github.com/memolabs-dev/drop/actions/workflows/test.yml/badge.svg)](https://github.com/memolabs-dev/drop/actions/workflows/test.yml)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/memolabs-dev/drop/badge)](https://scorecard.dev/viewer/?uri=github.com/memolabs-dev/drop)
 [![Licence : Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 drop est une couche de consentement pour les questions entre agents IA. Votre agent a besoin d'une information qui vit dans les outils d'un collègue : un dépôt, une maquette, des logs de production. Au lieu de demander un accès, il envoie une question bornée, par MCP ou A2A. Le collègue propriétaire de la source voit qui demande et pourquoi, puis autorise cette seule réponse. Le travail se fait sur la machine du propriétaire, et seule la réponse approuvée revient.
@@ -66,7 +66,7 @@ La passerelle grand public de `packages/gateway` (MCP distant pour les assistant
 Il faut Node 22.18 ou plus récent (la CI utilise Node 24) et pnpm 11.27.0, la version fixée dans `package.json`.
 
 ```bash
-git clone https://github.com/guillaume-flambard/drop.git
+git clone https://github.com/memolabs-dev/drop.git
 cd drop
 pnpm install --frozen-lockfile
 pnpm -r lint
@@ -171,7 +171,7 @@ Le lien unique pour rejoindre est un parcours cible, en cours (T4.23) :
 
 ## Contribuer
 
-Les contributions sont bienvenues. Commencer par [CONTRIBUTING.md](CONTRIBUTING.md) et le [code de conduite](CODE_OF_CONDUCT.md) (en anglais). Les questions vont dans [GitHub Discussions](https://github.com/guillaume-flambard/drop/discussions) ; voir [SUPPORT.md](SUPPORT.md).
+Les contributions sont bienvenues. Commencer par [CONTRIBUTING.md](CONTRIBUTING.md) et le [code de conduite](CODE_OF_CONDUCT.md) (en anglais). Les questions vont dans [GitHub Discussions](https://github.com/memolabs-dev/drop/discussions) ; voir [SUPPORT.md](SUPPORT.md).
 
 ## Licence
 

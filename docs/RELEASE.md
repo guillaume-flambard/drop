@@ -59,7 +59,7 @@ Vérifier un fichier téléchargé :
 
 ```sh
 sha256sum -c SHA256SUMS.txt --ignore-missing           # Linux ; macOS : shasum -a 256 -c
-gh attestation verify drop_0.2.0_amd64.deb -R guillaume-flambard/drop
+gh attestation verify drop_0.2.0_amd64.deb -R memolabs-dev/drop
 ```
 
 Sous Windows : `Get-FileHash .\drop_0.2.0_x64-setup.exe` puis comparer avec la ligne de `SHA256SUMS.txt`.

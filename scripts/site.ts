@@ -8,7 +8,7 @@ import { UPDATE_ARCHIVE } from './mac-updates.ts';
 
 const root = resolve(import.meta.dirname, '..');
 const output = join(root, 'dist/site');
-const sourceBranch = 'https://github.com/guillaume-flambard/drop/blob/main/';
+const sourceBranch = 'https://github.com/memolabs-dev/drop/blob/main/';
 const sourceFiles: Record<string, string> = {
   'index.html': 'site/index.html',
   'demarrer.html': 'site/demarrer.html',

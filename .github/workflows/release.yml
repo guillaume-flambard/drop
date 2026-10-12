@@ -233,7 +233,7 @@ jobs:
     name: draft release
     needs: [meta, build]
     if: >-
-      github.repository == 'guillaume-flambard/drop' &&
+      github.repository == 'memolabs-dev/drop' &&
       (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')))
     runs-on: ubuntu-latest
     timeout-minutes: 15

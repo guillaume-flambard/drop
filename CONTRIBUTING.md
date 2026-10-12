@@ -9,7 +9,7 @@ By taking part you agree to follow the [Code of Conduct](CODE_OF_CONDUCT.md). Se
 You need Node 22.18 or later (CI runs Node 24) and pnpm 11.27.0, the version pinned in `package.json`. With Corepack, `corepack enable` picks the right pnpm.
 
 ```bash
-git clone https://github.com/guillaume-flambard/drop.git
+git clone https://github.com/memolabs-dev/drop.git
 cd drop
 pnpm install --frozen-lockfile
 pnpm -r lint
@@ -95,14 +95,14 @@ Do not include real configurations, conversations, identifiers, keys or screensh
 
 ## Good first issues
 
-Look for the [good first issue](https://github.com/guillaume-flambard/drop/labels/good%20first%20issue) and [help wanted](https://github.com/guillaume-flambard/drop/labels/help%20wanted) labels. If none is open, these are useful starting points:
+Look for the [good first issue](https://github.com/memolabs-dev/drop/labels/good%20first%20issue) and [help wanted](https://github.com/memolabs-dev/drop/labels/help%20wanted) labels. If none is open, these are useful starting points:
 
 - a missing test for a scenario listed in `.openspec-guard-baseline.json`;
 - a broken link, a stale statement or an unclear sentence in the docs;
 - fixtures for an MCP client adapter (paths and versions documented, no personal data);
 - reproducing a reported bug with synthetic data.
 
-Ask in [Discussions](https://github.com/guillaume-flambard/drop/discussions) before starting something bigger.
+Ask in [Discussions](https://github.com/memolabs-dev/drop/discussions) before starting something bigger.
 
 ## Security rules for contributors
 

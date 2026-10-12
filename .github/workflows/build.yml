@@ -1,12 +1,12 @@
 # Builds the root Dockerfile (relay, node, gateway and site share one image) on GitHub-hosted runners.
 #
 # - pull_request: build only, never pushed, never logged in to a registry.
-# - push to main: pushed to ghcr.io/guillaume-flambard/drop as `<full sha>`, `main` and `latest`.
+# - push to main: pushed to ghcr.io/memolabs-dev/drop as `<full sha>`, `main` and `latest`.
 # - push of a `v*` tag: pushed as `<full sha>` and the semver tags (`1.2.3`, `1.2`, `1` from 1.0 on), never `latest`.
 # Pushed images carry a BuildKit SBOM and provenance, plus a GitHub-signed SLSA provenance attestation
-# (`gh attestation verify oci://ghcr.io/guillaume-flambard/drop:<tag> -R guillaume-flambard/drop`).
+# (`gh attestation verify oci://ghcr.io/memolabs-dev/drop:<tag> -R memolabs-dev/drop`).
 #
-# The maintainer's server deploys ghcr.io/guillaume-flambard/drop:latest automatically (autodeploy), so `latest`
+# The maintainer's server deploys ghcr.io/memolabs-dev/drop:latest automatically (autodeploy), so `latest`
 # only ever comes from main. Its deployment configuration lives in a separate private repository, not here.
 name: build drop
 
@@ -37,7 +37,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
-  IMAGE: ghcr.io/guillaume-flambard/drop
+  IMAGE: ghcr.io/memolabs-dev/drop
 
 jobs:
   # Pull requests, forks included: no registry credentials and no write permission.
@@ -67,7 +67,7 @@ jobs:
   publish:
     name: publish
     if: >-
-      github.repository == 'guillaume-flambard/drop' && (
+      github.repository == 'memolabs-dev/drop' && (
         (github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))) ||
         (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
       )

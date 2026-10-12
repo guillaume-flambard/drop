@@ -125,7 +125,7 @@ describe('join page (T4.23)', () => {
       expect(
         target.startsWith('/') ||
           target.startsWith('#') ||
-          target === 'https://github.com/guillaume-flambard/drop/releases/latest',
+          target === 'https://github.com/memolabs-dev/drop/releases/latest',
         target,
       ).toBe(true);
     }
