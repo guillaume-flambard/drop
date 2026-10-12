@@ -297,7 +297,7 @@ describe('cards, receipts, invites, lifecycle, schemas', () => {
 
   it('encodes invites that expire after a day', async () => {
     const { alice } = await pair();
-    const invite = createInvite(alice, 'wss://relay.example', NOW);
+    const invite = await createInvite(alice, 'wss://relay.example', NOW);
     expect(decodeInvite(encodeInvite(invite), NOW + 23 * 3_600_000)).toEqual(invite);
     expect(() => decodeInvite(encodeInvite(invite), NOW + 24 * 3_600_000)).toThrow(DropError);
     expect(() => decodeInvite('not-a-code', NOW)).toThrow(DropError);
@@ -314,7 +314,7 @@ describe('cards, receipts, invites, lifecycle, schemas', () => {
     const forever = { ...ticket, expiresAt: NOW + 365 * ADMISSION_TTL_MS };
     const longLived = { ...forever, sig: await signDetached(alice, canonical(omitSig(forever))) };
     expect(await verifyAdmission(longLived, NOW)).toBe('too_long');
-    const invite = createInvite(alice, 'wss://relay.example', NOW, ticket);
+    const invite = await createInvite(alice, 'wss://relay.example', NOW, ticket);
     expect(decodeInvite(encodeInvite(invite), NOW).admission).toEqual(ticket);
   });
 

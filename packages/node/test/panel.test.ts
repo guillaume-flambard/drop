@@ -231,7 +231,7 @@ describe('menu bar panel and its admin routes (T4.14)', () => {
       relayUrl: 'ws://x/v1',
       refreshCatalogs: () => Promise.resolve(),
     });
-    const code = encodeInvite(createInvite(julie, 'ws://x/v1'));
+    const code = encodeInvite(await createInvite(julie, 'ws://x/v1'));
     const form = (value: string) => new URLSearchParams({ code: value }).toString();
     const preview = await new Promise<{ status: number; text: string }>((resolve, reject) => {
       const req = request(
@@ -260,7 +260,7 @@ describe('menu bar panel and its admin routes (T4.14)', () => {
       req.end(form(code));
     });
     expect(preview.status).toBe(200);
-    expect(JSON.parse(preview.text)).toEqual({ displayName: 'Julie' });
+    expect(JSON.parse(preview.text)).toMatchObject({ displayName: 'Julie', relayHost: 'x', relay: 'kept' });
     expect(sent).toHaveLength(0);
     expect((await call(api.port, 'POST', '/ui/pair/preview', undefined, false)).status).toBe(401);
     expect((await call(api.port, 'POST', '/ui/pair/preview', { code: 'not-a-code' })).status).toBe(400);

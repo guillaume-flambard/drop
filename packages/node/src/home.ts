@@ -17,6 +17,7 @@ import {
   unlinkSync,
   writeFileSync,
 } from 'node:fs';
+import { isIP } from 'node:net';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { z } from 'zod';
@@ -24,6 +25,7 @@ import { FundingConfigSchema } from './funding.ts';
 import type { DropClaim } from './engine.ts';
 import {
   PrivateNetworkSchema,
+  relayUrlAllowed,
   IrohAddrSchema,
   type IrohAddr,
   assertPrivateDestination,
@@ -43,6 +45,30 @@ import {
 
 export const MAX_RECEIVED_DROPS = 16_384;
 
+/** An https page with no query and no fragment: the invite is appended as the fragment (T4.23). */
+export const JoinPageSchema = z
+  .string()
+  .max(300)
+  .refine((raw) => {
+    try {
+      const url = new URL(raw);
+      return url.protocol === 'https:' && !url.username && !url.password && !url.search && !raw.includes('#');
+    } catch {
+      return false;
+    }
+  }, 'https join page required');
+
+/**
+ * Invites this node issued and has not seen used yet, by one-time token, and the invites it accepted, by the SHA-256
+ * of their token (T4.23): kept across restarts, so a link sent today still works after the Mac restarts, and a link
+ * already used is refused. Both expire with the invite.
+ */
+export const InviteStateSchema = z.object({
+  issued: z.record(z.string(), z.number().int()).default({}),
+  used: z.record(z.string(), z.number().int()).default({}),
+});
+export type InviteState = z.infer<typeof InviteStateSchema>;
+
 export const NodeConfigSchema = z
   .object({
     relayUrl: z.string(),
@@ -58,13 +84,17 @@ export const NodeConfigSchema = z
     payer: z.enum(['requester', 'owner']).default('requester'),
     /** As requester: how this node pays for its drops (D27). Absent: it sends no key, the owner's config applies. */
     funding: FundingConfigSchema.optional(),
+    /** The page join links open (T4.23, D89), for a team that hosts its own; drop.memolabs.dev/join by default. */
+    joinPage: JoinPageSchema.optional(),
   })
   .superRefine((config, ctx) => {
     if (config.profile !== 'private') return;
     try {
       if (!config.network || config.funding || config.gateways.length) throw new Error('policy');
-      assertPrivateDestination(config.relayUrl, config.network);
-      if (!['ws:', 'wss:'].includes(new URL(config.relayUrl).protocol)) throw new Error('relay');
+      // A literal address stays a listed private origin; a DNS name is only accepted over TLS (D89).
+      if (!relayUrlAllowed(config.relayUrl)) throw new Error('relay');
+      if (isIP(new URL(config.relayUrl).hostname.replace(/^\[|\]$/g, '')) !== 0)
+        assertPrivateDestination(config.relayUrl, config.network);
     } catch {
       ctx.addIssue({ code: 'custom', message: 'E_DENIED invalid private profile' });
     }
@@ -446,6 +476,16 @@ export class DropHome {
       join(this.root, 'iroh-addrs.json'),
       `${JSON.stringify({ ...this.irohAddrs(), [nodeId]: address }, null, 2)}\n`,
     );
+  }
+
+  inviteState(): InviteState {
+    const path = join(this.root, 'invites.json');
+    if (!existsSync(path)) return { issued: {}, used: {} };
+    return InviteStateSchema.parse(JSON.parse(readFileSync(path, 'utf8')));
+  }
+
+  saveInviteState(state: InviteState): void {
+    writeDurablePrivate(join(this.root, 'invites.json'), `${JSON.stringify(state)}\n`);
   }
 
   /** The owner's Internet choice from the panel (T4.2b): off until they pick one. */

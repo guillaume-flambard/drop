@@ -25,8 +25,11 @@ const USAGE = `drop <command>
   migrate-private --relay <url> [--network <policy.json>]  stop daemon first; backs up config
   rollback-private               stop daemon first; restores unchanged migrated config
   serve                          daemon: relay, local API, consent UI, runner
-  invite                         print a one-time pairing code (daemon must run)
-  pair <code>                    pair with the node that issued the code (daemon must run)
+  invite [--link]                print a one-time invite, valid 24 hours (daemon must run); --link prints the link
+                                 to send, https://drop.memolabs.dev/join#<invite>, which works without the app
+  join <code-or-link>            join the team of whoever sent this invite or link (daemon must run); a node that
+                                 joined nobody yet moves to the invite's relay first
+  pair <code>                    same as join, kept for scripts
   peers                          list paired peers
   publish <capability-id> --approver <nodeId> [--config <file.json>]
                                  e.g. publish mcp.answer.figma --config figma.json (one per MCP server)
@@ -181,14 +184,34 @@ switch (command) {
     break;
   }
   case 'invite': {
-    const { code } = (await api(home, 'POST', '/ui/invite', {})) as { code: string };
-    process.stdout.write(`${code}\n(valid 24 hours, single use; also lets a new node join the relay)\n`);
+    const { values } = parseArgs({ args: rest, options: { link: { type: 'boolean' } } });
+    const { code, link } = (await api(home, 'POST', '/ui/invite', {})) as { code: string; link: string };
+    process.stdout.write(
+      values.link
+        ? `${link}\n(valid 24 hours, single use: send it to one person; the invite stays in the part after #, which the page never sends anywhere)\n`
+        : `${code}\n(valid 24 hours, single use; also lets a new node join the relay)\n`,
+    );
     break;
   }
+  case 'join':
   case 'pair': {
-    const code = rest[0] ?? fail('drop pair <code>');
-    const { nodeId } = (await api(home, 'POST', '/ui/pair', { code })) as { nodeId: string };
-    process.stdout.write(`pair request sent to ${nodeId}; \`drop peers\` shows it once accepted\n`);
+    const input = rest[0] ?? fail(`drop ${command} <code-or-link>`);
+    const preview = (await api(home, 'POST', '/ui/pair/preview', { code: input })) as {
+      displayName: string;
+      team?: string;
+      relayHost: string;
+      relay: 'same' | 'adopt' | 'kept';
+    };
+    const { nodeId, relay } = (await api(home, 'POST', '/ui/pair', { code: input })) as {
+      nodeId: string;
+      relay: string;
+    };
+    const who = terminalText(preview.displayName);
+    process.stdout.write(
+      `${preview.team ? `joining ${terminalText(preview.team)}, the team of ${who}` : `pairing with ${who}`} (${nodeId})\n` +
+        (relay === 'adopt' ? `this node now uses the team's relay, ${terminalText(preview.relayHost)}\n` : '') +
+        '`drop peers` shows them once accepted; then `drop install all` connects your agents\n',
+    );
     break;
   }
   case 'peers':
