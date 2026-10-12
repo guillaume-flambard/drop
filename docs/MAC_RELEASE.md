@@ -1,6 +1,8 @@
 # Application Mac : construction, installation et mise à jour
 
-Ce document décrit le canal Mac de T3.4. Il ne prouve pas qu'un paquet publié est qualifié : seules les vérifications consignées dans la change font foi ([vérification T3.4](../openspec/changes/t3-4-private-mac-app/proof/verification.md)).
+Ce document décrit le canal Mac de T3.4 : la build notarisée faite sur un Mac, les mises à jour signées et le retour arrière. La sortie d'une version pour les trois systèmes, les paquets construits par GitHub Actions et l'installation par un testeur sont dans [RELEASE](RELEASE.md). `scripts/build-mac.ts` est désormais un alias de `scripts/build-desktop.ts --platform macos`, mêmes options.
+
+Il ne prouve pas qu'un paquet publié est qualifié : seules les vérifications consignées dans la change font foi ([vérification T3.4](../openspec/changes/t3-4-private-mac-app/proof/verification.md)).
 
 L'app contient son propre runtime Node, le programme `drop-iroh` et les deux bundles de drop. Elle fonctionne sans Node installé et sans service Memo Labs.
 
@@ -33,7 +35,9 @@ node scripts/build-mac.ts --release --sign "Developer ID Application: …" --not
 
 Le script refuse une release sans ces prérequis. Il signe le Node embarqué et `drop-iroh` pour le runtime renforcé. Avec un profil du trousseau, il soumet lui-même le DMG à `notarytool`, exige le statut `Accepted` et agrafe le ticket au DMG et à l'app. Il exige ensuite `codesign --verify`, `spctl --assess` et `xcrun stapler validate`.
 
-Il écrit `drop-build-manifest.json` à côté des paquets : version, architecture, version de Node et empreintes SHA-256. Une build locale ou un manifeste seul ne qualifie pas le paquet.
+Il copie le DMG dans `dist/desktop/` avec `drop-build-manifest-macos-<arch>.json` : version, architecture, version de Node et empreintes SHA-256. Une build locale ou un manifeste seul ne qualifie pas le paquet.
+
+`--release --unsigned` fait une build optimisée signée ad hoc, sans identité Apple : c'est ce que produit GitHub Actions tant que les secrets Apple manquent (voir RELEASE). macOS en demande l'autorisation à la première ouverture ; ce n'est pas une build à distribuer largement.
 
 ## Mises à jour
 
