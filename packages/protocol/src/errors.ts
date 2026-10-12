@@ -22,6 +22,10 @@ export const ERROR_CODES = [
   'E_INVITE_SIG',
   'E_INVITE_USED',
   'E_INVITE_RELAY',
+  /** A local file another operation holds under its lock, such as config.json during a relay switch (T4.33). */
+  'E_LOCKED',
+  /** A local file that changed between its read and its rewrite: nothing is overwritten (T4.33). */
+  'E_CONFLICT',
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];

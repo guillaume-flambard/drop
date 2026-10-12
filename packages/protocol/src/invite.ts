@@ -55,15 +55,22 @@ const InviteBodySchema = z.object({
 });
 
 /**
- * A pairing code (T2.1, T4.23). The inviter's node signs every other field with its identity key, so the name, team
- * and relay shown before « Rejoindre » are the ones that node issued; it does not prove who the human is.
+ * A pairing code (T2.1, T4.23). The inviter's node signs every other field with its identity key, under the invite
+ * domain (T4.33), so the name, team and relay shown before « Rejoindre » are the ones that node issued; it does not
+ * prove who the human is.
  */
 export const InviteSchema = InviteBodySchema.extend({ sig: z.string().regex(/^[A-Za-z0-9_-]{86}$/) });
 export type Invite = z.infer<typeof InviteSchema>;
 
-/** Every field but the signature: canonical JSON drops the `undefined` member. */
+/**
+ * Signed under a domain of its own (T4.33), as the organization policy is under `drop-policy-v1|`: no other drop
+ * signature over the same JSON can pass for an invite.
+ */
+const INVITE_DOMAIN = 'drop-invite-v1|';
+
+/** The domain, then every field but the signature: canonical JSON drops the `undefined` member. */
 function signedPart(invite: Omit<Invite, 'sig'> & { sig?: string }): string {
-  return canonical({ ...invite, sig: undefined });
+  return `${INVITE_DOMAIN}${canonical({ ...invite, sig: undefined })}`;
 }
 
 export async function createInvite(
