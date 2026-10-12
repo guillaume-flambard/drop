@@ -51,4 +51,35 @@ describe('local node client', () => {
       message: 'E_LOCAL_NODE le nœud local a répondu 200 sans JSON lisible.',
     });
   });
+
+  it('keeps the unconfirmed delivery the local node reports, and nothing else it does not know (T4.39)', async () => {
+    server = createServer((req, res) => {
+      const body =
+        req.method === 'POST'
+          ? '{"dropId":"d1","owner":"Julie","title":"Figma","delivery":"unconfirmed"}'
+          : '{"dropId":"d1","capabilityId":"c","title":"Figma","ownerName":"Julie","state":"proposed","delivery":"unconfirmed","extra":1}';
+      res.writeHead(req.method === 'POST' ? 201 : 200, { 'Content-Type': 'application/json' }).end(body);
+    });
+    await new Promise<void>((resolve) => server?.listen(0, '127.0.0.1', resolve));
+    const address = server.address();
+    const node = httpLocalNode(
+      `http://127.0.0.1:${String(typeof address === 'object' && address ? address.port : 0)}`,
+      't',
+    );
+    expect(await node.requestDrop({ capabilityId: 'c', input: {}, purpose: 'Test réception', agent: 'codex' })).toEqual(
+      {
+        dropId: 'd1',
+        owner: 'Julie',
+        delivery: 'unconfirmed',
+      },
+    );
+    expect(await node.drop('d1', 0)).toEqual({
+      dropId: 'd1',
+      capabilityId: 'c',
+      title: 'Figma',
+      ownerName: 'Julie',
+      state: 'proposed',
+      delivery: 'unconfirmed',
+    });
+  });
 });

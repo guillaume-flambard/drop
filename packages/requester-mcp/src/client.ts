@@ -23,6 +23,8 @@ export const DropViewSchema = z.object({
   state: z.string(),
   result: z.object({ output: z.unknown(), outputSchemaHash: z.string() }).optional(),
   error: z.object({ code: z.string(), message: z.string() }).optional(),
+  /** Sent, but the relay never answered: the owner may or may not have the request yet (T4.39). */
+  delivery: z.literal('unconfirmed').optional(),
 });
 export type DropView = z.infer<typeof DropViewSchema>;
 
@@ -34,11 +36,19 @@ export const AskViewSchema = z.object({
       title: z.string(),
       reason: z.string(),
       online: z.boolean(),
+      delivery: z.literal('unconfirmed').optional(),
     }),
   ),
   helpers: z.array(z.object({ ownerName: z.string(), title: z.string(), online: z.boolean() })),
 });
 export type AskView = z.infer<typeof AskViewSchema>;
+
+export const RequestedDropSchema = z.object({
+  dropId: z.string(),
+  owner: z.string(),
+  delivery: z.literal('unconfirmed').optional(),
+});
+export type RequestedDrop = z.infer<typeof RequestedDropSchema>;
 
 /** The only thing requester-mcp talks to: the local node API. Never the relay. */
 export interface LocalNode {
@@ -49,7 +59,7 @@ export interface LocalNode {
     input: unknown;
     purpose: string;
     agent: string;
-  }): Promise<{ dropId: string; owner: string }>;
+  }): Promise<RequestedDrop>;
   drop(dropId: string, waitSeconds: number): Promise<DropView>;
   /** « Demander à mon équipe »: the node picks who to ask (T2.12). */
   ask(body: { question: string; purpose?: string | undefined; agent: string }): Promise<AskView>;
@@ -97,8 +107,7 @@ export function httpLocalNode(baseUrl: string, token: string): LocalNode {
   return {
     capabilities: async () =>
       z.object({ capabilities: z.array(CapabilityViewSchema) }).parse(await call('GET', '/capabilities')).capabilities,
-    requestDrop: async (body) =>
-      z.object({ dropId: z.string(), owner: z.string() }).parse(await call('POST', '/drops', body)),
+    requestDrop: async (body) => RequestedDropSchema.parse(await call('POST', '/drops', body)),
     drop: async (dropId, waitSeconds) =>
       DropViewSchema.parse(await call('GET', `/drops/${encodeURIComponent(dropId)}?wait=${String(waitSeconds)}`)),
     ask: async (body) => AskViewSchema.parse(await call('POST', '/ask', body)),

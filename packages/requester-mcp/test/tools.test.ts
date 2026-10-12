@@ -155,6 +155,82 @@ describe('requester MCP tools', () => {
     expect(result.content[0]?.text).toContain('E_DENIED');
   });
 
+  it('request_drop says a request the relay never confirmed is unconfirmed, not refused (T4.39)', async () => {
+    const node = fakeNode();
+    requestDrop.mockResolvedValueOnce({ dropId: 'd1', owner: 'Julie', delivery: 'unconfirmed' } as never);
+    const result = await createTools(node, 'codex').requestDrop({
+      capability_id: capability.capability_id,
+      input: { service: 'api', window: '1h' },
+      purpose: 'Comprendre les erreurs de paiement',
+    });
+    expect(result.isError).toBeUndefined();
+    expect(JSON.parse(result.content[0]?.text ?? '{}')).toEqual({
+      drop_id: 'd1',
+      status: 'unconfirmed',
+      message:
+        "Demande envoyée à Julie, mais le relais n'a pas confirmé sa réception. drop la renvoie : ne la relance pas, suis-la avec get_drop_result.",
+    });
+  });
+
+  it('get_drop_result and the fan-out tools carry an unconfirmed delivery (T4.39)', async () => {
+    const view = (dropId: string, delivery?: 'unconfirmed'): DropView => ({
+      dropId,
+      capabilityId: capability.capability_id,
+      title: capability.title,
+      ownerName: dropId === 'd1' ? 'Julie' : 'Natha',
+      state: 'proposed',
+      ...(delivery ? { delivery } : {}),
+    });
+    const node = fakeNode(view('d1', 'unconfirmed'));
+    const tools = createTools(node, 'codex');
+    const single = await tools.getDropResult({ drop_id: 'd1', wait_seconds: 0 });
+    expect(JSON.parse(single.content[0]?.text ?? '{}')).toEqual({
+      status: 'pending',
+      state: 'proposed',
+      delivery: 'unconfirmed',
+    });
+
+    node.drop = vi.fn((dropId: string) => Promise.resolve(view(dropId, dropId === 'd1' ? 'unconfirmed' : undefined)));
+    const results = (await tools.getDropResults({ drop_ids: ['d1', 'd2'], wait_seconds: 0 })).content[0]?.text ?? '';
+    const lines = results.split('\n\n');
+    expect(lines.find((line) => line.startsWith('Julie'))).toContain('réception non confirmée');
+    expect(lines.find((line) => line.startsWith('Natha'))).not.toContain('réception non confirmée');
+
+    requestDrop.mockResolvedValueOnce({ dropId: 'd1', owner: 'Julie', delivery: 'unconfirmed' } as never);
+    requestDrop.mockResolvedValueOnce({ dropId: 'd2', owner: 'Natha' });
+    const many = await tools.requestDrops({
+      purpose: 'Comprendre les erreurs de paiement',
+      requests: [
+        { capability_id: capability.capability_id, input: { service: 'api', window: '1h' } },
+        { capability_id: capability.capability_id, input: { service: 'web', window: '1h' } },
+      ],
+    });
+    const sent = JSON.parse(many.content[0]?.text ?? '{}') as { requests: { drop_id: string; delivery?: string }[] };
+    expect(sent.requests).toEqual([
+      expect.objectContaining({ drop_id: 'd1', delivery: 'unconfirmed' }),
+      expect.not.objectContaining({ delivery: expect.anything() as unknown }),
+    ]);
+
+    node.ask = () =>
+      Promise.resolve({
+        asked: [
+          {
+            dropId: 'd1',
+            ownerName: 'Julie',
+            title: 'Figma',
+            reason: 'elle partage Figma',
+            online: true,
+            delivery: 'unconfirmed',
+          },
+          { dropId: 'd2', ownerName: 'Natha', title: 'GitHub', reason: 'elle partage GitHub', online: true },
+        ],
+        helpers: [],
+      } as never);
+    const asked = (await tools.askTeam({ question: 'Où en est la maquette du panier ?' })).content[0]?.text ?? '';
+    expect(asked.split('\n').find((line) => line.includes('Julie'))).toContain('réception non confirmée');
+    expect(asked.split('\n').find((line) => line.includes('Natha'))).not.toContain('réception non confirmée');
+  });
+
   it('fan-out: one question to several capabilities, all checked before any is sent (T2.10)', async () => {
     const node = fakeNode();
     const tools = createTools(node, 'claude_code');

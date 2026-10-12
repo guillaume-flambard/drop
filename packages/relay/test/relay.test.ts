@@ -190,7 +190,7 @@ describe('relay', () => {
     const m = client(relay, mallory);
     await m.instance.waitReady();
     const forged = await sealEnvelope(alice, bob.nodeId, { type: 'catalog_request' });
-    expect(await m.instance.send(forged)).toBe('offline');
+    expect(await m.instance.send(forged)).toBe('unconfirmed');
     expect(logs).toContainEqual(expect.objectContaining({ outcome: 'spoofed_from', from: alice.nodeId }));
   });
 

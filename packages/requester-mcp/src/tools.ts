@@ -66,6 +66,9 @@ export const GetResultInput = {
   wait_seconds: z.number().int().min(0).max(50).default(30),
 };
 
+/** A request the relay never answered (T4.39): said in the same words wherever several requests are listed. */
+const UNCONFIRMED = 'réception non confirmée';
+
 export interface ToolText {
   [key: string]: unknown;
   content: { type: 'text'; text: string }[];
@@ -184,13 +187,22 @@ export function createTools(node: LocalNode, agent: string) {
       if ('error' in picked) return text(`${picked.error} Rien n'a été envoyé.`, true);
       const problem = validateAgainst(picked.capability, args.input);
       if (problem) return text(`Entrée invalide, rien n'a été envoyé :\n${problem}`, true);
-      const { dropId, owner } = await node.requestDrop({
+      const { dropId, owner, delivery } = await node.requestDrop({
         capabilityId: args.capability_id,
         ownerNodeId: picked.capability.owner_node_id,
         input: args.input,
         purpose: args.purpose,
         agent,
       });
+      // Sent, but the relay never answered: neither refused nor received, and resent by the node (T4.39).
+      if (delivery === 'unconfirmed')
+        return text(
+          JSON.stringify({
+            drop_id: dropId,
+            status: 'unconfirmed',
+            message: `Demande envoyée à ${peerText(owner)}, mais le relais n'a pas confirmé sa réception. drop la renvoie : ne la relance pas, suis-la avec get_drop_result.`,
+          }),
+        );
       return text(
         JSON.stringify({
           drop_id: dropId,
@@ -208,7 +220,9 @@ export function createTools(node: LocalNode, agent: string) {
           JSON.stringify({ status: 'error', code: peerText(drop.error.code), message: peerText(drop.error.message) }),
           true,
         );
-      return text(JSON.stringify({ status: 'pending', state: drop.state }));
+      return text(
+        JSON.stringify({ status: 'pending', state: drop.state, ...(drop.delivery ? { delivery: drop.delivery } : {}) }),
+      );
     },
 
     async requestDrops(args: {
@@ -234,14 +248,19 @@ export function createTools(node: LocalNode, agent: string) {
       if (problems.length > 0) return text(`Rien n'a été envoyé :\n${problems.join('\n')}`, true);
       const sent = [];
       for (const [index, request] of args.requests.entries()) {
-        const { dropId, owner } = await node.requestDrop({
+        const { dropId, owner, delivery } = await node.requestDrop({
           capabilityId: request.capability_id,
           ownerNodeId: targets[index],
           input: request.input,
           purpose: args.purpose,
           agent,
         });
-        sent.push({ drop_id: dropId, capability_id: request.capability_id, owner: peerText(owner) });
+        sent.push({
+          drop_id: dropId,
+          capability_id: request.capability_id,
+          owner: peerText(owner),
+          ...(delivery ? { delivery, note: UNCONFIRMED } : {}),
+        });
       }
       return text(
         JSON.stringify({
@@ -262,7 +281,7 @@ export function createTools(node: LocalNode, agent: string) {
         lines.push(
           drop.error
             ? `${peerText(drop.ownerName)} (« ${peerText(drop.title)} ») : ${peerText(drop.error.code)}, ${peerText(drop.error.message)}`
-            : `${peerText(drop.ownerName)} (« ${peerText(drop.title)} ») : en attente (${peerText(drop.state)})`,
+            : `${peerText(drop.ownerName)} (« ${peerText(drop.title)} ») : en attente (${peerText(drop.state)}${drop.delivery ? `, ${UNCONFIRMED}` : ''})`,
         );
       }
       return text(lines.join('\n\n'));
@@ -283,7 +302,7 @@ export function createTools(node: LocalNode, agent: string) {
       }
       const lines = asked.map(
         (entry) =>
-          `- ${peerText(entry.ownerName)} (« ${peerText(entry.title)} »), parce que ${peerText(entry.reason)}${entry.online ? '' : ' ; hors ligne pour l\u2019instant'}`,
+          `- ${peerText(entry.ownerName)} (« ${peerText(entry.title)} »), parce que ${peerText(entry.reason)}${entry.online ? '' : ' ; hors ligne pour l\u2019instant'}${entry.delivery ? ` ; ${UNCONFIRMED}, drop la renvoie` : ''}`,
       );
       return text(
         `Question envoyée. Chacun doit accepter avant de répondre :\n${lines.join('\n')}\n\n${JSON.stringify({ drop_ids: asked.map((entry) => entry.dropId) })}`,
