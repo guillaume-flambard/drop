@@ -5,6 +5,7 @@ import {
   decodeInvite,
   DEFAULT_JOIN_PAGE,
   encodeInvite,
+  ERROR_CODES,
   generateIdentity,
   INVITE_TTL_MS,
   inviteCodeFrom,
@@ -71,7 +72,7 @@ describe('invites (T4.23)', () => {
     expect(await refusal(verifyInvite(code, NOW + INVITE_TTL_MS))).toBe('E_INVITE_EXPIRED');
     // Signed by the inviter but dated a year ahead: refused like an admission ticket that lives too long.
     const forever = { ...invite, expiresAt: NOW + 365 * INVITE_TTL_MS };
-    forever.sig = await signDetached(guillaume, canonical({ ...forever, sig: undefined }));
+    forever.sig = await signDetached(guillaume, `drop-invite-v1|${canonical({ ...forever, sig: undefined })}`);
     expect(await refusal(verifyInvite(encodeInvite(forever), NOW))).toBe('E_INVITE_EXPIRED');
   });
 
@@ -114,5 +115,25 @@ describe('invites (T4.23)', () => {
       `wss://${'a'.repeat(600)}.example/v1`,
     ])
       expect(relayUrlAllowed(refused), refused).toBe(false);
+  });
+});
+
+describe('invite hardening (T4.33)', () => {
+  it('signs under the drop-invite-v1| domain: a bare or foreign-domain signature does not verify (E_INVITE_SIG)', async () => {
+    const guillaume = await generateIdentity('Guillaume');
+    const invite = await createInvite(guillaume, RELAY, NOW);
+    expect(await refusal(verifyInvite(encodeInvite(invite), NOW))).toBe('accepted');
+    const body = canonical({ ...invite, sig: undefined });
+    const signedOver = async (text: string) =>
+      refusal(verifyInvite(encodeInvite({ ...invite, sig: await signDetached(guillaume, text) }), NOW));
+    // The format T4.23 shipped: the bare canonical JSON. Then another drop domain over the same fields.
+    expect(await signedOver(body)).toBe('E_INVITE_SIG');
+    expect(await signedOver(`drop-policy-v1|${body}`)).toBe('E_INVITE_SIG');
+    expect(await signedOver(`drop-invite-v1|${body}`)).toBe('accepted');
+  });
+
+  it('lists E_LOCKED and E_CONFLICT among the stable error codes', () => {
+    expect(ERROR_CODES).toContain('E_LOCKED');
+    expect(ERROR_CODES).toContain('E_CONFLICT');
   });
 });
