@@ -8,6 +8,7 @@ The user interface of the drop desktop app: the menu bar panel (`/app`, a 380 x 
 - shadcn/ui components (`components.json`, style `new-york`) on Radix primitives, under `src/components/ui/`.
 - Tailwind CSS 4 (`src/styles.css`), lucide icons.
 - Panel: entry `src/panel/main.tsx`, tabs Demandes, Équipe and Mes outils; pure rules and wording in `src/panel/logic.ts`.
+- Consent card (T4.35): `src/consent/`, shared by the panel's « Demandes » tab and the workspace's « Demandes » page. States and wording in the pure `model.ts`, the purely visual card in `card.tsx`.
 - Workspace: entry `src/main.tsx`, screens in `src/views/`.
 - `src/api.ts` talks to the local Node API.
 - Component tests run in happy-dom: `packages/desktop-ui/test/`.

@@ -1,9 +1,12 @@
 export class WorkspaceApiError extends Error {
   code: string | undefined;
-  constructor(message: string, code?: string) {
+  /** The HTTP status of a refusal, 0 when nothing was sent (no local session); a network failure is not this error. */
+  status: number | undefined;
+  constructor(message: string, code?: string, status?: number) {
     super(message);
     this.name = 'WorkspaceApiError';
     this.code = code;
+    this.status = status;
   }
 }
 
@@ -17,7 +20,7 @@ export async function api<T>(method: 'GET' | 'POST', path: string, body?: unknow
   // Fixed local URL paths only. Never fetch URLs supplied by peers.
   if (!path.startsWith('/ui/')) throw new Error('Chemin API non autorisé.');
   const token = localToken();
-  if (!token) throw new WorkspaceApiError('Session locale indisponible. Rouvre Drop.');
+  if (!token) throw new WorkspaceApiError('Session locale indisponible. Rouvre Drop.', undefined, 0);
   const form = body instanceof URLSearchParams;
   const response = await fetch(path, {
     method,
@@ -42,7 +45,7 @@ export async function api<T>(method: 'GET' | 'POST', path: string, body?: unknow
         : typeof record.error === 'string'
           ? record.error
           : 'Action impossible, réessaie.';
-    throw new WorkspaceApiError(message, typeof record.code === 'string' ? record.code : undefined);
+    throw new WorkspaceApiError(message, typeof record.code === 'string' ? record.code : undefined, response.status);
   }
   return value as T;
 }
