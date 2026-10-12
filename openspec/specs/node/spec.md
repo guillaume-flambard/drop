@@ -1249,7 +1249,17 @@ L'API locale SHALL répondre à `POST /ui/invite` par `{ code, link, validHours:
 - **THEN** elle reçoit `E_INVITE_SIG`, `E_INVITE_EXPIRED`, `E_INVITE`, `E_INVITE` puis `E_INVITE_USED`, sans écho du code, et rien n'est envoyé
 
 ### Requirement: Relais adopté au premier « Rejoindre »
-Un Node sans pair ni équipe SHALL, après « Rejoindre », passer au relais de l'invitation : `config.json` réécrit sous verrou, connexion changée sans redémarrage, puis ticket d'admission et demande d'appairage. La prévisualisation MUST ne rien changer. Un relais non admissible (protocole) ou hors de la politique d'organisation MUST être refusé (`E_INVITE_RELAY`). Un Node déjà relié SHALL garder son relais.
+Un Node sans pair, sans équipe et sans appairage en cours SHALL, après « Rejoindre », passer au relais de l'invitation : `config.json` réécrit sous verrou, connexion changée sans redémarrage, puis ticket d'admission et demande d'appairage. La prévisualisation MUST ne rien changer. Un relais non admissible (protocole) ou hors de la politique d'organisation MUST être refusé (`E_INVITE_RELAY`). Un Node déjà relié SHALL garder son relais.
+
+#### Scenario: AC: deux « Rejoindre » rapides et appairage en cours
+<!-- openspec-guard:test="one-link join (T4.23) > accepts a link once even on two quick « Rejoindre », and moves no relay while a pairing is pending" -->
+- **WHEN** l'invitée appuie deux fois sur « Rejoindre » avec le même lien, puis accepte un second lien avant la réponse du premier inviteur
+- **THEN** le second appui est refusé avec `E_INVITE_USED` et une seule demande d'appairage part, et le second lien garde le relais déjà adopté (`kept`)
+
+#### Scenario: AC: carte qui annonce le relais
+<!-- openspec-guard:test="menu bar panel and its admin routes (T4.14) > previews an invitation without pairing and pairs only after Rejoindre" -->
+- **WHEN** le panneau montre la carte d'une invitation qui ferait changer de relais, ou qu'un lien est refusé
+- **THEN** la carte nomme le relais de l'invitation avant « Rejoindre », et le refus affiche le message de son code stable
 
 #### Scenario: AC: nouveau poste sur le relais de l'équipe
 <!-- openspec-guard:test="one-link join (T4.23) > a fresh private node adopts the relay of the link, is admitted and joins the team after Rejoindre" -->

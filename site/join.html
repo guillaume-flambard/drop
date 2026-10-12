@@ -126,7 +126,9 @@
           byId('join-steps').hidden = true;
         }
         // The invite lives in the fragment, never sent to a server. Kept for this tab only, then out of the address bar.
+        // A fragment that cannot be an invite (the page's own #contenu anchor) never replaces the one kept.
         var code = location.hash.slice(1);
+        if (!/^[A-Za-z0-9_-]{40,3500}$/.test(code)) code = '';
         try {
           if (code) sessionStorage.setItem(KEY, code);
           else code = sessionStorage.getItem(KEY) || '';

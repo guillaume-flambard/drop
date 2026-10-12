@@ -272,6 +272,13 @@ describe('menu bar panel and its admin routes (T4.14)', () => {
     const inviteCard = html.slice(html.indexOf('function inviteCard(view)'));
     const handler = inviteCard.slice(0, inviteCard.indexOf("'Rejoindre'"));
     expect(handler).toContain("api('POST', '/ui/pair', undefined");
+    // A link from anyone can open the card: it says when « Rejoindre » moves the app to the inviter's relay, and a
+    // refusal shows its own reason (wrong relay, expired, used) rather than one catch-all sentence.
+    expect(html).toContain('relay: preview.relay, relayHost: preview.relayHost');
+    expect(inviteCard).toContain("invite.relay === 'adopt'");
+    expect(inviteCard).toContain('ton app passera par le relais ');
+    expect(html).not.toContain("function () { notice = 'Ce lien d’invitation n’est plus valable");
+    expect(html).not.toContain("function () { pendingInvite = null; notice = 'Ce lien d’invitation n’est plus valable");
   });
 
   it('renders expiry, high sensitivity, a default Pas maintenant and per-field redaction', () => {

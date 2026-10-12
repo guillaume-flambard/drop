@@ -341,6 +341,8 @@ export class NodeEngine extends EventEmitter {
   /** Recent fact requests per peer (T4.4), for FACT_REQUESTS_PER_MINUTE. */
   private readonly factRequests = new Map<NodeId, number[]>();
   private readonly pairing = new Map<NodeId, { token: string; displayName: string; iroh?: IrohAddr }>();
+  /** Joins between their checks and their pairing request: they hold the relay as if already paired (T4.23). */
+  private joining = 0;
   /** This node's iroh addresses while the Internet mode runs (T4.2b). */
   private irohAddress: IrohAddr | undefined;
   private irohAddrsCache: { at: number; addrs: Record<string, IrohAddr> } | undefined;
@@ -484,16 +486,19 @@ export class NodeEngine extends EventEmitter {
    * joined nobody yet, the move to the invite's relay, and only then the admission ticket and the pairing request.
    */
   async join(input: string): Promise<{ nodeId: NodeId; relay: RelayOutcome }> {
-    const { invite, relay } = await this.previewInvite(input);
-    if (relay === 'adopt') {
-      try {
-        await this.options.adoptRelay?.(invite.relayUrl);
-      } catch (error) {
-        this.log({ event: 'invite_refused', code: 'E_INVITE_RELAY', reason: 'relay_not_adopted' });
-        throw isDropError(error, 'E_INVITE_RELAY') ? error : new DropError('E_INVITE_RELAY', 'relay not adopted');
-      }
+    const { invite } = await this.previewInvite(input);
+    // Nothing else runs until the first await below: a second « Rejoindre » meanwhile finds this invite used, and a
+    // second invite finds this node no longer free to move to another relay.
+    const used = sha256Hex(invite.oneTimeToken);
+    if (this.liveUsedInvites(this.now()).has(used)) throw new DropError('E_INVITE_USED', 'invite already used');
+    const relay = this.relayOutcome(invite.relayUrl);
+    this.usedInvites.set(used, invite.expiresAt);
+    this.joining += 1;
+    try {
+      if (relay === 'adopt') await this.adopt(invite.relayUrl, used);
+    } finally {
+      this.joining -= 1;
     }
-    this.usedInvites.set(sha256Hex(invite.oneTimeToken), invite.expiresAt);
     this.saveInvites();
     if (invite.admission) this.options.onAdmission?.(invite.admission);
     // Joining a team: the roster arrives from the inviter once paired (T2.9).
@@ -518,9 +523,23 @@ export class NodeEngine extends EventEmitter {
     return (await this.join(code)).nodeId;
   }
 
-  /** A node with no peer and no team has joined nobody: it may still move to the relay of the team it joins. */
+  /** A refused move leaves the invite unused, so the owner may try it again once the cause is fixed. */
+  private async adopt(relayUrl: string, used: string): Promise<void> {
+    try {
+      await this.options.adoptRelay?.(relayUrl);
+    } catch (error) {
+      this.usedInvites.delete(used);
+      this.log({ event: 'invite_refused', code: 'E_INVITE_RELAY', reason: 'relay_not_adopted' });
+      throw isDropError(error, 'E_INVITE_RELAY') ? error : new DropError('E_INVITE_RELAY', 'relay not adopted');
+    }
+  }
+
+  /**
+   * A node that has joined nobody, with no pairing pending or under way, may still move to the relay of the team it
+   * joins: once it has asked someone, a second invite never moves it away from the relay that answer will come on.
+   */
   private relayOutcome(relayUrl: string): RelayOutcome {
-    const fresh = this.peers().length === 0 && !this.team();
+    const fresh = this.peers().length === 0 && !this.team() && this.pairing.size === 0 && this.joining === 0;
     return this.options.relayPlan?.(relayUrl, fresh) ?? 'kept';
   }
 

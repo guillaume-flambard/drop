@@ -160,6 +160,50 @@ describe('one-link join (T4.23)', () => {
     expect(julieHome.config().relayUrl).toBe('ws://127.0.0.1:9/v1');
   });
 
+  it('accepts a link once even on two quick « Rejoindre », and moves no relay while a pairing is pending', async () => {
+    const guillaume = await generateIdentity('Guillaume');
+    const marc = await generateIdentity('Marc');
+    const julie = await generateIdentity('Julie');
+    const home = newHome(
+      julie,
+      NodeConfigSchema.parse({ profile: 'legacy', relayUrl: 'ws://127.0.0.1:9/v1', ownerKind: 'human' }),
+    );
+    const sent: Envelope[] = [];
+    const adopted: string[] = [];
+    let release = (): void => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const engine = new NodeEngine({
+      identity: julie,
+      ownerKind: 'human',
+      store: home,
+      capabilities: [],
+      transport: {
+        send: (envelope) => {
+          sent.push(envelope);
+          return Promise.resolve('delivered');
+        },
+      },
+      relayPlan: (_url, fresh) => (fresh ? 'adopt' : 'kept'),
+      adoptRelay: async (url) => {
+        adopted.push(url);
+        await gate;
+      },
+    });
+    const code = encodeInvite(await createInvite(guillaume, 'wss://team.example/v1'));
+    const first = engine.join(code);
+    const second = engine.join(code);
+    release();
+    expect((await first).relay).toBe('adopt');
+    expect(await refusal(second)).toBe('E_INVITE_USED');
+    expect(sent).toHaveLength(1);
+    // Guillaume has not answered yet: another link may pair, but never moves the relay a second time.
+    const other = encodeInvite(await createInvite(marc, 'wss://other.example/v1'));
+    expect((await engine.join(other)).relay).toBe('kept');
+    expect(adopted).toEqual(['wss://team.example/v1']);
+  });
+
   it('answers each refusal with its stable code: modified, expired, own, reused, unreadable', async () => {
     const guillaume = await generateIdentity('Guillaume');
     const julie = await generateIdentity('Julie');

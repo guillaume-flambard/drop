@@ -194,6 +194,10 @@ describe('join page (T4.23)', () => {
     const reloaded = runJoinScript(script, '', MAC, page.stored);
     expect(reloaded.byId('join-open').href).toBe(`drop://join?invite=${code}`);
     expect(reloaded.order[0]).toBe('mac');
+    // The skip link puts the page's own anchor in the address bar: a reload there keeps the invite it had.
+    const anchored = runJoinScript(script, '#contenu', MAC, page.stored);
+    expect(anchored.byId('join-open').href).toBe(`drop://join?invite=${code}`);
+    expect(page.stored.get('drop-invite')).toBe(code);
   });
 
   it('explains an incomplete, unreadable or expired link instead of a join button', async () => {
