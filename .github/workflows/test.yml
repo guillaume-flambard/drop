@@ -32,8 +32,10 @@ jobs:
       - run: pnpm install --frozen-lockfile
       # internet.test.ts drives the real drop-iroh binary and builds it in a beforeAll: without a cache every run compiled
       # iroh and its dependencies from scratch (2 to 7 minutes per OS, D94). The key follows our crate; the restore key
-      # keeps the compiled dependencies when only our code changed.
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      # keeps the compiled dependencies when only our code changed. The cache is saved right after the build, not at the
+      # end of the job, so a flaky test never keeps an OS without one.
+      - id: cargo-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             crates/drop-iroh/target
@@ -44,6 +46,15 @@ jobs:
           restore-keys: drop-iroh-${{ runner.os }}-
       - name: Build drop-iroh
         run: cargo build --release --manifest-path crates/drop-iroh/Cargo.toml
+      - if: steps.cargo-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            crates/drop-iroh/target
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+          key: ${{ steps.cargo-cache.outputs.cache-primary-key }}
       - run: pnpm -r lint && pnpm -r typecheck && pnpm -r test
       # The compiled desktop UI shipped in the Node must match its React sources (D87).
       - name: Desktop UI assets match their sources
@@ -84,8 +95,10 @@ jobs:
       - run: pnpm install --frozen-lockfile
       # internet.test.ts drives the real drop-iroh binary and builds it in a beforeAll: without a cache every run compiled
       # iroh and its dependencies from scratch (2 to 7 minutes per OS, D94). The key follows our crate; the restore key
-      # keeps the compiled dependencies when only our code changed.
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      # keeps the compiled dependencies when only our code changed. The cache is saved right after the build, not at the
+      # end of the job, so a flaky test never keeps an OS without one.
+      - id: cargo-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             crates/drop-iroh/target
@@ -96,6 +109,15 @@ jobs:
           restore-keys: drop-iroh-${{ runner.os }}-
       - name: Build drop-iroh
         run: cargo build --release --manifest-path crates/drop-iroh/Cargo.toml
+      - if: steps.cargo-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            crates/drop-iroh/target
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+          key: ${{ steps.cargo-cache.outputs.cache-primary-key }}
       - run: pnpm -r lint
       - run: pnpm -r typecheck
       - run: pnpm -r test

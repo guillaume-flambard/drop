@@ -16,6 +16,10 @@ Windows, et les trois jobs sont des checks obligatoires de la règle de branche 
   `src/` change, le cache précédent est restauré : Cargo ne recompile que notre crate, les dépendances restent.
 - Un cache par système, puisque les binaires diffèrent. La taille locale de `target/` est de 555 Mo, dans la limite
   de 10 Go par dépôt de GitHub pour trois systèmes.
+- Le cache est enregistré juste après `Build drop-iroh` (`actions/cache/restore` puis `actions/cache/save`), et non
+  en fin de job. Le premier run de la PR l'a montré : `actions/cache` en un seul pas n'enregistre rien quand un test
+  échoue ensuite, et le test Windows instable a laissé Windows sans cache sur deux tentatives. C'est le cas que décrit
+  la doc de l'action (`save/README.md`, « Always save cache »).
 - Choix écarté : `Swatinem/rust-cache`. C'est une action tierce de plus à épingler et à auditer, alors que
   `actions/cache` suffit pour un seul crate.
 
