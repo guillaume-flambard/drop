@@ -5,22 +5,14 @@
  * allowlisted environment, never the caller's keys.
  */
 import { execFile, spawn, type ChildProcess } from 'node:child_process';
-import {
-  appendFileSync,
-  mkdirSync,
-  mkdtempSync,
-  openSync,
-  readFileSync,
-  readdirSync,
-  statSync,
-  writeFileSync,
-} from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { z } from 'zod';
+import { appendOwnerOnly, openOwnerOnly, writeOwnerOnly } from './owner-files.ts';
 import { assertLoopbackRelay, buildPlan, type Decision, type Plan, type Policy } from './plan.ts';
 import { residentKb } from './memory.ts';
 import { renderMarkdown, summarize, type MemorySeries, type OutcomeRecord, type Report } from './report.ts';
@@ -158,9 +150,9 @@ export async function runCampaign(options: CampaignOptions): Promise<CampaignRes
   const started = Date.now();
   const eventsPath = join(dir, 'events.jsonl');
   const emit = (event: Record<string, unknown>) => {
-    appendFileSync(eventsPath, `${JSON.stringify({ t: Date.now() - started, campaign, ...event })}\n`);
+    appendOwnerOnly(eventsPath, `${JSON.stringify({ t: Date.now() - started, campaign, ...event })}\n`);
   };
-  writeFileSync(join(dir, 'plan.json'), `${JSON.stringify(plan, null, 2)}\n`);
+  writeOwnerOnly(join(dir, 'plan.json'), `${JSON.stringify(plan, null, 2)}\n`);
 
   const children: ChildProcess[] = [];
   options.onChildren?.(children);
@@ -254,8 +246,8 @@ export async function runCampaign(options: CampaignOptions): Promise<CampaignRes
     log(`${String(nodes.length)} nodes initialised`);
 
     const relayConfig = join(dir, 'relay.config.json');
-    writeFileSync(relayConfig, `${JSON.stringify({ port: basePort, allowedNodeIds: nodes.map((n) => n.nodeId) })}\n`);
-    const relayLog = openSync(join(dir, 'relay.log'), 'a');
+    writeOwnerOnly(relayConfig, `${JSON.stringify({ port: basePort, allowedNodeIds: nodes.map((n) => n.nodeId) })}\n`);
+    const relayLog = openOwnerOnly(join(dir, 'relay.log'), 'a');
     const relay = spawn(process.execPath, [RELAY_CLI, 'serve', `--config=${relayConfig}`], {
       env: { ...baseEnv, HOME: join(dir, 'relay-home') },
       stdio: ['ignore', relayLog, relayLog],
@@ -266,7 +258,7 @@ export async function runCampaign(options: CampaignOptions): Promise<CampaignRes
     for (const ownerIndex of plan.owners) {
       const owner = nodes[ownerIndex] as SimNode;
       const now = new Date().toISOString();
-      writeFileSync(
+      writeOwnerOnly(
         join(owner.home, 'app.log'),
         [
           `${now} INFO checkout ok user=alice.simleak@example.com amount=42.00EUR`,
@@ -276,7 +268,7 @@ export async function runCampaign(options: CampaignOptions): Promise<CampaignRes
           '',
         ].join('\n'),
       );
-      writeFileSync(
+      writeOwnerOnly(
         join(owner.home, 'error-summary.json'),
         JSON.stringify({
           services: { api: { source: { kind: 'file', path: join(owner.home, 'app.log') } } },
@@ -299,7 +291,7 @@ export async function runCampaign(options: CampaignOptions): Promise<CampaignRes
     }
 
     for (const node of nodes) {
-      const serveLog = openSync(join(node.home, 'serve.log'), 'a');
+      const serveLog = openOwnerOnly(join(node.home, 'serve.log'), 'a');
       const child = spawn(process.execPath, [NODE_CLI, 'serve'], {
         env: isolatedEnv(node.home),
         stdio: ['ignore', serveLog, serveLog],
@@ -463,8 +455,8 @@ export async function runCampaign(options: CampaignOptions): Promise<CampaignRes
       memory: [...memory.values()],
       leaks,
     });
-    writeFileSync(join(dir, 'report.json'), `${JSON.stringify(report, null, 2)}\n`);
-    writeFileSync(join(dir, 'report.md'), renderMarkdown(report));
+    writeOwnerOnly(join(dir, 'report.json'), `${JSON.stringify(report, null, 2)}\n`);
+    writeOwnerOnly(join(dir, 'report.md'), renderMarkdown(report));
     return { dir, report, pids };
   } finally {
     for (const timer of timers) clearInterval(timer);

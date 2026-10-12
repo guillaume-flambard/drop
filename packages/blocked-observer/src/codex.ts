@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { closeSync, constants, existsSync, fstatSync, openSync, readdirSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { codexNoise } from './noise.ts';
@@ -22,6 +22,28 @@ function walk(dir: string): string[] {
     if (entry.isDirectory()) return walk(path);
     return entry.isFile() && entry.name.endsWith('.jsonl') ? [path] : [];
   });
+}
+
+/**
+ * The log's text if it was modified since `sinceMs`, else undefined. Its date is read through the descriptor the text
+ * is read from, so the file dated is the file read (T4.26, CodeQL js/file-system-race). A log that vanished or became
+ * something else since the walk is skipped; O_NONBLOCK keeps a named pipe from blocking the import.
+ */
+function readIfModified(file: string, sinceMs: number): string | undefined {
+  let fd: number;
+  try {
+    fd = openSync(file, constants.O_RDONLY | ('O_NONBLOCK' in constants ? constants.O_NONBLOCK : 0));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
+    throw error;
+  }
+  try {
+    const stats = fstatSync(fd);
+    if (!stats.isFile() || stats.mtimeMs < sinceMs) return undefined;
+    return readFileSync(fd, 'utf8');
+  } finally {
+    closeSync(fd);
+  }
 }
 
 function outputText(output: unknown): string {
@@ -61,11 +83,12 @@ export interface CodexImport {
 export function parseCodexSessions(dir: string, sinceMs: number): CodexImport {
   const result: CodexImport = { events: [], sessions: [], files: 0 };
   for (const file of walk(dir)) {
-    if (statSync(file).mtimeMs < sinceMs) continue;
+    const text = readIfModified(file, sinceMs);
+    if (text === undefined) continue;
     result.files += 1;
     let session = 'unknown';
     const tools = new Map<string, { name: string; resource: string }>();
-    for (const line of readFileSync(file, 'utf8').split('\n')) {
+    for (const line of text.split('\n')) {
       if (line.trim() === '') continue;
       let rec: Rec;
       try {

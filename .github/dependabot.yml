@@ -56,11 +56,13 @@ updates:
     commit-message:
       prefix: deps
 
-  # Root Dockerfile and docker/relay.Dockerfile: base images pinned by digest.
+  # Root Dockerfile, docker/relay.Dockerfile and the two proof images: base images pinned by digest (T4.26).
   - package-ecosystem: docker
     directories:
       - /
       - /docker
+      - /scripts/hermes-proof
+      - /scripts/private-proof
     schedule:
       interval: weekly
       day: monday
