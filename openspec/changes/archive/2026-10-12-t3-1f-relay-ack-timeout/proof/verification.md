@@ -40,7 +40,7 @@ Contre `client.ts` de `origin/main` : 5 des 6 tests du client échouent (le test
 Revue menée sur le diff selon la liste de contrôle de gstack `/review` (passes critique et informative), puis une revue adversariale indépendante par un second agent en lecture seule. Ce n'est pas une invocation journalisée du skill gstack `/review` : son format interactif (questions, jetons de journal) ne convient pas à un sous-agent sans humain. Constats de la revue adversariale, aucun P0 ni P1 :
 
 - P2 : après un abandon, `ready` ramenait le délai au minimum ; un relais qui accepte sans acquitter faisait recomposer chaque Node toutes les 16 s avec vidage de file et annonces. **Corrigé** (délai qui continue de croître, test rouge puis vert).
-- P2 : le délai d'acquittement partait de l'appel à `send`, une grosse enveloppe sur une voie montante lente pouvait être prise pour un relais mort. **Corrigé** : le délai part du rappel d'écriture de `ws`. La voie descendante reste une limite (voir plus bas).
+- P2 : le délai d'acquittement partait de l'appel à `send`, une grosse enveloppe sur une voie montante lente pouvait être prise pour un relais mort. **Corrigé en partie** : le délai part du rappel d'écriture de `ws`, qui arrive quand Node a remis la trame au système, pas quand elle est sur le fil ; une trame de 256 Kio tient souvent dans le tampon d'envoi, donc le délai part presque aussitôt. Voies montante et descendante lentes restent des limites (voir plus bas). Contre-revue du correctif : aucun nouveau défaut, les autres points résolus.
 - P3 : trames d'un socket abandonné encore traitées (un vieux `ready`). **Corrigé** : seules ses enveloppes sont gardées.
 - P3 : réentrance dans `lost()`. **Corrigé** : reconnexion planifiée avant le statut.
 - P3 : une demande `drop_request` dont l'acquittement manque est abandonnée côté demandeur alors que l'exécuteur a pu la recevoir. Comportement existant à la fermeture, non modifié ; noté en limite.
@@ -52,6 +52,7 @@ Revue menée sur le diff selon la liste de contrôle de gstack `/review` (passes
 
 ## Limites
 
+- Voie montante lente : sous environ 140 kbit/s, une enveloppe de 256 Kio peut ne pas être acquittée en 15 s ; elle est alors renvoyée en boucle jusqu'à son expiration.
 - Voie descendante lente : une trame entrante de 256 Kio qui met plus de 15 à 30 s à arriver ne produit aucune trame entre-temps et la connexion est abandonnée ; le relais a déjà retiré de sa file les enveloppes envoyées à l'authentification (comportement du relais, `purge` puis `dropQueue`).
 - Le relais renvoie certaines erreurs sans identifiant (enveloppe hors schéma) : l'envoi correspondant n'est pas libéré par la réponse mais par le délai, puis revient en file jusqu'à son expiration. Les enveloppes scellées par le moteur ne devraient pas échouer au schéma. Corriger demanderait de changer le contrat du relais (hors périmètre).
 - Le cas précis de T4.6a n'est pas rejoué sur le VPS : la cause exacte de la suspension de lecture ne peut être établie après coup (app lancée depuis un DMG supprimé). Le correctif ne dépend pas de cette cause.
