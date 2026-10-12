@@ -300,7 +300,8 @@ export interface EngineOptions {
   onAdmission?: (ticket: unknown) => void;
   /**
    * The relay an invite would leave this node on (T4.23, D95). `fresh` is true while this node has no peer and no
-   * team. Throws E_INVITE_RELAY for a relay this node may not use. Absent: the node keeps its relay.
+   * team; the daemon also keeps a relay set by hand (T4.33). Throws E_INVITE_RELAY for a relay this node may not use.
+   * Absent: the node keeps its relay.
    */
   relayPlan?: (relayUrl: string, fresh: boolean) => RelayOutcome;
   /** Moves this node to the invite's relay, after « Rejoindre » and before anything is sent (T4.23). */
@@ -523,14 +524,21 @@ export class NodeEngine extends EventEmitter {
     return (await this.join(code)).nodeId;
   }
 
-  /** A refused move leaves the invite unused, so the owner may try it again once the cause is fixed. */
+  /**
+   * A refused move leaves the invite unused, so the owner may try it again once the cause is fixed. The cause is kept
+   * when it is a configuration held by another operation (E_LOCKED) or changed meanwhile (E_CONFLICT), T4.33.
+   */
   private async adopt(relayUrl: string, used: string): Promise<void> {
     try {
       await this.options.adoptRelay?.(relayUrl);
     } catch (error) {
       this.usedInvites.delete(used);
-      this.log({ event: 'invite_refused', code: 'E_INVITE_RELAY', reason: 'relay_not_adopted' });
-      throw isDropError(error, 'E_INVITE_RELAY') ? error : new DropError('E_INVITE_RELAY', 'relay not adopted');
+      const refusal =
+        isDropError(error, 'E_INVITE_RELAY') || isDropError(error, 'E_LOCKED') || isDropError(error, 'E_CONFLICT')
+          ? error
+          : new DropError('E_INVITE_RELAY', 'relay not adopted');
+      this.log({ event: 'invite_refused', code: refusal.code, reason: 'relay_not_adopted' });
+      throw refusal;
     }
   }
 
