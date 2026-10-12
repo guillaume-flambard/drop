@@ -1,3 +1,4 @@
+import { execFileSync, spawn } from 'node:child_process';
 import {
   chmodSync,
   existsSync,
@@ -649,4 +650,40 @@ describe('all thirteen clients connected automatically (T4.22)', () => {
       'claude.bat',
     ]);
   });
+});
+
+describe('onboarding configuration read (T4.42)', () => {
+  // Windows has no named pipes in the file system namespace that mkfifo could plant.
+  it.skipIf(process.platform === 'win32')(
+    'refuses a named pipe planted at a client configuration path at once, without waiting for a writer',
+    async () => {
+      const m = machine('linux');
+      const zed = m.files.get('zed') ?? '';
+      rmSync(zed);
+      execFileSync('mkfifo', [zed]);
+      // A writer that shows up 5 s later: an open without O_NONBLOCK would wait for it, then refuse the pipe anyway.
+      const writer = spawn('sh', ['-c', 'sleep 5; exec 3>"$0"', zed], { stdio: 'ignore' });
+      const exited = new Promise<void>((resolve) => {
+        writer.once('exit', () => {
+          resolve();
+        });
+      });
+      try {
+        const started = performance.now();
+        const plans = previewOnboarding(m.options);
+        const elapsed = performance.now() - started;
+        expect(plans.find((plan) => plan.agent === 'zed')).toMatchObject({
+          state: 'error',
+          detail: 'E_CONFIG_INVALID_OR_UNREADABLE',
+        });
+        expect(elapsed).toBeLessThan(2500);
+        // Every other client is still analysed.
+        expect(plans.find((plan) => plan.agent === 'cursor')?.state).toBe('ready');
+      } finally {
+        writer.kill('SIGKILL');
+        await exited;
+      }
+    },
+    15_000,
+  );
 });

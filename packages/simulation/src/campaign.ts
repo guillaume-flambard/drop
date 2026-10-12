@@ -5,14 +5,15 @@
  * allowlisted environment, never the caller's keys.
  */
 import { execFile, spawn, type ChildProcess } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { createServer } from 'node:net';
-import { tmpdir } from 'node:os';
+import { availableParallelism, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { z } from 'zod';
-import { appendOwnerOnly, openOwnerOnly, writeOwnerOnly } from './owner-files.ts';
+import { appendOwnerOnly, openOwnerOnly, ownerOnlyDir, writeOwnerOnly } from './owner-files.ts';
+import { inParallel } from './parallel.ts';
 import { assertLoopbackRelay, buildPlan, type Decision, type Plan, type Policy } from './plan.ts';
 import { residentKb } from './memory.ts';
 import { renderMarkdown, summarize, type MemorySeries, type OutcomeRecord, type Report } from './report.ts';
@@ -22,6 +23,12 @@ const NODE_CLI = fileURLToPath(new URL('../../node/src/cli.ts', import.meta.url)
 const RELAY_CLI = fileURLToPath(new URL('../../relay/src/cli.ts', import.meta.url));
 const CAPABILITY = 'production.error_summary';
 export const MAX_PROCESS_NODES = 80;
+/**
+ * Short-lived CLI runs (`init` per node, `publish` per owner) at once. Each is a cold Node.js start (0.25 s idle, up to
+ * 7 s on a saturated CPU, T4.25); one after another they made most of the wait before the load phase. One per core:
+ * more would only queue on the CPU, and 80 nodes at once would hold several gigabytes.
+ */
+export const START_PARALLELISM = availableParallelism();
 
 /** Distinctive fragments planted in every owner's log; none may ever reach a requester. */
 export const LEAK_FRAGMENTS = [
@@ -145,7 +152,9 @@ export async function runCampaign(options: CampaignOptions): Promise<CampaignRes
     if (!(await portIsFree(port))) throw new Error(`E_SIM_PORT port ${String(port)} is busy`);
 
   const dir = options.workDir ?? mkdtempSync(join(tmpdir(), 'drop-sim-'));
-  mkdirSync(dir, { recursive: true });
+  // A --work-dir may be shared: refused if it is a link or someone else's, closed to others before anything is
+  // written, so nobody can plant a link where the bench writes (T4.42).
+  ownerOnlyDir(dir);
   const campaign = `seed${String(options.seed)}-${String(options.nodes)}n`;
   const started = Date.now();
   const eventsPath = join(dir, 'events.jsonl');
@@ -180,7 +189,10 @@ export async function runCampaign(options: CampaignOptions): Promise<CampaignRes
   });
 
   const cli = async (node: SimNode, args: string[]) => {
-    const { stdout } = await run(process.execPath, [NODE_CLI, ...args], { env: isolatedEnv(node.home) });
+    const pending = run(process.execPath, [NODE_CLI, ...args], { env: isolatedEnv(node.home) });
+    // Tracked like the long-lived processes: a signal during the start stops the CLI runs in flight too.
+    children.push(pending.child);
+    const { stdout } = await pending;
     return stdout;
   };
   const api = async (node: SimNode, method: string, path: string, body?: unknown, form?: Record<string, string>) => {
@@ -207,6 +219,40 @@ export async function runCampaign(options: CampaignOptions): Promise<CampaignRes
     }
     return { status: response.status, data, text };
   };
+  // The planted log and its capability, published before the node serves (`drop publish` is local).
+  const publishErrorSummary = async (owner: SimNode) => {
+    const now = new Date().toISOString();
+    writeOwnerOnly(
+      join(owner.home, 'app.log'),
+      [
+        `${now} INFO checkout ok user=alice.simleak@example.com amount=42.00EUR`,
+        `${now} ERROR payment timeout order=9f1c2b7e card=4242-SIMLEAK-0001`,
+        `${now} ERROR payment timeout ip=10.99.77.55`,
+        `${now} ERROR db connection refused key=sk-ant-api03-SIMLEAK-notarealkey`,
+        '',
+      ].join('\n'),
+    );
+    writeOwnerOnly(
+      join(owner.home, 'error-summary.json'),
+      JSON.stringify({
+        services: { api: { source: { kind: 'file', path: join(owner.home, 'app.log') } } },
+        errorPatterns: [
+          { name: 'PAYMENT_TIMEOUT', regex: 'payment timeout' },
+          { name: 'DB_DOWN', regex: 'connection refused' },
+        ],
+        errorLineRegex: '\\b(ERROR|FATAL)\\b',
+        degradedThreshold: 2,
+      }),
+    );
+    await cli(owner, [
+      'publish',
+      CAPABILITY,
+      '--approver',
+      owner.nodeId,
+      '--config',
+      join(owner.home, 'error-summary.json'),
+    ]);
+  };
   const track = (child: ChildProcess, role: MemorySeries['role'], index: number) => {
     children.push(child);
     if (child.pid) pids.push(child.pid);
@@ -215,18 +261,23 @@ export async function runCampaign(options: CampaignOptions): Promise<CampaignRes
 
   try {
     log(`campaign ${campaign} in ${dir}`);
+    // Every node directory is checked before any process starts, top-down from the closed work directory.
     for (let i = 0; i < options.nodes; i += 1) {
       const home = join(dir, `node-${String(i)}`);
-      mkdirSync(join(home, 'user-home'), { recursive: true });
+      ownerOnlyDir(home);
+      ownerOnlyDir(join(home, 'user-home'));
       const role = plan.owners.includes(i) ? 'owner' : 'requester';
-      const node: SimNode = {
+      nodes.push({
         index: i,
         name: `${role === 'owner' ? 'Owner' : 'Asker'} ${String(i)}`,
         home,
         apiPort: basePort + 1 + i,
         nodeId: '',
         token: '',
-      };
+      });
+    }
+    // Each node only touches its own DROP_HOME, and neither init nor publish contacts the relay: they run in parallel.
+    await inParallel(nodes, START_PARALLELISM, async (node) => {
       await cli(node, [
         'init',
         '--name',
@@ -240,9 +291,9 @@ export async function runCampaign(options: CampaignOptions): Promise<CampaignRes
       ]);
       node.nodeId = z
         .object({ nodeId: z.string() })
-        .parse(JSON.parse(readFileSync(join(home, 'identity.json'), 'utf8'))).nodeId;
-      nodes.push(node);
-    }
+        .parse(JSON.parse(readFileSync(join(node.home, 'identity.json'), 'utf8'))).nodeId;
+      if (plan.owners.includes(node.index)) await publishErrorSummary(node);
+    });
     log(`${String(nodes.length)} nodes initialised`);
 
     const relayConfig = join(dir, 'relay.config.json');
@@ -254,41 +305,6 @@ export async function runCampaign(options: CampaignOptions): Promise<CampaignRes
     });
     track(relay, 'relay', -1);
     emit({ kind: 'relay_started', relayUrl });
-
-    for (const ownerIndex of plan.owners) {
-      const owner = nodes[ownerIndex] as SimNode;
-      const now = new Date().toISOString();
-      writeOwnerOnly(
-        join(owner.home, 'app.log'),
-        [
-          `${now} INFO checkout ok user=alice.simleak@example.com amount=42.00EUR`,
-          `${now} ERROR payment timeout order=9f1c2b7e card=4242-SIMLEAK-0001`,
-          `${now} ERROR payment timeout ip=10.99.77.55`,
-          `${now} ERROR db connection refused key=sk-ant-api03-SIMLEAK-notarealkey`,
-          '',
-        ].join('\n'),
-      );
-      writeOwnerOnly(
-        join(owner.home, 'error-summary.json'),
-        JSON.stringify({
-          services: { api: { source: { kind: 'file', path: join(owner.home, 'app.log') } } },
-          errorPatterns: [
-            { name: 'PAYMENT_TIMEOUT', regex: 'payment timeout' },
-            { name: 'DB_DOWN', regex: 'connection refused' },
-          ],
-          errorLineRegex: '\\b(ERROR|FATAL)\\b',
-          degradedThreshold: 2,
-        }),
-      );
-      await cli(owner, [
-        'publish',
-        CAPABILITY,
-        '--approver',
-        owner.nodeId,
-        '--config',
-        join(owner.home, 'error-summary.json'),
-      ]);
-    }
 
     for (const node of nodes) {
       const serveLog = openOwnerOnly(join(node.home, 'serve.log'), 'a');

@@ -1,5 +1,5 @@
 import { execFileSync, spawn } from 'node:child_process';
-import { existsSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -73,6 +73,39 @@ describe('simulation campaign (T4.1)', () => {
         policy: { allow: 1, deny: 0, notNow: 0 },
       }),
     ).rejects.toThrow('E_SIM_SIZE');
+  });
+});
+
+describe('simulation campaign work directory (T4.42)', () => {
+  it('refuses a reused work directory where a node directory is a planted link, before starting any process', async () => {
+    const dir = join(tmpdir(), `drop-sim-planted-${String(process.pid)}`);
+    const victim = mkdtempSync(join(tmpdir(), 'drop-sim-planted-victim-'));
+    mkdirSync(dir, { recursive: true });
+    try {
+      try {
+        symlinkSync(victim, join(dir, 'node-0'), 'dir');
+      } catch (error) {
+        // Windows without Developer Mode cannot create the link: there is nothing to refuse.
+        if (process.platform === 'win32' && (error as NodeJS.ErrnoException).code === 'EPERM') return;
+        throw error;
+      }
+      await expect(
+        runCampaign({
+          nodes: 2,
+          owners: 1,
+          requestsPerRequester: 1,
+          durationMs: 1000,
+          seed: 1,
+          policy: { allow: 1, deny: 0, notNow: 0 },
+          relayUrl: `ws://127.0.0.1:${String(port(3))}/v1`,
+          workDir: dir,
+        }),
+      ).rejects.toThrow('E_SIM_WORK_DIR');
+      expect(readdirSync(victim)).toEqual([]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+      rmSync(victim, { recursive: true, force: true });
+    }
   });
 });
 
