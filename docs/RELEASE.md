@@ -89,6 +89,42 @@ macOS, signature et notarisation (les six sont requis, sinon la build reste ad h
 
 Le trousseau temporaire de la CI reçoit un mot de passe aléatoire à chaque run : pas de secret à prévoir pour lui.
 
+#### Configuration Apple depuis le Mac (une seule fois)
+
+Le certificat Developer ID Application est déjà présent dans le trousseau du Mac,
+et son identité est renseignée dans le dépôt. Pour permettre aux runners GitHub de
+signer à leur tour, deux actions nécessitent une autorisation Apple :
+
+1. Dans Trousseau d'accès → Mes certificats, exporter uniquement le certificat
+   Developer ID Application (avec sa clé privée) en .p12 protégé par un mot de passe.
+2. Dans [App Store Connect](https://appstoreconnect.apple.com/access/integrations/api),
+   créer et télécharger une clé API **d'équipe** (Team), rôle Developer suffisant.
+   Une clé **individuelle** ne fonctionne pas avec notarytool (documenté par Apple).
+   Conserver l'Issuer ID, le Key ID et le fichier AuthKey_*.p8.
+
+Une fois ces deux fichiers présents sur le Mac, lancer depuis un terminal local :
+
+```bash
+./scripts/setup-apple-github-signing.sh
+```
+
+Ce programme compare l'empreinte du .p12 au certificat Developer ID déjà installé,
+teste **l'authentification auprès d'Apple avant toute modification GitHub**, puis
+transfère les cinq secrets manquants via gh secret set, sans imprimer leurs valeurs
+ni les committer. Les fichiers privés doivent rester dans un stockage chiffré
+et leur export temporaire doit être supprimé en sécurité par le propriétaire.
+
+Le workflow manuel verify Apple signing teste ensuite l'import du certificat
+et la connexion à notarytool sur un **runner GitHub macOS vierge** :
+
+```bash
+gh workflow run apple-signing-check.yml --repo memolabs-dev/drop --ref main
+```
+
+Après réussite, relancer release desktop depuis main : les DMG ARM64 et Intel
+doivent être réellement signés, notarisés et vérifiés par la CI. Ne pas activer
+la publication automatique tant que les autres prérequis bêta ne sont pas validés.
+
 Windows, signature Authenticode (les deux sont requis) :
 
 | Secret                          | Contenu                                                   |
