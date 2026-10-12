@@ -144,6 +144,11 @@ listé dans `allowedNodeIds` ou présentant un nouveau ticket, et refuser les ti
 - **WHEN** l'opérateur révoque Natha avec `--with-invited`, après qu'elle a fait admettre Paul
 - **THEN** Natha et Paul sont coupés, et Zoé, admise par Julie, reste connectée
 
+#### Scenario: AC: révocation écrite pendant le démarrage
+<!-- openspec-guard:test="relay > applies a revocation file written while the relay starts, even with a busy thread pool" -->
+- **WHEN** le fichier de révocations est créé juste après le démarrage du relais, alors que la machine est chargée
+- **THEN** la révocation est appliquée au contrôle suivant, sans attendre une autre modification du fichier
+
 ### Requirement: Plafond global d'admissions
 Le relais MUST refuser une admission quand `maxAdmissionsPerDay` Nodes (100 par défaut) ont été admis dans les
 dernières 24 h, tous sponsors confondus, ce qui borne la vitesse à laquelle les admissions se propagent (T2.19, D75).

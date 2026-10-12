@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import WebSocket, { WebSocketServer } from 'ws';
 import { execFileSync } from 'node:child_process';
+import { pbkdf2 } from 'node:crypto';
 import { chmodSync, existsSync, mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -656,6 +657,31 @@ describe('relay', () => {
     // Julie, who invited her, keeps her place.
     const j = client(relay, julie);
     await j.instance.waitReady();
+  });
+
+  it('applies a revocation file written while the relay starts, even with a busy thread pool', async () => {
+    const natha = await generateIdentity('Natha');
+    const dir = mkdtempSync(join(tmpdir(), 'relay-revoke-start-'));
+    const revokedPath = join(dir, 'revoked.json');
+    // Hold every libuv pool thread: a file check that relies on it runs only once the file below is already written.
+    const poolSize = Math.max(4, Number(process.env.UV_THREADPOOL_SIZE ?? 4));
+    const busy = Array.from(
+      { length: poolSize * 2 },
+      () =>
+        new Promise<void>((resolve) => {
+          pbkdf2('drop', 'pool', 150_000, 32, 'sha256', () => {
+            resolve();
+          });
+        }),
+    );
+    const { logs } = await relayFor([natha], { revokedPath });
+    revokeNode(revokedPath, natha.nodeId);
+    await Promise.all(busy);
+    await until(() =>
+      logs.some(
+        (entry) => entry.event === 'revocation' && entry.outcome === 'revoked' && entry.nodeId === natha.nodeId,
+      ),
+    );
   });
 
   it('revoking with --with-invited also cuts off the nodes it admitted, transitively (T2.19)', async () => {

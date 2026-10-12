@@ -49,3 +49,26 @@ Après un abandon, `ready` MUST NOT ramener le délai entre tentatives au minimu
 <!-- openspec-guard:test="relay client liveness > keeps backing off after giving up, instead of redialing every second a relay that never acknowledges" -->
 - **WHEN** le client abandonne deux connexions de suite à un relais qui accepte les trames sans jamais les acquitter
 - **THEN** la deuxième reconnexion attend le double de la première au lieu de repartir du délai minimal
+
+## MODIFIED Requirements
+
+### Requirement: Révocation sans redémarrage
+`drop-relay revoke <nodeId> [--with-invited]` SHALL ajouter le Node à `revokedPath` (mode `0600`), que le relais relit
+toutes les 2 s : il MUST alors couper la connexion du Node avec `4401`, oublier sa file, et le refuser ensuite, même
+listé dans `allowedNodeIds` ou présentant un nouveau ticket, et refuser les tickets qu'il a signés. Avec
+`--with-invited`, les Nodes qu'il a fait admettre sont révoqués aussi, de proche en proche (T2.19, D75).
+
+#### Scenario: Node révoqué
+<!-- openspec-guard:test="relay > revokes a node without a restart: cut off at once, never back, and no longer a sponsor (T2.19)" -->
+- **WHEN** l'opérateur révoque Natha, admise par Julie, pendant qu'elle est connectée
+- **THEN** sa connexion est coupée, un nouveau ticket de Julie ne la fait pas revenir, ses propres tickets sont refusés, et Julie reste admise
+
+#### Scenario: Révocation avec ses invités
+<!-- openspec-guard:test="relay > revoking with --with-invited also cuts off the nodes it admitted, transitively (T2.19)" -->
+- **WHEN** l'opérateur révoque Natha avec `--with-invited`, après qu'elle a fait admettre Paul
+- **THEN** Natha et Paul sont coupés, et Zoé, admise par Julie, reste connectée
+
+#### Scenario: AC: révocation écrite pendant le démarrage
+<!-- openspec-guard:test="relay > applies a revocation file written while the relay starts, even with a busy thread pool" -->
+- **WHEN** le fichier de révocations est créé juste après le démarrage du relais, alors que la machine est chargée
+- **THEN** la révocation est appliquée au contrôle suivant, sans attendre une autre modification du fichier
