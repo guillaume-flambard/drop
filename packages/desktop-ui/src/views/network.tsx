@@ -4,6 +4,7 @@ import { api } from '../api.ts';
 import { Button } from '../components/ui/button.tsx';
 import { Card, CardContent } from '../components/ui/card.tsx';
 import { Input } from '../components/ui/input.tsx';
+import { internetModeLabel } from '../lib/format.ts';
 import type { InternetMode } from '../types.ts';
 import type { ViewProps } from '../App.tsx';
 
@@ -84,15 +85,7 @@ export function NetworkView({ data, busy, act }: ViewProps) {
               </span>
               <div>
                 <p className="text-[13px] font-semibold">Connexion actuelle</p>
-                <p className="mt-0.5 text-[12px] text-muted-foreground">
-                  {saved?.mode === 'off'
-                    ? 'Réseau local'
-                    : saved?.mode === 'relay'
-                      ? 'Relais privé'
-                      : saved?.mode === 'direct'
-                        ? 'Directe'
-                        : 'Non configurée'}
-                </p>
+                <p className="mt-0.5 text-[12px] text-muted-foreground">{internetModeLabel(saved?.mode)}</p>
               </div>
             </div>
             <span
