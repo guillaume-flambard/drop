@@ -124,11 +124,13 @@ describe('monorepo tooling', () => {
     expect(Object.keys(scripts(readJson('package.json')))).toEqual(
       expect.arrayContaining(['lint', 'typecheck', 'test', 'format:check']),
     );
+    const outputs = new Map<string, string>();
     for (const args of [['lint'], ['typecheck'], ['-r', 'lint'], ['-r', 'typecheck']]) {
       const result = run('pnpm', args);
       expect(result.status, result.output).toBe(0);
+      outputs.set(args.join(' '), result.output);
     }
-    expect(run('pnpm', ['-r', 'typecheck']).output).toContain('tsc --noEmit -p tsconfig.json');
+    expect(outputs.get('-r typecheck')).toContain('tsc --noEmit -p tsconfig.json');
   }, 300_000);
 
   it('typecheck exits non-zero on a type error and zero on valid code', () => {
