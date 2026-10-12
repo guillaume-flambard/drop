@@ -964,7 +964,11 @@ fn supervise(app: AppHandle) {
 /// Where the panel goes for a click on the icon at `click`, in physical pixels: centred on the click, under it when the
 /// icon sits at the top of the screen (the macOS menu bar), above it when there is room, as with the Windows taskbar at
 /// the bottom. Never off the left or top edge.
-fn panel_position(click: PhysicalPosition<f64>, scale: f64, prefer_above: bool) -> PhysicalPosition<f64> {
+fn panel_position(
+    click: PhysicalPosition<f64>,
+    scale: f64,
+    prefer_above: bool,
+) -> PhysicalPosition<f64> {
     let x = (click.x - PANEL_WIDTH * scale / 2.0).max(0.0);
     let gap = 8.0 * scale;
     let above = click.y - PANEL_HEIGHT * scale - gap;
@@ -998,7 +1002,12 @@ fn show_workspace(app: &AppHandle) {
         show_panel(app, None);
         return;
     }
-    let Some(port) = *app.state::<Daemon>().verified_port.lock().expect("verified port") else {
+    let Some(port) = *app
+        .state::<Daemon>()
+        .verified_port
+        .lock()
+        .expect("verified port")
+    else {
         show_panel(app, None);
         return;
     };
@@ -1310,7 +1319,9 @@ fn check_for_update(app: &AppHandle) {
 
 /// Downloads the pending update, checks its signature, replaces the app, then restarts it with its daemon.
 fn install_update(app: &AppHandle) {
-    let Some(update) = app.state::<PendingUpdate>().0.lock().unwrap().take() else { return };
+    let Some(update) = app.state::<PendingUpdate>().0.lock().unwrap().take() else {
+        return;
+    };
     let version = update.version.clone();
     let _ = set_tray_menu(app, Some(&version), true);
     let app = app.clone();
@@ -1635,7 +1646,10 @@ mod tests {
             github.as_str(),
             "plain-value-123",
         ] {
-            assert!(!out.contains(secret), "{secret} in {out}");
+            assert!(
+                !out.contains(secret),
+                "redacted output still contains a secret"
+            );
         }
         // What explains a crash stays: the message, the path and position.
         assert!(
@@ -1668,7 +1682,10 @@ mod tests {
             let out = redact_stray(vector["input"].as_str().expect("input"), None);
             for secret in vector["absent"].as_array().expect("absent") {
                 let secret = secret.as_str().expect("secret");
-                assert!(!out.contains(secret), "{name}: {secret} in {out}");
+                assert!(
+                    !out.contains(secret),
+                    "{name}: sensitive value was not redacted"
+                );
             }
             for kept in vector["present"].as_array().expect("present") {
                 let kept = kept.as_str().expect("kept");

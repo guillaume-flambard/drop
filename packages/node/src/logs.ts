@@ -444,8 +444,29 @@ function startedAt(path: string): number {
   return Number.isFinite(at) ? at : statSync(path).mtimeMs;
 }
 
+/** Verify the opened file descriptor, not a pre-open path check (symlinks and swaps are refused). */
+function openCheckedLog(path: string): number {
+  const fd = openSync(path, fsConstants.O_RDONLY | NOFOLLOW);
+  try {
+    const opened = fstatSync(fd);
+    const named = lstatSync(path);
+    if (
+      !opened.isFile() ||
+      !named.isFile() ||
+      opened.dev !== named.dev ||
+      (process.platform !== 'win32' && opened.ino !== named.ino)
+    ) {
+      throw new Error('E_LOG log changed or is a symbolic link');
+    }
+    return fd;
+  } catch (error) {
+    closeSync(fd);
+    throw error;
+  }
+}
+
 function firstLine(path: string): string {
-  const fd = openSync(path, 'r');
+  const fd = openCheckedLog(path);
   try {
     const buffer = Buffer.alloc(4096);
     return (
@@ -463,21 +484,11 @@ function firstLine(path: string): string {
 export function lastLines(path: string, bytes: number): string[] {
   // Open first (O_NOFOLLOW on POSIX), then validate the opened descriptor and the named file.
   // A pre-open lstat would allow a symlink swap between the check and open.
-  const fd = openSync(path, fsConstants.O_RDONLY | NOFOLLOW);
+  const fd = openCheckedLog(path);
   let buffer: Buffer;
   let start: number;
   try {
-    const opened = fstatSync(fd);
-    const named = lstatSync(path);
-    if (
-      !opened.isFile() ||
-      !named.isFile() ||
-      opened.dev !== named.dev ||
-      (process.platform !== 'win32' && opened.ino !== named.ino)
-    ) {
-      throw new Error('E_LOG log changed or is a symbolic link');
-    }
-    const size = opened.size;
+    const size = fstatSync(fd).size;
     start = Math.max(0, size - bytes);
     buffer = Buffer.alloc(size - start);
     readSync(fd, buffer, 0, buffer.length, start);
