@@ -168,8 +168,21 @@ export interface LinkRequest {
 }
 
 /** A drop://pair invitation (T4.14), previewed before anything is sent. */
+/** What « Rejoindre » would do to this node's relay (T4.23): `adopt` moves it to the relay the invite names. */
+export type RelayOutcome = 'same' | 'adopt' | 'kept';
+
+/** `POST /ui/pair/preview`: who invites, read from a signed invite, and the relay it names. */
+export interface InvitePreview {
+  displayName: string;
+  team?: string;
+  relayHost: string;
+  relay: RelayOutcome;
+}
+
 export interface PendingInvite {
   code: string;
   displayName: string;
   team: string;
+  relay: RelayOutcome;
+  relayHost: string;
 }

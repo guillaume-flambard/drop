@@ -6,9 +6,9 @@ La source d'autorité reste `docs/product/PRD.md`, `docs/product/APP_FLOW.md` et
 
 ## Ce qui est intégré
 
-> Depuis T4.24 (D90), le panneau est construit en React avec les composants et jetons de la fenêtre (`packages/desktop-ui/src/panel/`) ; `panel.ts` et `panel-human.ts` n'existent plus. Les lignes ci-dessous décrivent l'étape précédente.
+> Depuis T4.24 (D97), le panneau est construit en React avec les composants et jetons de la fenêtre (`packages/desktop-ui/src/panel/`) ; `panel.ts` et `panel-human.ts` n'existent plus. Les lignes ci-dessous décrivent l'étape précédente.
 
-1. **Thème du panneau :** `packages/node/src/panel-human.ts`, injecté par `packages/desktop-ui/src/panel/` dans la page `/app` servie localement. Aucune ressource externe, police ou dépendance UI. Modes clair/sombre, clavier et préférences de mouvement préservés.
+1. **Thème du panneau :** `packages/node/src/panel-human.ts` (supprimé en T4.24), injecté par `packages/node/src/panel.ts` (supprimé en T4.24) dans la page `/app` servie localement. Aucune ressource externe, police ou dépendance UI. Modes clair/sombre, clavier et préférences de mouvement préservés.
 2. **Démarrage cohérent :** mêmes tokens de base dans `apps/desktop/web/index.html` pour les états avant disponibilité du moteur.
 3. **Demandes :** libellé humain, carte de consentement plus lisible, actions explicites et registre « recevra / ne recevra jamais » maintenu avant les boutons.
 4. **Relecture :** contenu et retrait champ par champ toujours présents ; seule la présentation et la formulation de l'étape changent.

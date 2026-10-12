@@ -161,7 +161,7 @@ Remplacer `codex` par l'un des treize clients (`claude_code`, `claude_desktop`, 
 
 Dans le panneau local, « Mes outils » propose le parcours guidé : « Analyser ce Mac », choisir les agents, puis « Connecter les agents sélectionnés ». Une configuration changée depuis l'analyse est refusée ; aucune capacité n'est publiée par ce raccordement. La commande CLI suit les mêmes contrôles de conflit et de sauvegarde pour l'agent nommé.
 
-Un annuaire d’équipe est implémenté : `team create <nom>` initialise l’équipe ; les invitations propagent l’adhésion et l’appairage ; `team` liste les membres, leurs agents et leurs capacités. Dans le panneau, un lien `drop://pair` montre qui invite et dans quelle équipe, puis attend « Rejoindre » ou « Refuser » (T4.14).
+Un annuaire d’équipe est implémenté : `team create <nom>` initialise l’équipe ; les invitations propagent l’adhésion et l’appairage ; `team` liste les membres, leurs agents et leurs capacités. Pour faire venir quelqu'un, un seul lien suffit : `drop invite --link` ou « Inviter quelqu'un » dans Mon espace donne `https://drop.memolabs.dev/join#<invitation>`, valable 24 h et une fois. La page du lien propose le téléchargement de drop puis rouvre l'app sur la carte « Rejoindre » ou « Refuser » ; un poste neuf passe alors au relais de l'équipe. En ligne de commande : `drop join <code-ou-lien>`. Le parcours complet et les refus sont dans [ONBOARDING](ONBOARDING.md#rejoindre-une-équipe-par-un-seul-lien-t423-d89). Un lien `drop://pair` ouvre la même carte (T4.14).
 
 Pour examiner les agents reconnus et les sources déjà configurées :
 

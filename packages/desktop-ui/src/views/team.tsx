@@ -15,6 +15,118 @@ import { PersonLine } from '../components/person.tsx';
 import { api } from '../api.ts';
 import type { ViewProps } from '../App.tsx';
 
+interface InvitePreview {
+  displayName: string;
+  team?: string;
+  relayHost: string;
+}
+
+/**
+ * « J'ai reçu une invitation » (T4.23): the code or the link pasted from the join page. The node checks it and shows
+ * who invites; nothing is sent before « Rejoindre », as on a drop://join link (T4.14).
+ */
+function JoinWithCode({ act }: Pick<ViewProps, 'act'>) {
+  const [open, setOpen] = useState(false);
+  const [code, setCode] = useState('');
+  const [preview, setPreview] = useState<InvitePreview | null>(null);
+  const [error, setError] = useState('');
+  function reset(next: boolean): void {
+    setOpen(next);
+    setCode('');
+    setPreview(null);
+    setError('');
+  }
+  function check(): void {
+    setError('');
+    api<InvitePreview>('POST', '/ui/pair/preview', { code: code.trim() })
+      .then(setPreview)
+      .catch((e: unknown) => {
+        setError(e instanceof Error ? e.message : 'Invitation illisible.');
+      });
+  }
+  return (
+    <>
+      <Button
+        variant="secondary"
+        onClick={() => {
+          reset(true);
+        }}
+      >
+        J’ai reçu une invitation
+      </Button>
+      <Dialog open={open} onOpenChange={reset}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {preview
+                ? preview.team
+                  ? preview.displayName + ' t’invite dans l’équipe ' + preview.team
+                  : 'Invitation de ' + preview.displayName
+                : 'Rejoindre une équipe'}
+            </DialogTitle>
+            <DialogDescription>
+              {preview
+                ? 'Nom et équipe annoncés par le lien, via ' +
+                  preview.relayHost +
+                  ' : si tu ne l’attendais pas, vérifie avec la personne avant de rejoindre. Chaque question reste soumise à ton accord.'
+                : 'Colle le code ou le lien reçu. Rien n’est envoyé avant « Rejoindre ».'}
+            </DialogDescription>
+          </DialogHeader>
+          {preview ? null : (
+            <div className="space-y-2">
+              <label htmlFor="join-code" className="text-xs font-medium">
+                Code ou lien d’invitation
+              </label>
+              <Input
+                id="join-code"
+                value={code}
+                autoComplete="off"
+                spellCheck={false}
+                onChange={(e) => {
+                  setCode(e.target.value);
+                }}
+              />
+            </div>
+          )}
+          {error ? (
+            <p role="alert" className="mt-2 text-[12px] text-muted-foreground">
+              {error}
+            </p>
+          ) : null}
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                reset(false);
+              }}
+            >
+              {preview ? 'Refuser' : 'Fermer'}
+            </Button>
+            {preview ? (
+              <Button
+                onClick={() => {
+                  const pasted = code.trim();
+                  reset(false);
+                  act(
+                    () => api('POST', '/ui/pair', { code: pasted }),
+                    'Invitation acceptée : tu rejoins l’équipe dans quelques secondes. Ensuite, connecte tes agents.',
+                  );
+                }}
+              >
+                Rejoindre
+              </Button>
+            ) : (
+              <Button disabled={!code.trim()} onClick={check}>
+                Voir l’invitation
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
 export function TeamView({ data, busy, act }: ViewProps) {
   const [name, setName] = useState('');
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -65,6 +177,8 @@ export function TeamView({ data, busy, act }: ViewProps) {
               Créer l’équipe <ArrowRight size={15} />
             </Button>
           </div>
+          <p className="mt-6 mb-2 text-[12px] text-muted-foreground">Une personne t’a envoyé un lien ?</p>
+          <JoinWithCode act={act} />
         </CardContent>
       </Card>
     );
@@ -72,9 +186,10 @@ export function TeamView({ data, busy, act }: ViewProps) {
   function createInvite(): void {
     setInviteError('');
     setInviteBusy(true);
-    api<{ code: string }>('POST', '/ui/invite')
+    api<{ code: string; link?: string }>('POST', '/ui/invite')
       .then((result) => {
-        setInvite('drop://pair?code=' + encodeURIComponent(result.code));
+        // One https link that works without the app (T4.23): the join page installs drop, then opens drop://join.
+        setInvite(result.link ?? 'drop://pair?code=' + encodeURIComponent(result.code));
       })
       .catch((e: unknown) => {
         setInviteError(e instanceof Error ? e.message : 'Impossible de créer le lien.');
@@ -106,15 +221,18 @@ export function TeamView({ data, busy, act }: ViewProps) {
             {members.length} membres · {online} en ligne
           </p>
         </div>
-        <Button
-          onClick={() => {
-            setInviteOpen(true);
-            setInvite('');
-            setInviteError('');
-          }}
-        >
-          <Plus /> Inviter quelqu’un
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <JoinWithCode act={act} />
+          <Button
+            onClick={() => {
+              setInviteOpen(true);
+              setInvite('');
+              setInviteError('');
+            }}
+          >
+            <Plus /> Inviter quelqu’un
+          </Button>
+        </div>
       </div>
       <Card>
         <CardContent className="px-6 py-2 sm:px-7">
@@ -163,7 +281,8 @@ export function TeamView({ data, busy, act }: ViewProps) {
           <DialogHeader>
             <DialogTitle>Inviter une personne</DialogTitle>
             <DialogDescription>
-              Un lien personnel à usage unique, valable 24 heures. Le lien n’autorise aucun partage.
+              Un lien personnel à usage unique, valable 24 heures, pour une seule personne. Sa page installe drop puis
+              l’ouvre sur ton invitation. Le lien n’autorise aucun partage.
             </DialogDescription>
           </DialogHeader>
           {invite ? (

@@ -1,0 +1,94 @@
+{
+  "change": "t3-1b-replay-storage-bounds",
+  "phase": "CLOSED",
+  "status": "DONE_ARCHIVED",
+  "requirements": [
+    "REQ-1 UUIDv7 for new drop requests",
+    "REQ-2 bounded durable anti-replay across restart and clock rollback",
+    "REQ-3 per-node relay rate across reconnect"
+  ],
+  "acceptance": {
+    "protocol_uuidv7": "passed",
+    "protocol_uppercase_canonicalization": "passed",
+    "node_expiry_future": "passed",
+    "node_restart_rollback": "passed",
+    "node_saturation": "passed",
+    "node_corruption": "passed",
+    "node_case_replay_and_migration": "passed",
+    "node_foreign_lock_age": "passed",
+    "node_missing_clock_after_migration": "passed",
+    "node_missing_marker_directory": "passed_full_suite",
+    "node_partial_marker_loss": "passed_full_suite",
+    "node_missing_version_after_purge": "passed_full_suite",
+    "relay_malformed_frame_quota": "passed",
+    "relay_oversized_frame_quota": "passed",
+    "relay_websocket_payload_limit_quota": "passed",
+    "relay_websocket_invalid_utf8_quota": "passed",
+    "node_duplicate_review_decision": "passed_full_suite",
+    "node_review_expiry_while_sending": "passed_full_suite",
+    "relay_reconnect": "passed",
+    "relay_uncorrelated_rate_close": "passed_full_suite",
+    "relay_decoy_id_rate_close": "passed_full_suite",
+    "replay_clock_temp_cleanup": "passed_full_suite",
+    "replay_marker_rollback": "passed",
+    "replay_prune_transient_failure": "passed",
+    "replay_first_migration_transient_failure": "passed",
+    "replay_pre_floor_digest": "passed"
+  },
+  "workGraph": {
+    "P0-1": "DONE",
+    "P0-2": "DONE",
+    "P0-3": "DONE",
+    "P1-1": "DONE",
+    "P1-2": "DONE",
+    "P1-3": "DONE",
+    "P1-4": "DONE",
+    "P1-5": "DONE",
+    "P1-6": "DONE",
+    "P1-7": "DONE",
+    "P1-8": "DONE",
+    "P1-9": "DONE",
+    "P1-10": "DONE",
+    "P1-11": "DONE",
+    "P1-12": "DONE",
+    "P1-13": "DONE",
+    "P1-14": "DONE",
+    "P1-15": "DONE",
+    "P1-16": "DONE"
+  },
+  "risks": [
+    {
+      "id": "R-1",
+      "severity": "high",
+      "status": "closed_after_final_review",
+      "description": "Replay and quota bypasses fixed; final review on the stabilized code found no P0/P1 and two P2 availability defects (transient I/O bricking admission), both fixed red-green"
+    },
+    {
+      "id": "R-2",
+      "severity": "high",
+      "status": "closed_in_T3.1c",
+      "description": "T3.1c bounds executing and outbound with tests; CSO finding 369ec22b77cbf3bf1de4e4b432896a67 has static mitigation evidence, but its partial recheck cannot formally close it before pilot T3.5"
+    },
+    {
+      "id": "R-3",
+      "severity": "high",
+      "status": "tracked_in_T3.1d",
+      "description": "A relay E_RATE refusal may leave an executor result unsent while a receipt claims delivery; T3.1d explicitly owns retryable E_RATE and outbound quota behavior before the pilot"
+    }
+  ],
+  "verification": {
+    "targetedTests": "passed",
+    "lint": "passed",
+    "typecheck": "passed",
+    "fullTests": "passed_353_of_353_current_worktree",
+    "openspecValidate": "passed",
+    "guard": "passed_436_criteria_161_linked_baseline_plus0_minus0",
+    "review": "final_review_2026-10-11_two_independent_passes_on_main_d61a2d4;_P2_marker_rollback_and_P2_prune_or_first_migration_fixed_red_green;_no_P0_P1;_not_a_logged_gstack_review_invocation",
+    "cso": "diff_run_1791738131254-49036b6f9ddab1ad_finished_partial_no_supported_findings_in_diff_scope;_scanners_not_run;_recheck_of_369ec22b_impossible_MISSING_INPUT"
+  },
+  "remaining": [
+    "T3.1d owns relay E_RATE retry and outbound quota",
+    "T3.1e owns per-peer marker quota, admission cost, crash recovery between marker and digest, Windows rename durability",
+    "Relay client ack timeout added to the index as a follow-up (T3.1f)"
+  ]
+}

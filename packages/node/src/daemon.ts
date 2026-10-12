@@ -9,9 +9,9 @@ import {
   repoAnswer,
   type ConnectOptions,
 } from '@drop/capabilities';
-import { DropError, NodeIdSchema, policyExpired } from '@drop/protocol';
+import { DropError, NodeIdSchema, policyExpired, relayUrlAllowed } from '@drop/protocol';
 import { RelayClient } from '@drop/relay';
-import { NodeEngine, type InboxItem } from './engine.ts';
+import { NodeEngine, type InboxItem, type RelayOutcome } from './engine.ts';
 import { detectAgents } from './detect.ts';
 import { openRouterFunder } from './funding.ts';
 import { applyOnboarding, manualOnboarding, previewOnboarding } from './onboarding.ts';
@@ -42,6 +42,7 @@ import {
   type InternetSettings,
 } from './iroh.ts';
 import { addProject, listProjects, removeProject } from './projects.ts';
+import { switchRelay } from './private-config.ts';
 
 export interface Daemon {
   engine: NodeEngine;
@@ -67,6 +68,8 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
   const identity = home.identity();
   const config = home.config();
   const token = home.localToken();
+  // peers.json and team.json written by a version before T4.15 may still be readable by others.
+  home.securePrivateFiles();
   const log = options.log ?? ((line: string) => process.stderr.write(`${line}\n`));
   /** A structured log line: a timestamp, an event and a stable code, never a payload. */
   const logEntry = (entry: object): void => {
@@ -98,6 +101,17 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
   const store = oauthStore(home);
   const signIns = new OAuthSignIns({ store, redirectUrl });
   const oauth: ConnectOptions = { oauth: (serverUrl) => runtimeOAuth(store, redirectUrl())(serverUrl) };
+  // The relay this node uses now: a node that joins its first team adopts that team's relay (T4.23, D95).
+  let relayUrl = config.relayUrl;
+  const relayPlan = (url: string, fresh: boolean): RelayOutcome => {
+    if (url === relayUrl) return 'same';
+    if (!fresh) return 'kept';
+    // ws only to a literal private address, wss to such an address or a DNS name; then the organization's list.
+    if (!relayUrlAllowed(url)) throw new DropError('E_INVITE_RELAY', 'E_INVITE_RELAY relay not allowed');
+    if (policy && !relayAllowed(policy.policy, url))
+      throw new DropError('E_INVITE_RELAY', 'E_INVITE_RELAY relay not allowed by policy');
+    return 'adopt';
+  };
   const engine = new NodeEngine({
     identity,
     ...(lanKey ? { lanKey } : {}),
@@ -146,6 +160,19 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
     onAdmission: (ticket) => {
       home.savePendingAdmission(ticket);
       link.relay?.retryNow();
+    },
+    relayPlan,
+    // Written to config.json first, so a restart keeps the team's relay; the connection then moves without one.
+    adoptRelay: (url) => {
+      try {
+        switchRelay(home, url);
+      } catch {
+        throw new DropError('E_INVITE_RELAY', 'E_INVITE_RELAY relay not adopted');
+      }
+      relayUrl = url;
+      link.relay?.switchUrl(url);
+      logEntry({ event: 'relay_adopted' });
+      return Promise.resolve();
     },
   });
   // Every path (relay, local network, iroh) hands its envelopes to the engine the same way.
@@ -258,7 +285,8 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
     engine,
     token,
     port: options.apiPort ?? config.apiPort,
-    relayUrl: config.relayUrl,
+    relayUrl: () => relayUrl,
+    ...(config.joinPage ? { joinPage: config.joinPage } : {}),
     log: logEntry,
     ...(process.env.DROP_SHELL_INSTANCE ? { shellInstance: process.env.DROP_SHELL_INSTANCE } : {}),
     admin: {

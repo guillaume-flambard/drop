@@ -31,7 +31,7 @@ des questions envoyées par ce Node.
 - **THEN** chaque action atteint le Node dans cet ordre ; une demande de partage incomplète est refusée (400), une demande sans jeton aussi (401)
 
 ### Requirement: App de la barre de menus
-L’app SHALL embarquer Node et `drop.mjs`, créer une identité au premier lancement avec un relais local ou explicitement configuré, lancer le daemon et l’arrêter en quittant. Le daemon MUST aussi s’arrêter quand la coque disparaît sans quitter, y compris tuée par un signal. Le panneau et les liens d’appairage restent locaux. Le bootstrap MUST NOT sélectionner le relais public. Seule la version finale s’inscrit au démarrage de session.
+L’app SHALL embarquer Node et `drop.mjs`, créer une identité au premier lancement avec un relais local ou explicitement configuré, lancer le daemon et l’arrêter en quittant, y compris quand la coque est tuée. Le panneau et les liens d’appairage restent locaux. Le bootstrap MUST NOT sélectionner de lui-même le relais public : seul le Node, au clic sur « Rejoindre », adopte le relais d’une invitation (D95). Seule la version finale s’inscrit au démarrage de session.
 
 #### Scenario: Premier lancement
 <!-- openspec-guard:test="private bundled bootstrap > initializes a fresh private home without starting the imported MCP executable" -->
@@ -57,12 +57,17 @@ Le panneau SHALL d'abord montrer l'analyse locale expurgée des adaptateurs conn
 - **THEN** le panneau propose la configuration manuelle et n'élargit aucune permission
 
 ### Requirement: Invitation confirmée avant appairage
-Ouvert par un lien `drop://pair`, le panneau SHALL afficher qui invite et, s'il y a lieu, l'équipe, comme texte, puis attendre « Rejoindre » ou « Refuser ». Il MUST NOT envoyer de demande d'appairage avant « Rejoindre ». Le code d'invitation MUST rester hors de l'URL une fois le panneau ouvert.
+Ouvert par un lien `drop://pair` ou `drop://join` (T4.23), même avant que le Node réponde, le panneau SHALL afficher qui invite et l'équipe, comme texte, puis attendre « Rejoindre » ou « Refuser ». Il MUST NOT envoyer de demande d'appairage avant « Rejoindre ». Le code MUST rester hors de l'URL une fois le panneau ouvert. Mon espace SHALL accepter le code ou le lien collé, avec le même aperçu.
 
 #### Scenario: AC: aucun appairage sans clic
 <!-- openspec-guard:test="menu bar panel and its admin routes (T4.14) > previews an invitation without pairing and pairs only after Rejoindre" -->
 - **WHEN** le panneau est ouvert avec une invitation valide
 - **THEN** la prévisualisation montre l'inviteur sans appairer, et l'appairage n'a lieu qu'après « Rejoindre »
+
+#### Scenario: AC: lien drop://join
+<!-- openspec-guard:test="desktop join link (T4.23) > opens drop://join like drop://pair: the confirmation card, queued until the node answers" -->
+- **WHEN** la page pour rejoindre ouvre `drop://join?invite=<code>`, avant ou après le démarrage du Node
+- **THEN** l'app passe le seul code base64url au panneau, comme pour `drop://pair`, et ignore un lien trop long, sans code ou d'une autre sorte
 
 ### Requirement: Carte et relecture conformes dans le panneau
 Le panneau SHALL afficher sur la carte de consentement la ligne de sensibilité haute quand elle s'applique, le compte à rebours « Expire dans » et faire de « Pas maintenant » le bouton par défaut au clavier. Pour une capacité sensible, son écran de relecture SHALL proposer une case par champ de premier niveau pour le retirer avant l'envoi.

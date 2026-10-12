@@ -11,7 +11,7 @@ Le panneau de la barre de menus est une page servie par le Node sur `127.0.0.1` 
 5. **Rafraîchissement en direct.** Le flux SSE recharge demandes, badge et état d'en-tête, quel que soit l'onglet ; si le focus est dans un champ du panneau, le rechargement attend que le focus le quitte.
 6. **Focus.** Après une action, le bandeau de résultat prend le focus ; une région vivante cachée l'annonce. Les déplacements précis (zone de réponse, « Envoyer », « Retirer » d'un fichier…) passent par `data-focus`. Sans focus, « Pas maintenant » de la première carte le prend ; jamais « Autoriser ».
 7. **Texte des pairs.** Tout passe par le rendu texte de React. Aucun `dangerouslySetInnerHTML` ni `innerHTML` dans `src/panel` (vérifié par test).
-8. **Tests.** happy-dom (D90) rend les vrais composants ; un `fetch` remplacé joue le Node. Les tests HTTP et CSP restent dans `packages/node/test/panel.test.ts`.
+8. **Tests.** happy-dom (D97) rend les vrais composants ; un `fetch` remplacé joue le Node. Les tests HTTP et CSP restent dans `packages/node/test/panel.test.ts`.
 
 ## Parité avec l'ancien panneau
 
@@ -34,7 +34,7 @@ Le panneau de la barre de menus est une page servie par le Node sur `127.0.0.1` 
 | Mes outils : interrupteurs Partager / Ne plus partager | Switch Radix (`role="switch"`) |
 | Assistants reliés et Retirer, qui paie le modèle | Repris ; le retrait confirme par un bandeau |
 | Connexion par Internet : états, message d'échec, quatre choix, adresse validée, Enregistrer | Repris |
-| `drop://pair` : aperçu, Refuser par défaut, Rejoindre seul appaire, puis Équipe ; lien périmé | Repris |
+| `drop://pair` et `drop://join` : aperçu, Refuser par défaut, Rejoindre seul appaire, puis Équipe ; relais nommé quand « Rejoindre » le ferait changer (`relay: 'adopt'`) ; chaque refus avec le message de son code stable (revue de T4.23, D95) | Repris ; porté le 12 octobre 2026 à la fusion de `main`, refus affiché par `failureText` (message du Node suivi du code) |
 | `drop://link` : passerelle inconnue, lien incomplet, domaine inconnu, Autoriser seulement si complet | Repris ; Refuser prend le focus |
 | Paramètres de lien retirés de l'adresse, jeton gardé | Repris (`history.replaceState`) |
 | Chargement (blocs, « Chargement… », `aria-busy`), erreur avec Réessayer, refus en alerte, boutons inactifs pendant l'appel | Repris |

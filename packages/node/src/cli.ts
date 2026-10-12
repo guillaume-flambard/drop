@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { dashedValues } from './cli-args.ts';
 import { privateConfig, migratePrivate, rollbackPrivate } from './private-config.ts';
 import { PrivateNetworkSchema } from '@drop/protocol';
 import { readFileSync } from 'node:fs';
@@ -25,8 +26,11 @@ const USAGE = `drop <command>
   migrate-private --relay <url> [--network <policy.json>]  stop daemon first; backs up config
   rollback-private               stop daemon first; restores unchanged migrated config
   serve                          daemon: relay, local API, consent UI, runner
-  invite                         print a one-time pairing code (daemon must run)
-  pair <code>                    pair with the node that issued the code (daemon must run)
+  invite [--link]                print a one-time invite, valid 24 hours (daemon must run); --link prints the link
+                                 to send, https://drop.memolabs.dev/join#<invite>, which works without the app
+  join <code-or-link>            join the team of whoever sent this invite or link (daemon must run); a node that
+                                 joined nobody yet moves to the invite's relay first
+  pair <code>                    same as join, kept for scripts
   peers                          list paired peers
   publish <capability-id> --approver <nodeId> [--config <file.json>]
                                  e.g. publish mcp.answer.figma --config figma.json (one per MCP server)
@@ -98,7 +102,7 @@ const home = new DropHome();
 switch (command) {
   case 'init': {
     const { values } = parseArgs({
-      args: rest,
+      args: dashedValues(rest),
       options: {
         name: { type: 'string' },
         kind: { type: 'string' },
@@ -119,7 +123,7 @@ switch (command) {
     home.init(
       identity,
       values.profile === 'legacy'
-        ? NodeConfigSchema.parse({ relayUrl, ownerKind, apiPort: Number(values.port ?? 7781) })
+        ? NodeConfigSchema.parse({ profile: 'legacy', relayUrl, ownerKind, apiPort: Number(values.port ?? 7781) })
         : privateConfig(relayUrl, ownerKind, Number(values.port ?? 7781), network),
     );
     process.stdout.write(
@@ -128,7 +132,10 @@ switch (command) {
     break;
   }
   case 'migrate-private': {
-    const { values } = parseArgs({ args: rest, options: { relay: { type: 'string' }, network: { type: 'string' } } });
+    const { values } = parseArgs({
+      args: dashedValues(rest),
+      options: { relay: { type: 'string' }, network: { type: 'string' } },
+    });
     if (!values.relay) fail('migrate-private requires --relay');
     migratePrivate(
       home,
@@ -181,14 +188,34 @@ switch (command) {
     break;
   }
   case 'invite': {
-    const { code } = (await api(home, 'POST', '/ui/invite', {})) as { code: string };
-    process.stdout.write(`${code}\n(valid 24 hours, single use; also lets a new node join the relay)\n`);
+    const { values } = parseArgs({ args: rest, options: { link: { type: 'boolean' } } });
+    const { code, link } = (await api(home, 'POST', '/ui/invite', {})) as { code: string; link: string };
+    process.stdout.write(
+      values.link
+        ? `${link}\n(valid 24 hours, single use: send it to one person; the invite stays in the part after #, which the page never sends anywhere)\n`
+        : `${code}\n(valid 24 hours, single use; also lets a new node join the relay)\n`,
+    );
     break;
   }
+  case 'join':
   case 'pair': {
-    const code = rest[0] ?? fail('drop pair <code>');
-    const { nodeId } = (await api(home, 'POST', '/ui/pair', { code })) as { nodeId: string };
-    process.stdout.write(`pair request sent to ${nodeId}; \`drop peers\` shows it once accepted\n`);
+    const input = rest[0] ?? fail(`drop ${command} <code-or-link>`);
+    const preview = (await api(home, 'POST', '/ui/pair/preview', { code: input })) as {
+      displayName: string;
+      team?: string;
+      relayHost: string;
+      relay: 'same' | 'adopt' | 'kept';
+    };
+    const { nodeId, relay } = (await api(home, 'POST', '/ui/pair', { code: input })) as {
+      nodeId: string;
+      relay: string;
+    };
+    const who = terminalText(preview.displayName);
+    process.stdout.write(
+      `${preview.team ? `joining ${terminalText(preview.team)}, the team of ${who}` : `pairing with ${who}`} (${nodeId})\n` +
+        (relay === 'adopt' ? `this node now uses the team's relay, ${terminalText(preview.relayHost)}\n` : '') +
+        '`drop peers` shows them once accepted; then `drop install all` connects your agents\n',
+    );
     break;
   }
   case 'peers':
@@ -197,7 +224,7 @@ switch (command) {
     break;
   case 'publish': {
     const { values, positionals } = parseArgs({
-      args: rest,
+      args: dashedValues(rest),
       allowPositionals: true,
       options: { approver: { type: 'string', multiple: true }, config: { type: 'string' } },
     });
@@ -330,7 +357,7 @@ switch (command) {
   }
   case 'share': {
     const { values, positionals } = parseArgs({
-      args: rest,
+      args: dashedValues(rest),
       allowPositionals: true,
       options: {
         label: { type: 'string' },
@@ -377,7 +404,7 @@ switch (command) {
     break;
   }
   case 'mcp-tools': {
-    const { values } = parseArgs({ args: rest, options: { config: { type: 'string' } } });
+    const { values } = parseArgs({ args: dashedValues(rest), options: { config: { type: 'string' } } });
     const raw: unknown = JSON.parse(readFileSync(values.config ?? fail('drop mcp-tools --config <file.json>'), 'utf8'));
     // Only the server part is needed here: the tool list may still be empty while the owner is choosing.
     const server = McpAnswerConfigSchema.shape.server.parse((raw as { server?: unknown }).server);
@@ -441,7 +468,7 @@ switch (command) {
   }
   case 'review': {
     const { values, positionals } = parseArgs({
-      args: rest,
+      args: dashedValues(rest),
       allowPositionals: true,
       options: { redact: { type: 'string', multiple: true } },
     });
@@ -453,7 +480,7 @@ switch (command) {
     break;
   }
   case 'receipts': {
-    const { values } = parseArgs({ args: rest, options: { since: { type: 'string' } } });
+    const { values } = parseArgs({ args: dashedValues(rest), options: { since: { type: 'string' } } });
     for (const receipt of home.receipts(parseSince(values.since))) {
       const at = new Date(receipt.timestamps.requested ?? 0).toISOString();
       process.stdout.write(

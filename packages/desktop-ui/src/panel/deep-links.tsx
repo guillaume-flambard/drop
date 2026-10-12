@@ -10,8 +10,6 @@ import { failureText, linkWarnings } from './logic.ts';
 import type { LinkRequest, PendingInvite } from './types.ts';
 import { Muted, usePanel } from './ui.tsx';
 
-export const EXPIRED_INVITE = 'Ce lien d’invitation n’est plus valable. Demande-en un nouveau.';
-
 export function InviteCard({ invite, onDone }: { invite: PendingInvite; onDone: (joined: boolean) => void }) {
   const panel = usePanel();
   const [busy, setBusy] = useState(false);
@@ -28,6 +26,13 @@ export function InviteCard({ invite, onDone }: { invite: PendingInvite; onDone: 
       <Muted>
         Nom et équipe annoncés par le lien : si tu ne l’attendais pas, vérifie avec la personne avant de rejoindre.
       </Muted>
+      {invite.relay === 'adopt' ? (
+        // Any page can open drop://join with an invite signed by its own key: say when « Rejoindre » changes relay.
+        <Muted className="break-words">
+          En rejoignant, ton app passera par le relais {invite.relayHost}, celui de la personne qui t’invite. Si tu ne
+          connais pas ce relais, refuse.
+        </Muted>
+      ) : null}
       <Muted>
         En rejoignant, vous verrez les outils partagés l’un de l’autre. Chaque question reste soumise à ton accord ;
         personne ne reçoit d’accès.
@@ -54,8 +59,8 @@ export function InviteCard({ invite, onDone }: { invite: PendingInvite; onDone: 
                 panel.info('Invitation acceptée : tu rejoins l’équipe dans quelques secondes.');
                 onDone(true);
               },
-              () => {
-                panel.fail(EXPIRED_INVITE);
+              (error: unknown) => {
+                panel.fail(failureText(error));
                 onDone(false);
               },
             );

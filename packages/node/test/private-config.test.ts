@@ -16,7 +16,18 @@ describe('private configuration', () => {
     const config = privateConfig('ws://127.0.0.1:7780/v1', 'human', 7781);
     expect(config).toMatchObject({ profile: 'private', payer: 'owner', gateways: [] });
     expect(config.funding).toBeUndefined();
-    expect(() => privateConfig('wss://drop.memolabs.dev/v1', 'human', 7781)).toThrow();
+    // D95: a team relay named by DNS is allowed over TLS only, and never joins the runner's destinations.
+    expect(privateConfig('wss://drop.memolabs.dev/v1', 'human', 7781).network?.origins).toEqual([
+      'http://127.0.0.1:11434',
+    ]);
+    for (const relay of [
+      'ws://drop.memolabs.dev/v1',
+      'wss://8.8.8.8/v1',
+      'wss://user:pw@drop.memolabs.dev/v1',
+      'https://drop.memolabs.dev/v1',
+      'wss://drop.memolabs.dev/v1?x=1',
+    ])
+      expect(() => privateConfig(relay, 'human', 7781), relay).toThrow();
     expect(() => NodeConfigSchema.parse({ ...config, funding: { kind: 'openrouter' } })).toThrow();
   });
   it('recovers a migration interrupted before replacement and refuses an occupied lock', async () => {
@@ -25,7 +36,7 @@ describe('private configuration', () => {
     const home = new DropHome(root);
     home.init(
       await generateIdentity('Owner'),
-      NodeConfigSchema.parse({ relayUrl: 'wss://drop.memolabs.dev/v1', ownerKind: 'human' }),
+      NodeConfigSchema.parse({ profile: 'legacy', relayUrl: 'wss://drop.memolabs.dev/v1', ownerKind: 'human' }),
     );
     const before = readFileSync(join(root, 'config.json'), 'utf8');
     writeFileSync(join(root, 'private-migration.json'), JSON.stringify({ before, after: 'not committed' }), {
@@ -46,7 +57,7 @@ describe('private configuration', () => {
     const home = new DropHome(root);
     home.init(
       await generateIdentity('Owner'),
-      NodeConfigSchema.parse({ relayUrl: 'wss://drop.memolabs.dev/v1', ownerKind: 'human' }),
+      NodeConfigSchema.parse({ profile: 'legacy', relayUrl: 'wss://drop.memolabs.dev/v1', ownerKind: 'human' }),
     );
     home.publish({
       capabilityId: 'repo.answer',

@@ -8,12 +8,13 @@ import { X } from 'lucide-react';
 import { api } from '../api.ts';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs.tsx';
 import { cn } from '../lib/utils.ts';
-import { InviteCard, LinkCard, EXPIRED_INVITE } from './deep-links.tsx';
-import { connectionStatus } from './logic.ts';
+import { InviteCard, LinkCard } from './deep-links.tsx';
+import { connectionStatus, failureText } from './logic.ts';
 import { RequestsTab, editing, type RequestsData } from './requests.tsx';
 import { TeamTab } from './team.tsx';
 import { ToolsTab, loadTools } from './tools.tsx';
 import type {
+  InvitePreview,
   LinkRequest,
   OutboundDrop,
   PanelStatus,
@@ -148,12 +149,19 @@ export default function PanelApp() {
   useEffect(() => {
     const code = deepLink.invitation;
     if (!code) return;
-    api<{ displayName: string; team?: string }>('POST', '/ui/pair/preview', new URLSearchParams({ code })).then(
+    // A refusal shows the message of its stable code (expired, used, modified, relay not allowed), never one catch-all.
+    api<InvitePreview>('POST', '/ui/pair/preview', new URLSearchParams({ code })).then(
       (preview) => {
-        setInvite({ code, displayName: preview.displayName, team: preview.team ?? '' });
+        setInvite({
+          code,
+          displayName: preview.displayName,
+          team: preview.team ?? '',
+          relay: preview.relay,
+          relayHost: preview.relayHost,
+        });
       },
-      () => {
-        actions.fail(EXPIRED_INVITE);
+      (error: unknown) => {
+        actions.fail(failureText(error));
       },
     );
   }, [deepLink, actions]);

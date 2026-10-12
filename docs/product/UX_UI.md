@@ -6,7 +6,7 @@ Ce document décrit les surfaces de drop, les écrans tels qu'ils existent dans 
 
 ## Lire ce document
 
-- **Existant** : présent dans le code. Sauf mention, la source est le panneau React `packages/desktop-ui/src/panel/` (T4.24, D90), servi par `packages/node/src/workspace.ts`.
+- **Existant** : présent dans le code. Sauf mention, la source est le panneau React `packages/desktop-ui/src/panel/` (T4.24, D97), servi par `packages/node/src/workspace.ts`.
 - **Visé** : cible adoptée, livrée par la tâche citée.
 - **Hypothèse** : supposition non vérifiée, avec son critère.
 
@@ -15,7 +15,7 @@ Ce document décrit les surfaces de drop, les écrans tels qu'ils existent dans 
 ## 1. Principes
 
 1. **Existant** (D46, contraignant) : un panneau Mac discret et familier, en typographie système, avec la palette neutre existante.
-2. **Existant** (D46, couleur changée par D88) : l'accent sert aux actions et aux états, jamais à la décoration. Depuis le 11 octobre 2026, l'accent est violet dans la fenêtre « Ton espace » (React, D87) et, depuis T4.24 (D90), dans le panneau, construit avec les mêmes composants et jetons.
+2. **Existant** (D46, couleur changée par D88) : l'accent sert aux actions et aux états, jamais à la décoration. Depuis le 11 octobre 2026, l'accent est violet dans la fenêtre « Ton espace » (React, D87) et, depuis T4.24 (D97), dans le panneau, construit avec les mêmes composants et jetons.
 3. **Existant** (D46) : le clavier et VoiceOver passent avant toute décoration. Les onglets, l'annonce des résultats et le focus sont décrits en section 6. La recette VoiceOver réelle reste à faire (T3.4).
 4. **Existant** : tout texte écrit par un pair est rendu comme texte par React, jamais comme HTML ; aucun `dangerouslySetInnerHTML` ni `innerHTML` dans le panneau (spec owner-app « Texte des pairs inerte », vérifié par test).
 5. **Existant** : la carte de décision montre ce qui sort et ce qui ne sort jamais avant de demander une décision : « Julie recevra » et « Julie ne recevra jamais ».
@@ -28,7 +28,7 @@ Ce document décrit les surfaces de drop, les écrans tels qu'ils existent dans 
 | Surface                    | Rôle                                                       | Statut et source                                             |
 | -------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------ |
 | Icône de barre de menus    | Ouvrir ou fermer le panneau, menu de trois actions         | **Existant**, `apps/desktop/src-tauri/src/main.rs`               |
-| Panneau                    | Demandes, Équipe, Mes outils ; servi par le Node sur `/app` | **Existant**, `packages/desktop-ui/src/panel/` (React, D90)  |
+| Panneau                    | Demandes, Équipe, Mes outils ; servi par le Node sur `/app` | **Existant**, `packages/desktop-ui/src/panel/` (React, D97)  |
 | Page de démarrage          | États de démarrage et codes de diagnostic                  | **Existant**, `apps/desktop/web/index.html`                      |
 | Notifications macOS        | Annoncer une décision ou une relecture en attente          | **Existant**, `packages/node/src/notify.ts`                  |
 | Page historique `/`        | Ancienne UI de consentement, avec retrait de champs        | **Existant**, `packages/node/src/ui.ts`                      |
@@ -207,7 +207,7 @@ Surface locale du paquet de simulation, hors panneau. React Flow est candidat, l
 
 ## 7. Jetons de design
 
-### 7.1 Jetons communs à la fenêtre « Ton espace » et au panneau (React et composants shadcn/ui, D87, D88, D90)
+### 7.1 Jetons communs à la fenêtre « Ton espace » et au panneau (React et composants shadcn/ui, D87, D88, D97)
 
 **Existant**, valeurs de `packages/desktop-ui/src/styles.css`, compilées et servies par le Node, sans police ni ressource externe. Le panneau et la fenêtre partagent la même feuille de style.
 

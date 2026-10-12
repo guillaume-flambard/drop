@@ -2,7 +2,14 @@ import { timingSafeEqual } from 'node:crypto';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { z } from 'zod';
 import { AGENTS, type AgentKind } from '@drop/capabilities';
-import { decodeInvite, DropError, isDropError, RequesterAgentSchema } from '@drop/protocol';
+import {
+  DEFAULT_JOIN_PAGE,
+  DropError,
+  isDropError,
+  joinLink,
+  RequesterAgentSchema,
+  type ErrorCode,
+} from '@drop/protocol';
 import { AmbiguousCapabilityError, UnknownCapabilityError, type NodeEngine } from './engine.ts';
 import { LinkRequestSchema, type LinkRequest } from './home.ts';
 import { InternetSettingsSchema, type InternetSettings } from './iroh.ts';
@@ -17,7 +24,10 @@ export interface LocalApiOptions {
   port: number;
   /** Fetches fresh catalogs when the cache is older than 60 s; resolves when answers arrived or timed out. */
   refreshCatalogs: () => Promise<void>;
-  relayUrl: string;
+  /** The relay this node's invites name; read at each invite, since joining a first team may change it (T4.23). */
+  relayUrl: string | (() => string);
+  /** The page join links open (T4.23); drop.memolabs.dev/join by default. */
+  joinPage?: string;
   /** Opaque process instance marker used only by the Mac shell to recognize its own child. */
   shellInstance?: string;
   now?: () => number;
@@ -187,6 +197,35 @@ async function readJson(req: IncomingMessage): Promise<unknown> {
   } catch {
     throw new BodyError('E_SCHEMA', 'Requête illisible : JSON invalide.');
   }
+}
+
+/** The invite refusals the app explains (T4.23), each with its stable code; anything else is E_INVITE. */
+const INVITE_ERRORS: Record<string, string> = {
+  E_INVITE: 'Ce code d’invitation est illisible. Copie le lien en entier, ou demande un nouveau lien.',
+  E_INVITE_EXPIRED: 'Cette invitation a expiré : une invitation vaut 24 heures. Demande un nouveau lien.',
+  E_INVITE_SIG: 'Cette invitation a été modifiée depuis son envoi. Demande un nouveau lien à la personne.',
+  E_INVITE_USED: 'Cette invitation a déjà servi. Demande un nouveau lien.',
+  E_INVITE_RELAY: 'Le relais de cette invitation n’est pas autorisé sur cet ordinateur.',
+};
+
+function inviteError(res: ServerResponse, error: unknown): void {
+  const code: ErrorCode =
+    isDropError(error) && error.code in INVITE_ERRORS ? error.code : ('E_INVITE' satisfies ErrorCode);
+  json(res, 400, { error: code, code, message: INVITE_ERRORS[code] });
+}
+
+/** The invite as the panel sends it (form `code=`) or the workspace does (JSON `{ code }`): a code or a link. */
+async function readInviteInput(req: IncomingMessage): Promise<string> {
+  const body = await readBody(req, 8 * 1024);
+  if ((req.headers['content-type'] ?? '').startsWith('application/json')) {
+    try {
+      const parsed = z.object({ code: z.string().max(8 * 1024) }).safeParse(JSON.parse(body));
+      return parsed.success ? parsed.data.code : '';
+    } catch {
+      return '';
+    }
+  }
+  return new URLSearchParams(body).get('code') ?? '';
 }
 
 /** The answer to a request the engine refused before sending it: too many active drops, or an envelope too large. */
@@ -701,27 +740,37 @@ export function startLocalApi(options: LocalApiOptions): Promise<LocalApi> {
       }
       return;
     }
+    // One link to send (T4.23): `link` opens the join page, the invite in its fragment; `code` is the same invite.
     if (method === 'POST' && path === '/ui/invite') {
-      json(res, 200, { code: await engine.invite(options.relayUrl) });
+      const relayUrl = typeof options.relayUrl === 'function' ? options.relayUrl() : options.relayUrl;
+      const code = await engine.invite(relayUrl);
+      json(res, 200, { code, link: joinLink(code, options.joinPage ?? DEFAULT_JOIN_PAGE), validHours: 24 });
       return;
     }
-    // Shows who invites before anything is sent: the panel asks « Rejoindre » first (T4.14).
+    // Shows who invites before anything is sent: the panel asks « Rejoindre » first (T4.14). Accepts a code or a link.
     if (method === 'POST' && path === '/ui/pair/preview') {
-      const code = new URLSearchParams(await readBody(req)).get('code') ?? '';
       try {
-        const invite = decodeInvite(code);
-        json(res, 200, { displayName: invite.displayName, ...(invite.team ? { team: invite.team.name } : {}) });
-      } catch {
-        json(res, 400, { error: 'E_INVITE' });
+        const { invite, relay } = await engine.previewInvite(await readInviteInput(req));
+        json(res, 200, {
+          displayName: invite.displayName,
+          ...(invite.team ? { team: invite.team.name } : {}),
+          relayHost: new URL(invite.relayUrl).host,
+          relay,
+          expiresAt: invite.expiresAt,
+        });
+      } catch (error) {
+        inviteError(res, error);
       }
       return;
     }
+    // « Rejoindre » (T4.14, T4.23): a node that joined nobody yet moves to the invite's relay, then pairs. Next comes
+    // « Connecter mes agents » (T3.3).
     if (method === 'POST' && path === '/ui/pair') {
-      const code = new URLSearchParams(await readBody(req)).get('code') ?? '';
       try {
-        json(res, 200, { nodeId: await engine.pair(code) });
-      } catch {
-        json(res, 400, { error: 'E_INVITE' });
+        const { nodeId, relay } = await engine.join(await readInviteInput(req));
+        json(res, 200, { nodeId, relay, next: 'connect_agents' });
+      } catch (error) {
+        inviteError(res, error);
       }
       return;
     }

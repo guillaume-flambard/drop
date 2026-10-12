@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>One question, end to end</title>
+  <!-- Font source: system (drop profile). No web font request; stacks fall back to platform faces. -->
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --color-paper:   #f8f8f7;
+      --color-ink:     #27262b;
+      --color-muted:   #605d66;
+      --color-accent:  #6660aa;
+      --font-sans:     'Geist', system-ui, sans-serif;
+      --font-serif:    'Instrument Serif', 'Noto Serif', serif;
+      --font-mono:     'Geist Mono', ui-monospace, monospace;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      background: var(--color-paper);
+      color: var(--color-ink);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem 2rem;
+    }
+
+    .frame { max-width: 1200px; width: 100%; min-width: 0; }
+    .diagram-container { width: 100%; overflow-x: auto; }
+
+    .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--color-muted);
+      margin-bottom: 0.5rem;
+    }
+
+    h1 {
+      font-family: var(--font-serif);
+      font-size: clamp(1.5rem, 2.4vw + 0.75rem, 2rem);
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+      color: var(--color-ink);
+      margin-bottom: 1.5rem;
+    }
+
+    svg { width: 100%; min-width: 960px; display: block; }
+    @media print {
+      .diagram-container { overflow-x: visible; }
+      svg { min-width: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">Sequence · drop</p>
+    <h1>One question, end to end</h1>
+
+    <div class="diagram-container">
+<svg viewBox="0 0 960 784" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="one-question-title one-question-desc">
+<title id="one-question-title">One question, end to end</title>
+<desc id="one-question-desc">Sequence of one drop question: the requester's agent asks over MCP, the requester Node signs and encrypts it, the relay forwards what it cannot read, the owner Node shows a consent card, and only if the owner allows once does the capability run with fixed tools and checked output, so only the approved answer returns encrypted with a signed receipt; a refusal, a delay or an expiry returns a status and nothing runs.</desc>
+<defs>
+<marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#605d66"/></marker>
+<marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#6660aa"/></marker>
+<marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#3b6390"/></marker>
+</defs>
+<rect width="100%" height="100%" fill="#f8f8f7"/>
+<line x1="104" y1="104" x2="104" y2="704" stroke="rgba(39,38,43,0.22)" stroke-width="1" stroke-dasharray="3,3"/>
+<line x1="256" y1="104" x2="256" y2="704" stroke="rgba(39,38,43,0.22)" stroke-width="1" stroke-dasharray="3,3"/>
+<line x1="408" y1="104" x2="408" y2="704" stroke="rgba(39,38,43,0.22)" stroke-width="1" stroke-dasharray="3,3"/>
+<line x1="560" y1="104" x2="560" y2="704" stroke="rgba(39,38,43,0.22)" stroke-width="1" stroke-dasharray="3,3"/>
+<line x1="712" y1="104" x2="712" y2="704" stroke="rgba(39,38,43,0.22)" stroke-width="1" stroke-dasharray="3,3"/>
+<rect x="220" y="280" width="520" height="360" rx="4" fill="rgba(39,38,43,0.02)" stroke="rgba(39,38,43,0.22)" stroke-width="1"/>
+<rect x="220" y="280" width="40" height="16" rx="2" fill="#f8f8f7" stroke="rgba(39,38,43,0.22)" stroke-width="1"/>
+<text x="240" y="292" fill="#605d66" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.12em">ALT</text>
+<text x="272" y="292" fill="#605d66" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" letter-spacing="0.04em">[allow once]</text>
+<line x1="228" y1="488" x2="732" y2="488" stroke="rgba(39,38,43,0.2)" stroke-width="1" stroke-dasharray="4,3"/>
+<text x="272" y="508" fill="#605d66" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" letter-spacing="0.04em">[refuse · not now · expired]</text>
+<rect x="252" y="132" width="8" height="56" fill="rgba(39,38,43,0.06)" stroke="#605d66" stroke-width="0.8"/>
+<rect x="556" y="212" width="8" height="56" fill="rgba(39,38,43,0.06)" stroke="#605d66" stroke-width="0.8"/>
+<rect x="556" y="324" width="8" height="112" fill="rgba(39,38,43,0.06)" stroke="#605d66" stroke-width="0.8"/>
+<rect x="556" y="532" width="8" height="56" fill="rgba(39,38,43,0.06)" stroke="#605d66" stroke-width="0.8"/>
+<rect x="252" y="460" width="8" height="232" fill="rgba(39,38,43,0.06)" stroke="#605d66" stroke-width="0.8"/>
+<line x1="104" y1="136" x2="252" y2="136" stroke="#3b6390" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+<rect x="148" y="118" width="60" height="12" rx="2" fill="#f8f8f7"/>
+<text x="178" y="127" fill="#3b6390" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">ASK · MCP</text>
+<line x1="260" y1="176" x2="408" y2="176" stroke="#605d66" stroke-width="1.2" marker-end="url(#arrow)"/>
+<rect x="290" y="158" width="88" height="12" rx="2" fill="#f8f8f7"/>
+<text x="334" y="167" fill="#6e6b74" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">SIGN + ENCRYPT</text>
+<line x1="408" y1="216" x2="556" y2="216" stroke="#605d66" stroke-width="1.2" marker-end="url(#arrow)"/>
+<rect x="438" y="198" width="88" height="12" rx="2" fill="#f8f8f7"/>
+<text x="482" y="207" fill="#6e6b74" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">SEALED REQUEST</text>
+<line x1="564" y1="256" x2="712" y2="256" stroke="#605d66" stroke-width="1.2" marker-end="url(#arrow)"/>
+<rect x="600" y="238" width="76" height="12" rx="2" fill="#f8f8f7"/>
+<text x="638" y="247" fill="#6e6b74" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">CONSENT CARD</text>
+<line x1="712" y1="328" x2="564" y2="328" stroke="#6660aa" stroke-width="1.4" marker-end="url(#arrow-accent)"/>
+<rect x="606" y="310" width="64" height="12" rx="2" fill="#f8f8f7"/>
+<text x="638" y="319" fill="#6660aa" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">ALLOW ONCE</text>
+<path d="M 564,364 H 592 Q 600,364 600,372 V 380 Q 600,388 592,388 H 568" fill="none" stroke="#605d66" stroke-width="1.2" marker-end="url(#arrow)"/>
+<rect x="608" y="364" width="72" height="12" rx="2" fill="#f8f8f7"/>
+<text x="644" y="373" fill="#6e6b74" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">FIXED TOOLS</text>
+<rect x="608" y="378" width="84" height="12" rx="2" fill="#f8f8f7"/>
+<text x="650" y="387" fill="#6e6b74" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">SCHEMA · SCAN</text>
+<line x1="556" y1="424" x2="408" y2="424" stroke="#605d66" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+<rect x="438" y="406" width="88" height="12" rx="2" fill="#f8f8f7"/>
+<text x="482" y="415" fill="#6e6b74" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">ANSWER+RECEIPT</text>
+<line x1="408" y1="464" x2="260" y2="464" stroke="#605d66" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+<rect x="290" y="446" width="88" height="12" rx="2" fill="#f8f8f7"/>
+<text x="334" y="455" fill="#6e6b74" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">ANSWER+RECEIPT</text>
+<line x1="712" y1="536" x2="564" y2="536" stroke="#605d66" stroke-width="1.2" marker-end="url(#arrow)"/>
+<rect x="594" y="518" width="88" height="12" rx="2" fill="#f8f8f7"/>
+<text x="638" y="527" fill="#6e6b74" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">REFUSE/NOT NOW</text>
+<line x1="556" y1="576" x2="408" y2="576" stroke="#605d66" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+<rect x="446" y="558" width="72" height="12" rx="2" fill="#f8f8f7"/>
+<text x="482" y="567" fill="#6e6b74" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">STATUS ONLY</text>
+<line x1="408" y1="616" x2="260" y2="616" stroke="#605d66" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+<rect x="298" y="598" width="72" height="12" rx="2" fill="#f8f8f7"/>
+<text x="334" y="607" fill="#6e6b74" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">NOTHING RAN</text>
+<line x1="252" y1="680" x2="104" y2="680" stroke="#605d66" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+<rect x="134" y="662" width="88" height="12" rx="2" fill="#f8f8f7"/>
+<text x="178" y="671" fill="#6e6b74" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">RESULT AS DATA</text>
+<rect x="40" y="40" width="128" height="64" rx="6" fill="#f8f8f7"/>
+<rect x="40" y="40" width="128" height="64" rx="6" fill="rgba(96,93,102,0.1)" stroke="#6e6b74" stroke-width="1"/>
+<rect x="48" y="48" width="36" height="12" rx="2" fill="none" stroke="rgba(110,107,116,0.4)" stroke-width="0.8"/>
+<text x="66" y="57" fill="#6e6b74" font-size="7" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">AGENT</text>
+<text x="104" y="81" fill="#27262b" font-size="12" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">Agent</text>
+<text x="104" y="95" fill="#605d66" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">Claude Code, Codex…</text>
+<rect x="192" y="40" width="128" height="64" rx="6" fill="#f8f8f7"/>
+<rect x="192" y="40" width="128" height="64" rx="6" fill="#ffffff" stroke="#27262b" stroke-width="1"/>
+<rect x="200" y="48" width="28" height="12" rx="2" fill="none" stroke="rgba(39,38,43,0.4)" stroke-width="0.8"/>
+<text x="214" y="57" fill="#27262b" font-size="7" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">NODE</text>
+<text x="256" y="81" fill="#27262b" font-size="12" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">Requester Node</text>
+<text x="256" y="95" fill="#605d66" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">signs · encrypts</text>
+<rect x="344" y="40" width="128" height="64" rx="6" fill="#f8f8f7"/>
+<rect x="344" y="40" width="128" height="64" rx="6" fill="rgba(39,38,43,0.03)" stroke="rgba(39,38,43,0.3)" stroke-width="1"/>
+<rect x="352" y="48" width="36" height="12" rx="2" fill="none" stroke="rgba(39,38,43,0.22)" stroke-width="0.8"/>
+<text x="370" y="57" fill="#6e6b74" font-size="7" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">RELAY</text>
+<text x="408" y="81" fill="#27262b" font-size="12" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">Relay</text>
+<text x="408" y="95" fill="#605d66" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">sees no content</text>
+<rect x="496" y="40" width="128" height="64" rx="6" fill="#f8f8f7"/>
+<rect x="496" y="40" width="128" height="64" rx="6" fill="#ffffff" stroke="#27262b" stroke-width="1"/>
+<rect x="504" y="48" width="28" height="12" rx="2" fill="none" stroke="rgba(39,38,43,0.4)" stroke-width="0.8"/>
+<text x="518" y="57" fill="#27262b" font-size="7" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">NODE</text>
+<text x="560" y="81" fill="#27262b" font-size="12" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">Owner Node</text>
+<text x="560" y="95" fill="#605d66" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">consent · runs</text>
+<rect x="648" y="40" width="128" height="64" rx="6" fill="#f8f8f7"/>
+<rect x="648" y="40" width="128" height="64" rx="6" fill="rgba(102,96,170,0.08)" stroke="#6660aa" stroke-width="1"/>
+<rect x="656" y="48" width="36" height="12" rx="2" fill="none" stroke="rgba(102,96,170,0.5)" stroke-width="0.8"/>
+<text x="674" y="57" fill="#6660aa" font-size="7" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">HUMAN</text>
+<text x="712" y="81" fill="#27262b" font-size="12" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">Owner</text>
+<text x="712" y="95" fill="#605d66" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">decides once</text>
+<text x="792" y="236" fill="#27262b" font-size="14" font-style="italic" font-family="'Instrument Serif', 'Noto Serif', serif" text-anchor="start">who asks, why,</text>
+<text x="792" y="252" fill="#27262b" font-size="14" font-style="italic" font-family="'Instrument Serif', 'Noto Serif', serif" text-anchor="start">what leaves, and</text>
+<text x="792" y="268" fill="#27262b" font-size="14" font-style="italic" font-family="'Instrument Serif', 'Noto Serif', serif" text-anchor="start">what never does</text>
+<path d="M 788,250 Q 752,248 720,255" fill="none" stroke="rgba(39,38,43,0.4)" stroke-width="1" stroke-dasharray="4,3"/>
+<circle cx="716" cy="256" r="2" fill="#27262b"/>
+<text x="792" y="320" fill="#27262b" font-size="14" font-style="italic" font-family="'Instrument Serif', 'Noto Serif', serif" text-anchor="start">or answer by hand:</text>
+<text x="792" y="336" fill="#27262b" font-size="14" font-style="italic" font-family="'Instrument Serif', 'Noto Serif', serif" text-anchor="start">your own text, same</text>
+<text x="792" y="352" fill="#27262b" font-size="14" font-style="italic" font-family="'Instrument Serif', 'Noto Serif', serif" text-anchor="start">checks and receipt</text>
+<path d="M 788,326 Q 752,324 720,327" fill="none" stroke="rgba(39,38,43,0.4)" stroke-width="1" stroke-dasharray="4,3"/>
+<circle cx="716" cy="328" r="2" fill="#27262b"/>
+<line x1="40" y1="724" x2="920" y2="724" stroke="rgba(39,38,43,0.1)" stroke-width="0.8"/>
+<text x="40" y="740" fill="#605d66" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" letter-spacing="0.18em">LEGEND</text>
+<line x1="40" y1="755" x2="68" y2="755" stroke="#3b6390" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+<text x="76" y="758" fill="#605d66" font-size="8.5" font-family="'Geist', system-ui, sans-serif">MCP call</text>
+<line x1="148" y1="755" x2="176" y2="755" stroke="#605d66" stroke-width="1.2" marker-end="url(#arrow)"/>
+<text x="184" y="758" fill="#605d66" font-size="8.5" font-family="'Geist', system-ui, sans-serif">Message</text>
+<line x1="252" y1="755" x2="280" y2="755" stroke="#605d66" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+<text x="288" y="758" fill="#605d66" font-size="8.5" font-family="'Geist', system-ui, sans-serif">Reply</text>
+<line x1="344" y1="755" x2="372" y2="755" stroke="#6660aa" stroke-width="1.4" marker-end="url(#arrow-accent)"/>
+<text x="380" y="758" fill="#605d66" font-size="8.5" font-family="'Geist', system-ui, sans-serif">Human decision</text>
+<rect x="484" y="748" width="8" height="14" fill="rgba(39,38,43,0.06)" stroke="#605d66" stroke-width="0.8"/>
+<text x="500" y="758" fill="#605d66" font-size="8.5" font-family="'Geist', system-ui, sans-serif">Node holds control</text>
+<rect x="612" y="750" width="14" height="10" rx="2" fill="rgba(102,96,170,0.08)" stroke="#6660aa" stroke-width="1"/>
+<text x="632" y="758" fill="#605d66" font-size="8.5" font-family="'Geist', system-ui, sans-serif">The person who decides</text>
+</svg>
+    </div>
+  </div>
+</body>
+</html>

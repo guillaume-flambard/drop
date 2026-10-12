@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { generateIdentity, sealEnvelope, uuidv7 } from '@drop/protocol';
-import { MAX_OUTBOUND_DROPS, NodeEngine } from '../src/engine.ts';
+import { MAX_ACTIVE_EXECUTING_DROPS, MAX_OUTBOUND_DROPS, NodeEngine } from '../src/engine.ts';
 import { fakeCapability, MemoryStore, startMesh, type Mesh } from './helpers.ts';
 
 const CAPABILITY = 'test.memory';
@@ -448,4 +448,53 @@ describe('bounded transient node memory', () => {
     await engine.tick();
     expect(engine.memoryStats().invites).toBe(0);
   });
+});
+
+describe('bounded executor memory under concurrent delivery', () => {
+  it('never exceeds the active execution cap when requests are admitted concurrently', async () => {
+    const owner = await generateIdentity('Owner');
+    const requester = await generateIdentity('Requester');
+    const store = new MemoryStore();
+    const now = Date.now();
+    const logs: { code?: string; reason?: string }[] = [];
+    store.savePeer({ nodeId: requester.nodeId, displayName: 'Requester', ownerKind: 'human', pairedAt: '' });
+    store.publishedList.push({
+      capabilityId: CAPABILITY,
+      approverNodeIds: [owner.nodeId],
+      config: {},
+      publishedAt: new Date(now).toISOString(),
+    });
+    const engine = new NodeEngine({
+      identity: owner,
+      ownerKind: 'human',
+      store,
+      capabilities: [fakeCapability(CAPABILITY, 'low')],
+      transport: { send: () => Promise.resolve('delivered') },
+      now: () => now,
+      log: (entry) => logs.push(entry),
+    });
+    const request = (index: number) =>
+      sealEnvelope(
+        requester,
+        owner.nodeId,
+        {
+          type: 'drop_request',
+          dropId: uuidv7(now + index),
+          capabilityId: CAPABILITY,
+          capabilityVersion: '1.0.0',
+          input: { mode: 'ok' },
+          purpose: 'Test mémoire',
+          requestedBy: { nodeId: requester.nodeId, displayName: 'Requester', agent: 'codex' },
+        },
+        { now },
+      );
+    for (let index = 0; index < MAX_ACTIVE_EXECUTING_DROPS - 1; index += 1)
+      await engine.handleEnvelope(await request(index));
+    expect(engine.memoryStats().executing).toBe(MAX_ACTIVE_EXECUTING_DROPS - 1);
+    const burst = await Promise.all([0, 1, 2, 3].map((offset) => request(MAX_ACTIVE_EXECUTING_DROPS + offset)));
+    await Promise.all(burst.map((envelope) => engine.handleEnvelope(envelope)));
+    expect(engine.memoryStats().executing).toBe(MAX_ACTIVE_EXECUTING_DROPS);
+    expect(engine.pending()).toHaveLength(MAX_ACTIVE_EXECUTING_DROPS);
+    expect(logs.filter((entry) => entry.code === 'E_RATE' && entry.reason === 'execution_capacity')).toHaveLength(3);
+  }, 60_000);
 });

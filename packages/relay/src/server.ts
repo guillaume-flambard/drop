@@ -271,13 +271,17 @@ export async function startRelay(config: RelayConfig, options: RelayOptions = {}
     watchFile(settings.revokedPath, { interval: options.revocationPollMs ?? 2000 }, applyRevocations);
   // HTTP answers only GET /health (for the deploy probe and uptime monitoring); /v1 upgrades to WebSocket. With tls,
   // the relay serves https and wss itself.
+  // The probe also names the commit the relay was built from, so "is the deployed relay the one we meant to serve?" is
+  // answerable without server access (D91, T4.6a). A build that carries nothing answers "unknown": the probe must
+  // never claim a version it cannot prove.
+  const build = process.env.DROP_BUILD?.trim() || 'unknown';
   const answer = (
     req: { method?: string | undefined; url?: string | undefined },
     res: import('node:http').ServerResponse,
   ) => {
     const healthy = req.method === 'GET' && req.url === '/health';
     res.writeHead(healthy ? 200 : 404, { 'Content-Type': 'application/json' });
-    res.end(healthy ? JSON.stringify({ ok: true, nodes: connections.size }) : '{"error":"not_found"}');
+    res.end(healthy ? JSON.stringify({ ok: true, nodes: connections.size, build }) : '{"error":"not_found"}');
   };
   const http = settings.tls
     ? createTlsServer({ cert: readFileSync(settings.tls.certPath), key: readFileSync(settings.tls.keyPath) }, answer)

@@ -48,7 +48,7 @@ Plusieurs Nodes sur une même machine SHALL fonctionner avec plusieurs `DROP_HOM
 - **THEN** `DROP_HOME`, `identity.json` et `config.json` (URL du relais, rôle) sont créés
 
 ### Requirement: Commandes drop invite et drop pair
-`drop invite` et `drop pair <code>` SHALL réaliser l'appairage tel que défini par le protocole (code d'invitation, `pair_request`, `pair_accept`, `peers.json`).
+`drop invite` et `drop pair <code>` SHALL réaliser l'appairage tel que défini par le protocole (code d'invitation, `pair_request`, `pair_accept`, `peers.json`). `drop invite --link` SHALL afficher le lien à envoyer (T4.23) ; `drop join <code-ou-lien>` SHALL rejoindre l'équipe de l'inviteur et accepter le code comme le lien, `drop pair` restant un synonyme.
 
 #### Scenario: Appairage par la CLI
 - **WHEN** A lance `drop invite` et B lance `drop pair <code>` avec le code obtenu
@@ -61,13 +61,17 @@ Plusieurs Nodes sur une même machine SHALL fonctionner avec plusieurs `DROP_HOM
 - **AND** le ticket est effacé du disque de B une fois admis
 
 ### Requirement: Qui paie le modèle
-La config du Node SHALL porter `payer: 'requester' | 'owner'` (défaut `requester`, D27) pour ce qu'il exécute. Un
-exécuteur en `payer: 'owner'` ignore la clé reçue et paie avec sa propre config.
+La config du Node SHALL porter `payer: 'requester' | 'owner'` pour ce qu'il exécute : défaut `requester` (D27) en profil `legacy`, `owner` en profil privé, où `requester` MUST être refusé par le schéma (D40). Un exécuteur en `payer: 'owner'` ignore la clé reçue et paie avec sa propre config.
 
 #### Scenario: Le propriétaire paie
 <!-- openspec-guard:test="the requester pays with a capped key (T2.3, D27) > an owner who pays ignores the key and the card says the cost is theirs" -->
 - **WHEN** l'exécuteur est en `payer: 'owner'` et reçoit une demande avec une clé
 - **THEN** la capacité tourne sans la clé et la carte indique `paidBy: 'owner'`
+
+#### Scenario: AC: le propriétaire paie en profil privé
+<!-- openspec-guard:test="configuration hygiene (T4.15) > makes the owner pay in the private profile and refuses a requester payer" -->
+- **WHEN** une config privée omet `payer`, ou porte `payer: 'requester'`
+- **THEN** la première est lue avec `payer: 'owner'` et la seconde est refusée
 
 ### Requirement: Clé plafonnée du demandeur
 La config MAY porter `funding: { kind: 'openrouter', managementKeyEnv, perDropUsd, model? }`. Le Node demandeur SHALL
@@ -462,12 +466,17 @@ L'écran de relecture MUST afficher le texte long tel quel, échappé.
 - **THEN** il est affiché littéralement, sans interprétation ni troncature
 
 ### Requirement: Profil privé explicite
-Le Node SHALL proposer un profil privé sans compte externe, passerelle cloud, financement distant automatique, télémétrie, activation de licence ni téléchargement au démarrage. Le relais et les destinations sont choisis localement.
+Le Node SHALL proposer un profil privé sans compte externe, passerelle cloud, financement distant automatique, télémétrie, activation de licence ni téléchargement au démarrage. Le relais et les destinations sont choisis localement. Le relais MAY être nommé par DNS, en `wss:` seulement ; il n'entre alors jamais dans les destinations permises au modèle ou aux serveurs MCP (D95). Un relais à adresse littérale MUST rester une origine privée listée.
 
 #### Scenario: AC: installation et cycle sans Internet
 <!-- openspec-guard:test="private system > runs two private nodes with internal MCP and model through consent failure and restart" -->
 - **WHEN** deux Nodes privés utilisent leur relais et leur modèle internes, Internet bloqué
 - **THEN** le consentement et la réponse fonctionnent après arrêt et relance, sans connexion externe ; la recette conserve les observations réseau.
+
+#### Scenario: AC: relais de l'équipe par nom DNS
+<!-- openspec-guard:test="private configuration > initializes without cloud accounts and rejects forbidden profile settings" -->
+- **WHEN** un profil privé est créé avec `wss://drop.memolabs.dev/v1`, puis avec `ws://drop.memolabs.dev/v1`, une adresse publique littérale, des identifiants, une URL `https:` ou une requête
+- **THEN** le premier est accepté avec pour seule destination le modèle local, les autres sont refusés
 
 ### Requirement: Migration privée réversible
 La migration SHALL être explicite, sauvegarder la configuration en mode privé, préserver identité, jeton, pairs et publications, et proposer un retour arrière sans écraser une modification concurrente.
@@ -613,8 +622,36 @@ Le Node MUST supprimer le fichier temporaire d'une écriture durable échouée, 
 - **WHEN** la synchronisation de l'horloge échoue plusieurs fois avant le renommage
 - **THEN** le Node refuse chaque demande sans laisser de fichier temporaire supplémentaire
 
+### Requirement: Panne passagère sans blocage de l'admission
+Une erreur passagère d'écriture ou de synchronisation MUST refuser seulement la demande en cours, sans laisser le stockage anti-rejeu refuser les suivantes. L'empreinte durable porte le plancher de fraîcheur auquel elle a été calculée et ne compte que les marqueurs vivants ; elle est écrite avant toute purge. Une première migration interrompue reprend grâce à un journal écrit en premier et retiré en dernier.
+
+#### Scenario: AC: panne passagère après création du marqueur
+<!-- openspec-guard:test="replay clock write failures > rolls back a new marker whose durable digest could not be written, so admission keeps working" -->
+- **WHEN** l'écriture durable de l'empreinte échoue après la création du marqueur d'une nouvelle demande
+- **THEN** cette demande est refusée, son marqueur est retiré tant que l'empreinte durable désigne l'ancien jeu, et l'admission suivante réussit sans réparation manuelle
+
+#### Scenario: AC: empreinte déjà en place
+<!-- openspec-guard:test="replay clock write failures > keeps a new marker whose digest was already renamed into place when the folder sync fails" -->
+- **WHEN** seule la synchronisation du dossier échoue après le renommage de la nouvelle empreinte
+- **THEN** le marqueur et l'empreinte restent d'accord, le même identifiant est refusé comme doublon et une autre demande est admise
+
+#### Scenario: AC: panne passagère pendant la purge
+<!-- openspec-guard:test="replay clock write failures > keeps admitting after a transient sync failure at any step of a claim that prunes expired markers" -->
+- **WHEN** une synchronisation échoue à n'importe quelle étape d'une admission qui purge des marqueurs expirés
+- **THEN** cette demande est refusée, puis le même identifiant est admis au plus une fois et une autre demande est admise, sans réparation manuelle
+
+#### Scenario: AC: panne passagère pendant la première admission
+<!-- openspec-guard:test="replay clock write failures > keeps admitting after a transient sync failure at any step of the first claim on a fresh home" -->
+- **WHEN** une synchronisation échoue pendant la première admission d'un `DROP_HOME` neuf ou antérieur à T3.1b
+- **THEN** la migration reprend à l'admission suivante au lieu de refuser toute demande
+
+#### Scenario: AC: empreinte antérieure aux planchers
+<!-- openspec-guard:test="bounded received drops > verifies a digest written before floors, then rewrites it with its floor and keeps detecting a lost marker" -->
+- **WHEN** l'empreinte durable a été écrite par une version qui ne portait pas de plancher
+- **THEN** elle est vérifiée sur tout le jeu, réécrite avec son plancher, et la perte d'un marqueur récent reste refusée
+
 ### Requirement: Mémoire des demandes exécutées bornée
-Le Node MUST limiter à 1 024 les demandes reçues encore actives en mémoire. Dès qu'une issue est envoyée, il MUST libérer l'entrée complète ; il MAY conserver pendant au plus 30 minutes un résumé borné du refus pour répondre au même demandeur. La suppression de mémoire MUST NOT supprimer le marqueur anti-rejeu durable ni relancer une demande.
+Le Node MUST limiter à 1 024 les demandes reçues encore actives en mémoire, y compris quand plusieurs demandes sont traitées en même temps. Dès qu'une issue est envoyée, il MUST libérer l'entrée complète ; il MAY conserver pendant au plus 30 minutes un résumé borné du refus pour répondre au même demandeur. La suppression de mémoire MUST NOT supprimer le marqueur anti-rejeu durable ni relancer une demande.
 
 #### Scenario: AC: libération après issue
 <!-- openspec-guard:test="replay admission through the engine > frees a delivered request without reopening its durable replay marker" -->
@@ -635,6 +672,11 @@ Le Node MUST limiter à 1 024 les demandes reçues encore actives en mémoire. D
 <!-- openspec-guard:test="replay admission through the engine > refuses another request before consent when active execution memory is full" -->
 - **WHEN** 1 024 demandes reçues sont encore actives
 - **THEN** une demande supplémentaire reçoit `E_RATE` avant accord ou exécution, sans évincer une demande active
+
+#### Scenario: AC: plafond sous livraison concurrente
+<!-- openspec-guard:test="bounded executor memory under concurrent delivery > never exceeds the active execution cap when requests are admitted concurrently" -->
+- **WHEN** plusieurs demandes valides arrivent ensemble alors qu'il ne reste qu'une place active
+- **THEN** une seule est admise et les autres reçoivent `E_RATE`, sans dépasser 1 024 demandes actives
 
 ### Requirement: Mémoire des demandes émises bornée
 Le Node MUST conserver au plus 1 024 demandes émises en mémoire. Il MUST évincer d'abord les plus anciennes demandes terminées ; si toutes les places sont actives, il MUST refuser la nouvelle demande avec une erreur de capacité explicite sans créer de financement ni envoyer d'enveloppe. L'API locale MUST exposer cette saturation par HTTP 429.
@@ -892,6 +934,11 @@ Le Node SHALL annoncer un fait seulement dans le catalogue des pairs de son publ
 <!-- openspec-guard:test="published facts (T4.4) > serves a fact without a decision, with a signed receipt marked fact" -->
 - **WHEN** un pair du public demande un fait actif
 - **THEN** il le reçoit sans carte d'approbation chez le propriétaire, et le compteur de service augmente
+
+#### Scenario: AC: fenêtre de cadence bornée
+<!-- openspec-guard:test="published facts (T4.4) > keeps a bounded fact-rate window per peer however fast it asks" -->
+- **WHEN** un pair demande des faits bien plus vite que 10 par minute, par un chemin direct sans quota du relais
+- **THEN** les demandes en trop sont refusées sans être mémorisées, et la fenêtre gardée pour ce pair ne dépasse pas la limite
 
 #### Scenario: AC: fait indisponible
 <!-- openspec-guard:test="published facts (T4.4) > refuses a retired, expired, out-of-audience or outdated fact without saying which" -->
@@ -1186,3 +1233,84 @@ Le Node SHALL proposer la configuration à coller, ou la commande à lancer, seu
 <!-- openspec-guard:test="all thirteen clients connected automatically (T4.22) > keeps the requester server out of a client drop could not write" -->
 - **WHEN** une sélection forgée vise un client dont le fichier est illisible
 - **THEN** l'action échoue et le serveur demandeur n'est même pas copié
+
+### Requirement: Lien d'invitation à envoyer
+L'API locale SHALL répondre à `POST /ui/invite` par `{ code, link, validHours: 24 }`, où `link` est le lien de la page pour rejoindre avec le code dans le fragment. Les invitations du Node SHALL nommer le relais qu'il utilise au moment de l'invitation.
+
+#### Scenario: AC: lien produit par l'app
+<!-- openspec-guard:test="one-link join (T4.23) > a fresh private node adopts the relay of the link, is admitted and joins the team after Rejoindre" -->
+- **WHEN** l'inviteur demande une invitation à son Node
+- **THEN** il reçoit `https://drop.memolabs.dev/join#<code>`, et une fois l'invitée arrivée dans l'équipe, les invitations de celle-ci nomment le relais de l'équipe
+
+### Requirement: Rejoindre par un lien
+`POST /ui/pair/preview` SHALL vérifier une invitation, code ou lien, sans rien envoyer. `POST /ui/pair`, après « Rejoindre », SHALL refaire ces vérifications, appairer et répondre `next: 'connect_agents'`. Chaque refus MUST répondre 400 avec son code stable (`E_INVITE`, `E_INVITE_EXPIRED`, `E_INVITE_SIG`, `E_INVITE_USED`, `E_INVITE_RELAY`) sans répéter l'invitation, qui MUST NOT apparaître dans un journal. Le Node MUST refuser sa propre invitation.
+
+#### Scenario: AC: refus à codes stables
+<!-- openspec-guard:test="one-link join (T4.23) > answers each refusal with its stable code: modified, expired, own, reused, unreadable" -->
+- **WHEN** l'invitée présente une invitation modifiée, expirée, la sienne, un lien d'une autre sorte, puis une invitation déjà acceptée
+- **THEN** elle reçoit `E_INVITE_SIG`, `E_INVITE_EXPIRED`, `E_INVITE`, `E_INVITE` puis `E_INVITE_USED`, sans écho du code, et rien n'est envoyé
+
+### Requirement: Relais adopté au premier « Rejoindre »
+Un Node sans pair, sans équipe et sans appairage en cours SHALL, après « Rejoindre », passer au relais de l'invitation : `config.json` réécrit sous verrou, connexion changée sans redémarrage, puis ticket d'admission et demande d'appairage. La prévisualisation MUST ne rien changer. Un relais non admissible (protocole) ou hors de la politique d'organisation MUST être refusé (`E_INVITE_RELAY`). Un Node déjà relié SHALL garder son relais.
+
+#### Scenario: AC: deux « Rejoindre » rapides et appairage en cours
+<!-- openspec-guard:test="one-link join (T4.23) > accepts a link once even on two quick « Rejoindre », and moves no relay while a pairing is pending" -->
+- **WHEN** l'invitée appuie deux fois sur « Rejoindre » avec le même lien, puis accepte un second lien avant la réponse du premier inviteur
+- **THEN** le second appui est refusé avec `E_INVITE_USED` et une seule demande d'appairage part, et le second lien garde le relais déjà adopté (`kept`)
+
+#### Scenario: AC: carte qui annonce le relais
+<!-- openspec-guard:test="menu bar panel and its admin routes (T4.14) > names the relay only when Rejoindre would move to it, and shows each refusal with the message of its stable code" -->
+- **WHEN** le panneau montre la carte d'une invitation qui ferait changer de relais, ou qu'un lien est refusé
+- **THEN** la carte nomme le relais de l'invitation avant « Rejoindre », et le refus affiche le message de son code stable
+
+#### Scenario: AC: nouveau poste sur le relais de l'équipe
+<!-- openspec-guard:test="one-link join (T4.23) > a fresh private node adopts the relay of the link, is admitted and joins the team after Rejoindre" -->
+- **WHEN** un poste privé neuf, sur le relais de bouclage, prévisualise puis accepte le lien d'un membre admis du relais de l'équipe
+- **THEN** la prévisualisation annonce `adopt` sans rien changer, puis le poste passe au relais de l'équipe, y est admis par le ticket, rejoint l'équipe, et l'origine de bouclage quitte ses destinations privées
+
+#### Scenario: AC: relais gardé ou refusé
+<!-- openspec-guard:test="one-link join (T4.23) > keeps the relay of a node that already joined someone, and refuses a relay it may not adopt (E_INVITE_RELAY)" -->
+- **WHEN** l'invitation nomme `ws://` vers un nom DNS ou une adresse publique littérale, puis, le poste ayant une équipe, un autre relais admissible
+- **THEN** les premières sont refusées avec `E_INVITE_RELAY` sans modifier `config.json` ni appairer, la dernière garde le relais du poste (`kept`)
+
+### Requirement: Invitations gardées au redémarrage
+Le Node SHALL garder dans `invites.json` (mode `0600`) les jetons de ses invitations encore valables, pour les honorer une seule fois après un redémarrage, et l'empreinte SHA-256 des invitations qu'il a acceptées, jamais leur jeton, pour refuser une seconde utilisation (`E_INVITE_USED`). Les deux s'effacent à l'expiration de l'invitation.
+
+#### Scenario: AC: lien honoré après redémarrage, une fois
+<!-- openspec-guard:test="one-link join (T4.23) > the inviter honours a link sent before its restart, once, and forgets it when it expires" -->
+- **WHEN** l'inviteur redémarre puis reçoit deux demandes avec le même jeton, puis une demande avec un jeton expiré
+- **THEN** seule la première aboutit
+
+#### Scenario: AC: lien déjà accepté refusé après redémarrage
+<!-- openspec-guard:test="one-link join (T4.23) > remembers accepted invites across a restart: a reused link stays refused (E_INVITE_USED)" -->
+- **WHEN** l'invitée accepte un lien, redémarre, puis le présente de nouveau
+- **THEN** il est refusé avec `E_INVITE_USED`, rien n'est envoyé, et `invites.json` ne contient pas le jeton
+
+### Requirement: Profil par défaut privé
+Le schéma de configuration MUST lire un `config.json` sans `profile` comme le profil privé que crée `drop init`, soumis aux mêmes contrôles. Un fichier `legacy` MUST porter `profile: 'legacy'`. `drop migrate-private` SHALL encore lire un fichier antérieur aux profils comme `legacy`.
+
+#### Scenario: AC: fichier sans profil
+<!-- openspec-guard:test="configuration hygiene (T4.15) > reads a configuration without a profile as the private profile drop init creates" -->
+- **WHEN** une config ne porte pas de `profile`
+- **THEN** elle est lue comme privée, refusée si elle n'en remplit pas les conditions, et une config `legacy` explicite reste acceptée
+
+#### Scenario: AC: migration d'un fichier antérieur aux profils
+<!-- openspec-guard:test="configuration hygiene (T4.15) > still migrates a pre-profile legacy configuration to the private profile" -->
+- **WHEN** `drop migrate-private` lit un `config.json` écrit avant les profils
+- **THEN** il le traite comme `legacy` et écrit une config privée payée par le propriétaire
+
+### Requirement: Pairs et équipe en mode 0600
+`peers.json` et `team.json` MUST être en mode `0600`. Une écriture MUST resserrer un fichier existant avant d'y poser le nouveau contenu, et le daemon MUST resserrer au démarrage ceux qu'une version antérieure a laissés plus ouverts.
+
+#### Scenario: AC: fichiers des pairs et de l'équipe privés
+<!-- openspec-guard:test="configuration hygiene (T4.15) > keeps peers.json and team.json owner-only, narrowing existing files" -->
+- **WHEN** le Node crée ou réécrit `peers.json` ou `team.json`, y compris un fichier existant en `0644`, ou démarre avec un tel fichier
+- **THEN** le fichier est en `0600` sous macOS et Linux, son contenu inchangé tant que rien n'y est écrit
+
+### Requirement: Agents détectés nommables par le protocole
+La liste des agents que le Node détecte et raccorde MUST être exactement celle que `requestedBy.agent` peut nommer, `other` excepté.
+
+#### Scenario: AC: listes alignées
+<!-- openspec-guard:test="configuration hygiene (T4.15) > detects exactly the agents the protocol can name on a consent card" -->
+- **WHEN** on compare les agents détectés aux agents du protocole
+- **THEN** les deux listes sont identiques, `other` excepté

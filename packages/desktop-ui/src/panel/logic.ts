@@ -83,6 +83,8 @@ export function failureText(error: unknown, translate = false): string {
   if (bare) return CODES[bare] ? explain(bare) : 'Action impossible. Réessaie dans un instant. (' + bare + ')';
   if (raw === 'unauthorized') return 'Session locale refusée : rouvre drop depuis la barre de menus.';
   if (raw === 'not_found') return 'Action indisponible sur ce Node.';
+  // `{ error: 'internal' }` is the Node's opaque 500 body: never shown as a bare word.
+  if (raw === 'internal') return 'Action impossible. Réessaie dans un instant.';
   const code = typeof record.code === 'string' ? record.code : undefined;
   const message = raw;
   if (code === 'E_SECRET_DETECTED' && message) return message + ' (E_SECRET_DETECTED)';

@@ -68,7 +68,23 @@ Les sauvegardes locales sont privées, versionnées et limitées à trois par fi
 
 ## Après le raccordement
 
-Rejoindre l'équipe exige un lien d'invitation `drop://pair` valable 24 h et une seule fois. Dans le panneau, ce lien montre qui invite et dans quelle équipe, puis attend « Rejoindre » ou « Refuser » (T4.14, `packages/desktop-ui/src/panel/`).
+### Rejoindre une équipe par un seul lien (T4.23, D95)
+
+Côté inviteur, « Inviter quelqu'un » (Mon espace, Équipe) ou `drop invite --link` donne un lien de la forme `https://drop.memolabs.dev/join#<invitation>`. Il vaut 24 h, sert une seule fois, pour une seule personne. L'invitation est signée par le Node de l'inviteur et porte son nom, celui de l'équipe, l'adresse du relais (`wss://drop.memolabs.dev/v1` pour l'essai) et un ticket d'admission à ce relais. Elle est dans la partie du lien après `#`, qu'un navigateur n'envoie jamais au site. Le Node de l'inviteur garde ses invitations vivantes : un lien envoyé reste valable si son Mac redémarre.
+
+Côté invité :
+
+1. Ouvrir le lien. La page affiche « Guillaume t'invite dans l'équipe Atelier », reconnaît le système et propose le téléchargement (page des versions de drop sur GitHub). Elle n'envoie rien.
+2. Installer drop et l'ouvrir une fois.
+3. Cliquer sur « J'ai installé drop : rejoindre l'équipe ». drop s'ouvre sur la carte de confirmation : qui invite, quelle équipe, « Rejoindre » ou « Refuser ». Rien n'est envoyé avant « Rejoindre ».
+4. « Rejoindre » : un poste qui n'a encore rejoint personne passe au relais de l'invitation, y est admis par le ticket, puis apparaît dans l'équipe. Un poste déjà relié garde son relais.
+5. Connecter ses agents (Agents, « Analyser cet ordinateur », puis « Connecter »), comme décrit plus haut.
+
+Si le bouton ne fait rien, la page donne le code à copier : dans drop, Mon espace, Équipe, « J'ai reçu une invitation », coller le code ou le lien entier. En ligne de commande : `drop join <code-ou-lien>`.
+
+Refus possibles, chacun avec son code : invitation illisible (`E_INVITE`), expirée (`E_INVITE_EXPIRED`), modifiée depuis son envoi (`E_INVITE_SIG`), déjà utilisée (`E_INVITE_USED`), relais non autorisé sur ce poste (`E_INVITE_RELAY` : `ws:` seulement vers une adresse privée, `wss:` vers une adresse privée ou un nom DNS, puis la liste de la politique d'organisation).
+
+Un lien `drop://pair` (T4.14) ouvre la même carte (`packages/desktop-ui/src/panel/`). Le panneau de la barre de menus, passé à React en T4.24, donne encore ce lien-là et ne propose pas « Connecter mes agents » après « Rejoindre » : ces suites restent dans T4.31.
 
 **Partager un outil, ce qui existe.** Dans « Mes outils », chaque serveur MCP partageable d'un agent installé porte un interrupteur « Partager … ». Un clic suffit (`packages/desktop-ui/src/panel/`, `packages/node/src/share.ts`) :
 

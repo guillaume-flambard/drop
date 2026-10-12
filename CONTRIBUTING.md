@@ -85,7 +85,7 @@ Fill in the [pull request template](.github/pull_request_template.md): what and 
 
 How a pull request gets merged:
 
-- The `test` check (lint, typecheck, tests, openspec-guard) must pass. It is required on `main`.
+- The `test` check (lint, typecheck, tests, openspec-guard) and the `test-windows` and `test-macos` checks must pass, on a branch that is up to date with `main`. All three are required on `main`, with no bypass.
 - Every review conversation must be resolved.
 - `main` only takes merge commits. No squash, no rebase merge, no force push.
 - The maintainer reviews and merges. Changes that touch `protocol`, `relay`, `node`, `runner`, the capabilities or `requester-mcp` also get a security review, so they take longer.

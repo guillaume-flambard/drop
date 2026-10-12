@@ -11,11 +11,17 @@ export const ERROR_CODES = [
   'E_DENIED',
   'E_NOT_NOW',
   'E_RATE',
+  /** The relay holds no more deferred envelopes for that recipient (maxQueuePerNode or maxQueueBytes). */
+  'E_QUEUE_FULL',
   'E_BUDGET',
   'E_OUTPUT_INVALID',
   'E_SECRET_DETECTED',
   'E_RUNNER',
   'E_INVITE',
+  'E_INVITE_EXPIRED',
+  'E_INVITE_SIG',
+  'E_INVITE_USED',
+  'E_INVITE_RELAY',
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];

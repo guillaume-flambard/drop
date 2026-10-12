@@ -595,14 +595,6 @@
       "file": "openspec/specs/deploy-mac-vps/spec.md"
     },
     {
-      "id": "sg_68d4cea024ab39ef",
-      "reason": "missing-selector",
-      "verdict": "fail",
-      "capability": "deploy-mac-vps",
-      "scenario": "Directives présentes",
-      "file": "openspec/specs/deploy-mac-vps/spec.md"
-    },
-    {
       "id": "sg_91ecf90e1dafb76c",
       "reason": "missing-selector",
       "verdict": "fail",
@@ -616,14 +608,6 @@
       "verdict": "fail",
       "capability": "deploy-mac-vps",
       "scenario": "Journaux Docker",
-      "file": "openspec/specs/deploy-mac-vps/spec.md"
-    },
-    {
-      "id": "sg_a6b1b7774cafe7b2",
-      "reason": "missing-selector",
-      "verdict": "fail",
-      "capability": "deploy-mac-vps",
-      "scenario": "Reverse proxy",
       "file": "openspec/specs/deploy-mac-vps/spec.md"
     },
     {

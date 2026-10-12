@@ -30,29 +30,16 @@ Le bilan daté est dans [docs/AVANCEMENT.md](docs/AVANCEMENT.md) et l'index ordo
 
 ## Fonctionnement
 
-```mermaid
-sequenceDiagram
-    participant A as Agent du demandeur
-    participant RN as Node du demandeur
-    participant OW as Node du propriétaire
-    actor O as Propriétaire
-    A->>RN: request_drop(capacité, entrée, raison) par MCP
-    RN->>OW: demande signée et chiffrée (réseau local, iroh ou votre relais)
-    OW->>O: carte de consentement : qui demande, pourquoi, ce qui peut sortir
-    O->>OW: autoriser une fois, refuser ou pas maintenant
-    Note over OW: n'utilise que les outils fixés par la capacité,<br/>valide le schéma de sortie, cherche les secrets
-    opt capacité sensible
-        OW->>O: relecture : retirer des champs, envoyer ou ne pas envoyer
-    end
-    OW->>RN: réponse chiffrée et reçu signé
-    RN->>A: résultat, encadré comme une donnée non fiable
-```
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/one-question-dark.svg">
+  <img src="docs/diagrams/one-question.svg" alt="Séquence d'une question : l'agent du demandeur demande par MCP, le Node du demandeur signe et chiffre, le relais transmet sans pouvoir lire, le propriétaire voit une carte de consentement et autorise une fois, la capacité s'exécute avec des outils fixés et une sortie vérifiée, et seuls la réponse et un reçu signé reviennent. Un refus, un report ou une expiration renvoie un statut et rien ne s'exécute." width="960">
+</picture>
 
 1. Le propriétaire publie une **capacité** : un contrat qui fixe l'entrée, le schéma de sortie, les outils autorisés, le budget et l'approbateur. Rien n'est partagé par défaut.
 2. L'agent du demandeur choisit une capacité dans le catalogue de l'équipe et pose une question avec sa raison.
 3. Le propriétaire décide une fois : autoriser une fois, refuser ou pas maintenant. Sans accord avant l'expiration, rien ne s'exécute.
 4. Le Node du propriétaire exécute la capacité avec les outils fixés à l'avance. Le modèle ne décide jamais des permissions.
-5. La sortie est validée par son schéma puis passée au scanner de secrets. Une sortie invalide est rejetée, pas réparée.
+5. La sortie est validée par son schéma puis passée au scanner de secrets. Une sortie invalide est rejetée, pas réparée. Pour une capacité sensible, le propriétaire relit la réponse, peut retirer des champs, puis l'envoie ou ne l'envoie pas.
 6. Le demandeur reçoit la réponse. Chaque côté garde un reçu signé, avec des empreintes et des métadonnées, jamais le contenu.
 
 Le [guide](docs/GUIDE.md) détaille le parcours avec des schémas.
@@ -114,6 +101,13 @@ Le raccordement des agents, la configuration MCP manuelle et les treize clients 
 
 ## Organisation du dépôt
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/architecture-overview-dark.svg">
+  <img src="docs/diagrams/architecture-overview.svg" alt="Architecture sur un poste : l'app de bureau Tauri affiche l'espace de travail React servi par le Node drop local ; les agents de code se branchent au Node par MCP ; les capacités ne s'exécutent qu'après consentement et appellent les outils du propriétaire ; les Nodes joignent un collègue par un lien chiffré : un relais, iroh ou le réseau local." width="960">
+</picture>
+
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) explique comment l'app de bureau, le Node et l'interface s'assemblent.
+
 | Chemin                      | Contenu                                                                        |
 | --------------------------- | ------------------------------------------------------------------------------ |
 | `packages/protocol`         | Schémas zod, identité, signature, chiffrement, reçus                           |
@@ -162,6 +156,18 @@ Les vulnérabilités se signalent en privé, selon [SECURITY.md](SECURITY.md) (e
 ## Feuille de route
 
 [docs/TASKS.md](docs/TASKS.md) est la seule source de l'ordre et des dépendances. En résumé : fermer les revues de sécurité en attente, finir l'app Mac, livrer les apps Windows et Linux, un lien unique pour rejoindre une équipe, puis un essai en binômes de collègues qui travaillent vraiment ensemble. Le lancement public, les paquets et le nom du produit viennent ensuite.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/roadmap-phases-dark.svg">
+  <img src="docs/diagrams/roadmap-phases.svg" alt="Feuille de route dans l'ordre des tâches : ce qui est livré, puis la mesure du besoin et les revues de sécurité, les apps Windows et Linux, le lien unique, le design du panneau et le banc maison, puis l'essai en binômes de collègues, puis les tâches avant le lancement public." width="960">
+</picture>
+
+Le lien unique pour rejoindre est un parcours cible, en cours (T4.23) :
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/join-two-clicks-dark.svg">
+  <img src="docs/diagrams/join-two-clicks.svg" alt="Parcours cible, en cours (T4.23) : la personne qui invite copie un lien, la page du lien reconnaît le système et propose le téléchargement, l'app s'ouvre avec l'invitation et le relais remplis, puis le nouveau membre clique sur « Rejoindre » et sur « Connecter mes agents »." width="960">
+</picture>
 
 ## Contribuer
 

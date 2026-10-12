@@ -355,6 +355,11 @@ describe('menu bar panel and its admin routes (T2.4)', () => {
     await until(() => text().includes('Atlas · 1 membres, 1 en ligne'), 'team');
     await click(button('Inviter quelqu’un dans l’équipe'));
     await until(() => document.querySelector('[role="alert"]') !== null, 'invite failure');
+    // The Node's opaque 500 body reads as the calm default, never as the bare word « internal ».
+    expect(document.querySelector('[role="alert"]')?.textContent).toContain(
+      'Action impossible. Réessaie dans un instant.',
+    );
+    expect(text()).not.toMatch(/\binternal\b/);
     route('POST /ui/invite', { body: { code: 'code-fictif' } });
     Object.defineProperty(navigator, 'clipboard', {
       configurable: true,
@@ -372,7 +377,9 @@ describe('menu bar panel and its admin routes (T2.4)', () => {
 
 describe('menu bar panel and its admin routes (T4.14)', () => {
   it('previews an invitation without pairing and pairs only after Rejoindre', async () => {
-    route('POST /ui/pair/preview', { body: { displayName: 'Julie <b>', team: 'Atlas' } });
+    route('POST /ui/pair/preview', {
+      body: { displayName: 'Julie <b>', team: 'Atlas', relayHost: 'relais.example:8443', relay: 'adopt' },
+    });
     await mount('&pair=code-fictif');
     await until(() => text().includes('Julie <b> t’invite dans l’équipe Atlas'), 'invite card');
     // The code left the address at once, and nothing paired yet.
@@ -380,10 +387,71 @@ describe('menu bar panel and its admin routes (T4.14)', () => {
     expect(posted('/ui/pair/preview')[0]?.body).toBe('code=code-fictif');
     expect(posted('/ui/pair')).toHaveLength(0);
     expect(document.activeElement?.textContent).toBe('Refuser');
+    // A link from anyone can open the card: before « Rejoindre », it names the relay the app would move to (T4.23).
+    expect(text()).toContain(
+      'En rejoignant, ton app passera par le relais relais.example:8443, celui de la personne qui t’invite. Si tu ne connais pas ce relais, refuse.',
+    );
     await click(button('Rejoindre'));
     expect(posted('/ui/pair').map((call) => call.body)).toEqual(['code=code-fictif']);
     await until(() => text().includes('Invitation acceptée'), 'joined');
     expect(document.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe('Équipe');
+  });
+
+  it('names the relay only when Rejoindre would move to it, and shows each refusal with the message of its stable code', async () => {
+    const alerts = (): string[] =>
+      [...document.querySelectorAll('[role="alert"]')].map((node) => plain(node.textContent));
+    async function reopen(query: string): Promise<void> {
+      await step(() => {
+        root?.unmount();
+      });
+      host?.remove();
+      calls = [];
+      await mount(query);
+    }
+    // A node that joined nobody yet would adopt the invite's relay: the card names it, as text, before « Rejoindre ».
+    route('POST /ui/pair/preview', {
+      body: { displayName: 'Julie', team: 'Atlas', relayHost: '<b>relais.example</b>', relay: 'adopt' },
+    });
+    await mount('&pair=code-fictif');
+    await until(() => text().includes('Julie t’invite dans l’équipe Atlas'), 'adopting card');
+    expect(text()).toContain('ton app passera par le relais <b>relais.example</b>, celui de la personne qui t’invite.');
+    expect(host?.querySelector('b')).toBeNull();
+    expect(posted('/ui/pair')).toHaveLength(0);
+    // A node that already joined someone keeps its relay: the card says nothing about one.
+    route('POST /ui/pair/preview', {
+      body: { displayName: 'Julie', team: 'Atlas', relayHost: 'relais.example:8443', relay: 'kept' },
+    });
+    route('POST /ui/pair', {
+      status: 400,
+      body: {
+        error: 'E_INVITE_USED',
+        code: 'E_INVITE_USED',
+        message: 'Cette invitation a déjà servi. Demande un nouveau lien.',
+      },
+    });
+    await reopen('&pair=code-fictif');
+    await until(() => text().includes('Julie t’invite dans l’équipe Atlas'), 'invite card');
+    expect(text()).not.toContain('passera par le relais');
+    expect(text()).not.toContain('relais.example');
+    // « Rejoindre » refused: the reason of its code, not one sentence for every refusal.
+    await click(button('Rejoindre'));
+    await until(() => alerts().some((line) => line.includes('Cette invitation a déjà servi.')), 'used refusal');
+    expect(alerts().join(' ')).toContain('Cette invitation a déjà servi. Demande un nouveau lien. (E_INVITE_USED)');
+    expect(text()).not.toContain('n’est plus valable');
+    expect(text()).not.toContain('Julie t’invite');
+    // The preview refused: same rule, and a code this panel does not know yet still shows the Node's message.
+    for (const [code, message] of [
+      ['E_INVITE_RELAY', 'Le relais de cette invitation n’est pas autorisé sur cet ordinateur.'],
+      ['E_FUTURE_JOIN', 'Un message que seul le Node connaît.'],
+    ] as const) {
+      route('POST /ui/pair/preview', { status: 400, body: { error: code, code, message } });
+      await reopen('&pair=code-fictif');
+      await until(() => alerts().some((line) => line.includes(message)), code + ' refusal');
+      expect(alerts().join(' ')).toContain(message + ' (' + code + ')');
+      expect(text()).not.toContain('n’est plus valable');
+      expect(text()).not.toContain('Rejoindre');
+      expect(posted('/ui/pair')).toHaveLength(0);
+    }
   });
 
   it('renders expiry, high sensitivity, a default Pas maintenant and per-field redaction', async () => {
@@ -714,6 +782,7 @@ describe('menu bar panel (T4.24)', () => {
     );
     expect(failureText({ message: 'Secret.', code: 'E_SECRET_DETECTED' })).toBe('Secret. (E_SECRET_DETECTED)');
     expect(failureText({})).toBe('Action impossible. Réessaie dans un instant.');
+    expect(failureText({ message: 'internal' })).toBe('Action impossible. Réessaie dans un instant.');
   });
 
   it('describes only the outbound state that the Node actually exposes', async () => {

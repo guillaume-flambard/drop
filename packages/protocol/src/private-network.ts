@@ -52,3 +52,45 @@ export function assertPrivateDestination(raw: string, policy: PrivateNetwork, so
     throw new DropError('E_DENIED', 'E_DENIED private network origin');
   return url;
 }
+
+/** A DNS host name: dotted labels of letters, digits and hyphens, never an IP literal. */
+function isDnsName(host: string): boolean {
+  return (
+    host.length <= 253 &&
+    isIP(host) === 0 &&
+    host.includes('.') &&
+    host.split('.').every((label) => /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label)) &&
+    !/^[0-9.]+$/.test(host)
+  );
+}
+
+/**
+ * The relay a node may adopt from an invite or be configured with (T4.23, D95): `ws:` only to a literal private or
+ * loopback address, as before; `wss:` to such an address or to a DNS name, whose TLS certificate the relay client
+ * checks. Never credentials, a query or a fragment, never a non-canonical address.
+ */
+export function relayUrlAllowed(raw: string): boolean {
+  if (raw.length > 512) return false;
+  try {
+    const url = privateUrl(raw);
+    return (url.protocol === 'ws:' || url.protocol === 'wss:') && !url.search;
+  } catch {
+    // Not a literal private address: only a DNS name over TLS remains.
+  }
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return false;
+  }
+  const authority = raw.split('://')[1]?.split(/[/?#]/)[0];
+  return (
+    url.protocol === 'wss:' &&
+    !url.username &&
+    !url.password &&
+    !url.search &&
+    !raw.includes('#') &&
+    authority === url.host &&
+    isDnsName(url.hostname)
+  );
+}
