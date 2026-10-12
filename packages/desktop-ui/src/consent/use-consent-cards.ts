@@ -10,6 +10,7 @@ import { usePanel } from '../panel/ui.tsx';
 import {
   announcement,
   begin,
+  leftAnnouncement,
   dismiss as dismissEntry,
   reconcile,
   replyFromError,
@@ -50,11 +51,15 @@ export function useConsentCards(pending: readonly PendingItem[] | null, now: num
     (items: readonly ApprovalItem[] | null, at: number) => {
       const result = reconcile(current.current, items, at);
       if (!items && result.changed.length === 0) return;
-      // A card that expires under the focus loses its buttons: the focus stays on the card itself.
+      // A card that expires under the focus loses its buttons: the focus stays on the card itself. One that leaves
+      // under the focus hands it to the list.
       const refocus = result.changed.filter((entry) => !waiting(entry.state) && focused(entry.item.dropId));
+      const lost = result.removed.some((entry) => focused(entry.item.dropId));
       commit(result.entries);
-      if (result.changed.length > 0) panel.announce(result.changed.map(announcement).join(' '));
+      const said = [...result.changed.map(announcement), ...result.removed.map(leftAnnouncement)];
+      if (said.length > 0) panel.announce(said.join(' '));
       for (const entry of refocus) panel.focusTo(entry.item.dropId + ':card');
+      if (lost) panel.focusTo('consent-list');
     },
     [commit, panel],
   );
@@ -116,11 +121,14 @@ export function useConsentCards(pending: readonly PendingItem[] | null, now: num
   const finishAnswer = useCallback(
     (dropId: string, reply: NodeReply) => {
       const state = settle('answer', reply);
-      if (state.kind === 'pending') commit(update(current.current, dropId, state));
-      else finish(dropId, state);
+      if (state.kind === 'pending') {
+        commit(update(current.current, dropId, state));
+        // The Node may have taken the card out before refusing: its list says whether it still waits.
+        panel.refreshRequests();
+      } else finish(dropId, state);
       return state;
     },
-    [commit, finish],
+    [commit, finish, panel],
   );
 
   const dismiss = useCallback(

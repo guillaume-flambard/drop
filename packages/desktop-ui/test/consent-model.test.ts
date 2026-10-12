@@ -10,6 +10,7 @@ import {
   begin,
   blockedReason,
   dismiss,
+  leftAnnouncement,
   reconcile,
   replyFromError,
   settle,
@@ -184,5 +185,9 @@ describe('consent card model (T4.35)', () => {
       [OTHER, 'authorized'],
     ]);
     expect(after.changed).toEqual([]);
+    expect(after.removed.map((entry) => entry.item.dropId)).toEqual([DROP]);
+    expect(leftAnnouncement(after.removed[0] as ConsentEntry)).toBe(
+      'N’attend plus ta décision ici : Résumer les erreurs de production.',
+    );
   });
 });

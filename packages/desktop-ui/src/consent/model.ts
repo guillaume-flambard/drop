@@ -129,6 +129,11 @@ export function stateCopy(
   }
 }
 
+/** Said when a waiting card leaves without a decision here: decided elsewhere (notification, CLI) or expired there. */
+export function leftAnnouncement(entry: ConsentEntry): string {
+  return 'N’attend plus ta décision ici : ' + entry.item.card.title + '.';
+}
+
 /** What the surface's single live region says when a card changes state. */
 export function announcement(entry: ConsentEntry): string {
   const { item, state } = entry;
@@ -142,14 +147,16 @@ export function announcement(entry: ConsentEntry): string {
  * Brings the cards in line with the clock and, when given, with the Node's list, which has the last word on « still
  * waiting »: an uncertain card it still lists waits again. A confirmed decision or an expiry never goes back, so that a
  * stale list cannot revive a card. A waiting card that left the list without a decision here (notification, CLI)
- * leaves too: this surface does not know what happened and does not guess. `changed` lists what to announce.
+ * leaves too: this surface does not know what happened and does not guess. `changed` lists the state changes to
+ * announce, `removed` the cards that left that way.
  */
 export function reconcile(
   entries: readonly ConsentEntry[],
   items: readonly ApprovalItem[] | null,
   now: number,
-): { entries: ConsentEntry[]; changed: ConsentEntry[] } {
+): { entries: ConsentEntry[]; changed: ConsentEntry[]; removed: ConsentEntry[] } {
   const changed: ConsentEntry[] = [];
+  const removed: ConsentEntry[] = [];
   const listed = new Map((items ?? []).map((item) => [item.dropId, item]));
   const next: ConsentEntry[] = [];
   for (const entry of entries) {
@@ -157,7 +164,10 @@ export function reconcile(
     listed.delete(entry.item.dropId);
     let state = tick(entry.state, entry.item.expiresAt, now);
     if (items && fresh && state.kind === 'uncertain') state = { kind: 'pending', notice: STILL_WAITING };
-    if (items && !fresh && state.kind === 'pending') continue;
+    if (items && !fresh && state.kind === 'pending') {
+      removed.push(entry);
+      continue;
+    }
     const updated = { item: fresh && waiting(state) ? fresh : entry.item, state };
     if (state !== entry.state) changed.push(updated);
     next.push(updated);
@@ -167,7 +177,7 @@ export function reconcile(
     next.push({ item, state });
   }
   next.sort((a, b) => a.item.expiresAt - b.item.expiresAt);
-  return { entries: next, changed };
+  return { entries: next, changed, removed };
 }
 
 /** « Masquer »: a settled card leaves; a waiting one stays. */

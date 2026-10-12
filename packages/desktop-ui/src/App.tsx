@@ -71,54 +71,12 @@ export default function App() {
   const [version, setVersion] = useState(0);
   const [announcement, setAnnouncement] = useState('');
   const liveVersion = useRef(0);
+  const [pendingFailed, setPendingFailed] = useState(false);
   const title = subtitles[page];
 
-  const refresh = useCallback((): void => {
-    setLoading(true);
-    // Each endpoint is independent: an unavailable Internet service or fact store
-    // must not prevent the team and assistant lists from being shown.
-    const requests = [
-      api<StatusData>('GET', '/ui/admin/status'),
-      api<TeamData>('GET', '/ui/team'),
-      api<ToolsData>('GET', '/ui/admin/tools'),
-      api<FactsData>('GET', '/ui/facts'),
-      api<{ drops: DropStatus[] }>('GET', '/ui/outbound'),
-      api<InternetData>('GET', '/ui/admin/internet'),
-      api<{ pending: PendingItem[] }>('GET', '/ui/pending'),
-    ] as const;
-    Promise.allSettled(requests)
-      .then((parts) => {
-        const extract = (index: number): unknown => {
-          const result = parts[index];
-          return result?.status === 'fulfilled' ? result.value : null;
-        };
-        const next: WorkspaceData = {
-          status: extract(0) as StatusData | null,
-          team: extract(1) as TeamData | null,
-          tools: extract(2) as ToolsData | null,
-          facts: extract(3) as FactsData | null,
-          outbound: extract(4) as { drops: DropStatus[] } | null,
-          internet: extract(5) as InternetData | null,
-          pending: (extract(6) as { pending: PendingItem[] } | null)?.pending ?? null,
-        };
-        if (parts.every((result) => result.status === 'rejected')) setError('Le moteur local ne répond pas. Réessaie.');
-        setData(next);
-        setVersion((n) => n + 1);
-      })
-      .catch((e: unknown) => {
-        setError(formatError(e));
-      })
-      .finally(() => {
-        setLoading(false);
-      });
-  }, []);
-
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
-
-  // Live updates (T4.35): what waits and what this Node asked, without touching the forms of the other pages. A late
-  // answer from an older read never overwrites a newer one.
+  // What waits and what this Node asked (T4.35), read here only, so that reads are ordered: a late answer from an
+  // older read never overwrites a newer one, and a failed read keeps what was shown. It never touches the forms of the
+  // other pages.
   const refreshLive = useCallback((): void => {
     const mine = ++liveVersion.current;
     Promise.allSettled([
@@ -127,6 +85,7 @@ export default function App() {
     ]).then(
       ([pending, outbound]) => {
         if (mine !== liveVersion.current) return;
+        setPendingFailed(pending.status === 'rejected');
         setData((current) => ({
           ...current,
           ...(pending.status === 'fulfilled' ? { pending: pending.value.pending } : {}),
@@ -136,6 +95,48 @@ export default function App() {
       () => undefined,
     );
   }, []);
+
+  const refresh = useCallback((): void => {
+    setLoading(true);
+    refreshLive();
+    // Each endpoint is independent: an unavailable Internet service or fact store
+    // must not prevent the team and assistant lists from being shown.
+    const requests = [
+      api<StatusData>('GET', '/ui/admin/status'),
+      api<TeamData>('GET', '/ui/team'),
+      api<ToolsData>('GET', '/ui/admin/tools'),
+      api<FactsData>('GET', '/ui/facts'),
+      api<InternetData>('GET', '/ui/admin/internet'),
+    ] as const;
+    Promise.allSettled(requests)
+      .then((parts) => {
+        const extract = (index: number): unknown => {
+          const result = parts[index];
+          return result?.status === 'fulfilled' ? result.value : null;
+        };
+        if (parts.every((result) => result.status === 'rejected')) setError('Le moteur local ne répond pas. Réessaie.');
+        setData((current) => ({
+          status: extract(0) as StatusData | null,
+          team: extract(1) as TeamData | null,
+          tools: extract(2) as ToolsData | null,
+          facts: extract(3) as FactsData | null,
+          internet: extract(4) as InternetData | null,
+          outbound: current.outbound,
+          pending: current.pending,
+        }));
+        setVersion((n) => n + 1);
+      })
+      .catch((e: unknown) => {
+        setError(formatError(e));
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }, [refreshLive]);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
 
   // The Node says « change » on its event stream: the requests reload without a page reload.
   useEffect(() => {
@@ -213,7 +214,7 @@ export default function App() {
   const waiting = data.pending?.length ?? 0;
   const username = data.status?.displayName.split(' ')[0] || 'toi';
   const view = useMemo(() => {
-    const props = { data, loading, busy, act, refresh, toPage, version };
+    const props = { data, loading, busy, act, refresh, toPage, version, pendingFailed };
     switch (page) {
       case 'overview':
         return <OverviewView {...props} />;
@@ -230,7 +231,7 @@ export default function App() {
       case 'network':
         return <NetworkView {...props} />;
     }
-  }, [act, busy, data, loading, page, refresh, version]);
+  }, [act, busy, data, loading, page, refresh, version, pendingFailed]);
 
   return (
     <PanelContext.Provider value={actions}>
@@ -385,4 +386,6 @@ export interface ViewProps {
   refresh: () => void;
   toPage: (page: Page) => void;
   version: number;
+  /** The last read of the pending requests failed (T4.35). */
+  pendingFailed: boolean;
 }

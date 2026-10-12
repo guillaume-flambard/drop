@@ -6,9 +6,9 @@ import { PendingList } from '../consent/pending-list.tsx';
 import { Loading } from '../panel/ui.tsx';
 import type { ViewProps } from '../App.tsx';
 
-export function RequestsView({ data, loading }: ViewProps) {
+export function RequestsView({ data, pendingFailed }: ViewProps) {
   if (!data.pending) {
-    if (loading) return <Loading />;
+    if (!pendingFailed) return <Loading />;
     return (
       <p role="alert" className="text-[12px] text-muted-foreground">
         Impossible de lire les demandes. Vérifie que drop est ouvert, puis actualise.
