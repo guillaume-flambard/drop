@@ -1,0 +1,12 @@
+# Known advisories accepted for this Cargo.lock, each with its reason (T4.26). Read by OSV-Scanner and by the OpenSSF
+# Scorecard Vulnerabilities check. Review on the date below, or when Tauri moves its Linux GTK stack to glib 0.20.
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2024-0429"
+ignoreUntil = 2027-01-12
+reason = "glib 0.18.5 comes with Tauri's GTK stack for Linux (gtk, tray-icon). The unsound code is glib::VariantStrIter, which our code never calls; the fix needs glib 0.20, which Tauri does not use yet."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2024-0370"
+ignoreUntil = 2027-01-12
+reason = "proc-macro-error 1.0.4 is unmaintained, not vulnerable: a compile-time macro pulled in by glib-macros 0.18 for the same Linux GTK stack. It goes away with glib 0.20."
