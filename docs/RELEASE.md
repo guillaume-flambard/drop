@@ -89,6 +89,42 @@ macOS, signature et notarisation (les six sont requis, sinon la build reste ad h
 
 Le trousseau temporaire de la CI reçoit un mot de passe aléatoire à chaque run : pas de secret à prévoir pour lui.
 
+#### Configuration Apple depuis le Mac (une seule fois)
+
+Le certificat Developer ID Application est déjà présent dans le trousseau du Mac,
+et son identité est renseignée dans le dépôt. Pour permettre aux runners GitHub de
+signer à leur tour, deux actions nécessitent une autorisation Apple :
+
+1. Dans Trousseau d'accès → Mes certificats, exporter uniquement le certificat
+   Developer ID Application (avec sa clé privée) en .p12 protégé par un mot de passe.
+2. Dans [App Store Connect](https://appstoreconnect.apple.com/access/integrations/api),
+   créer et télécharger une clé API **d'équipe** (Team), rôle Developer suffisant.
+   Une clé **individuelle** ne fonctionne pas avec notarytool (documenté par Apple).
+   Conserver l'Issuer ID, le Key ID et le fichier AuthKey_*.p8.
+
+Une fois ces deux fichiers présents sur le Mac, lancer depuis un terminal local :
+
+```bash
+./scripts/setup-apple-github-signing.sh
+```
+
+Ce programme compare l'empreinte du .p12 au certificat Developer ID déjà installé,
+teste **l'authentification auprès d'Apple avant toute modification GitHub**, puis
+transfère les cinq secrets manquants via gh secret set, sans imprimer leurs valeurs
+ni les committer. Les fichiers privés doivent rester dans un stockage chiffré
+et leur export temporaire doit être supprimé en sécurité par le propriétaire.
+
+Le workflow manuel verify Apple signing teste ensuite l'import du certificat
+et la connexion à notarytool sur un **runner GitHub macOS vierge** :
+
+```bash
+gh workflow run apple-signing-check.yml --repo memolabs-dev/drop --ref main
+```
+
+Après réussite, relancer release desktop depuis main : les DMG ARM64 et Intel
+doivent être réellement signés, notarisés et vérifiés par la CI. Ne pas activer
+la publication automatique tant que les autres prérequis bêta ne sont pas validés.
+
 Windows, signature Authenticode (les deux sont requis) :
 
 | Secret                          | Contenu                                                   |
@@ -110,11 +146,25 @@ par `GET /_shell/update-ready`, réservé à la coque locale authentifiée. Si u
 l'installation attend ; la détection continue périodiquement. Sur Windows le mode
 `passive` montre une courte fenêtre de progression. Le processus est redémarré après remplacement.
 
-Cette vérification protège les cas d'activité connus **mais ne constitue pas un verrou atomique** :
-une nouvelle demande peut théoriquement arriver entre le dernier contrôle d'inactivité et
-l'installation. Le test réel de montée de version et les essais en concurrence restent des
-prérequis avant de promettre une mise à jour sans interruption. L'app ne modifie pas d'office
-l'identité, les permissions ou le stockage anti-rejeu du Node.
+L'archive est d'abord téléchargée et **vérifiée cryptographiquement**, sans modifier Drop.
+Juste avant son installation, l'app recontrôle toutes les conditions d'inactivité ;
+si une demande ou une fenêtre est apparue pendant le téléchargement, elle conserve la
+mise à jour en attente et recommence une période de calme avant un nouvel essai.
+Une installation demandée manuellement est également reportée si le moteur travaille.
+
+Après le téléchargement et la vérification cryptographique, la coque demande un **verrou
+de maintenance atomique au Node** (`POST /_shell/update-prepare`, autorisation locale requise).
+Le Node ne le donne que si aucun message entrant ni aucune mutation HTTP ne sont en cours
+et si toutes les opérations métier sont terminées. Pendant ce verrou, toute nouvelle mutation
+HTTP obtient `503`, et les nouvelles demandes distantes une erreur temporaire `E_RATE`
+pour permettre de réessayer après le redémarrage ; elles ne sont **pas** exécutées en secret.
+En cas d'échec de l'installation, la coque annule le verrou via
+`POST /_shell/update-cancel` et garde l'application en place.
+
+Cette coordination ferme la fenêtre de concurrence entre le dernier contrôle et le remplacement
+des fichiers. Le test réel de montée de version et les scénarios de demandes simultanées
+restent des prérequis pour valider le comportement sur chaque système. L'app ne modifie pas
+d'office l'identité, les permissions ou le stockage anti-rejeu du Node.
 
 La signature Tauri est obligatoire, indépendante de la notarisation Apple et de la signature Authenticode.
 Ne jamais ajouter la clé privée, son mot de passe, ni un fichier `.key` au dépôt.
@@ -140,9 +190,9 @@ Ne jamais ajouter la clé privée, son mot de passe, ni un fichier `.key` au dé
    filière administrée dédiée, distincte des releases auto-updatables.
    Chaque build produit un fragment avec signature liée à la version ; le job de publication exige
    cinq fragments distincts, identiques en version, et une URL d'archive dans **ce dépôt**.
-   Avant de créer le brouillon, un vérificateur Rust indépendant (\`crates/drop-update-verify\`)
+   Avant de créer le brouillon, un vérificateur Rust indépendant (`crates/drop-update-verify`)
    valide **cryptographiquement les octets exacts des cinq archives** avec la clé publique
-   inscrite dans \`apps/desktop/updater.pub\`, et vérifie la version signée. Une archive
+   inscrite dans `apps/desktop/updater.pub`, et vérifie la version signée. Une archive
    modifiée ou une clé privée qui ne correspondrait pas à la clé publique bloque la release.
    Il ajoute `latest.json` et les archives signées à la **release GitHub en brouillon**.
 5. Après les tests manuels, **publier la release stable sur GitHub**. Quand la recette

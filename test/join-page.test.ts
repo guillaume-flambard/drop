@@ -38,10 +38,17 @@ function stub(): Stub {
 }
 
 /** Runs the page's inline script against a minimal DOM: what it shows, where it points, what it tried to keep. */
-function runJoinScript(script: string, hash: string, userAgent: string, stored = new Map<string, string>()) {
+function runJoinScript(
+  script: string,
+  hash: string,
+  userAgent: string,
+  stored = new Map<string, string>(),
+  pathname = '/join',
+) {
   const elements = new Map<string, Stub>();
   const byId = (id: string): Stub => {
     const found = elements.get(id) ?? stub();
+    if (!elements.has(id) && id === 'join-beta-downloads') found.hidden = true;
     elements.set(id, found);
     return found;
   };
@@ -64,10 +71,25 @@ function runJoinScript(script: string, hash: string, userAgent: string, stored =
       return this.link;
     },
   }));
+  const betaFilenames = [
+    'drop_0.1.0_aarch64.dmg',
+    'drop_0.1.0_x64.dmg',
+    'drop_0.1.0_x64-setup.exe',
+    'drop_0.1.0_amd64.AppImage',
+    'drop_0.1.0_aarch64.AppImage',
+  ];
+  const betaFiles = betaFilenames.map((name) => ({
+    name,
+    href: '#contenu',
+    getAttribute: () => name,
+  }));
   const replaced: string[] = [];
   runInNewContext(script, {
-    document: { getElementById: byId, querySelectorAll: () => items },
-    location: { hash, pathname: '/join' },
+    document: {
+      getElementById: byId,
+      querySelectorAll: (selector: string) => (selector === '[data-beta-file]' ? betaFiles : items),
+    },
+    location: { hash, pathname },
     history: { replaceState: (_state: unknown, _title: string, url: string) => replaced.push(url) },
     sessionStorage: {
       getItem: (key: string) => stored.get(key) ?? null,
@@ -82,7 +104,7 @@ function runJoinScript(script: string, hash: string, userAgent: string, stored =
     JSON,
     String,
   });
-  return { byId, order, items, replaced, stored };
+  return { byId, order, items, betaFiles, replaced, stored };
 }
 
 const MAC = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_6) AppleWebKit/605.1.15 Version/18.0 Safari/605.1.15';
@@ -119,6 +141,12 @@ describe('join page (T4.23)', () => {
     }
     expect(html).toContain(`content="default-src 'none'; script-src 'sha256-${hash}'`);
     expect(html).not.toContain('{{');
+    // A GitHub draft release is invisible to invited testers: no dead public download.
+    expect(html).toContain('La bêta est encore privée.');
+    expect(html).not.toContain('github.com/memolabs-dev/drop/releases/latest');
+    expect(html).toContain('id="join-beta-downloads" hidden');
+    expect(html).toContain('data-beta-file="drop_0.1.0_aarch64.dmg"');
+
     expect((await fetch(`${preview.url}/demarrer.html`)).headers.get('content-security-policy')).toContain(
       "script-src 'none'",
     );
@@ -201,6 +229,31 @@ describe('join page (T4.23)', () => {
     const anchored = runJoinScript(script, '#contenu', MAC, page.stored);
     expect(anchored.byId('join-open').href).toBe(`drop://join?invite=${code}`);
     expect(page.stored.get('drop-invite')).toBe(code);
+  });
+
+  it('unlocks version-pinned private downloads only on a signed-capability URL', async () => {
+    const sender = await generateIdentity('Guillaume');
+    const code = encodeInvite(await createInvite(sender, 'wss://drop.memolabs.dev/v1', Date.now()));
+    const pathname = '/beta/1790000000/abcdefghijklmnopqrstuv';
+    const beta = runJoinScript(script, '#' + code, MAC, new Map(), pathname);
+    expect(beta.byId('join-private-note').hidden).toBe(true);
+    expect(beta.byId('join-beta-downloads').hidden).toBe(false);
+    expect(beta.betaFiles.map((file) => file.href)).toEqual(beta.betaFiles.map((file) => pathname + '/' + file.name));
+    expect(beta.replaced).toEqual([pathname]);
+    expect(beta.byId('join-open').href).toBe('drop://join?invite=' + code);
+
+    const plain = runJoinScript(script, '#' + code, MAC);
+    expect(plain.byId('join-beta-downloads').hidden).not.toBe(false);
+    expect(plain.betaFiles.every((file) => file.href === '#contenu')).toBe(true);
+
+    const malformed = runJoinScript(
+      script,
+      '#' + code,
+      MAC,
+      new Map(),
+      '/beta/1790000000/aaaaaaaaaaaaaaaaaaaaaa/../secret',
+    );
+    expect(malformed.betaFiles.every((file) => file.href === '#contenu')).toBe(true);
   });
 
   it('explains an incomplete, unreadable or expired link instead of a join button', async () => {

@@ -69,6 +69,7 @@ import {
 } from './facts.ts';
 import { applyRedactions, buildCard, implFor, runCapability, validateInput, type CapabilityImpl } from '@drop/runner';
 import type { AgentLink, InviteState, LinkRequest, Peer, Published, TeamState } from './home.ts';
+import { canRestartForUpdate } from './update-readiness.ts';
 
 export const APPROVAL_TTL_MS = 10 * 60_000;
 export const REVIEW_TTL_MS = 10 * 60_000;
@@ -372,6 +373,10 @@ export class NodeEngine extends EventEmitter {
   private outboxInFlight: QueuedEnvelope | undefined;
   private outboxFlush: Promise<void> | undefined;
   private nextOutboxOrder = 0;
+  // An atomic in-process maintenance lease: never admit new work between the final
+  // idle check and Tauri's updater installation. Clearing it resumes normal operations.
+  private updateMaintenance = false;
+  private activeIncoming = 0;
 
   constructor(options: EngineOptions) {
     super();
@@ -403,6 +408,8 @@ export class NodeEngine extends EventEmitter {
     outbound: number;
     inbox: number;
     outbox: number;
+    incoming: number;
+    maintenance: number;
     replay: number;
     invites: number;
     factRequests: number;
@@ -416,7 +423,24 @@ export class NodeEngine extends EventEmitter {
       outbound: this.outbound.size,
       inbox: this.inbox.size,
       outbox: this.outbox.length + (this.outboxInFlight ? 1 : 0),
+      incoming: this.activeIncoming,
+      maintenance: Number(this.updateMaintenance),
     };
+  }
+
+  preparingUpdate(): boolean {
+    return this.updateMaintenance;
+  }
+
+  /** One synchronous event-loop decision: fail closed on pending work and in-flight envelopes. */
+  prepareUpdate(): boolean {
+    if (!canRestartForUpdate(this)) return false;
+    this.updateMaintenance = true;
+    return true;
+  }
+
+  cancelUpdate(): void {
+    this.updateMaintenance = false;
   }
 
   drop(dropId: string): OutboundDrop | undefined {
@@ -900,6 +924,7 @@ export class NodeEngine extends EventEmitter {
     purpose: string;
     agent: Agent;
   }): Promise<OutboundDrop> {
+    if (this.updateMaintenance) throw new DropError('E_RATE', 'Mise à jour en cours. Réessaie dans un instant.');
     const matches = this.catalog().filter(
       (candidate) =>
         candidate.card.id === request.capabilityId &&
@@ -1059,19 +1084,24 @@ export class NodeEngine extends EventEmitter {
   // ---- transport ---------------------------------------------------------------------------------------------
 
   async handleEnvelope(raw: unknown): Promise<void> {
-    let opened: Awaited<ReturnType<typeof openEnvelope>>;
+    this.activeIncoming += 1;
     try {
-      opened = await openEnvelope(this.identity, raw, {
-        isKnownPeer: (nodeId) => this.isKnown(nodeId),
-        replay: this.replay,
-        now: this.now(),
-        ...(this.hasLiveInvite() ? { acceptPairToken: (token: string) => this.hasInvite(token) } : {}),
-      });
-    } catch (error) {
-      this.log({ event: 'envelope_rejected', code: isDropError(error) ? error.code : 'E_RUNNER' });
-      return;
+      let opened: Awaited<ReturnType<typeof openEnvelope>>;
+      try {
+        opened = await openEnvelope(this.identity, raw, {
+          isKnownPeer: (nodeId) => this.isKnown(nodeId),
+          replay: this.replay,
+          now: this.now(),
+          ...(this.hasLiveInvite() ? { acceptPairToken: (token: string) => this.hasInvite(token) } : {}),
+        });
+      } catch (error) {
+        this.log({ event: 'envelope_rejected', code: isDropError(error) ? error.code : 'E_RUNNER' });
+        return;
+      }
+      await this.dispatch(opened.envelope.from, opened.message);
+    } finally {
+      this.activeIncoming -= 1;
     }
-    await this.dispatch(opened.envelope.from, opened.message);
   }
 
   /** Re-sends envelopes that could not leave while the relay was unreachable. */
@@ -1162,6 +1192,28 @@ export class NodeEngine extends EventEmitter {
   // ---- internals ---------------------------------------------------------------------------------------------
 
   private async dispatch(from: NodeId, message: Message): Promise<void> {
+    if (this.updateMaintenance) {
+      // New accepted work may not cross the installation boundary. Return a
+      // temporary refusal rather than silently acknowledging a request.
+      if (message.type === 'drop_request') {
+        await this.refuse(from, message.dropId, 'E_RATE', 'Drop redémarre pour une mise à jour. Réessaie.');
+        return;
+      }
+      if (message.type === 'agent_call') {
+        await this.send(
+          from,
+          {
+            type: 'agent_reply',
+            callId: message.callId,
+            text: 'Drop redémarre pour une mise à jour. Réessaie dans un instant.',
+            isError: true,
+          },
+          { queueOffline: false },
+        );
+        return;
+      }
+      if (message.type === 'pair_request') return;
+    }
     switch (message.type) {
       case 'pair_request':
         return this.onPairRequest(from, message);

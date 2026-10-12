@@ -1342,6 +1342,20 @@ fn local_update_ready(app: &AppHandle) -> bool {
             }
         }
     }
+    shell_update_call(app, "GET", "/_shell/update-ready", "ready")
+}
+
+/// The daemon atomically stops admitting new work before Tauri replaces application files.
+fn local_update_prepare(app: &AppHandle) -> bool {
+    local_update_ready(app) && shell_update_call(app, "POST", "/_shell/update-prepare", "ready")
+}
+
+fn local_update_cancel(app: &AppHandle) {
+    let _ = shell_update_call(app, "POST", "/_shell/update-cancel", "cancelled");
+}
+
+fn shell_update_call(app: &AppHandle, method: &str, path: &str, flag: &str) -> bool {
+    let state = app.state::<Daemon>();
     let port = match state.verified_port.lock() {
         Ok(port) => match *port {
             Some(port) => port,
@@ -1365,7 +1379,7 @@ fn local_update_ready(app: &AppHandle) -> bool {
     let _ = socket.set_read_timeout(Some(Duration::from_secs(2)));
     let _ = socket.set_write_timeout(Some(Duration::from_secs(2)));
     let request = format!(
-        "GET /_shell/update-ready HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nAuthorization: Bearer {token}\r\nConnection: close\r\n\r\n"
+        "{method} {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nAuthorization: Bearer {token}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
     );
     if socket.write_all(request.as_bytes()).is_err() {
         return false;
@@ -1380,7 +1394,7 @@ fn local_update_ready(app: &AppHandle) -> bool {
     headers.starts_with("HTTP/1.1 200 ")
         && serde_json::from_str::<serde_json::Value>(body)
             .ok()
-            .and_then(|value| value.get("ready").and_then(serde_json::Value::as_bool))
+            .and_then(|value| value.get(flag).and_then(serde_json::Value::as_bool))
             == Some(true)
 }
 
@@ -1407,7 +1421,7 @@ fn maintain_updates(app: &AppHandle) {
             let since = idle_since.get_or_insert_with(Instant::now);
             if since.elapsed() >= UPDATE_MIN_IDLE {
                 // Keep a manual install menu for immediate, intentional updates.
-                install_update(app);
+                install_update(app, true);
                 idle_since = None;
             }
         } else {
@@ -1417,8 +1431,19 @@ fn maintain_updates(app: &AppHandle) {
     }
 }
 
-/// Downloads the pending update, checks its signature, replaces the app, then restarts it with its daemon.
-fn install_update(app: &AppHandle) {
+/// Downloads a signed update, then checks the daemon *again* before replacing any app files.
+/// The first five-minute idle period is not enough: someone can return while an archive downloads.
+fn install_update(app: &AppHandle, automatic: bool) {
+    // A manual menu click should not interrupt a user's current work either.
+    if !local_update_ready(app) {
+        if !automatic {
+            log_error(
+                "E_UPDATE_DEFERRED",
+                "an active request or window prevents installation",
+            );
+        }
+        return;
+    }
     let Some(update) = app.state::<PendingUpdate>().0.lock().unwrap().take() else {
         return;
     };
@@ -1426,14 +1451,40 @@ fn install_update(app: &AppHandle) {
     let _ = set_tray_menu(app, Some(&version), true);
     let app = app.clone();
     thread::spawn(move || {
-        match tauri::async_runtime::block_on(update.download_and_install(|_, _| {}, || {})) {
-            Ok(()) => {
-                stop_daemon(&app);
-                app.restart();
+        // Download first: this verifies the signed package but does not touch the installed app.
+        let downloaded = tauri::async_runtime::block_on(update.download(|_, _| {}, || {}));
+        match downloaded {
+            Ok(bytes) => {
+                // If any work started during the download, keep offering the update without installing it.
+                // The next automatic attempt must pass another full quiet period.
+                if !local_update_prepare(&app) {
+                    if let Ok(mut pending) = app.state::<PendingUpdate>().0.lock() {
+                        *pending = Some(update);
+                    }
+                    let _ = set_tray_menu(&app, Some(&version), false);
+                    log_error(
+                        "E_UPDATE_DEFERRED",
+                        "Drop became active during update download",
+                    );
+                    return;
+                }
+                match update.install(bytes) {
+                    Ok(()) => {
+                        // On Windows Tauri exits inside install() and the child daemon stops with its parent.
+                        // On macOS/Linux, the shell closes the daemon and restarts the new app.
+                        stop_daemon(&app);
+                        app.restart();
+                    }
+                    Err(error) => {
+                        local_update_cancel(&app);
+                        log_error("E_UPDATE_INSTALL", &error.to_string());
+                        let _ = set_tray_menu(&app, None, false);
+                    }
+                }
             }
             Err(error) => {
-                log_error("E_UPDATE_INSTALL", &error.to_string());
-                // Offered again by the next check.
+                log_error("E_UPDATE_DOWNLOAD", &error.to_string());
+                // The old app and daemon remain untouched on download or signature failure.
                 let _ = set_tray_menu(&app, None, false);
             }
         }
@@ -1569,7 +1620,7 @@ fn main() {
                         app.state::<Daemon>().retry.store(true, Ordering::SeqCst);
                         show_panel(app, None);
                     }
-                    "update" => install_update(app),
+                    "update" => install_update(app, false),
                     "quit" => app.exit(0),
                     _ => {}
                 })
