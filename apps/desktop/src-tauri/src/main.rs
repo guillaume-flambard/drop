@@ -1342,6 +1342,20 @@ fn local_update_ready(app: &AppHandle) -> bool {
             }
         }
     }
+    shell_update_call(app, "GET", "/_shell/update-ready", "ready")
+}
+
+/// The daemon atomically stops admitting new work before Tauri replaces application files.
+fn local_update_prepare(app: &AppHandle) -> bool {
+    local_update_ready(app) && shell_update_call(app, "POST", "/_shell/update-prepare", "ready")
+}
+
+fn local_update_cancel(app: &AppHandle) {
+    let _ = shell_update_call(app, "POST", "/_shell/update-cancel", "cancelled");
+}
+
+fn shell_update_call(app: &AppHandle, method: &str, path: &str, flag: &str) -> bool {
+    let state = app.state::<Daemon>();
     let port = match state.verified_port.lock() {
         Ok(port) => match *port {
             Some(port) => port,
@@ -1365,7 +1379,7 @@ fn local_update_ready(app: &AppHandle) -> bool {
     let _ = socket.set_read_timeout(Some(Duration::from_secs(2)));
     let _ = socket.set_write_timeout(Some(Duration::from_secs(2)));
     let request = format!(
-        "GET /_shell/update-ready HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nAuthorization: Bearer {token}\r\nConnection: close\r\n\r\n"
+        "{method} {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nAuthorization: Bearer {token}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
     );
     if socket.write_all(request.as_bytes()).is_err() {
         return false;
@@ -1380,7 +1394,7 @@ fn local_update_ready(app: &AppHandle) -> bool {
     headers.starts_with("HTTP/1.1 200 ")
         && serde_json::from_str::<serde_json::Value>(body)
             .ok()
-            .and_then(|value| value.get("ready").and_then(serde_json::Value::as_bool))
+            .and_then(|value| value.get(flag).and_then(serde_json::Value::as_bool))
             == Some(true)
 }
 
@@ -1443,7 +1457,7 @@ fn install_update(app: &AppHandle, automatic: bool) {
             Ok(bytes) => {
                 // If any work started during the download, keep offering the update without installing it.
                 // The next automatic attempt must pass another full quiet period.
-                if !local_update_ready(&app) {
+                if !local_update_prepare(&app) {
                     if let Ok(mut pending) = app.state::<PendingUpdate>().0.lock() {
                         *pending = Some(update);
                     }
@@ -1462,6 +1476,7 @@ fn install_update(app: &AppHandle, automatic: bool) {
                         app.restart();
                     }
                     Err(error) => {
+                        local_update_cancel(&app);
                         log_error("E_UPDATE_INSTALL", &error.to_string());
                         let _ = set_tray_menu(&app, None, false);
                     }
