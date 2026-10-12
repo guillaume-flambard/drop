@@ -188,6 +188,8 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
     // The internal relay checks this node runs its organization's policy (T4.10).
     ...(policy ? { policy: () => policy.fingerprint } : {}),
     onEnvelope: receive,
+    // A connection given up for silence, a missing acknowledgement or a stuck handshake (T3.1f): code and reason only.
+    log: logEntry,
     onStatus: (status) => {
       log(`relay: ${status}`);
       if (status === 'connected') {
