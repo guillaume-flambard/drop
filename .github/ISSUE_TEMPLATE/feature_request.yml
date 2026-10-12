@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Open questions and early ideas are welcome in [Discussions](https://github.com/guillaume-flambard/drop/discussions/categories/ideas) first.
+        Open questions and early ideas are welcome in [Discussions](https://github.com/memolabs-dev/drop/discussions/categories/ideas) first.
         The order of work lives in docs/TASKS.md; a proposal may become a new task there.
   - type: textarea
     id: need

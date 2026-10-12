@@ -7,7 +7,7 @@ body:
       value: |
         Thanks for taking the time to report a bug.
 
-        **Security vulnerabilities do not go here.** Use a [private security report](https://github.com/guillaume-flambard/drop/security/advisories/new) instead (see SECURITY.md).
+        **Security vulnerabilities do not go here.** Use a [private security report](https://github.com/memolabs-dev/drop/security/advisories/new) instead (see SECURITY.md).
         Do not attach keys, real configurations, conversations or anyone's data. Redact logs.
   - type: textarea
     id: behavior

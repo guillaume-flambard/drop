@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: Ask a question
-    url: https://github.com/guillaume-flambard/drop/discussions/categories/q-a
+    url: https://github.com/memolabs-dev/drop/discussions/categories/q-a
     about: Questions, help and early ideas go to GitHub Discussions.
   - name: Report a security vulnerability
-    url: https://github.com/guillaume-flambard/drop/security/advisories/new
+    url: https://github.com/memolabs-dev/drop/security/advisories/new
     about: Report vulnerabilities privately. Never in a public issue.

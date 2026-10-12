@@ -17,7 +17,7 @@ There is no tagged release yet and the project is pre-1.0. Fixes land on `main` 
 
 **Do not open a public issue, discussion or pull request for a vulnerability.**
 
-Use GitHub private vulnerability reporting: **[open a private report](https://github.com/guillaume-flambard/drop/security/advisories/new)** (also reachable from the repository's **Security** tab, **Report a vulnerability**). Only you and the maintainer see it. The project publishes no email address for security.
+Use GitHub private vulnerability reporting: **[open a private report](https://github.com/memolabs-dev/drop/security/advisories/new)** (also reachable from the repository's **Security** tab, **Report a vulnerability**). Only you and the maintainer see it. The project publishes no email address for security.
 
 Please include:
 

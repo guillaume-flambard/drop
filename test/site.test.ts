@@ -72,7 +72,7 @@ describe('documentation site', () => {
     expect(await readdir(directory)).not.toContain('stale-private.txt');
     expect(await readFile(join(directory, 'guide.html'), 'utf8')).toBe(first);
     const guide = await readFile(join(directory, 'downloads/GUIDE.md'), 'utf8');
-    expect(guide).toContain('https://github.com/guillaume-flambard/drop/blob/main/');
+    expect(guide).toContain('https://github.com/memolabs-dev/drop/blob/main/');
     expect(guide).toContain('../diagrams/journey.svg');
     expect(guide).not.toContain('](../packages/');
     for (const name of [

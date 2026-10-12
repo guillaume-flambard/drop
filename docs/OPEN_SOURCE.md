@@ -1,6 +1,6 @@
 # Socle ouvert et modèle économique
 
-Cap adopté le 9 octobre 2026. Le code détenu par le projet est placé sous [Apache-2.0](../LICENSE). Le dépôt [github.com/guillaume-flambard/drop](https://github.com/guillaume-flambard/drop) est public depuis le 11 octobre 2026. Rendre le code lisible n'est pas un lancement : aucun paquet, aucun binaire et aucune offre ne sont publiés. Le nom drop reste provisoire.
+Cap adopté le 9 octobre 2026. Le code détenu par le projet est placé sous [Apache-2.0](../LICENSE). Le dépôt [github.com/memolabs-dev/drop](https://github.com/memolabs-dev/drop) est public depuis le 11 octobre 2026. Rendre le code lisible n'est pas un lancement : aucun paquet, aucun binaire et aucune offre ne sont publiés. Le nom drop reste provisoire.
 
 ## La frontière gratuit / payant
 
@@ -33,7 +33,7 @@ Apache-2.0 est choisi pour faciliter l'usage et les contributions, y compris com
 
 1. Vérifier le nom, les droits sur le code et les contributions, la licence de chaque dépendance embarquée, les images et les modèles éventuellement distribués. Produire les attributions et l'inventaire des composants du paquet.
 2. Relire tout l'historique, les fixtures, captures, archives, artefacts et métadonnées. Retirer les données tierces ; révoquer tout secret exposé.
-3. Séparer la CI publique des automatisations du lab. Fait le 11 octobre 2026 : toute la CI tourne sur des runners hébergés par GitHub, `build.yml` construit l'image sans la pousser sur une pull request et ne publie sur GHCR (`ghcr.io/guillaume-flambard/drop`) que depuis `main` ou un tag `v*`, avec SBOM et attestation de provenance. Actions épinglées par SHA, permissions minimales par job, workflows audités par zizmor, OpenSSF Scorecard et Dependabot. Aucun job de contribution externe ne doit atteindre un runner interne, un déploiement ou un secret.
+3. Séparer la CI publique des automatisations du lab. Fait le 11 octobre 2026 : toute la CI tourne sur des runners hébergés par GitHub, `build.yml` construit l'image sans la pousser sur une pull request et ne publie sur GHCR (`ghcr.io/memolabs-dev/drop`) que depuis `main` ou un tag `v*`, avec SBOM et attestation de provenance. Actions épinglées par SHA, permissions minimales par job, workflows audités par zizmor, OpenSSF Scorecard et Dependabot. Aucun job de contribution externe ne doit atteindre un runner interne, un déploiement ou un secret.
 4. Tester une contribution depuis un clone propre sur runner hébergé, sans accès au lab ; vérifier les checks, le build et les liens. Documenter la création d'un adaptateur et un exemple borné.
 5. Le signalement privé de GitHub est activé et décrit dans [SECURITY](../SECURITY.md) (accusé de réception visé sous une semaine, sans engagement de service). Reste à le tester de bout en bout.
 6. Préparer versions, provenance, signatures, notarisation Mac, mises à jour vérifiées et voie hors ligne. Publier seulement les plateformes réellement testées.

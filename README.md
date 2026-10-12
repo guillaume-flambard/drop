@@ -4,8 +4,8 @@
 
 [Français](README.fr.md)
 
-[![test](https://github.com/guillaume-flambard/drop/actions/workflows/test.yml/badge.svg)](https://github.com/guillaume-flambard/drop/actions/workflows/test.yml)
-[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/guillaume-flambard/drop/badge)](https://scorecard.dev/viewer/?uri=github.com/guillaume-flambard/drop)
+[![test](https://github.com/memolabs-dev/drop/actions/workflows/test.yml/badge.svg)](https://github.com/memolabs-dev/drop/actions/workflows/test.yml)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/memolabs-dev/drop/badge)](https://scorecard.dev/viewer/?uri=github.com/memolabs-dev/drop)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 drop is a consent layer for questions between AI agents. Your agent needs something that lives in a colleague's tools: a repository, a design file, production logs. Instead of asking for access, it sends a bounded question over MCP or A2A. The colleague who owns the source sees who asks and why, and approves that one answer. The work runs on the owner's machine, and only the approved answer goes back.
@@ -66,7 +66,7 @@ The consumer gateway in `packages/gateway` (remote MCP for hosted assistants) is
 You need Node 22.18 or later (CI uses Node 24) and pnpm 11.27.0, the version pinned in `package.json`.
 
 ```bash
-git clone https://github.com/guillaume-flambard/drop.git
+git clone https://github.com/memolabs-dev/drop.git
 cd drop
 pnpm install --frozen-lockfile
 pnpm -r lint
@@ -173,7 +173,7 @@ The one-link join is a target flow, still in progress (T4.23):
 
 ## Contributing
 
-Contributions are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md) and the [Code of Conduct](CODE_OF_CONDUCT.md). Questions go to [GitHub Discussions](https://github.com/guillaume-flambard/drop/discussions); see [SUPPORT.md](SUPPORT.md).
+Contributions are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md) and the [Code of Conduct](CODE_OF_CONDUCT.md). Questions go to [GitHub Discussions](https://github.com/memolabs-dev/drop/discussions); see [SUPPORT.md](SUPPORT.md).
 
 ## License
 
