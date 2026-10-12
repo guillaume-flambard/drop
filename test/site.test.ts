@@ -1,4 +1,5 @@
 import { chmod, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
 import { request } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -170,6 +171,44 @@ describe('documentation site', () => {
         '/secret.txt',
       ])
         expect((await get(path)).status, path).toBe(404);
+    } finally {
+      await site.stop();
+      await rm(releases, { recursive: true, force: true });
+    }
+  });
+
+  it('checks a release through the handle it sends, answers 404 for a directory or a pipe and never waits on one (T4.26)', async () => {
+    const releases = await mkdtemp(join(tmpdir(), 'drop-releases-'));
+    await writeFile(join(releases, 'latest.json'), '{"version":"0.5.0"}');
+    await writeFile(join(releases, 'drop.dmg'), '');
+    await mkdir(join(releases, 'drop-0.5.0-darwin-aarch64.app.tar.gz'));
+    // A named pipe would hold a plain open until a writer came: the request would never be answered.
+    if (process.platform !== 'win32') execFileSync('mkfifo', [join(releases, 'drop-0.5.0-darwin-x86_64.app.tar.gz')]);
+    const site = await startPublicSite(await collectSite({ installs: 'beta', contact: '' }), {
+      port: 0,
+      host: '127.0.0.1',
+      publicHost: 'drop.example',
+      releasesDir: releases,
+    });
+    const get = (path: string, method = 'GET') =>
+      new Promise<{ status: number; length: unknown; body: string }>((resolve, reject) => {
+        const req = request(`${site.url}${path}`, { method, headers: { Host: 'drop.example' } }, (res) => {
+          let body = '';
+          res.on('data', (chunk: Buffer) => (body += chunk.toString()));
+          res.on('end', () => {
+            resolve({ status: res.statusCode ?? 0, length: res.headers['content-length'], body });
+          });
+        });
+        req.on('error', reject);
+        req.end();
+      });
+    try {
+      expect(await get('/updates/latest.json')).toEqual({ status: 200, length: '19', body: '{"version":"0.5.0"}' });
+      expect(await get('/updates/latest.json', 'HEAD')).toEqual({ status: 200, length: '19', body: '' });
+      expect(await get('/downloads/drop.dmg')).toEqual({ status: 200, length: '0', body: '' });
+      expect((await get('/updates/drop-0.5.0-darwin-aarch64.app.tar.gz')).status).toBe(404);
+      expect((await get('/updates/drop-0.5.0-darwin-x86_64.app.tar.gz')).status).toBe(404);
+      expect((await get('/updates/drop-0.6.0-darwin-aarch64.app.tar.gz')).status).toBe(404);
     } finally {
       await site.stop();
       await rm(releases, { recursive: true, force: true });

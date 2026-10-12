@@ -94,6 +94,7 @@ La connexion et la découverte des outils MCP MUST appliquer la politique privé
 <!-- openspec-guard:test="private adapters > refuses HTTP discovery outside policy and refuses stdio before spawning it" -->
 - **WHEN** un serveur HTTP hors politique ou un serveur stdio non isolé est découvert
 - **THEN** aucune connexion ni exécution de ce serveur n’a lieu.
+
 ### Requirement: Partage vérifié
 Partager un serveur détecté (`drop share`, panneau) SHALL toujours s'y connecter d'abord et MUST ne rien publier si :
 le serveur exige une connexion OAuth (401 ou 403 sans en-tête `Authorization`), refuse son jeton (401 ou 403 avec
@@ -120,3 +121,11 @@ Pour un serveur MCP distant à OAuth avec enregistrement dynamique, drop SHALL s
 <!-- openspec-guard:test="remote MCP servers behind OAuth (T2.17) > drop share uses the tokens of a sign-in, and says how to sign in before one" -->
 - **WHEN** Natha partage le serveur Notion avant, puis après la connexion de drop
 - **THEN** le premier partage indique `drop connect claude_code/notion`, le second publie les outils en lecture du serveur
+
+### Requirement: Réponse finale lue en temps linéaire
+La lecture de la réponse finale du modèle SHALL retirer les blocs `<think>…</think>` fermés et garder un bloc non fermé, en un temps linéaire dans la longueur de la réponse, quelle qu'elle soit.
+
+#### Scenario: AC: réponse pleine de balises non fermées
+<!-- openspec-guard:test="configuration and reply parsing in linear time (T4.26) > drops closed reasoning blocks and stays linear on a reply full of unclosed <think>" -->
+- **WHEN** le modèle répond par 100 000 `<think>` sans fermeture, ou par un objet JSON entouré de blocs de raisonnement
+- **THEN** la première réponse est lue en moins de 1,5 s, sans réponse finale ; la seconde donne l'objet hors des blocs fermés

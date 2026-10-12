@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { closeSync, constants, existsSync, fstatSync, openSync, readdirSync, readSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, posix, win32 } from 'node:path';
 import { REQUESTER_AGENTS } from '@drop/protocol';
@@ -485,16 +485,35 @@ export const MAX_PROJECT_CONFIG_BYTES = 1024 * 1024;
  * /dev/zero or a huge file, and reading it must never hang or exhaust the daemon (T4.5 review). Absent: undefined.
  */
 export function readConfigText(path: string, maxBytes: number = MAX_GLOBAL_CONFIG_BYTES): string | undefined {
-  let stats;
+  let fd: number;
   try {
-    stats = statSync(path);
+    // Opened once, then checked and read through that descriptor: the file checked is the file read (T4.26, CodeQL
+    // js/file-system-race). O_NONBLOCK makes opening a named pipe return at once; its type then refuses it.
+    fd = openSync(path, constants.O_RDONLY | ('O_NONBLOCK' in constants ? constants.O_NONBLOCK : 0));
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === 'ENOENT') return undefined;
+    // Windows refuses to open a directory at all, where macOS and Linux open it and fstat tells.
+    if (code === 'EISDIR') throw new Error('E_CONFIG_TYPE', { cause: error });
     throw error;
   }
-  if (!stats.isFile()) throw new Error('E_CONFIG_TYPE');
-  if (stats.size > maxBytes) throw new Error('E_CONFIG_TOO_LARGE');
-  return readFileSync(path, 'utf8');
+  try {
+    const stats = fstatSync(fd);
+    if (!stats.isFile()) throw new Error('E_CONFIG_TYPE');
+    if (stats.size > maxBytes) throw new Error('E_CONFIG_TOO_LARGE');
+    // Read to the end but never past the bound, even if the file grew after the check.
+    const chunks: Buffer[] = [];
+    const chunk = Buffer.alloc(64 * 1024);
+    let total = 0;
+    for (let read = readSync(fd, chunk); read > 0; read = readSync(fd, chunk)) {
+      total += read;
+      if (total > maxBytes) throw new Error('E_CONFIG_TOO_LARGE');
+      chunks.push(Buffer.from(chunk.subarray(0, read)));
+    }
+    return Buffer.concat(chunks, total).toString('utf8');
+  } finally {
+    closeSync(fd);
+  }
 }
 
 /** Copies a string literal starting at `index`; returns the index just after its closing quote. */
@@ -556,13 +575,22 @@ export function stripJsonc(input: string): string {
   return out.join('');
 }
 
+/**
+ * `text` without its trailing ` # comment`, cut at the first `#` that follows a space. Found with a fixed-length search:
+ * `/\s+#.*$/` took a time quadratic in a run of spaces with no comment after it (T4.26, CodeQL js/polynomial-redos).
+ */
+function stripYamlComment(text: string): string {
+  const comment = /\s#/.exec(text);
+  return comment ? text.slice(0, comment.index).trimEnd() : text;
+}
+
 /** An unquoted scalar, without a trailing ` # comment`; quoted scalars keep everything inside the quotes. */
 function scalar(value: string): string | undefined {
   const trimmed = value.trim();
   if (/^"(?:[^"\\]|\\.)*"$/.test(trimmed)) return JSON.parse(trimmed) as string;
   if (/^'[^']*'$/.test(trimmed)) return trimmed.slice(1, -1);
   if (/["'{}[\]]/.test(trimmed)) return undefined;
-  return trimmed.replace(/\s+#.*$/, '');
+  return stripYamlComment(trimmed);
 }
 
 /**
@@ -606,7 +634,8 @@ export function gooseExtensions(yaml: string): Record<string, Record<string, unk
       continue;
     }
     if (map && indent === 6) {
-      const pair = /^([A-Za-z0-9_]+):\s*(.*)$/.exec(line);
+      // No `\s*` before the value: scalar trims it, and the two together made the match quadratic (T4.26).
+      const pair = /^([A-Za-z0-9_]+):(.*)$/.exec(line);
       const value = pair ? scalar(pair[2] ?? '') : undefined;
       if (!pair || value === undefined) broken();
       else map[pair[1] ?? ''] = value;
@@ -618,7 +647,8 @@ export function gooseExtensions(yaml: string): Record<string, Record<string, unk
     }
     list = undefined;
     map = undefined;
-    const pair = /^([A-Za-z_]+):\s*(.*)$/.exec(line);
+    // As above: the leading spaces of the value are dropped below, not by a `\s*` that backtracks (T4.26).
+    const pair = /^([A-Za-z_]+):(.*)$/.exec(line);
     if (!pair) {
       broken();
       continue;

@@ -30,6 +30,7 @@ import {
   IrohAddrSchema,
   type IrohAddr,
   assertPrivateDestination,
+  CapabilityIdSchema,
   TeamMemberSchema,
   TeamSchema,
   IdentitySchema,
@@ -637,7 +638,12 @@ export class DropHome {
     return true;
   }
 
+  /**
+   * The id names the file: only a capability id is accepted, never a path (T4.26). `drop share --id` passed its value
+   * through unchecked, so `../../x` wrote outside DROP_HOME/capabilities.
+   */
   publish(entry: Published): void {
+    if (!CapabilityIdSchema.safeParse(entry.capabilityId).success) throw new Error('E_CAPABILITY_ID');
     writePrivate(join(this.root, 'capabilities', `${entry.capabilityId}.json`), `${JSON.stringify(entry, null, 2)}\n`);
   }
 
