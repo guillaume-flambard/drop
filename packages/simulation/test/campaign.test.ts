@@ -76,6 +76,14 @@ describe('simulation campaign (T4.1)', () => {
   });
 });
 
+/**
+ * Before its load phase the bench starts one Node.js process after another (an init per node, a publish per owner),
+ * then the relay and every node, and their cold starts take most of the wait: about 0.25 s each on an idle Mac, up to
+ * 7 s each on a saturated one (T4.25). The bench already gives each node 30 s to serve and each pairing 30 s; the test
+ * waits longer than that, so a slow phase is judged by the bench, whose exit is reported at once with its error.
+ */
+const LOAD_PHASE_WAIT_MS = 120_000;
+
 describe('simulation bench signals (T4.1)', () => {
   // Windows has no SIGTERM: Node's kill() ends the bench at once, with no handler to run, and pgrep does not exist.
   it.skipIf(process.platform === 'win32')(
@@ -83,13 +91,14 @@ describe('simulation bench signals (T4.1)', () => {
     async () => {
       const cli = fileURLToPath(new URL('../src/cli.ts', import.meta.url));
       const dir = join(tmpdir(), `drop-sim-signal-${String(process.pid)}`);
+      // Two nodes still start every kind of process the bench stops (relay, owner, requester), with fewer cold starts.
       const bench = spawn(
         process.execPath,
         [
           cli,
           'run',
           '--nodes',
-          '3',
+          '2',
           '--owners',
           '1',
           '--requests',
@@ -103,35 +112,55 @@ describe('simulation bench signals (T4.1)', () => {
         ],
         { stdio: ['ignore', 'ignore', 'pipe'] },
       );
+      let stderr = '';
+      bench.stderr.setEncoding('utf8');
+      bench.stderr.on('data', (chunk: string) => {
+        stderr += chunk;
+      });
+      const exited = new Promise<void>((resolve) => {
+        bench.once('exit', () => {
+          resolve();
+        });
+      });
       try {
         await new Promise<void>((resolve, reject) => {
+          const settle = (error?: Error) => {
+            clearTimeout(timer);
+            bench.stderr.off('data', onData);
+            bench.off('exit', onExit);
+            if (error) reject(error);
+            else resolve();
+          };
+          const onData = () => {
+            if (stderr.includes('requesters paired')) settle();
+          };
+          const onExit = (code: number | null, signal: NodeJS.Signals | null) => {
+            settle(new Error(`bench exited (${String(code ?? signal)}) before the load phase:\n${stderr}`));
+          };
           const timer = setTimeout(() => {
-            reject(new Error('bench never reached the load phase'));
-          }, 60_000);
-          bench.stderr.on('data', (chunk: Buffer) => {
-            if (chunk.toString().includes('requesters paired')) {
-              clearTimeout(timer);
-              resolve();
-            }
-          });
+            settle(new Error(`bench never reached the load phase in ${String(LOAD_PHASE_WAIT_MS)} ms:\n${stderr}`));
+          }, LOAD_PHASE_WAIT_MS);
+          bench.stderr.on('data', onData);
+          bench.once('exit', onExit);
         });
         const children = execFileSync('pgrep', ['-P', String(bench.pid)], { encoding: 'utf8' })
           .trim()
           .split('\n')
           .map(Number)
           .filter((pid) => pid > 0);
-        expect(children.length).toBeGreaterThanOrEqual(4);
+        expect(children.length).toBeGreaterThanOrEqual(3);
         bench.kill('SIGTERM');
-        await new Promise<void>((resolve) => {
-          bench.once('exit', () => {
-            resolve();
-          });
-        });
+        await exited;
         for (const pid of children) expect(alive(pid)).toBe(false);
       } finally {
+        // A failed run must not leave the bench and its processes running after the test, nor delete its folder under it.
+        if (bench.exitCode === null && bench.signalCode === null) {
+          bench.kill('SIGTERM');
+          await exited;
+        }
         rmSync(dir, { recursive: true, force: true });
       }
     },
-    120_000,
+    LOAD_PHASE_WAIT_MS + 30_000,
   );
 });
