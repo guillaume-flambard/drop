@@ -154,6 +154,14 @@ const AskBody = z.object({
   agent: RequesterAgentSchema.default('other'),
 });
 
+/**
+ * A notification's « Refuser » (T4.30): the drop's identifier and nothing else. Strict, so that a body naming any
+ * decision, « allow_once » included, is refused rather than read as a refusal.
+ */
+const NotificationDenyBody = z
+  .object({ dropId: z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/) })
+  .strict();
+
 const MAX_BODY_BYTES = 128 * 1024;
 /** A hand-written answer carries up to 160 KiB of JSON (T4.3): only its route reads more. */
 const MAX_ANSWER_BODY_BYTES = 200 * 1024;
@@ -681,12 +689,46 @@ export function startLocalApi(options: LocalApiOptions): Promise<LocalApi> {
       const decision = form.get('decision') ?? '';
       let done = false;
       if (path === '/ui/decide' && (decision === 'allow_once' || decision === 'deny' || decision === 'not_now')) {
-        done = await engine.decide(dropId, decision);
+        const outcome = await engine.decideApproval(dropId, decision);
+        if (!outcome.ok) {
+          json(res, 404, { ok: false, code: outcome.code });
+          return;
+        }
+        done = true;
       }
       if (path === '/ui/review' && (decision === 'send' || decision === 'discard')) {
         done = await engine.review(dropId, decision, form.getAll('redact'));
       }
       json(res, done ? 200 : 404, { ok: done });
+      return;
+    }
+    // A notification's « Refuser » (T4.30): a refusal only, whatever else the body carries, through the card's own
+    // decision path. A request that no longer waits is ignored with its stable code; nothing is sent then.
+    if (method === 'POST' && path === '/ui/notification/deny') {
+      let dropId: string | undefined;
+      try {
+        const parsed = NotificationDenyBody.safeParse(JSON.parse(await readBody(req, 1024)));
+        if (parsed.success) dropId = parsed.data.dropId;
+      } catch (error) {
+        if (isDropError(error, 'E_TOO_LARGE')) {
+          log({ event: 'notification_deny', code: 'E_TOO_LARGE', path });
+          json(res, 413, { ok: false, code: 'E_TOO_LARGE' });
+          return;
+        }
+        dropId = undefined;
+      }
+      if (dropId === undefined) {
+        log({ event: 'notification_deny', code: 'E_SCHEMA', path });
+        json(res, 400, { ok: false, code: 'E_SCHEMA' });
+        return;
+      }
+      const outcome = await engine.decideApproval(dropId, 'deny');
+      if (!outcome.ok) {
+        log({ event: 'notification_deny', code: outcome.code, path });
+        json(res, 409, { ok: false, code: outcome.code });
+        return;
+      }
+      json(res, 200, { ok: true });
       return;
     }
     // The owner answers by hand (T4.3): checked by the engine before anything leaves, refused with a stable code.
