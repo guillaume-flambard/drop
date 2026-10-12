@@ -182,12 +182,17 @@ Le relais MUST NOT journaliser `body`. Il SHALL journaliser seulement `id`, `fro
 - **THEN** l'entrée de log contient `id`, `from`, `to`, la taille et l'issue
 
 ### Requirement: Ping de maintien
-Le relais SHALL envoyer un ping toutes les 25 s à chaque Node et MUST le déconnecter après 2 pings sans réponse.
+Le relais SHALL envoyer un ping toutes les 25 s à chaque Node et MUST le déconnecter après 2 pings sans réponse. Tout octet reçu d'un Node authentifié MUST compter comme une réponse : un Node dont la voie montante lente porte encore une grosse trame, et dont le pong attend derrière elle, n'est pas coupé (T4.39).
 
 #### Scenario: Node muet
 <!-- openspec-guard:test="relay contract > closes a node that misses two pings" -->
 - **WHEN** un Node ne répond pas à 2 pings
 - **THEN** le relais ferme sa connexion
+
+#### Scenario: AC: trame lente reçue
+<!-- openspec-guard:test="relay answers and liveness (T4.39) > keeps a node whose slow uplink is still carrying a frame, and cuts it once its bytes stop" -->
+- **WHEN** un Node qui ne répond plus aux pings envoie encore, lentement, les octets d'une trame
+- **THEN** le relais garde la connexion tant que des octets arrivent, puis la coupe après deux pings sans octet ni pong
 
 ### Requirement: Limite de débit par Node
 Le relais MUST limiter chaque Node authentifié à `rateLimitPerMinute` tentatives par minute (60 par défaut) à travers ses reconnexions, y compris les trames malformées ou trop grandes. Une tentative hors quota MUST recevoir `E_RATE`, sauf si WebSocket a déjà fermé la connexion pour dépassement de `maxPayload` ; cette trame MUST néanmoins compter pour l'identité authentifiée.
@@ -320,7 +325,7 @@ rester une chaîne non secrète ; une construction qui n'en a pas fourni MUST r�
 - **THEN** `GET /health` répond toujours en 200 avec une valeur explicite d'absence
 
 ### Requirement: Battement de cœur du client relais
-Le client relais (`RelayClient`) SHALL envoyer un ping toutes les 15 s et MUST abandonner la connexion si aucune trame (pong, ping, message) n'est arrivée pendant un intervalle complet, même sans fermeture reçue. La raison journalisée est `heartbeat`.
+Le client relais (`RelayClient`) SHALL envoyer un ping toutes les 15 s et MUST abandonner la connexion si rien n'est arrivé pendant un intervalle complet, même sans fermeture reçue. Tout octet reçu sur le socket compte (pong, ping, message, ou morceau d'une trame encore incomplète). La raison journalisée est `heartbeat`, sauf voie montante occupée (exigence suivante).
 
 #### Scenario: AC: relais muet sans fermeture
 <!-- openspec-guard:test="relay client liveness > reconnects within two heartbeat intervals when the relay stops answering without closing" -->
@@ -337,13 +342,18 @@ Le client relais (`RelayClient`) SHALL envoyer un ping toutes les 15 s et MUST a
 - **WHEN** le client ne lit plus son socket et que le relais ferme la connexion de son côté
 - **THEN** le client détruit ce socket en 30 s au plus, sans attendre sa fermeture, et se reconnecte
 
+#### Scenario: AC: grosse trame entrante lente
+<!-- openspec-guard:test="relay client liveness > keeps a connection while a big inbound frame trickles in, and gives it up once the bytes stop" -->
+- **WHEN** le relais, qui ne répond plus aux pings, envoie lentement une trame pendant plus de deux intervalles
+- **THEN** le client garde la connexion tant que des octets arrivent, puis l'abandonne (`heartbeat`) dans les 30 s qui suivent le dernier octet
+
 ### Requirement: Délai d'acquittement du client relais
-Chaque envoi du client relais MUST recevoir son acquittement ou son erreur en 15 s au plus, comptées depuis que sa trame a quitté le processus ; sinon la connexion est abandonnée avec la raison `ack`.
+Chaque envoi du client relais MUST recevoir son acquittement ou son erreur dans un délai compté depuis l'appel : 15 s, plus le temps de transmettre à 32 kbit/s (4 000 octets par seconde) les octets envoyés sur cette connexion et encore sans réponse, les siens compris. Sinon la connexion est abandonnée avec la raison `ack`.
 
 #### Scenario: AC: envoi sans acquittement libéré
-<!-- openspec-guard:test="relay client liveness > releases a send left without acknowledgement as offline after 15 s and reconnects" -->
-- **WHEN** le relais répond aux pings mais n'acquitte pas une enveloppe
-- **THEN** l'envoi reste en attente avant 15 s, puis se résout en `offline`, `E_RELAY_TIMEOUT` (`ack`) est journalisé et le client se reconnecte
+<!-- openspec-guard:test="relay client liveness > releases a send left without acknowledgement as unconfirmed after 15 s and reconnects" -->
+- **WHEN** le relais répond aux pings mais n'acquitte pas une petite enveloppe
+- **THEN** l'envoi reste en attente pendant 15 s, puis se résout en `unconfirmed` à l'échéance de son délai, `E_RELAY_TIMEOUT` (`ack`) est journalisé et le client se reconnecte
 
 ### Requirement: Délai de connexion du client relais
 Chaque tentative de connexion du client relais MUST atteindre `ready` en 15 s au plus, poignées de main TCP, TLS, HTTP et défi comprises ; sinon elle est abandonnée avec la raison `connect`.
@@ -354,12 +364,12 @@ Chaque tentative de connexion du client relais MUST atteindre `ready` en 15 s au
 - **THEN** le client abandonne la tentative au bout de 15 s, journalise `E_RELAY_TIMEOUT` (`connect`) et en ouvre une nouvelle
 
 ### Requirement: Abandon d'une connexion par le client relais
-Abandonner une connexion MUST la détruire sans attendre sa fermeture, résoudre chaque envoi en attente par `offline`, signaler `disconnected`, journaliser le code stable `E_RELAY_TIMEOUT` avec sa raison et planifier la reconnexion avec le délai exponentiel habituel. La fermeture volontaire du client MUST aussi résoudre les envois en attente par `offline`.
+Abandonner une connexion MUST la détruire sans attendre sa fermeture, résoudre chaque envoi en attente par `unconfirmed` (sa trame a été confiée à la connexion et le relais a pu la recevoir), signaler `disconnected`, journaliser le code stable `E_RELAY_TIMEOUT` avec sa raison et planifier la reconnexion avec le délai exponentiel habituel. La fermeture volontaire du client, une fermeture de la connexion et le changement de relais MUST aussi résoudre les envois en attente par `unconfirmed`.
 
 #### Scenario: AC: fermeture du client
-<!-- openspec-guard:test="relay client liveness > settles pending sends as offline on close" -->
+<!-- openspec-guard:test="relay client liveness > settles pending sends as unconfirmed on close" -->
 - **WHEN** le client est fermé alors qu'un envoi attend son acquittement
-- **THEN** cet envoi se résout aussitôt en `offline`
+- **THEN** cet envoi se résout aussitôt en `unconfirmed`
 
 ### Requirement: Délai de reconnexion après un abandon
 Après un abandon, `ready` MUST NOT ramener le délai entre tentatives au minimum : il n'y revient qu'après une réponse du relais à un envoi, ou un intervalle de battement vivant sans envoi en attente.
@@ -376,3 +386,61 @@ Le client du relais SHALL pouvoir passer à un autre relais sans redémarrage (`
 <!-- openspec-guard:test="relay client switch (T4.33) > keeps the extra certificate authority for the same host only, never for a relay on another host" -->
 - **WHEN** un client connecté en `wss` à un relais grâce à son autorité passe à un autre relais du même hôte, puis à un relais d'un autre nom d'hôte servi par un certificat de cette même autorité
 - **THEN** il se connecte au premier, et pas au second, qu'un client neuf muni de l'autorité atteint
+
+### Requirement: Réponses du relais dans l'ordre
+Le relais MUST répondre à chaque trame `envelope` d'un Node authentifié par exactement une trame `ack` ou `error`, dans l'ordre de réception des trames sur cette connexion, ou fermer la connexion. Les enveloppes qu'il pousse vers ce Node ne sont pas des réponses.
+
+#### Scenario: AC: une réponse par trame, dans l'ordre
+<!-- openspec-guard:test="relay answers and liveness (T4.39) > answers every envelope frame once, in the order received, including an error without id" -->
+- **WHEN** un Node envoie une enveloppe valide, une enveloppe hors schéma, puis une enveloppe valide
+- **THEN** il reçoit dans cet ordre un `ack`, une `error` `E_SCHEMA` sans identifiant, puis un `ack`
+
+### Requirement: Erreur du relais sans identifiant
+Le client relais MUST attribuer une trame `error` sans identifiant à l'envoi le plus ancien encore sans réponse sur cette connexion, et résoudre cet envoi aussitôt avec ce code, tant que toutes les réponses précédentes de cette connexion sont arrivées dans l'ordre des envois. Si une réponse est arrivée hors de cet ordre, il MUST NOT l'attribuer : l'envoi est libéré par son délai.
+
+#### Scenario: AC: erreur sans identifiant attribuée
+<!-- openspec-guard:test="relay answers and liveness (T4.39) > resolves at once, with E_SCHEMA, a send the real relay answers without an id" -->
+- **WHEN** le relais répond `E_SCHEMA` sans identifiant à une enveloppe hors schéma envoyée entre deux enveloppes valides
+- **THEN** cet envoi se résout aussitôt en `E_SCHEMA`, les deux autres en `delivered` ou `queued`, sans attendre de délai ni abandonner la connexion
+
+#### Scenario: AC: réponse hors ordre
+<!-- openspec-guard:test="relay client liveness > does not attribute an error without id once the relay answered out of order" -->
+- **WHEN** le relais acquitte la deuxième enveloppe avant la première, puis envoie une erreur sans identifiant
+- **THEN** le client n'attribue pas cette erreur, et l'envoi restant est libéré par son délai
+
+### Requirement: Renvoi borné d'une enveloppe
+Après trois abandons `ack` causés par la même enveloppe, le client relais MUST NOT l'envoyer de nouveau : l'envoi se résout aussitôt en `E_RELAY_TIMEOUT`, journalisé avec la raison `ack_retries`. Le compteur par enveloppe MUST être borné en mémoire et oublié dès que l'enveloppe reçoit une réponse.
+
+#### Scenario: AC: trois essais au plus
+<!-- openspec-guard:test="relay client liveness > stops sending an envelope that caused three acknowledgement give-ups" -->
+- **WHEN** la même enveloppe a causé trois abandons faute d'acquittement
+- **THEN** le quatrième envoi se résout aussitôt en `E_RELAY_TIMEOUT` sans rien écrire au relais, avec `ack_retries` au journal
+
+### Requirement: Voie montante occupée du client relais
+Tant que les octets envoyés et encore sans réponse sur une connexion demandent plus d'un intervalle de battement au débit plancher de 32 kbit/s, un intervalle muet MUST NOT abandonner cette connexion : leur délai d'acquittement borne alors l'attente (T4.39).
+
+#### Scenario: AC: voie montante saturée
+<!-- openspec-guard:test="relay client liveness > waits for a big envelope at the floor rate, through silent heartbeat intervals, before giving up its acknowledgement" -->
+- **WHEN** une enveloppe de 200 000 octets attend sa réponse et que plus rien n'arrive du relais
+- **THEN** le client garde la connexion au-delà de 30 s, puis l'abandonne avec la raison `ack` à l'échéance du délai proportionnel à sa taille
+
+### Requirement: Abandons comptés par enveloppe
+Le délai d'acquittement d'un envoi MUST doubler à chaque abandon `ack` déjà compté contre la même enveloppe, jusqu'à quatre fois sa valeur de base. Un abandon MUST compter contre l'enveloppe seulement si la connexion a reçu des octets pendant que l'envoi attendait et que son écriture n'a pas échoué. Le changement de relais MUST oublier ces comptes (T4.39).
+
+#### Scenario: AC: délai doublé pour la même enveloppe
+<!-- openspec-guard:test="relay client liveness > doubles the acknowledgement delay for an envelope that already caused a give-up" -->
+- **WHEN** la même enveloppe, déjà abandonnée une fois faute d'acquittement, est envoyée de nouveau à un relais qui n'acquitte pas
+- **THEN** elle attend au-delà de 15 s, et son délai dépassé abandonne la connexion au double du premier
+
+#### Scenario: AC: lien mort, enveloppe hors de cause
+<!-- openspec-guard:test="relay client liveness > does not count a give-up against an envelope when nothing came back while it waited" -->
+- **WHEN** une grosse enveloppe est abandonnée faute de réponse sur une connexion qui n'a plus rien reçu, puis renvoyée
+- **THEN** son délai ne double pas
+
+### Requirement: Envoi qui n'a pas quitté le Node
+Un envoi demandé sans connexion prête, ou dont l'écriture a échoué, MUST se résoudre par `offline` : il n'a pas quitté le Node (T4.39).
+
+#### Scenario: AC: envoi sans connexion
+<!-- openspec-guard:test="relay client liveness > settles a send made without a ready connection as offline" -->
+- **WHEN** un envoi est demandé alors qu'aucune connexion n'est prête
+- **THEN** il se résout aussitôt en `offline`

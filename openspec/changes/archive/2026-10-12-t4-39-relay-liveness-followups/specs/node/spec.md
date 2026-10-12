@@ -1,7 +1,7 @@
 ## MODIFIED Requirements
 
 ### Requirement: Refus explicite du relais côté demandeur
-Le Node MUST traiter `E_RATE`, `E_QUEUE_FULL` ou l'indisponibilité du relais à la demande initiale comme une non-livraison. Il MUST retirer l'entrée locale active, demander la révocation de la clé plafonnée créée pour cette demande et exposer `E_RATE` à l'appelant ; une demande initiale non livrée MUST NOT rester dans la file volatile, et aucun résultat tardif ne doit recréer une demande effacée. Une demande initiale confiée au relais sans réponse (issue `unconfirmed`, spec `relay`) n'est pas une non-livraison : le Node MUST la garder active à l'état `proposed` avec `delivery: 'unconfirmed'`, garder sa clé plafonnée, remettre la même enveloppe dans la file d'envoi et répondre 201 avec `delivery: 'unconfirmed'`. `delivery` MUST disparaître dès qu'un renvoi est acquitté par le relais (`delivered` ou `queued`) ou qu'un message de l'exécuteur sur cette demande arrive (T4.39). Si l'enveloppe renvoyée quitte la file sans confirmation (expirée, refusée pour de bon, abandonnée par le client relais ou évincée), la demande MUST se terminer avec ce qui est su : `expired` avec `E_EXPIRED` à l'expiration, `failed` sinon, `delivery` retiré, clé plafonnée révoquée ; un vrai résultat arrivé ensuite l'emporte encore.
+Le Node MUST traiter `E_RATE`, `E_QUEUE_FULL` ou l'indisponibilité du relais à la demande initiale comme une non-livraison. Il MUST retirer l'entrée locale active, demander la révocation de la clé plafonnée créée pour cette demande et exposer `E_RATE` à l'appelant ; une demande initiale non livrée MUST NOT rester dans la file volatile, et aucun résultat tardif ne doit recréer une demande effacée.
 
 #### Scenario: AC: relais refuse la demande initiale
 <!-- openspec-guard:test="bounded requester memory > releases funding and active memory when the relay returns E_RATE" -->
@@ -33,20 +33,31 @@ Le Node MUST traiter `E_RATE`, `E_QUEUE_FULL` ou l'indisponibilité du relais à
 - **WHEN** une demande routée par `/ask` dépasse la taille maximale de l'enveloppe
 - **THEN** l'API locale répond HTTP 413 avec `E_TOO_LARGE` et indique les routes éventuellement déjà émises
 
+## ADDED Requirements
+
+### Requirement: Demande initiale à la réception non confirmée
+Une demande initiale confiée au relais sans réponse (issue `unconfirmed`, spec `relay`) MUST NOT être traitée comme une non-livraison : le Node MUST la garder active à l'état `proposed` avec `delivery: 'unconfirmed'`, garder sa clé plafonnée, remettre la même enveloppe dans la file d'envoi et répondre 201 avec `delivery: 'unconfirmed'` (T4.39).
+
 #### Scenario: AC: demande initiale sans réponse du relais
 <!-- openspec-guard:test="unconfirmed drop request (T4.39) > keeps a drop request the relay never answered, sends it again, and confirms it once the executor answers" -->
 - **WHEN** la trame d'une demande initiale part vers le relais et la connexion disparaît avant sa réponse, alors que l'exécuteur a reçu la demande
 - **THEN** la demande reste active à l'état `proposed` avec `delivery: 'unconfirmed'`, sa clé plafonnée n'est pas révoquée, la même enveloppe attend dans la file, et `delivery` disparaît quand l'exécuteur répond
+
+#### Scenario: AC: réception non confirmée exposée par l'API locale
+<!-- openspec-guard:test="unconfirmed drop request (T4.39) > answers 201 with delivery unconfirmed on POST /drops and keeps it on GET /drops/:id" -->
+- **WHEN** `POST /drops` émet une demande dont la réception n'est pas confirmée
+- **THEN** l'API locale répond 201 avec `delivery: 'unconfirmed'`, et `GET /drops/:id` rend le même champ tant qu'il tient
+
+### Requirement: Confirmation d'une demande non confirmée
+`delivery` MUST disparaître dès qu'un renvoi est acquitté par le relais (`delivered` ou `queued`) ou qu'un message de l'exécuteur sur cette demande arrive (T4.39).
 
 #### Scenario: AC: réception confirmée par un renvoi
 <!-- openspec-guard:test="unconfirmed drop request (T4.39) > clears the unconfirmed delivery once the relay acknowledges the resent request" -->
 - **WHEN** la demande initiale s'est résolue en `unconfirmed`, puis le vidage de la file renvoie son enveloppe et le relais l'acquitte
 - **THEN** `delivery` disparaît de la demande, et un second exemplaire reçu par l'exécuteur est écarté par l'anti-rejeu
 
-#### Scenario: AC: réception non confirmée exposée par l'API locale
-<!-- openspec-guard:test="unconfirmed drop request (T4.39) > answers 201 with delivery unconfirmed on POST /drops and keeps it on GET /drops/:id" -->
-- **WHEN** `POST /drops` émet une demande dont la réception n'est pas confirmée
-- **THEN** l'API locale répond 201 avec `delivery: 'unconfirmed'`, et `GET /drops/:id` rend le même champ tant qu'il tient
+### Requirement: Fin d'une demande jamais confirmée
+Si l'enveloppe renvoyée quitte la file sans confirmation (expirée, refusée pour de bon, abandonnée par le client relais ou évincée), la demande MUST se terminer avec ce qui est su : `expired` avec `E_EXPIRED` à l'expiration, `failed` sinon, `delivery` retiré, clé plafonnée révoquée ; un vrai résultat arrivé ensuite l'emporte encore (T4.39).
 
 #### Scenario: AC: demande non confirmée expirée
 <!-- openspec-guard:test="unconfirmed drop request (T4.39) > ends an unconfirmed drop request whose resent envelope expires unanswered, and releases its capped key" -->
