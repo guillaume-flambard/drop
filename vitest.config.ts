@@ -4,6 +4,9 @@ export default defineConfig({
   test: {
     // A focused test (`it.only`) must fail the gate instead of silently skipping the rest.
     allowOnly: false,
+    // Windows CI runs heavily filesystem-bound replay and lifecycle tests. Saturating the
+    // runner with all files at once yields false timeouts and intermittent teardown races.
+    ...(process.platform === 'win32' && process.env.CI ? { maxWorkers: 2 } : {}),
     include: ['**/*.{test,spec}.{ts,tsx,mts,cts}'],
     exclude: [
       '**/node_modules/**',
