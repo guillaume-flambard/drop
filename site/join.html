@@ -49,12 +49,38 @@
           <h2><span class="step-number">1</span> Installe drop</h2>
           <p id="join-recommended" class="join-muted">Choisis le fichier de ton système sur la page des versions.</p>
           <!-- if:beta -->
-          <div class="note" role="status">
+          <div id="join-private-note" class="note" role="status">
             <p>
-              <strong>La bêta est encore privée.</strong> Les installateurs sont actuellement distribués
-              individuellement aux testeurs, et les versions GitHub restent en brouillon. Demande à la personne qui t'a
-              invité de te transmettre un installateur de test. Garde cette page ouverte : après installation, tu
-              pourras reprendre ton invitation à l'étape 2.
+              <strong>La bêta est encore privée.</strong> Si tu as reçu un lien d'accès bêta temporaire, ouvre-le : il
+              proposera directement l'installateur adapté. Sinon, demande à la personne qui t'a invité de te transmettre
+              son lien bêta. Garde cette page ouverte pour reprendre ton invitation après l'installation.
+            </p>
+          </div>
+          <div id="join-beta-downloads" hidden>
+            <p class="join-muted">
+              Cette invitation donne accès aux installateurs de test. Le lien de téléchargement expire indépendamment de
+              l'invitation d'équipe.
+            </p>
+            <ul class="join-downloads">
+              <li data-beta-os="mac">
+                <a class="button" href="#contenu" data-beta-file="drop_0.1.0_aarch64.dmg">Mac Apple Silicon (.dmg)</a>
+                <a class="button light" href="#contenu" data-beta-file="drop_0.1.0_x64.dmg">Mac Intel (.dmg)</a>
+              </li>
+              <li data-beta-os="windows">
+                <a class="button light" href="#contenu" data-beta-file="drop_0.1.0_x64-setup.exe">Windows (.exe)</a>
+              </li>
+              <li data-beta-os="linux">
+                <a class="button light" href="#contenu" data-beta-file="drop_0.1.0_amd64.AppImage"
+                  >Linux x64 (.AppImage)</a
+                >
+                <a class="button light" href="#contenu" data-beta-file="drop_0.1.0_aarch64.AppImage"
+                  >Linux ARM64 (.AppImage)</a
+                >
+              </li>
+            </ul>
+            <p class="join-muted">
+              Windows : cette version bêta n'a pas encore de signature Authenticode. Utilise-la uniquement si tu fais
+              partie des testeurs invités.
             </p>
           </div>
           <!-- /if:beta -->
@@ -77,9 +103,11 @@
             </li>
           </ul>
           <!-- /if:open -->
+          <!-- if:open -->
           <p class="join-muted">
             Les fichiers viennent de la page des versions de drop sur GitHub. Déjà installé ? Passe à l'étape 2.
           </p>
+          <!-- /if:open -->
         </li>
         <li class="install-card">
           <h2><span class="step-number">2</span> Rejoins l'équipe</h2>
@@ -182,6 +210,20 @@
         byId('join-expires').textContent = 'Invitation à usage unique, valable jusqu’au ' + until + '.';
         byId('join-open').href = 'drop://join?invite=' + code;
         byId('join-code').value = code;
+        // The short-lived download capability is in the URL path, distinct from the
+        // one-time team invitation, which stays in the fragment and never leaves the browser.
+        // The server checks the signed capability before serving this route.
+        var betaPath = /^\/beta\/[0-9]{10}\/[A-Za-z0-9_-]{22}$/.test(location.pathname) ? location.pathname : '';
+        if (betaPath) {
+          byId('join-private-note').hidden = true;
+          byId('join-beta-downloads').hidden = false;
+          var betaFiles = document.querySelectorAll('[data-beta-file]');
+          for (var fileAt = 0; fileAt < betaFiles.length; fileAt += 1) {
+            var betaFile = betaFiles[fileAt].getAttribute('data-beta-file');
+            if (/^drop_0\.1\.0_(?:aarch64|x64|amd64)(?:-setup)?\.(?:dmg|AppImage|exe)$/.test(betaFile))
+              betaFiles[fileAt].href = betaPath + '/' + betaFile;
+          }
+        }
         byId('join-copy').addEventListener('click', function () {
           var done = function (text) {
             byId('join-copied').textContent = text;
