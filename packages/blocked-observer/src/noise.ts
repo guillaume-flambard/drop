@@ -209,18 +209,26 @@ function stringAt(text: string, index: number): { raw: string; end: number } | u
 function shellScripts(args: string): string[] {
   const found: string[] = [];
   const key = /"command"\s*:\s*\[/g;
+  const flags = /"-l?c"\s*,\s*"/g;
+  // The starts only grow, so the last `]` and the last flag found stay valid answers while they lie ahead of the
+  // start: each is searched once per stretch of text, never again for every later "command":[ (T4.26 review).
+  let close = -2;
+  let flag: RegExpExecArray | null | undefined;
   for (let match = key.exec(args); match; match = key.exec(args)) {
     const start = match.index + match[0].length;
-    const close = args.indexOf(']', start);
+    if (close !== -1 && close < start) close = args.indexOf(']', start);
     const limit = close < 0 ? args.length : close;
+    if (flag !== null && (flag === undefined || flag.index < start)) {
+      flags.lastIndex = start;
+      flag = flags.exec(args);
+    }
     // The flag holds no `]`: when it starts inside the brackets it ends there too.
-    const flag = /"-l?c"\s*,\s*"/.exec(args.slice(start, limit));
-    if (!flag) {
+    if (!flag || flag.index >= limit) {
       // Every later `"command":[` before this `]` shares the same tail of brackets, without a flag either.
       key.lastIndex = Math.max(key.lastIndex, limit);
       continue;
     }
-    const script = stringAt(args, start + flag.index + flag[0].length - 1);
+    const script = stringAt(args, flag.index + flag[0].length - 1);
     // An unterminated script means no unescaped quote follows, so no later script could close either.
     if (!script) break;
     found.push(decoded(script.raw));

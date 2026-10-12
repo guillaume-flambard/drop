@@ -81,12 +81,21 @@ function jsonServers(servers: unknown): AgentServer[] {
  * gave, including on malformed input: an unterminated string is skipped and reading goes on after its opening quote.
  */
 
-/** A `"…"` string opening at `index`: its decoded value and the index after its closing quote; undefined if open. */
-function basicString(text: string, index: number): { value: string; end: number } | undefined {
+/** Characters a JavaScript `.` does not match: the former `\\.` could not escape them, and JSON.parse refuses them. */
+const LINE_SEPARATORS = new Set(['\n', '\r', '\u2028', '\u2029']);
+
+/**
+ * A `"…"` string opening at `index`: its decoded value and the index after its closing quote; undefined if it stays
+ * open, or if a backslash escapes a line separator (no value then, never an exception). `stopAfter` is a position
+ * where an earlier scan found a string that stays open: passing over it as an escaped quote puts this scan in step
+ * with that one, so it stays open too and the scan stops there instead of running to the end again.
+ */
+function basicString(text: string, index: number, stopAfter = Infinity): { value: string; end: number } | undefined {
   let cursor = index + 1;
-  while (cursor < text.length) {
+  while (cursor < text.length && cursor <= stopAfter) {
     const char = text.charAt(cursor);
     if (char === '"') return { value: JSON.parse(text.slice(index, cursor + 1)) as string, end: cursor + 1 };
+    if (char === '\\' && LINE_SEPARATORS.has(text.charAt(cursor + 1))) return undefined;
     cursor += char === '\\' ? 2 : 1;
   }
   return undefined;
@@ -99,13 +108,15 @@ function literalString(text: string, index: number): { value: string; end: numbe
 }
 
 /**
- * Remembers which kinds of string can no longer close. When a `"` string stays open to the end of the text, every
- * later `"` was an escaped quote inside it, so a string opening there stays open too; when a `'` string stays open,
- * there is no later `'` at all. Skipping them keeps the reading linear instead of rescanning the tail at each quote.
+ * Remembers where strings were found to stay open. A `"` string that stays open from `p` makes every `"` after `p` an
+ * escaped quote inside it, so a string opening there stays open too; a `'` string open from `p` means no `'` after
+ * `p`. Only positions after the first such failure are skipped: a table reader looks ahead for a value, then comes
+ * back to earlier positions, where strings can still close (T4.26 review). The reading stays linear: a scan from
+ * before the failure stops when it passes it (see `basicString`).
  */
 class StringReader {
-  private basicOpen = true;
-  private literalOpen = true;
+  private basicOpenFrom = Infinity;
+  private literalOpenFrom = Infinity;
   private readonly text: string;
 
   constructor(text: string) {
@@ -114,14 +125,14 @@ class StringReader {
 
   at(index: number): { value: string; end: number } | undefined {
     const char = this.text.charAt(index);
-    if (char === '"' && this.basicOpen) {
-      const string = basicString(this.text, index);
-      if (!string) this.basicOpen = false;
+    if (char === '"' && index < this.basicOpenFrom) {
+      const string = basicString(this.text, index, this.basicOpenFrom);
+      if (!string) this.basicOpenFrom = index;
       return string;
     }
-    if (char === "'" && this.literalOpen) {
+    if (char === "'" && index < this.literalOpenFrom) {
       const string = literalString(this.text, index);
-      if (!string) this.literalOpen = false;
+      if (!string) this.literalOpenFrom = index;
       return string;
     }
     return undefined;

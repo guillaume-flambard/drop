@@ -89,6 +89,82 @@ describe('configuration and reply parsing in linear time (T4.26)', () => {
   });
 });
 
+/** The expressions the TOML readers replaced (T4.26), kept here as the reference their results must match. */
+function formerArray(value: string): string[] {
+  return [...value.matchAll(/"((?:[^"\\]|\\.)*)"|'([^']*)'/g)].map((match) =>
+    match[1] !== undefined ? (JSON.parse(`"${match[1]}"`) as string) : (match[2] ?? ''),
+  );
+}
+
+function formerTable(value: string): Record<string, string> {
+  return Object.fromEntries(
+    [...value.matchAll(/([A-Za-z0-9_-]+|"[^"]+")\s*=\s*("(?:[^"\\]|\\.)*"|'[^']*')/g)].map((match) => {
+      const raw = match[2] ?? '""';
+      const text = raw.startsWith('"') ? (JSON.parse(raw) as string) : raw.slice(1, -1);
+      return [(match[1] ?? '').replaceAll('"', ''), text];
+    }),
+  );
+}
+
+/** What codexServers reads from one `args` or `env` value, or the error it throws. */
+function readArgs(value: string): unknown {
+  try {
+    return codexServers(`[mcp_servers.a]\ncommand = "x"\nargs = ${value}\n`)[0]?.args;
+  } catch (error) {
+    return error instanceof Error ? error.name : 'error';
+  }
+}
+
+function readEnv(value: string): unknown {
+  try {
+    return codexServers(`[mcp_servers.a]\ncommand = "x"\nenv = ${value}\n`)[0]?.env;
+  } catch (error) {
+    return error instanceof Error ? error.name : 'error';
+  }
+}
+
+function expected(former: () => unknown): unknown {
+  try {
+    return former();
+  } catch (error) {
+    return error instanceof Error ? error.name : 'error';
+  }
+}
+
+describe('TOML readers equal to the former expressions (T4.26 review)', () => {
+  it('reads a later string after a lookahead failed further on, as the expressions did', () => {
+    expect(readEnv(`{ "k" = true, A = '" = ' }`)).toEqual({ A: '" = ' });
+    expect(readEnv(`{a}"\t\\"b="="`)).toEqual({ b: '=' });
+  });
+
+  it('reads no value, and never throws, from a line that holds a line separator, as before', () => {
+    // The pair expression never matched such a line, before T4.26 and after: no string reader is reached.
+    for (const separator of ['\r', '\u2028', '\u2029']) {
+      expect(readArgs(`["a\\${separator}b", "kept"]`), JSON.stringify(separator)).toEqual([]);
+      expect(readEnv(`{ A = "a\\${separator}b", B = "kept" }`), JSON.stringify(separator)).toEqual({});
+    }
+  });
+
+  it('matches the former expressions on a generated corpus of inline arrays and tables', () => {
+    const alphabet = ['"', "'", '\\', '=', ' ', 'a', 'b', '-', ',', '{', '}', '[', ']', '\t'];
+    let seed = 26;
+    const next = () => {
+      seed = (seed * 1_103_515_245 + 12_345) % 2_147_483_648;
+      // The high bits: the low bits of this generator repeat with a short period.
+      return Math.floor(seed / 65_536);
+    };
+    for (let round = 0; round < 20_000; round += 1) {
+      const length = 1 + (next() % 20);
+      let body = '';
+      for (let index = 0; index < length; index += 1) body += alphabet[next() % alphabet.length] ?? '';
+      const array = `[${body}]`;
+      const table = `{${body}}`;
+      expect(readArgs(array), array).toEqual(expected(() => formerArray(array)));
+      expect(readEnv(table), table).toEqual(expected(() => formerTable(table)));
+    }
+  });
+});
+
 describe('configuration files read through one descriptor (T4.26)', () => {
   it('reads a regular file, refuses a directory or an oversized file, and never waits on a named pipe', () => {
     const dir = mkdtempSync(join(tmpdir(), 'config-read-'));

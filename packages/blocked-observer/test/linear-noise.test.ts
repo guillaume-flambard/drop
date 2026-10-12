@@ -45,6 +45,8 @@ describe('noise filter in linear time (T4.26)', () => {
     // An unterminated command string yields nothing.
     expect(commandsIn('{"command":["bash","-lc","open')).toEqual([]);
     fast(() => commandsIn('"command":['.repeat(LONG)));
+    // Each script found, then no `]` ahead: the brackets must not be searched again for every later "command":[.
+    expect(fast(() => commandsIn('"command":["-c","x"'.repeat(LONG)))).toHaveLength(LONG);
     fast(() => commandsIn(`"command":[${'"-lc","\\"'.repeat(LONG)}`));
   });
 });
