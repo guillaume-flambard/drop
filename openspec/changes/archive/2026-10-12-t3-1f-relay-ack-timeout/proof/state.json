@@ -1,0 +1,49 @@
+{
+  "change": "t3-1f-relay-ack-timeout",
+  "phase": "READY_FOR_MANUAL_ACCEPTANCE",
+  "status": "ARCHIVED_IN_PR",
+  "requirements": [
+    "REQ-1 client heartbeat: ping every 15 s, give up after a whole interval without any frame",
+    "REQ-2 ack timeout: 15 s from the frame leaving the process",
+    "REQ-3 connect timeout: 15 s from dial to ready",
+    "REQ-4 give-up: destroy without waiting for close, release pending as offline, log E_RELAY_TIMEOUT, reconnect",
+    "REQ-5 backoff keeps growing after a give-up until the connection proves itself",
+    "REQ-6 node: an unacknowledged envelope returns to the outbox and leaves again after reconnect"
+  ],
+  "acceptance": {
+    "relay_silent_without_close": "passed",
+    "relay_half_close": "passed",
+    "relay_unread_socket_close_wait": "passed",
+    "relay_send_without_ack": "passed",
+    "relay_handshake_never_answered": "passed",
+    "relay_close_settles_pending": "passed",
+    "relay_backoff_after_give_up": "passed",
+    "node_pairing_resent_after_half_open": "passed"
+  },
+  "workGraph": {
+    "P0-1": "DONE",
+    "P0-2": "DONE",
+    "P0-3": "DONE",
+    "P0-4": "DONE",
+    "P0-5": "DONE",
+    "P1-6": "DONE",
+    "P1-7": "DONE"
+  },
+  "verification": {
+    "lint": "passed",
+    "typecheck": "passed",
+    "test": "84 files passed, 1 skipped; 635 tests passed, 1 skipped",
+    "openspec_validate": "passed",
+    "openspec_guard": "446 linked, 0 new failures, baseline unchanged",
+    "review": "checklist pass plus independent adversarial review; no P0/P1; P2 and two P3 fixed",
+    "cso": "run 1791800603731-057a544626807e9a finished, completeness partial, no supported findings"
+  },
+  "openRisks": [
+    "slow downlink: an inbound frame taking more than 15 to 30 s gets the connection dropped",
+    "relay errors without id are released by the timeout and retried until the envelope expires",
+    "an unacknowledged drop_request is abandoned by the requester although the executor may have received it (pre-existing on close)"
+  ],
+  "manualAcceptance": [
+    "restart the trial relay on the VPS with the Mac app connected and check that the node reconnects within about 30 s and that no socket stays in CLOSE_WAIT (lsof -nP -iTCP:443)"
+  ]
+}

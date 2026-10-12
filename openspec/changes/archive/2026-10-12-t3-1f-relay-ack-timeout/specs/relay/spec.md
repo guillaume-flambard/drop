@@ -19,7 +19,7 @@ Le client relais (`RelayClient`) SHALL envoyer un ping toutes les 15 s et MUST a
 - **THEN** le client détruit ce socket en 30 s au plus, sans attendre sa fermeture, et se reconnecte
 
 ### Requirement: Délai d'acquittement du client relais
-Chaque envoi du client relais MUST recevoir son acquittement ou son erreur en 15 s au plus ; sinon la connexion est abandonnée avec la raison `ack`.
+Chaque envoi du client relais MUST recevoir son acquittement ou son erreur en 15 s au plus, comptées depuis que sa trame a quitté le processus ; sinon la connexion est abandonnée avec la raison `ack`.
 
 #### Scenario: AC: envoi sans acquittement libéré
 <!-- openspec-guard:test="relay client liveness > releases a send left without acknowledgement as offline after 15 s and reconnects" -->
@@ -41,3 +41,11 @@ Abandonner une connexion MUST la détruire sans attendre sa fermeture, résoudre
 <!-- openspec-guard:test="relay client liveness > settles pending sends as offline on close" -->
 - **WHEN** le client est fermé alors qu'un envoi attend son acquittement
 - **THEN** cet envoi se résout aussitôt en `offline`
+
+### Requirement: Délai de reconnexion après un abandon
+Après un abandon, `ready` MUST NOT ramener le délai entre tentatives au minimum : il n'y revient qu'après une réponse du relais à un envoi, ou un intervalle de battement vivant sans envoi en attente.
+
+#### Scenario: AC: délai qui continue de croître après un abandon
+<!-- openspec-guard:test="relay client liveness > keeps backing off after giving up, instead of redialing every second a relay that never acknowledges" -->
+- **WHEN** le client abandonne deux connexions de suite à un relais qui accepte les trames sans jamais les acquitter
+- **THEN** la deuxième reconnexion attend le double de la première au lieu de repartir du délai minimal

@@ -49,13 +49,18 @@ export class RelayClient {
   private ready = false;
   private closed = false;
   private backoffMs: number;
-  private readonly pending = new Map<string, { resolve: (outcome: SendOutcome) => void; timer: NodeJS.Timeout }>();
+  private readonly pending = new Map<string, { resolve: (outcome: SendOutcome) => void; timer?: NodeJS.Timeout }>();
   private readyWaiters: (() => void)[] = [];
   private reconnectTimer: NodeJS.Timeout | undefined;
   /** Liveness of the current socket: its heartbeat, its connection deadline, and whether a frame came in. */
   private heartbeat: NodeJS.Timeout | undefined;
   private connectDeadline: NodeJS.Timeout | undefined;
   private alive = false;
+  /**
+   * The last connection was given up for silence or a missing acknowledgement. Until a new one proves itself, `ready`
+   * no longer resets the backoff: a relay that accepts frames but never answers is not redialed every second.
+   */
+  private gaveUp = false;
 
   constructor(options: RelayClientOptions) {
     this.options = options;
@@ -87,13 +92,18 @@ export class RelayClient {
     return new Promise((resolve) => {
       // The same envelope sent again while the first copy waits: the first one is released, never left pending.
       this.settle(envelope.id, 'offline');
-      const timer = setTimeout(() => {
-        // No answer in time: this connection cannot be trusted with anything else (as on the local network).
-        if (this.pending.has(envelope.id) && this.socket === socket) this.abandon(socket, 'ack');
-        else this.settle(envelope.id, 'offline');
-      }, this.options.ackTimeoutMs ?? ACK_TIMEOUT_MS);
-      this.pending.set(envelope.id, { resolve, timer });
-      socket.send(JSON.stringify({ type: 'envelope', envelope }));
+      const entry: { resolve: (outcome: SendOutcome) => void; timer?: NodeJS.Timeout } = { resolve };
+      this.pending.set(envelope.id, entry);
+      // The delay counts from the moment the frame has left this process, so a slow uplink is not mistaken for a dead
+      // relay. A frame that never leaves (full buffers on a dead link) is the heartbeat's to catch.
+      socket.send(JSON.stringify({ type: 'envelope', envelope }), (error) => {
+        if (error || this.pending.get(envelope.id) !== entry) return;
+        entry.timer = setTimeout(() => {
+          // No answer in time: this connection cannot be trusted with anything else (as on the local network).
+          if (this.pending.get(envelope.id) === entry && this.socket === socket) this.abandon(socket, 'ack');
+          else if (this.pending.get(envelope.id) === entry) this.settle(envelope.id, 'offline');
+        }, this.options.ackTimeoutMs ?? ACK_TIMEOUT_MS);
+      });
     });
   }
 
@@ -185,6 +195,8 @@ export class RelayClient {
       return;
     }
     this.alive = false;
+    // A connection that kept answering for a whole interval with nothing left unanswered has proven itself.
+    if (this.ready && this.pending.size === 0) this.proven();
     try {
       socket.ping();
     } catch {
@@ -200,6 +212,7 @@ export class RelayClient {
   private abandon(socket: WebSocket, reason: RelayClientLogEntry['reason']): void {
     if (this.socket !== socket) return;
     this.socket = undefined;
+    this.gaveUp = true;
     this.options.log?.({ event: 'relay_timeout', code: 'E_RELAY_TIMEOUT', reason });
     this.lost('disconnected');
     socket.terminate();
@@ -210,8 +223,16 @@ export class RelayClient {
     this.stopLiveness();
     this.ready = false;
     this.releasePending();
-    this.options.onStatus?.(status);
+    // Scheduled before the status goes out: a callback that dials at once (switchUrl, retryNow) clears this timer
+    // instead of leaving it to open a second socket later.
     if (!this.closed) this.scheduleReconnect();
+    this.options.onStatus?.(status);
+  }
+
+  /** The current connection works: the next failure starts again from the shortest delay. */
+  private proven(): void {
+    this.gaveUp = false;
+    this.backoffMs = this.options.minBackoffMs ?? 1_000;
   }
 
   private stopLiveness(): void {
@@ -240,6 +261,9 @@ export class RelayClient {
   }
 
   private handle(socket: WebSocket, frame: ServerFrame): void {
+    // ws may still hand over bytes a given-up socket had buffered. Its envelopes are kept (the relay counts them as
+    // delivered), anything else would act on a connection that is gone.
+    if (this.socket !== socket && frame.type !== 'envelope') return;
     switch (frame.type) {
       case 'challenge':
         signDetached(this.options.identity, frame.challenge).then(
@@ -265,7 +289,7 @@ export class RelayClient {
         clearTimeout(this.connectDeadline);
         this.connectDeadline = undefined;
         this.ready = true;
-        this.backoffMs = this.options.minBackoffMs ?? 1_000;
+        if (!this.gaveUp) this.proven();
         this.options.onStatus?.('connected');
         for (const resolve of this.readyWaiters) resolve();
         this.readyWaiters = [];
@@ -274,9 +298,11 @@ export class RelayClient {
         this.options.onEnvelope(frame.envelope);
         return;
       case 'ack':
+        if (this.pending.has(frame.id)) this.proven();
         this.settle(frame.id, frame.status);
         return;
       case 'error':
+        if (frame.id && this.pending.has(frame.id)) this.proven();
         if (frame.id) this.settle(frame.id, frame.error);
         this.options.onError?.(frame);
         return;

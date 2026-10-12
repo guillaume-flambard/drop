@@ -172,7 +172,7 @@ une demande à chacune et MUST n'en envoyer aucune quand rien ne correspond.
 - **THEN** le runner est lancé en plus de l'API et de l'UI locales
 
 ### Requirement: Reconnexion exponentielle au relais
-`drop serve` MUST se reconnecter seul au relais après une coupure, avec un délai exponentiel de 1 s à 30 s. Une connexion morte ou à moitié ouverte, détectée par le client relais (spec `relay`, « Battement de cœur du client relais » et les trois exigences qui la suivent), MUST compter comme une coupure. Une enveloppe restée sans acquittement MUST revenir dans la file d'envoi et repartir à la reconnexion.
+`drop serve` MUST se reconnecter seul au relais après une coupure, avec un délai exponentiel de 1 s à 30 s. Une connexion morte ou à moitié ouverte, détectée par le client relais (spec `relay`, « Battement de cœur du client relais » et les exigences du client relais qui la suivent), MUST compter comme une coupure. Une enveloppe restée sans acquittement MUST revenir dans la file d'envoi et repartir à la reconnexion.
 
 #### Scenario: AC: drop serve se reconnecte seul après coupure du relais
 - **WHEN** le relais coupe la connexion puis redevient disponible

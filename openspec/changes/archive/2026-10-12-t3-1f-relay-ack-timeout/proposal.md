@@ -13,6 +13,7 @@ Preuve réelle en T4.6a : après le redémarrage du relais du VPS, le Node de l'
 - Une tentative de connexion doit aboutir à `ready` en 15 s ; sinon elle est abandonnée et le client réessaie avec le délai exponentiel existant (1 s à 30 s).
 - Abandonner une connexion, c'est la détruire (`terminate`, qui appelle `socket.destroy()`) sans attendre l'événement `close` de `ws` : les envois en attente sont libérés avec l'issue `offline`, que le Node remet dans sa file d'envoi ; le statut passe à `disconnected` et la reconnexion est planifiée. La cause est journalisée avec le code stable `E_RELAY_TIMEOUT` et une raison (`ack`, `heartbeat`, `connect`).
 - `close()` libère aussi les envois en attente (`offline`) au lieu de les laisser pendants.
+- Après un abandon, le délai entre tentatives continue de croître tant que la nouvelle connexion n'a pas prouvé qu'elle marche, pour ne pas recomposer chaque seconde un relais qui accepte sans répondre.
 - Le daemon passe son journal au client relais.
 
 ## Non-goals

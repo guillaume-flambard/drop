@@ -145,6 +145,11 @@ async function setup(modes: Mode[]) {
   return { identity, relay, client, statuses, logs, connected };
 }
 
+/** Lets a frame just sent leave the process: the acknowledgement delay starts once it is written. */
+async function written(): Promise<void> {
+  for (let turn = 0; turn < 5; turn += 1) await new Promise((resolve) => setImmediate(resolve));
+}
+
 /** Starts a send and records its outcome when it settles. */
 function track(promise: Promise<SendOutcome>): { outcome: SendOutcome | undefined } {
   const result: { outcome: SendOutcome | undefined } = { outcome: undefined };
@@ -193,6 +198,7 @@ describe('relay client liveness', () => {
     await settle(() => connected() === 1);
     const envelope = await sealEnvelope(identity, identity.nodeId, { type: 'catalog_request' });
     const sent = track(client.send(envelope));
+    await written();
     await vi.advanceTimersByTimeAsync(14_000);
     expect(sent.outcome).toBeUndefined();
     await vi.advanceTimersByTimeAsync(1_000);
@@ -204,6 +210,34 @@ describe('relay client liveness', () => {
     // The next connection acknowledges: the same envelope goes through.
     expect(await client.send(envelope)).toBe('delivered');
     expect(relay.connections).toBe(2);
+  });
+
+  it('keeps backing off after giving up, instead of redialing every second a relay that never acknowledges', async () => {
+    fakeTimers();
+    const { identity, relay, client, connected } = await setup(['no-ack', 'no-ack', 'no-ack']);
+    client.start();
+    await settle(() => connected() === 1);
+    const envelope = await sealEnvelope(identity, identity.nodeId, { type: 'catalog_request' });
+    const giveUp = async () => {
+      const sent = track(client.send(envelope));
+      await written();
+      await vi.advanceTimersByTimeAsync(15_000);
+      await settle(() => sent.outcome === 'offline');
+    };
+    await giveUp();
+    // First give-up: the usual first delay.
+    await vi.advanceTimersByTimeAsync(1_000);
+    await settle(() => connected() === 2);
+    // This connection is ready but has not proven itself: the next delay doubles instead of starting over.
+    await giveUp();
+    await vi.advanceTimersByTimeAsync(1_000);
+    // Real I/O time for a redial to reach the relay, had one been made: none comes.
+    const until = performance.now() + 300;
+    while (performance.now() < until) await new Promise((resolve) => setImmediate(resolve));
+    expect(relay.connections).toBe(2);
+    await vi.advanceTimersByTimeAsync(1_000);
+    await settle(() => connected() === 3);
+    expect(relay.connections).toBe(3);
   });
 
   it('gives up a connection attempt whose handshake is never answered and tries again', async () => {
