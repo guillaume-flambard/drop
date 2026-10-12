@@ -1,14 +1,18 @@
+/** A refusal of the local Node: its message, its stable code, the HTTP status and the route, for the details (T4.37). */
 export class WorkspaceApiError extends Error {
   code: string | undefined;
-  /** The HTTP status of a refusal, 0 when nothing was sent (no local session); a network failure is not this error. */
   status: number | undefined;
-  constructor(message: string, code?: string, status?: number) {
+  route: string | undefined;
+  constructor(message: string, code?: string, status?: number, route?: string) {
     super(message);
     this.name = 'WorkspaceApiError';
     this.code = code;
     this.status = status;
+    this.route = route;
   }
 }
+
+const STABLE_CODE = /^E_[A-Z0-9_]+$/;
 
 /** The local bearer token, read from the page address at each call: the panel strips other parameters, never this one. */
 export function localToken(): string {
@@ -20,7 +24,7 @@ export async function api<T>(method: 'GET' | 'POST', path: string, body?: unknow
   // Fixed local URL paths only. Never fetch URLs supplied by peers.
   if (!path.startsWith('/ui/')) throw new Error('Chemin API non autorisé.');
   const token = localToken();
-  if (!token) throw new WorkspaceApiError('Session locale indisponible. Rouvre Drop.', undefined, 0);
+  if (!token) throw new WorkspaceApiError('Session locale indisponible. Rouvre Drop.');
   const form = body instanceof URLSearchParams;
   const response = await fetch(path, {
     method,
@@ -45,7 +49,14 @@ export async function api<T>(method: 'GET' | 'POST', path: string, body?: unknow
         : typeof record.error === 'string'
           ? record.error
           : 'Action impossible, réessaie.';
-    throw new WorkspaceApiError(message, typeof record.code === 'string' ? record.code : undefined, response.status);
+    // The Node sends its stable code in `code`, or in `error` (`{ error: 'E_…', message }`).
+    const code =
+      typeof record.code === 'string'
+        ? record.code
+        : typeof record.error === 'string' && STABLE_CODE.test(record.error)
+          ? record.error
+          : undefined;
+    throw new WorkspaceApiError(message, code, response.status, method + ' ' + path);
   }
   return value as T;
 }

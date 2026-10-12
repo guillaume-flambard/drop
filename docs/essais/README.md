@@ -258,6 +258,13 @@ Relever aussi : chaque refus et sa raison, si le testeur veut bien la donner ; c
 « hors ligne » qui dure ; chaque fois qu'un testeur est revenu à sa messagerie ou à un partage d'accès à la place de
 drop.
 
+**Quand quelque chose casse chez un testeur** (T4.37) : il ouvre Mon espace, « Diagnostic », « Préparer le
+diagnostic », le relit, puis « Copier le diagnostic » et le colle dans sa messagerie. drop n'envoie rien. Le texte donne
+les versions, le système, l'état des connexions et la fin des journaux, expurgés : ni clé, ni jeton, ni contenu de
+demande. Si le moteur ne démarre plus, la page de démarrage donne le chemin du journal et ouvre le dossier
+`~/.drop/logs`, qui ne contient que des journaux expurgés à l'écriture : le testeur les relit avant de les envoyer, l'expurgation ne reconnaissant pas tout. Ne jamais demander le dossier
+`~/.drop` entier, qui contient sa clé privée.
+
 ### 6.5 Rendez-vous
 
 Proposition, à confirmer par Guillaume :
@@ -307,7 +314,7 @@ Chez le testeur, s'il ne garde pas drop, dans cet ordre :
    l'ouverture de session, ou en supprimant `~/Library/LaunchAgents/drop.plist`. Ce nom est déduit du code (plugin
    `autostart` de Tauri, qui prend le `productName` « drop », `main.rs`) : à vérifier sur un vrai Mac.
 6. **Supprimer `~/.drop`** : identité et clé privée, pairs, équipe, reçus, faits, marqueurs anti-rejeu, journaux
-   (`daemon.log`, `app.log`) et sauvegardes des configurations d'agents (`~/.drop/backups/`).
+   (`logs/daemon.log` et ses fichiers précédents, `logs/app.log`) et sauvegardes des configurations d'agents (`~/.drop/backups/`).
 7. **Révoquer les jetons** qu'il avait créés pour ses serveurs MCP (GitHub, Linear…) s'il n'en a plus besoin. drop
    n'en crée aucun : ils appartiennent à la configuration de ses agents.
 
