@@ -1,0 +1,7 @@
+# Known advisories accepted for this Cargo.lock, each with its reason (T4.26). Read by OSV-Scanner and by the OpenSSF
+# Scorecard Vulnerabilities check. Review on the date below.
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2024-0436"
+ignoreUntil = 2027-01-12
+reason = "paste 1.0.15 is unmaintained, not vulnerable: a compile-time macro pulled in by netlink-packet-core, a dependency of iroh. Nothing to update on our side until iroh's tree drops it."
