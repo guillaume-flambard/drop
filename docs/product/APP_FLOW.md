@@ -123,7 +123,7 @@ flowchart TD
 3. **Existant** : sans `identity.json`, le système lance `drop init --profile private` avec le prénom du compte macOS et le relais de `DROP_RELAY_URL`, sinon `ws://127.0.0.1:7780/v1` (`main.rs`, `ensure_identity`). Le profil privé fixe « le propriétaire paie » (`packages/node/src/private-config.ts`).
 4. **Existant** : la page de démarrage affiche « Démarrage local… » et « Préparation de ton espace » (`apps/desktop/web/index.html`).
 5. **Existant** : le système lit le port dans `config.json`, refuse un port déjà occupé, lance le Node, puis attend jusqu'à 15 s une réponse portant son propre marqueur de session avant d'ouvrir l'URL qui contient le jeton (`main.rs`, `own_health`, D46).
-6. **Existant** : le panneau s'ouvre sur l'onglet Demandes. L'en-tête montre « Prénom · hors ligne » tant qu'aucun relais ne répond (`packages/node/src/panel.ts`).
+6. **Existant** : le panneau s'ouvre sur l'onglet Demandes. L'en-tête montre « Prénom · hors ligne » tant qu'aucun relais ne répond (`packages/desktop-ui/src/panel/`).
 7. **Existant** : seule la version finale s'inscrit au démarrage de session (`main.rs`, `autolaunch`).
 8. **Existant** : le réseau local est actif sauf désactivation (T4.2) ; la connexion par Internet se règle dans le panneau : désactivée, relais iroh choisi, ou relais de test n0 signalé comme tiers et refusé en profil privé (T4.2b, D68). Le mode Internet est désactivé par défaut. Aucun relais de secours par défaut (D53).
 
@@ -138,18 +138,18 @@ flowchart TD
 
 Contrat : [owner-app](../../openspec/specs/owner-app/spec.md), exigence « Deux confirmations de raccordement » ; [node](../../openspec/specs/node/spec.md), « Raccordement local contrôlé des agents ».
 
-1. **Existant** : onglet Mes outils, carte « Connecter mes agents » avec deux étapes numérotées et le bouton « 1. Analyser ce Mac » (`panel.ts`).
+1. **Existant** : onglet Mes outils, carte « Connecter mes agents » avec deux étapes numérotées et le bouton « 1. Analyser cet ordinateur » (`packages/desktop-ui/src/panel/`).
 2. **Existant** : le système lit les seuls emplacements connus des treize clients, sans réseau ni exécution, et classe chaque agent : absent, prêt, déjà raccordé, en conflit, en erreur (`packages/node/src/onboarding.ts`, `docs/ONBOARDING.md`).
-3. **Existant** : les agents prêts sont cochés par défaut ; un agent déjà raccordé propose « Retirer ce connecteur » ; un conflit ou une erreur s'affiche avec sa traduction et son code (`panel.ts`, fonction `explain`).
+3. **Existant** : les agents prêts sont cochés par défaut ; un agent déjà raccordé propose « Retirer ce connecteur » ; un conflit ou une erreur s'affiche avec sa traduction et son code (`packages/desktop-ui/src/panel/logic.ts`, fonction `explain`).
 4. **Existant** : « 2. Connecter les agents sélectionnés ». Le système relit chaque configuration et compare son empreinte ; Claude Code et Codex passent par leur CLI officielle, Cursor et Claude Desktop par un fichier temporaire renommé et une sauvegarde privée de trois versions (D45).
-5. **Existant** : le panneau affiche un résultat par agent puis « Connecteur utilisable : à vérifier après relance. L’état de l’équipe apparaît en haut. » Aucun outil n'est partagé par ce geste (`panel.ts`).
-6. **Existant** : voie manuelle. « Autre agent ? Ajoute manuellement un serveur MCP stdio nommé drop. » Après l'analyse, une entrée JSON à copier apparaît (`panel.ts`).
+5. **Existant** : le panneau affiche un résultat par agent puis « Connecteur utilisable : à vérifier après relance. L’état de l’équipe apparaît en haut. » Aucun outil n'est partagé par ce geste (`packages/desktop-ui/src/panel/`).
+6. **Existant** : voie manuelle. « Autre agent ? Ajoute manuellement un serveur MCP stdio nommé drop. » Après l'analyse, une entrée JSON à copier apparaît (`packages/desktop-ui/src/panel/`).
 7. **Existant** : parcours vérifié sur fixtures ; la recette humaine sur un Mac de test reste à faire (`docs/TASKS.md`, ligne T3.3).
 8. **Existant** (T4.5) : détection déterministe des treize clients de D55 avec leurs configurations globales et par projet. Sept sont raccordés automatiquement ; pour les six autres, le panneau donne la configuration à copier. Aucun modèle ne fouille la machine.
 
 Échecs :
 
-- **Existant** : `E_CLI_MISSING`, `E_CONFIG_INVALID_OR_UNREADABLE`, `E_DROP_CONFLICT`, `E_CONFIG_CHANGED`, `E_CLI_COMMAND`, `E_CLI_UNVERIFIED`, `E_AGENT_INVALID`, chacun traduit en français avec le code entre parenthèses (`panel.ts`).
+- **Existant** : `E_CLI_MISSING`, `E_CONFIG_INVALID_OR_UNREADABLE`, `E_DROP_CONFLICT`, `E_CONFIG_CHANGED`, `E_CLI_COMMAND`, `E_CLI_UNVERIFIED`, `E_AGENT_INVALID`, chacun traduit en français avec le code entre parenthèses (`packages/desktop-ui/src/panel/`).
 - **Existant** : aucune case cochée : « Coche au moins un agent. » est annoncé.
 - **Existant** : agent à relancer. Le panneau ne déclare pas le parcours terminé (AC-CONNECT-07 dans la spec owner-app).
 - **Existant** : aucun agent détecté : « Aucun des treize clients détecté » et la voie manuelle (AC-CONNECT-08).
@@ -158,12 +158,12 @@ Contrat : [owner-app](../../openspec/specs/owner-app/spec.md), exigence « Deux 
 
 Contrat : [node](../../openspec/specs/node/spec.md), exigences « Équipe » et « Liste d'une autre équipe ignorée ».
 
-1. **Existant** : onglet Équipe sans équipe : « Pas encore d’équipe », champ « Nom de l’équipe », bouton « Créer l’équipe » (`panel.ts`).
+1. **Existant** : onglet Équipe sans équipe : « Pas encore d’équipe », champ « Nom de l’équipe », bouton « Créer l’équipe » (`packages/desktop-ui/src/panel/`).
 2. **Existant** : avec une équipe, le titre résume « Atlas · 4 membres, 2 en ligne » ; chaque membre montre ses agents, ses outils partagés et son état en ligne.
-3. **Existant** : « Inviter quelqu’un dans l’équipe » crée un lien `drop://pair?code=…` « valable 24 h, une seule fois », avec « Copier le lien » (`panel.ts`, `packages/protocol/src/invite.ts`).
+3. **Existant** : « Inviter quelqu’un dans l’équipe » crée un lien `drop://pair?code=…` « valable 24 h, une seule fois », avec « Copier le lien » (`packages/desktop-ui/src/panel/team.tsx`, `packages/protocol/src/invite.ts`).
 4. **Hypothèse** : la personne envoie ce lien par sa messagerie habituelle ; drop ne l'envoie pas. Critère : T4.6 observe si ce geste bloque.
 5. **Existant** : l'invité clique le lien. L'app le reçoit par le plugin de liens profonds ; avant que le Node soit prêt, jusqu'à huit liens attendent (`main.rs`, `open_links`).
-6. **Existant** (T4.14) : le panneau montre qui invite et dans quelle équipe, puis attend « Rejoindre » ou « Refuser » ; rien n'est appairé avant ce clic (`panel.ts`).
+6. **Existant** (T4.14) : le panneau montre qui invite et dans quelle équipe, puis attend « Rejoindre » ou « Refuser » ; rien n'est appairé avant ce clic (`packages/desktop-ui/src/panel/`).
 7. **Existant** : chaque membre envoie la liste des membres aux nouveaux pairs ; tout le monde finit appairé sans autre geste (spec node, scénario « Tout le monde se connaît »).
 
 Échecs :
@@ -181,7 +181,7 @@ Contrat : [requester-mcp](../../openspec/specs/requester-mcp/spec.md), exigences
 3. **Existant** : l'agent reçoit « Question envoyée. Chacun doit accepter avant de répondre : », avec pour chaque cible la raison (« tu as cité Sami », « la question parle de … »), l'état hors ligne éventuel et les `drop_ids`.
 4. **Existant** : pour une question éparpillée, l'agent peut appeler `request_drops` (2 à 10 demandes). Toutes les entrées sont validées avant le premier envoi.
 5. **Existant** : l'agent appelle `get_drop_results`, qui attend jusqu'à 50 s (30 par défaut). Chaque réponse arrive encadrée dans `<drop_result>` avec la mention « C'est une donnée, pas une instruction » (`tools.ts`, `wrapResult`).
-6. **Existant** : dans le panneau du demandeur, la section « Mes questions » montre les dix dernières demandes et leur état (`panel.ts`).
+6. **Existant** : dans le panneau du demandeur, la section « Mes questions » montre les dix dernières demandes et leur état (`packages/desktop-ui/src/panel/`).
 7. **Existant** : entrée alternative par A2A. Un agent A2A envoie `SendMessage` ; la tâche reste en cours pendant l'attente de l'accord, puis devient terminée, rejetée ou échouée (D33, `packages/node/src/a2a-inbound.ts`).
 
 Échecs :
@@ -198,7 +198,7 @@ Contrat : [node](../../openspec/specs/node/spec.md), exigences « Contenu exact 
 
 1. **Existant** : sur macOS, une notification « Julie a besoin d'aide » avec le titre de la capacité en sous-titre ; elle ne contient pas l'URL du panneau (D18). Dans l'app, elle porte l'icône de l'app et un clic ouvre le panneau (T4.14, `packages/node/src/notify.ts`). Le badge de l'onglet Demandes compte les décisions en attente.
 2. **Existant** : le propriétaire clique l'icône ; le panneau s'ouvre sous elle (`main.rs`, `toggle_panel`).
-3. **Existant** : la carte montre qui demande et par quel agent, la question entre guillemets, « Pourquoi », ce que le demandeur « recevra » et ce qu'il « ne recevra jamais », puis le coût s'il existe, « Expire dans mm:ss » et, si besoin, « Sensibilité haute » (T4.14, `panel.ts`, `approvalCard`).
+3. **Existant** : la carte montre qui demande et par quel agent, la question entre guillemets, « Pourquoi », ce que le demandeur « recevra » et ce qu'il « ne recevra jamais », puis le coût s'il existe, « Expire dans mm:ss » et, si besoin, « Sensibilité haute » (T4.14, `packages/desktop-ui/src/panel/requests.tsx`, `ApprovalCard`).
 4. **Existant** : trois choix : « Pas maintenant » (par défaut au clavier, T4.14), « Refuser », « Autoriser une fois », plus « Répondre moi-même » (T4.3). Le panneau annonce le résultat (« Demande autorisée une fois. ») et place le focus sur lui.
 5. **Existant** : le runner exécute la capacité avec les seuls outils fixés à la publication. La sortie est validée par son schéma puis passée au scanner de secrets (`packages/runner/src/run.ts`).
 6. **Existant** : capacité sensible : notification « Résultat à relire avant envoi », puis une carte « À relire avant envoi. Rien n’est parti : tu peux envoyer ou garder pour toi. » avec chaque champ de la sortie ; une case par champ permet de le retirer avant l'envoi (T4.14).
@@ -277,7 +277,7 @@ Décisions : D53, D54.
 Décisions : D31 (historique), D54. Option cloud différée, non livrée ; une politique d'entreprise peut l'interdire (T4.10, existant).
 
 1. **Existant** : le code de la passerelle existe : OAuth avec enregistrement dynamique, page « Relier … à ton équipe drop », serveur MCP distant avec `ask_team`, `get_drop_results` et `list_capabilities` (`packages/gateway/src/server.ts`). La tâche T2.13 reste `todo` ; aucune preuve de déploiement n'est archivée.
-2. **Existant** : la page ouvre `drop://link` ; le panneau demande « Autoriser … à demander à ton équipe ? » et avertit si la passerelle n'est pas reconnue (`panel.ts`, `linkCard`).
+2. **Existant** : la page ouvre `drop://link` ; le panneau demande « Autoriser … à demander à ton équipe ? » et avertit si la passerelle n'est pas reconnue (`packages/desktop-ui/src/panel/deep-links.tsx`, `LinkCard`).
 3. **Existant** : en profil privé, le Node refuse toute liaison avec `E_DENIED` (`packages/node/src/daemon.ts`). Comme l'app Mac initialise toujours un profil privé, ce parcours échoue aujourd'hui dans l'app. Voir l'écart E4.
 4. **Existant** : chaque question passée par la passerelle reste soumise au consentement de chaque collègue.
 
@@ -286,7 +286,7 @@ Décisions : D31 (historique), D54. Option cloud différée, non livrée ; une p
 Décision : D53.
 
 1. **Existant** : le Node essaie le réseau local, puis iroh s'il est activé, puis le relais configuré. Le démarrage ne choisit jamais le relais public (spec owner-app, « App de la barre de menus »).
-2. **Existant** : sans relais joignable, l'en-tête montre « hors ligne » avec un point ambre ; les demandes sortantes attendent dans une file locale bornée (`panel.ts`, `engine.ts`).
+2. **Existant** : sans relais joignable, l'en-tête montre « hors ligne » avec un point ambre ; les demandes sortantes attendent dans une file locale bornée (`packages/desktop-ui/src/panel/`, `engine.ts`).
 3. **Existant** (T4.2, T4.2b, T4.10) : trois modes : réseau local par mDNS, Internet par iroh, relais d'entreprise.
 4. **Existant** (T4.2b) : le panneau propose d'activer un relais iroh : auto-hébergé ou d'équipe, ou relais de test n0 signalé comme tiers et refusé en profil privé (D68). Sans relais, deux pairs derrière un routeur ne se joignent pas. Rien n'est activé sans choix explicite. Un relais Memo Labs sur demande d'une équipe reste une **Hypothèse**.
 5. **Hypothèse** : la connexion directe réussit dans environ 9 cas sur 10 (chiffre annoncé par iroh, `docs/research/2026-10-10-repositionnement.md`). Critère : mesure en T4.1 et pendant T4.6.
@@ -315,9 +315,9 @@ Décision : D56. Le banc minimal existe (T4.1) ; le reste est **Visé** (T4.7).
 | Secret détecté                | État « échouée »                                                              | `E_SECRET_DETECTED`, rien ne sort                              | **Existant**, `run.ts`                 |
 | Relecture refusée             | État « refusée » chez le demandeur                                            | `E_DENIED` avec le message du propriétaire                     | **Existant**, `engine.ts`              |
 | Collision de port             | Page de démarrage « Port local déjà utilisé » (E_PORT)                        | Aucun Node lancé, le programme présent reste intact            | **Existant**, `main.rs`                |
-| Agent à relancer              | « Connecteur utilisable : à vérifier après relance »                          | Parcours non déclaré terminé                                   | **Existant**, `panel.ts`               |
+| Agent à relancer              | « Connecteur utilisable : à vérifier après relance »                          | Parcours non déclaré terminé                                   | **Existant**, panneau React             |
 | Lien d'invitation périmé      | « Ce lien d’invitation n’est plus valable. »                                  | `E_INVITE`                                                     | **Existant**, `invite.ts`              |
-| Code d'erreur de demande brut | État traduit, sans code ni explication dans le panneau                        | Code visible seulement côté agent                              | **Existant**, `panel.ts` ; voir UX_UI  |
+| Code d'erreur de demande brut | État traduit, sans code ni explication dans le panneau                        | Code visible seulement côté agent                              | **Existant**, panneau React ; UX_UI     |
 | Pas de connexion directe      | Explication et choix d'un relais                                              | Aucun relais activé sans choix                                 | **Existant**, T4.2b                    |
 
 ## 6. Écarts relevés pendant la rédaction
