@@ -1,0 +1,14 @@
+{
+  "phase": "READY_FOR_MANUAL_ACCEPTANCE",
+  "scope": "T4.23 : un seul lien pour rejoindre une équipe, page /join, invitation signée à usage unique, relais adopté au premier « Rejoindre », drop://join",
+  "requirements": { "total": 11, "covered": 11 },
+  "acceptance": { "total": 17, "verified": 17, "pending": 0, "failed": 0 },
+  "todos": { "p0_open": 0, "p1_open": 0 },
+  "risks": { "critical_open": 0, "high_open": 0 },
+  "verification": {
+    "status": "PASS",
+    "evidence": "evidence.md",
+    "manual": "parcours réel au banc maison T4.6c, une fois le relais et la page déployés sur le VPS (T4.6a) et une release publiée ; single-instance Windows et Linux en T4.31"
+  },
+  "ready_for_manual_acceptance": true
+}
