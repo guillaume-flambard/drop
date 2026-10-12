@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { DEFAULT_RELAY_URL } from '../packages/node/src/home.ts';
 
 // The Rust shell is built and unit-tested by cargo (`join_and_pair_links_open_the_invite_confirmation`); this suite
 // keeps the contract visible to the JavaScript gate, which also runs where no Rust toolchain is installed.
@@ -19,5 +20,12 @@ describe('desktop join link (T4.23)', () => {
     expect(rust).toContain('fn join_and_pair_links_open_the_invite_confirmation()');
     // The shell never reads the invite: the first launch keeps its loopback relay, the node moves on « Rejoindre ».
     expect(rust).toContain('configured.unwrap_or_else(|| DEFAULT_RELAY.to_string())');
+  });
+});
+
+describe('default relay (T4.33)', () => {
+  it('starts the app on the node default loopback relay, the only one an invite may move a node from', () => {
+    const rust = readFileSync(join(process.cwd(), 'apps/desktop/src-tauri/src/main.rs'), 'utf8');
+    expect(rust).toContain(`const DEFAULT_RELAY: &str = "${DEFAULT_RELAY_URL}";`);
   });
 });

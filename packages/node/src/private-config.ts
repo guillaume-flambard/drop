@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { isIP } from 'node:net';
 import { join } from 'node:path';
 import { z } from 'zod';
-import { PrivateNetworkSchema, type OwnerKind, type PrivateNetwork } from '@drop/protocol';
+import { DropError, PrivateNetworkSchema, type OwnerKind, type PrivateNetwork } from '@drop/protocol';
 import { DropHome, NodeConfigSchema, type NodeConfig } from './home.ts';
 
 export function privateConfig(
@@ -36,25 +36,15 @@ function literalOrigin(relayUrl: string): string[] {
 
 /**
  * Moves this node to the relay of the invite it is accepting (T4.23, D95), while the daemon runs: only config.json
- * changes, through a temporary file renamed over it, and only if nobody changed it meanwhile (E_CONFLICT). The old
- * relay's origin leaves the private destinations when this config had added it; the new one joins if literal.
- * Returns the new configuration; the schema refuses a relay the profile does not allow.
+ * changes, through a temporary file renamed over it, under the migration lock (E_LOCKED) and only if nobody changed it
+ * meanwhile (E_CONFLICT). The private destinations stay exactly as they were (T4.33): a third party chose this relay,
+ * so it never joins them, and no origin the owner listed leaves them. Returns the new configuration.
  */
 export function switchRelay(home: DropHome, relayUrl: string): NodeConfig {
   return locked(home, () => {
     const before = readFileSync(join(home.root, 'config.json'), 'utf8');
     const config = NodeConfigSchema.parse(JSON.parse(before));
-    const network = config.network
-      ? PrivateNetworkSchema.parse({
-          origins: [
-            ...new Set([
-              ...config.network.origins.filter((origin) => !literalOrigin(config.relayUrl).includes(origin)),
-              ...literalOrigin(relayUrl),
-            ]),
-          ],
-        })
-      : undefined;
-    const next = NodeConfigSchema.parse({ ...config, relayUrl, ...(network ? { network } : {}) });
+    const next = NodeConfigSchema.parse({ ...config, relayUrl, relayAdopted: true });
     replace(home, before, `${JSON.stringify(next, null, 2)}\n`);
     return next;
   });
@@ -70,9 +60,9 @@ function locked<T>(home: DropHome, action: () => T): T {
     fd = openSync(lock, 'wx', 0o600);
   } catch (error) {
     if (error instanceof Error && 'code' in error && error.code === 'EEXIST')
-      throw new Error(
+      throw new DropError(
+        'E_LOCKED',
         'E_LOCKED private migration: check the recorded PID; after confirming it stopped, remove .private-migration.lock and retry rollback-private',
-        { cause: error },
       );
     throw error;
   }
@@ -90,7 +80,8 @@ function replace(home: DropHome, expected: string, content: string): void {
   const temp = join(home.root, `.config-${randomUUID()}.tmp`);
   try {
     writeFileSync(temp, content, { flag: 'wx', mode: 0o600 });
-    if (readFileSync(config, 'utf8') !== expected) throw new Error('E_CONFLICT configuration changed');
+    if (readFileSync(config, 'utf8') !== expected)
+      throw new DropError('E_CONFLICT', 'E_CONFLICT configuration changed');
     renameSync(temp, config);
   } finally {
     rmSync(temp, { force: true });
@@ -106,7 +97,7 @@ export function migratePrivate(home: DropHome, relayUrl: string, network?: Priva
     const config = NodeConfigSchema.parse(
       typeof raw === 'object' && raw !== null && !('profile' in raw) ? { ...raw, profile: 'legacy' } : raw,
     );
-    if (config.profile === 'private') throw new Error('E_CONFLICT already private');
+    if (config.profile === 'private') throw new DropError('E_CONFLICT', 'E_CONFLICT already private');
     const after = `${JSON.stringify(privateConfig(relayUrl, config.ownerKind, config.apiPort, network), null, 2)}\n`;
     writeFileSync(join(home.root, recordName), `${JSON.stringify({ before, after })}\n`, { mode: 0o600, flag: 'wx' });
     replace(home, before, after);

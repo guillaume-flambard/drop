@@ -47,6 +47,12 @@ import {
 
 export const MAX_RECEIVED_DROPS = 16_384;
 
+/**
+ * The loopback relay `drop init` and the app start on when nobody chose one (T3.1); the Tauri shell keeps the same value
+ * as `DEFAULT_RELAY`. Only a node still on it may adopt the relay of an invite (T4.33).
+ */
+export const DEFAULT_RELAY_URL = 'ws://127.0.0.1:7780/v1';
+
 /** An https page with no query and no fragment: the invite is appended as the fragment (T4.23). */
 export const JoinPageSchema = z
   .string()
@@ -99,15 +105,21 @@ const NodeConfigObject = z
     funding: FundingConfigSchema.optional(),
     /** The page join links open (T4.23, D95), for a team that hosts its own; drop.memolabs.dev/join by default. */
     joinPage: JoinPageSchema.optional(),
+    /**
+     * The relay came from an accepted invite (T4.33): it is only the relay, never one of the destinations a model or an
+     * MCP server may be called at, so a literal one is not required among the private origins.
+     */
+    relayAdopted: z.literal(true).optional(),
   })
   .superRefine((config, ctx) => {
     if (config.profile !== 'private') return;
     try {
       if (!config.network || config.funding || config.gateways.length || config.payer !== 'owner')
         throw new Error('policy');
-      // A literal address stays a listed private origin; a DNS name is only accepted over TLS (D95).
+      // A literal address stays a listed private origin, unless adopted from an invite (T4.33); a DNS name is only
+      // accepted over TLS (D95).
       if (!relayUrlAllowed(config.relayUrl)) throw new Error('relay');
-      if (isIP(new URL(config.relayUrl).hostname.replace(/^\[|\]$/g, '')) !== 0)
+      if (!config.relayAdopted && isIP(new URL(config.relayUrl).hostname.replace(/^\[|\]$/g, '')) !== 0)
         assertPrivateDestination(config.relayUrl, config.network);
     } catch {
       ctx.addIssue({ code: 'custom', message: 'E_DENIED invalid private profile' });

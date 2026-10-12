@@ -15,7 +15,7 @@ import { applyOnboarding, previewOnboarding } from './onboarding.ts';
 import { clientAllowed, loadPolicy } from './policy.ts';
 import { isAgentKind, shareDetected } from './share.ts';
 import { oauthConnect } from './oauth.ts';
-import { DropHome, NodeConfigSchema } from './home.ts';
+import { DEFAULT_RELAY_URL, DropHome, NodeConfigSchema } from './home.ts';
 import { costLine, terminalText } from './ui.ts';
 
 const AgentKindSchema = z.enum(AGENTS);
@@ -114,7 +114,7 @@ switch (command) {
     });
     if (!values.name) fail('drop init --name <name> [--relay <internal URL>]');
     if (values.profile && !['private', 'legacy'].includes(values.profile)) fail('unknown profile');
-    const relayUrl = values.relay ?? 'ws://127.0.0.1:7780/v1';
+    const relayUrl = values.relay ?? DEFAULT_RELAY_URL;
     const network = values.network
       ? PrivateNetworkSchema.parse(JSON.parse(readFileSync(values.network, 'utf8')))
       : undefined;
