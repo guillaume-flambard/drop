@@ -11,13 +11,16 @@ import { RelayClient, type RelayClientLogEntry, type SendOutcome } from '../src/
  * - silent: after ready, drops whatever it reads and never answers, without closing (a half-open link);
  * - half-close: after ready, sends the TCP FIN without a WebSocket close frame and keeps its side open;
  * - no-ack: answers pings but never acknowledges an envelope;
- * - mute: accepts the TCP connection and never answers the HTTP upgrade.
+ * - mute: accepts the TCP connection and never answers the HTTP upgrade;
+ * - reorder: leaves the first envelope unanswered, acknowledges the second, then sends an error without id (T4.39).
  */
-type Mode = 'normal' | 'silent' | 'half-close' | 'no-ack' | 'mute';
+type Mode = 'normal' | 'silent' | 'half-close' | 'no-ack' | 'mute' | 'reorder';
 
 interface FakeRelay {
   url: string;
   connections: number;
+  /** Envelope frames read on every connection, answered or not. */
+  envelopes: number;
   /** Raw sockets of every connection, in order of arrival, with whether each one has closed. */
   sockets: { socket: Duplex; closed: boolean }[];
   /**
@@ -57,6 +60,7 @@ async function fakeRelay(identity: Identity, modes: Mode[]): Promise<FakeRelay> 
   const relay: FakeRelay = {
     url: '',
     connections: 0,
+    envelopes: 0,
     sockets: [],
     halfClose: (index, unread = false) => {
       const entry = relay.sockets[index];
@@ -93,6 +97,7 @@ async function fakeRelay(identity: Identity, modes: Mode[]): Promise<FakeRelay> 
       ws.on('error', () => undefined);
       ws.send(JSON.stringify({ type: 'challenge', challenge: 'a'.repeat(43) }));
       let authed = false;
+      let seen = 0;
       ws.on('message', (data: Buffer) => {
         if (!authed) {
           authed = true;
@@ -107,7 +112,13 @@ async function fakeRelay(identity: Identity, modes: Mode[]): Promise<FakeRelay> 
           return;
         }
         const frame = JSON.parse(data.toString()) as { envelope: { id: string } };
+        relay.envelopes += 1;
+        seen += 1;
         if (mode === 'normal') ws.send(JSON.stringify({ type: 'ack', id: frame.envelope.id, status: 'delivered' }));
+        if (mode === 'reorder' && seen === 2) {
+          ws.send(JSON.stringify({ type: 'ack', id: frame.envelope.id, status: 'delivered' }));
+          ws.send(JSON.stringify({ type: 'error', error: 'E_SCHEMA' }));
+        }
       });
     });
   });
@@ -191,7 +202,7 @@ describe('relay client liveness', () => {
     expect(relay.connections).toBe(2);
   });
 
-  it('releases a send left without acknowledgement as offline after 15 s and reconnects', async () => {
+  it('releases a send left without acknowledgement as unconfirmed after 15 s and reconnects', async () => {
     fakeTimers();
     const { identity, relay, client, logs, connected } = await setup(['no-ack']);
     client.start();
@@ -199,11 +210,13 @@ describe('relay client liveness', () => {
     const envelope = await sealEnvelope(identity, identity.nodeId, { type: 'catalog_request' });
     const sent = track(client.send(envelope));
     await written();
-    await vi.advanceTimersByTimeAsync(14_000);
+    await vi.advanceTimersByTimeAsync(15_000);
     expect(sent.outcome).toBeUndefined();
+    // 15 s plus the time its few hundred bytes take at the floor rate (T4.39).
     await vi.advanceTimersByTimeAsync(1_000);
     await settle(() => sent.outcome !== undefined);
-    expect(sent.outcome).toBe('offline');
+    // The frame was handed to the connection: the relay may have it (T4.39).
+    expect(sent.outcome).toBe('unconfirmed');
     expect(logs).toContainEqual(expect.objectContaining({ code: 'E_RELAY_TIMEOUT', reason: 'ack' }));
     await vi.advanceTimersByTimeAsync(1_000);
     await settle(() => connected() === 2);
@@ -217,12 +230,14 @@ describe('relay client liveness', () => {
     const { identity, relay, client, connected } = await setup(['no-ack', 'no-ack', 'no-ack']);
     client.start();
     await settle(() => connected() === 1);
-    const envelope = await sealEnvelope(identity, identity.nodeId, { type: 'catalog_request' });
+    // A new envelope each time: the same one would see its own delay doubled (T4.39).
     const giveUp = async () => {
+      const envelope = await sealEnvelope(identity, identity.nodeId, { type: 'catalog_request' });
       const sent = track(client.send(envelope));
       await written();
-      await vi.advanceTimersByTimeAsync(15_000);
-      await settle(() => sent.outcome === 'offline');
+      // 15 s plus about 0.1 s for its 429 bytes at the floor rate.
+      await vi.advanceTimersByTimeAsync(15_500);
+      await settle(() => sent.outcome === 'unconfirmed');
     };
     await giveUp();
     // First give-up: the usual first delay.
@@ -277,7 +292,7 @@ describe('relay client liveness', () => {
     await settle(() => connected() === 2);
   });
 
-  it('settles pending sends as offline on close', async () => {
+  it('settles pending sends as unconfirmed on close', async () => {
     const { identity, client, connected } = await setup(['no-ack']);
     client.start();
     await settle(() => connected() === 1);
@@ -285,6 +300,163 @@ describe('relay client liveness', () => {
     const sent = track(client.send(envelope));
     client.close();
     await settle(() => sent.outcome !== undefined);
-    expect(sent.outcome).toBe('offline');
+    expect(sent.outcome).toBe('unconfirmed');
+  });
+
+  it('settles a send made without a ready connection as offline', async () => {
+    const { identity, client } = await setup(['normal']);
+    const envelope = await sealEnvelope(identity, identity.nodeId, { type: 'catalog_request' });
+    // Never started: the frame cannot leave this node.
+    expect(await client.send(envelope)).toBe('offline');
+  });
+
+  it('does not attribute an error without id once the relay answered out of order', async () => {
+    fakeTimers();
+    const { identity, relay, client, logs, connected } = await setup(['reorder']);
+    client.start();
+    await settle(() => connected() === 1);
+    const first = track(client.send(await sealEnvelope(identity, identity.nodeId, { type: 'catalog_request' })));
+    const second = track(client.send(await sealEnvelope(identity, identity.nodeId, { type: 'catalog_request' })));
+    await settle(() => second.outcome !== undefined);
+    expect(second.outcome).toBe('delivered');
+    // The error came after an answer out of order: nothing proves which send it is for.
+    await written();
+    await vi.advanceTimersByTimeAsync(14_000);
+    expect(first.outcome).toBeUndefined();
+    await vi.advanceTimersByTimeAsync(2_000);
+    await settle(() => first.outcome !== undefined);
+    expect(first.outcome).toBe('unconfirmed');
+    expect(logs).toContainEqual(expect.objectContaining({ code: 'E_RELAY_TIMEOUT', reason: 'ack' }));
+    expect(relay.envelopes).toBe(2);
+  });
+
+  it('waits for a big envelope at the floor rate, through silent heartbeat intervals, before giving up its acknowledgement', async () => {
+    fakeTimers();
+    const { identity, client, statuses, logs, connected } = await setup(['silent']);
+    client.start();
+    await settle(() => connected() === 1);
+    const sealed = await sealEnvelope(identity, identity.nodeId, { type: 'catalog_request' });
+    // About 200 000 bytes: 50 s at 32 kbit/s on top of the 15 s base. The fake relay never sees its shape.
+    const big = { ...sealed, pad: 'x'.repeat(200_000) } as typeof sealed;
+    const sent = track(client.send(big));
+    await written();
+    // Four heartbeat intervals without a single frame from the relay: the uplink may still be busy with the envelope.
+    await vi.advanceTimersByTimeAsync(64_000);
+    expect(sent.outcome).toBeUndefined();
+    expect(statuses).toEqual(['connected']);
+    await vi.advanceTimersByTimeAsync(3_000);
+    await settle(() => sent.outcome !== undefined);
+    expect(sent.outcome).toBe('unconfirmed');
+    expect(logs).toEqual([expect.objectContaining({ code: 'E_RELAY_TIMEOUT', reason: 'ack' })]);
+  });
+
+  it('doubles the acknowledgement delay for an envelope that already caused a give-up', async () => {
+    fakeTimers();
+    const { identity, client, logs, connected } = await setup(['no-ack', 'no-ack']);
+    client.start();
+    await settle(() => connected() === 1);
+    const envelope = await sealEnvelope(identity, identity.nodeId, { type: 'catalog_request' });
+    const first = track(client.send(envelope));
+    await written();
+    // The relay answers the heartbeat's ping: the link lives, only this envelope goes unanswered.
+    await vi.advanceTimersByTimeAsync(15_000);
+    await pause(50);
+    await vi.advanceTimersByTimeAsync(1_000);
+    await settle(() => first.outcome === 'unconfirmed');
+    await vi.advanceTimersByTimeAsync(1_000);
+    await settle(() => connected() === 2);
+    const again = track(client.send(envelope));
+    await written();
+    await vi.advanceTimersByTimeAsync(29_000);
+    await pause(50);
+    expect(again.outcome).toBeUndefined();
+    await vi.advanceTimersByTimeAsync(2_000);
+    await settle(() => again.outcome !== undefined);
+    expect(again.outcome).toBe('unconfirmed');
+    expect(logs.filter((entry) => entry.reason === 'ack')).toHaveLength(2);
+  });
+
+  it('does not count a give-up against an envelope when nothing came back while it waited', async () => {
+    fakeTimers();
+    const { identity, client, logs, connected } = await setup(['silent', 'silent']);
+    client.start();
+    await settle(() => connected() === 1);
+    const sealed = await sealEnvelope(identity, identity.nodeId, { type: 'catalog_request' });
+    const big = { ...sealed, pad: 'x'.repeat(200_000) } as typeof sealed;
+    const first = track(client.send(big));
+    await written();
+    await vi.advanceTimersByTimeAsync(67_000);
+    await settle(() => first.outcome === 'unconfirmed');
+    await vi.advanceTimersByTimeAsync(1_000);
+    await settle(() => connected() === 2);
+    // The link carried nothing at all: the envelope is not the cause, so its delay does not double.
+    const again = track(client.send(big));
+    await written();
+    await vi.advanceTimersByTimeAsync(67_000);
+    await settle(() => again.outcome === 'unconfirmed');
+    expect(logs.filter((entry) => entry.reason === 'ack')).toHaveLength(2);
+  });
+
+  it('stops sending an envelope that caused three acknowledgement give-ups', async () => {
+    fakeTimers();
+    const { identity, relay, client, logs, connected } = await setup(['no-ack', 'no-ack', 'no-ack', 'no-ack']);
+    client.start();
+    await settle(() => connected() === 1);
+    const envelope = await sealEnvelope(identity, identity.nodeId, { type: 'catalog_request' });
+    // 15 s, then 30 s, then 60 s (plus the floor-rate allowance), with the growing redial delay in between. Each send
+    // starts ten seconds into its connection, so the heartbeat pings the relay, which answers, while the send waits:
+    // the link lives, only this envelope goes unanswered.
+    for (const [index, wait] of [15_500, 30_500, 60_500].entries()) {
+      await vi.advanceTimersByTimeAsync(10_000);
+      const sent = track(client.send(envelope));
+      await written();
+      await advanceAnswering(wait);
+      await settle(() => sent.outcome === 'unconfirmed');
+      await vi.advanceTimersByTimeAsync(5_000);
+      await settle(() => connected() === index + 2);
+    }
+    expect(relay.envelopes).toBe(3);
+    expect(await client.send(envelope)).toBe('E_RELAY_TIMEOUT');
+    expect(logs).toContainEqual(expect.objectContaining({ code: 'E_RELAY_TIMEOUT', reason: 'ack_retries' }));
+    await written();
+    expect(relay.envelopes).toBe(3);
+    // Another envelope still goes out on the same connection.
+    track(client.send(await sealEnvelope(identity, identity.nodeId, { type: 'catalog_request' })));
+    await settle(() => relay.envelopes === 4);
+  });
+
+  it('keeps a connection while a big inbound frame trickles in, and gives it up once the bytes stop', async () => {
+    fakeTimers();
+    const { relay, client, statuses, logs, connected } = await setup(['silent']);
+    client.start();
+    await settle(() => connected() === 1);
+    const raw = relay.sockets[0]?.socket;
+    if (!raw) throw new Error('E_TEST_SOCKET');
+    // An unmasked server text frame announcing 1 000 bytes, of which only a few arrive every 10 s.
+    raw.write(Buffer.from([0x81, 126, 0x03, 0xe8]));
+    for (let step = 0; step < 6; step += 1) {
+      await vi.advanceTimersByTimeAsync(10_000);
+      raw.write(Buffer.from('xxxxxxxxxx'));
+      await pause(50);
+    }
+    // 60 s without a whole frame: the bytes alone kept it.
+    expect(statuses).toEqual(['connected']);
+    await vi.advanceTimersByTimeAsync(31_000);
+    await settle(() => statuses.includes('disconnected'));
+    expect(logs).toEqual([expect.objectContaining({ code: 'E_RELAY_TIMEOUT', reason: 'heartbeat' })]);
   });
 });
+
+/** Advances simulated time in 5 s steps, letting the relay's pongs land in real time between them. */
+async function advanceAnswering(ms: number): Promise<void> {
+  for (let left = ms; left > 0; left -= 5_000) {
+    await vi.advanceTimersByTimeAsync(Math.min(5_000, left));
+    await pause(30);
+  }
+}
+
+/** Real time for I/O to land while timers are faked. */
+async function pause(ms: number): Promise<void> {
+  const until = performance.now() + ms;
+  while (performance.now() < until) await new Promise((resolve) => setImmediate(resolve));
+}

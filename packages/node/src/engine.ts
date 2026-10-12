@@ -88,6 +88,8 @@ interface QueuedEnvelope {
   order: number;
   /** A state message (T4.2e): only the newest of its kind per peer stays in the outbox. */
   kind?: CoalescedKind;
+  /** The drop request this envelope carries: the relay's acknowledgement confirms its delivery (T4.39). */
+  confirms?: string;
 }
 
 /** Messages that describe a whole state, which the next one replaces (T4.2e, D79). Nothing else is ever coalesced. */
@@ -226,6 +228,11 @@ export interface OutboundDrop {
   createdAt: number;
   result?: { output: unknown; outputSchemaHash: string };
   error?: { code: DropErrorCode; message: string };
+  /**
+   * The request left for the relay, which never answered: the executor may or may not have it (T4.39). The same
+   * envelope waits in the outbox; cleared once the relay acknowledges it or the executor says anything about this drop.
+   */
+  delivery?: 'unconfirmed';
 }
 
 /** A drop this node executes. */
@@ -940,11 +947,19 @@ export class NodeEngine extends EventEmitter {
           requestedBy: { nodeId: this.identity.nodeId, displayName: this.identity.displayName, agent: request.agent },
           ...(funding ? { funding } : {}),
         },
-        { queueOffline: false },
+        { queueOffline: false, confirms: dropId },
       );
     } catch (error) {
       await this.abandonOutbound(dropId, funding);
       throw error;
+    }
+    if (outcome === 'unconfirmed') {
+      // Handed to the relay, never answered: the executor may have it. Neither refused nor received; the same envelope
+      // waits in the outbox and the capped key stays, since the executor needs it if it has the request (T4.39).
+      outbound.delivery = 'unconfirmed';
+      this.log({ event: 'send_unconfirmed', dropId, peer: entry.card.executorNodeId });
+      this.changed();
+      return outbound;
     }
     if (outcome === 'E_RATE' || outcome === 'E_QUEUE_FULL' || outcome === 'offline') {
       await this.abandonOutbound(dropId, funding);
@@ -1080,7 +1095,16 @@ export class NodeEngine extends EventEmitter {
       const [queued] = this.outbox.splice(index, 1);
       if (!queued) continue;
       const { envelope } = queued;
-      if (envelope.exp <= this.now() || this.isStale(queued)) continue;
+      if (envelope.exp <= this.now()) {
+        this.endUnconfirmed(
+          queued,
+          'E_EXPIRED',
+          "La réception de la demande n'a jamais été confirmée avant son expiration.",
+          'expired',
+        );
+        continue;
+      }
+      if (this.isStale(queued)) continue;
       this.outboxInFlight = queued;
       let outcome: string;
       try {
@@ -1091,12 +1115,22 @@ export class NodeEngine extends EventEmitter {
       } finally {
         this.outboxInFlight = undefined;
       }
-      if (outcome === 'offline' || outcome === 'E_RATE' || outcome === 'E_QUEUE_FULL') {
-        if (outcome !== 'offline')
+      if (outcome === 'offline' || outcome === 'unconfirmed' || outcome === 'E_RATE' || outcome === 'E_QUEUE_FULL') {
+        if (outcome === 'E_RATE' || outcome === 'E_QUEUE_FULL')
           this.log({ event: 'send_failed', code: outcome, reason: 'flush_refused', peer: envelope.to });
         this.queueOutbox(queued);
-      } else if (outcome !== 'delivered' && outcome !== 'queued') {
+      } else if (outcome === 'delivered' || outcome === 'queued') {
+        if (queued.confirms) this.confirmDelivery(queued.confirms);
+      } else {
         this.log({ event: 'send_failed', code: outcome, reason: 'flush_rejected', peer: envelope.to });
+        const refusal =
+          outcome === 'E_RELAY_TIMEOUT'
+            ? {
+                code: 'E_RUNNER' as const,
+                message: "Le relais n'a jamais confirmé la réception de la demande, même après plusieurs envois.",
+              }
+            : sendRefusal(outcome);
+        this.endUnconfirmed(queued, refusal.code, refusal.message);
       }
     }
   }
@@ -1718,9 +1752,42 @@ export class NodeEngine extends EventEmitter {
     await this.deliver(drop, applyRedactions(drop.output, message.redactions ?? []));
   }
 
+  /**
+   * A drop request whose delivery was never confirmed leaves the outbox for good (expired, refused, given up or evicted):
+   * the drop ends with what is known, its slot and capped key are released, and a real result still wins (T4.39).
+   */
+  private endUnconfirmed(
+    queued: QueuedEnvelope,
+    code: DropErrorCode,
+    message: string,
+    state: DropState = 'failed',
+  ): void {
+    const dropId = queued.confirms;
+    const drop = dropId ? this.outbound.get(dropId) : undefined;
+    if (!drop?.delivery || drop.result || drop.error) return;
+    delete drop.delivery;
+    drop.state = state;
+    drop.error = { code, message };
+    this.log({ event: 'send_unconfirmed_ended', code, dropId: drop.dropId, peer: drop.executor });
+    this.options.funder?.release(drop.dropId).catch(() => {
+      this.log({ event: 'funding', code: 'E_FUNDING_RELEASE', dropId: drop.dropId });
+    });
+    this.changed();
+  }
+
+  /** The relay acknowledged a resent drop request: it is delivered as surely as one acknowledged at once (T4.39). */
+  private confirmDelivery(dropId: string): void {
+    const drop = this.outbound.get(dropId);
+    if (!drop?.delivery) return;
+    delete drop.delivery;
+    this.changed();
+  }
+
   private onRequesterUpdate(from: NodeId, message: MessageOf<'drop_status' | 'drop_result' | 'drop_error'>): void {
     const drop = this.outbound.get(message.dropId);
     if (drop?.executor !== from) return;
+    // Any word from the executor about this drop proves it has the request (T4.39).
+    this.confirmDelivery(drop.dropId);
     // A result settles the drop for good. A recorded error yields only to a real result: a duplicate refusal may
     // overtake it. Status updates never claim an outcome; only drop_result, drop_error and receipt do.
     if (drop.result) return;
@@ -1919,12 +1986,26 @@ export class NodeEngine extends EventEmitter {
     if (insertAt === -1) this.outbox.push(queued);
     else this.outbox.splice(insertAt, 0, queued);
     if (this.outbox.length + (this.outboxInFlight ? 1 : 0) > MAX_OUTBOX_ENVELOPES) {
-      this.outbox.shift();
+      const evicted = this.outbox.shift();
       this.log({ event: 'send_failed', code: 'E_RATE', reason: 'outbox_capacity' });
+      if (evicted)
+        this.endUnconfirmed(
+          evicted,
+          'E_RATE',
+          "La réception de la demande n'a jamais été confirmée : file d'envoi pleine.",
+        );
     }
   }
 
-  private async send(to: NodeId, message: Message, options: { queueOffline?: boolean } = {}): Promise<string> {
+  /**
+   * `offline` waits in the outbox unless `queueOffline` is false; `unconfirmed` always does, since the recipient may
+   * already have it and its anti-replay drops a second copy (T4.39). `confirms` names the drop request it carries.
+   */
+  private async send(
+    to: NodeId,
+    message: Message,
+    options: { queueOffline?: boolean; confirms?: string } = {},
+  ): Promise<string> {
     // The order is taken before any wait, so that it follows the order of the calls.
     const order = this.nextOutboxOrder++;
     const kind = coalescedKind(message.type);
@@ -1937,8 +2018,13 @@ export class NodeEngine extends EventEmitter {
       this.log({ event: 'send_failed', code: 'E_RUNNER', reason: 'transport_exception', peer: to });
       outcome = 'offline';
     }
-    if (outcome === 'offline' && options.queueOffline !== false)
-      this.queueOutbox({ envelope, order, ...(kind ? { kind } : {}) });
+    if ((outcome === 'offline' && options.queueOffline !== false) || outcome === 'unconfirmed')
+      this.queueOutbox({
+        envelope,
+        order,
+        ...(kind ? { kind } : {}),
+        ...(options.confirms ? { confirms: options.confirms } : {}),
+      });
     else if (outcome !== 'delivered' && outcome !== 'queued')
       this.log({ event: 'send_failed', code: outcome, peer: to });
     return outcome;

@@ -388,7 +388,13 @@ export function startLocalApi(options: LocalApiOptions): Promise<LocalApi> {
         await options.refreshCatalogs();
       try {
         const drop = await engine.requestDrop(parsed.data);
-        json(res, 201, { dropId: drop.dropId, owner: drop.ownerName, title: drop.title });
+        // Sent, but the relay never answered: said as such, neither refused nor received (T4.39).
+        json(res, 201, {
+          dropId: drop.dropId,
+          owner: drop.ownerName,
+          title: drop.title,
+          ...(drop.delivery ? { delivery: drop.delivery } : {}),
+        });
       } catch (error) {
         const refused = dropErrorStatus(error);
         if (refused) {
@@ -434,7 +440,7 @@ export function startLocalApi(options: LocalApiOptions): Promise<LocalApi> {
             purpose: parsed.data.purpose ?? 'Pas de raison précisée.',
             agent: parsed.data.agent,
           });
-          asked.push({ dropId: drop.dropId, ...route });
+          asked.push({ dropId: drop.dropId, ...route, ...(drop.delivery ? { delivery: drop.delivery } : {}) });
         } catch (error) {
           const refused = dropErrorStatus(error);
           if (refused) {

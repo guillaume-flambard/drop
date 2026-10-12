@@ -416,7 +416,7 @@ export async function startRelay(config: RelayConfig, options: RelayOptions = {}
     return { socket, nodeId, missedPings: 0 };
   };
 
-  server.on('connection', (socket) => {
+  server.on('connection', (socket, request) => {
     const challenge = randomBytes(32).toString('base64url');
     let connection: Connection | undefined;
     let authStarted = false;
@@ -426,6 +426,11 @@ export async function startRelay(config: RelayConfig, options: RelayOptions = {}
     send(socket, { type: 'challenge', challenge });
 
     socket.on('pong', () => {
+      if (connection) connection.missedPings = 0;
+    });
+    // Any byte from the node answers the ping too: its pong may wait behind a big frame on a slow uplink (T4.39).
+    // Attached after ws's own listener (ws emits 'connection' once the socket is set), so it never changes how ws reads.
+    request.socket.on('data', () => {
       if (connection) connection.missedPings = 0;
     });
 

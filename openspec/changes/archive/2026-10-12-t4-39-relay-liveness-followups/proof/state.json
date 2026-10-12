@@ -1,0 +1,62 @@
+{
+  "change": "t4-39-relay-liveness-followups",
+  "phase": "READY_FOR_MANUAL_ACCEPTANCE",
+  "status": "ARCHIVED_IN_PR",
+  "requirements": [
+    "REQ-1 a send handed to a connection that went away before the answer resolves as unconfirmed; offline only when it never left",
+    "REQ-2 the engine keeps an unconfirmed drop request active with delivery unconfirmed, keeps its capped key, resends it, clears delivery on confirmation and ends it when the resend leaves the outbox unconfirmed",
+    "REQ-3 the local API and requester-mcp say unconfirmed instead of a refusal",
+    "REQ-4 the relay answers every envelope frame once, in order; the client attributes an error without id to the oldest send while that order holds",
+    "REQ-5 the ack delay counts the bytes in flight at 32 kbit/s, doubles per give-up counted against the envelope (live link only), and the envelope is not sent again after three",
+    "REQ-6 any byte received proves liveness on the client and on the relay; a busy uplink keeps a silent connection within its ack delay"
+  ],
+  "acceptance": {
+    "relay_answers_in_order": "passed",
+    "relay_error_without_id_attributed": "passed",
+    "relay_out_of_order_not_attributed": "passed",
+    "relay_slow_uplink_frame_kept": "passed",
+    "relay_client_unconfirmed_after_ack_timeout": "passed",
+    "relay_client_unconfirmed_on_close": "passed",
+    "relay_client_offline_without_connection": "passed",
+    "relay_client_big_envelope_floor_rate": "passed",
+    "relay_client_delay_doubles": "passed",
+    "relay_client_dead_link_not_counted": "passed",
+    "relay_client_three_tries": "passed",
+    "relay_client_slow_inbound_frame": "passed",
+    "node_unconfirmed_kept_and_confirmed_by_executor": "passed",
+    "node_unconfirmed_confirmed_by_resend": "passed",
+    "node_unconfirmed_expired": "passed",
+    "node_unconfirmed_given_up": "passed",
+    "node_api_delivery_unconfirmed": "passed",
+    "requester_mcp_request_drop_unconfirmed": "passed",
+    "requester_mcp_pending_and_fan_out_unconfirmed": "passed",
+    "requester_mcp_client_keeps_delivery": "passed"
+  },
+  "workGraph": {
+    "P0-1 unconfirmed outcome end to end": "DONE",
+    "P0-2 error without id": "DONE",
+    "P0-3 slow link": "DONE",
+    "P1-4 review fixes": "DONE",
+    "P1-5 verification, guard, review, cso, archive": "DONE"
+  },
+  "verification": {
+    "lint": "passed",
+    "typecheck": "passed",
+    "test": "95 files passed; 699 tests passed (after merging origin/main, before the review-only spec split)",
+    "timing_sensitive_reruns": "client-liveness, answers, unconfirmed, relay-liveness: 8 runs before review fixes, 3 after, all green",
+    "openspec_validate": "change valid with --strict; 18 specs valid with --strict after archive",
+    "openspec_guard": "494 linked by selector, 0 new failures, baseline unchanged",
+    "review": "checklist pass plus independent adversarial review: no P0/P1; two P2 and three P3 fixed, two P3 left as limits",
+    "cso": "run 1791814281385-e296aeb3a892951a finished, completeness partial, no supported findings"
+  },
+  "openRisks": [
+    "direct paths (local network, iroh) still report unreachable after writing without proof of receipt",
+    "gateway treats unconfirmed like a failure and drops a reply that may still come",
+    "desktop panel shows an unconfirmed drop as sent (proposed) without the nuance",
+    "an executor restarted between the first copy and the resend answers E_DENIED duplicate"
+  ],
+  "manualAcceptance": [
+    "with the Mac app connected to the VPS relay, cut the network right after request_drop and check that the agent reads status unconfirmed, then that the drop moves on once the network is back",
+    "on a link throttled to about 32 kbit/s, send a large result and check that the connection is not dropped in a loop"
+  ]
+}
