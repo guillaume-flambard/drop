@@ -23,5 +23,5 @@
 - [x] 4.1 `pnpm -r lint && pnpm -r typecheck && pnpm -r test`, `build-desktop-ui.ts --check`.
 - [x] 4.2 `cargo check`, `cargo clippy --all-targets`, `cargo test` dans `apps/desktop/src-tauri` (macOS).
 - [x] 4.3 `openspec validate t4-30-notification-actions --strict` et `openspec-guard`.
-- [x] 4.4 Revue du diff et revue de sécurité.
+- [x] 4.4 Revue du diff (deux revues adverses) et revue de sécurité (`cso`), constats corrigés (voir `evidence.md`).
 - [ ] 4.5 Recette manuelle de l'app signée par Guillaume (voir `evidence.md`).
