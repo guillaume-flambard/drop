@@ -426,6 +426,7 @@ La carte de consentement MUST NOT afficher d'identifiant technique : ni `nodeId`
 `inputPreview` MUST être un rendu lisible et échappé de l'entrée : aucun HTML n'est interprété.
 
 #### Scenario: AC: l'UI échappe une entrée contenant script
+<!-- openspec-guard:test="menu bar panel and its admin routes (T2.4) > inserts what peers wrote as text only" -->
 - **WHEN** l'entrée d'une demande contient `<script>`
 - **THEN** l'UI affiche le texte littéral et n'exécute ni n'interprète le HTML (test)
 
@@ -433,6 +434,7 @@ La carte de consentement MUST NOT afficher d'identifiant technique : ni `nodeId`
 Le bouton par défaut au clavier MUST être « Pas maintenant », jamais « Autoriser ».
 
 #### Scenario: Entrée au clavier
+<!-- openspec-guard:test="menu bar panel and its admin routes (T4.14) > renders expiry, high sensitivity, a default Pas maintenant and per-field redaction" -->
 - **WHEN** l'utilisateur presse Entrée sur une carte sans avoir choisi de bouton
 - **THEN** la décision émise est `not_now`
 
@@ -1262,7 +1264,7 @@ Un Node sur le relais de bouclage par défaut (`DEFAULT_RELAY_URL`, `ws://127.0.
 - **THEN** le second appui est refusé avec `E_INVITE_USED` et une seule demande d'appairage part, et le second lien garde le relais déjà adopté (`kept`)
 
 #### Scenario: AC: carte qui annonce le relais
-<!-- openspec-guard:test="menu bar panel and its admin routes (T4.14) > previews an invitation without pairing and pairs only after Rejoindre" -->
+<!-- openspec-guard:test="menu bar panel and its admin routes (T4.14) > names the relay only when Rejoindre would move to it, and shows each refusal with the message of its stable code" -->
 - **WHEN** le panneau montre la carte d'une invitation qui ferait changer de relais, ou qu'un lien est refusé
 - **THEN** la carte nomme le relais de l'invitation avant « Rejoindre », et le refus affiche le message de son code stable
 
