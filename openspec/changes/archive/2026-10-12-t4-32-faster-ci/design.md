@@ -46,4 +46,15 @@ Windows, et les trois jobs sont des checks obligatoires de la règle de branche 
 
 ## Measurements
 
-Avant : run 38185292252, voir proposal.md. Après : rempli en tâche 4 avec les runs de la PR.
+Avant : run 38185292252, voir proposal.md. Après, run 38217630816 (cache chaud, commit `d719f5c`) :
+
+| Mesure | Linux | macOS | Windows |
+| --- | --- | --- | --- |
+| job complet | 199 s (avant ~3 min) | 243 s (avant ~6 min) | 296 s (avant ~8 min) |
+| étape `Build drop-iroh` | 39 s | 44 s | 82 s |
+| `internet.test.ts` | < 7 s | 7,2 s | < 7 s |
+| `tooling.test.ts` | 78 s | 78 s | 91 s |
+| suite `vitest` (Duration) | 93 s | 109 s | 114 s |
+
+Le cache froid, au premier run, compilait drop-iroh en 86 s (Linux), 136 s (macOS) et 278 s (Windows). Windows reste
+au-dessus de 4 minutes ; voir D94 pour les causes suivantes.
