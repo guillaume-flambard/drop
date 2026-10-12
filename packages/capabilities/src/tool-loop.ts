@@ -8,9 +8,31 @@ export const MAX_TOOL_RESULT_CHARS = 20_000;
 
 const RETRY_PROMPT = 'Réponds uniquement avec l’objet JSON demandé, sans autre texte.';
 
+const THINK_OPEN = '<think>';
+const THINK_CLOSE = '</think>';
+
+/**
+ * The reply without its closed `<think>…</think>` blocks, in one pass: a lazy regular expression took a time quadratic
+ * in the length of a reply full of unclosed `<think>` (T4.26). An unclosed block is kept, as the expression kept it.
+ */
+function withoutReasoning(content: string): string {
+  const kept: string[] = [];
+  let index = 0;
+  for (;;) {
+    const open = content.indexOf(THINK_OPEN, index);
+    const close = open < 0 ? -1 : content.indexOf(THINK_CLOSE, open + THINK_OPEN.length);
+    // No closing tag after this opening one means none after any later one either: the rest stays as it is.
+    if (close < 0) break;
+    kept.push(content.slice(index, open));
+    index = close + THINK_CLOSE.length;
+  }
+  kept.push(content.slice(index));
+  return kept.join('');
+}
+
 /** Final answer: drops reasoning blocks, then reads the first JSON object, valid against `schema` or undefined. */
 export function parseFinalJson<T>(schema: z.ZodType<T>, content: string): T | undefined {
-  const cleaned = content.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+  const cleaned = withoutReasoning(content).trim();
   const start = cleaned.indexOf('{');
   const end = cleaned.lastIndexOf('}');
   if (start < 0 || end <= start) return undefined;
