@@ -1198,9 +1198,10 @@ fn panel_params(link: &Url) -> Vec<(&'static str, String)> {
         return vec![];
     }
     let param = |name: &str| {
-        link.query_pairs()
-            .find(|(key, _)| key == name)
-            .map(|(_, value)| value.into_owned())
+        let mut values = link.query_pairs().filter(|(key, _)| key == name);
+        let value = values.next()?.1.into_owned();
+        // An external URL may carry duplicate keys. Never silently choose one.
+        values.next().is_none().then_some(value)
     };
     let invite = |value: Option<String>| {
         value
@@ -1766,6 +1767,8 @@ mod tests {
         );
         // Not a code, no code, an unknown host, another scheme or an oversized link: nothing opens.
         for refused in [
+            format!("drop://join?invite={code}&invite=another"),
+            format!("drop://pair?code={code}&code=another"),
             "drop://join?invite=%3Cscript%3E".to_string(),
             "drop://join".to_string(),
             format!("drop://other?invite={code}"),
