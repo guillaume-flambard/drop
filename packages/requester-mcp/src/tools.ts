@@ -112,7 +112,7 @@ function factOrigin(drop: DropView, output: unknown): string | undefined {
   const parsed = FactOutputSchema.safeParse(output);
   if (!parsed.success) return undefined;
   const { fact } = parsed.data;
-  return `Fait publié par ${peerText(drop.ownerName)}, valable jusqu'au ${DAY_FORMAT.format(fact.validTo)}, sur « ${peerText(fact.topic)} »`;
+  return `Fait publié par ${peerText(drop.ownerName)}, valable jusqu'au ${DAY_FORMAT.format(fact.validTo)}, sur « ${peerText(fact.topic)} » (publié le ${DAY_FORMAT.format(fact.publishedAt)} ; source déclarée : ${peerText(fact.source.label)} ; portée limitée à ce fait publié, sans garantie de mise à jour en temps réel)`;
 }
 
 export function wrapResult(drop: DropView, output: unknown): string {
