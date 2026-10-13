@@ -60,7 +60,7 @@ Check actual statuses of PRs 91, 98, 99, 100, before starting new code. If they 
 **Breakdown written BEFORE code changes:**
 - `DONE` — Track a boolean replay-security block in the running NodeEngine only for the known persistent replay-state corruption reasons. Clear after a successful durable claim. Emit change only on actual transition.
 - `DONE` — Expose the flag only through the already authenticated owner `/ui/admin/status`, and render a concise accessible warning in the overview with a link to Diagnostic. Refresh owner status on existing engine change events.
-- `DONE` — Test persistent versus transient failure, recovery, HTTP authentication and workspace rendering; focused tests, lint/typecheck and OpenSpec guard PASS. Expanded UI regressions are being run before PR delivery.
+- `DONE` — Test persistent versus transient failure, recovery, HTTP authentication and workspace rendering; focused tests, lint/typecheck and OpenSpec guard PASS. Expanded UI regressions passed (44/44); GitHub PR #104 is awaiting required CI.
 - `QUEUED` — After a daemon restart the in-memory flag is unknown until a new claim. A startup read-only integrity probe/persistent detection is a separate future task. Do not change private replay storage layout or automatically repair it here.
 
 **Dependencies / safety:** This worktree is stacked on PR #103 head (`65729c9`), because the persistent/transient classification lives there. No production mutation, no credentials, no platform installations. The owner-only alert must never expose requester IDs, paths, exception messages or tokens.
@@ -79,5 +79,12 @@ Check actual statuses of PRs 91, 98, 99, 100, before starting new code. If they 
 - `pnpm -r lint` **PASS**; `pnpm -r typecheck` **PASS**; `git diff --check` **PASS**.
 - `openspec-guard@0.3.0` **PASS**, 698 criteria, 535 test-linked, existing 139 failures frozen in baseline (no new unfrozen failure). One new normative AC with exact selector.
 - GitHub PR #103 merged at `f7e200c`; the owner alert branch contains only the follow-up change relative to that commit. **Do not** mark T3.1d `done`: remaining resilience subtasks exist.
-- Expanded four-file regression job `job_42ffc8508442` must be inspected for the exact result before any claims about the expanded suite.
+- Expanded four-file regression job `job_42ffc8508442` **succeeded**: 44/44 tests PASS (35 replay, 5 diagnostics, 3 existing workspace, 1 new UI alert).
 - **Limitation to hand off:** owner alert is an in-process observed condition. After a daemon restart, before receiving another invalid request, the flag is unknown; a read-only startup anti-replay integrity probe is future work. No destructive automatic repair of security state.
+
+### Relay 12 GitHub handoff
+
+- PR #103 has MERGED at `f7e200c`; this branch adds only the owner alert.
+- PR #104: https://github.com/memolabs-dev/drop/pull/104 — OPEN with normal GitHub auto-merge enabled, Ubuntu/macOS/Windows/CodeQL checks pending at last check. No bypass of merge queue or protected checks.
+- **Next single task:** Proactively detect pre-existing persistent replay corruption at daemon startup via a *read-only* integrity validation, without mutating or resetting replay state. Begin by designing deterministic tests for healthy, old and corrupt stores; do not silently reset keys/markers.
+- Existing private beta installers do not include this new code until the normal signed release pipeline is run. No physical device claims, deploy, or stable publication in this relay.
