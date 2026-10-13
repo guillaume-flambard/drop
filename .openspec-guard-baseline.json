@@ -75,14 +75,6 @@
       "file": "openspec/specs/blocked-observer/spec.md"
     },
     {
-      "id": "sg_58ccbc7b6b38f1fe",
-      "reason": "missing-selector",
-      "verdict": "fail",
-      "capability": "blocked-observer",
-      "scenario": "AC: champ retiré absent de l'export",
-      "file": "openspec/specs/blocked-observer/spec.md"
-    },
-    {
       "id": "sg_5babf9e6650b2591",
       "reason": "missing-selector",
       "verdict": "fail",
@@ -107,14 +99,6 @@
       "file": "openspec/specs/blocked-observer/spec.md"
     },
     {
-      "id": "sg_71c5c30a8af634a5",
-      "reason": "missing-selector",
-      "verdict": "fail",
-      "capability": "blocked-observer",
-      "scenario": "AC: report_blocked visible dans list",
-      "file": "openspec/specs/blocked-observer/spec.md"
-    },
-    {
       "id": "sg_756df9a1fdc81a32",
       "reason": "missing-selector",
       "verdict": "fail",
@@ -136,14 +120,6 @@
       "verdict": "fail",
       "capability": "blocked-observer",
       "scenario": "Filtre since",
-      "file": "openspec/specs/blocked-observer/spec.md"
-    },
-    {
-      "id": "sg_8148e2a6d7d9a481",
-      "reason": "missing-selector",
-      "verdict": "fail",
-      "capability": "blocked-observer",
-      "scenario": "AC: 403 Forbidden sans extrait de la sortie",
       "file": "openspec/specs/blocked-observer/spec.md"
     },
     {
@@ -224,22 +200,6 @@
       "verdict": "fail",
       "capability": "blocked-observer",
       "scenario": "Valeur hors liste",
-      "file": "openspec/specs/blocked-observer/spec.md"
-    },
-    {
-      "id": "sg_e80ed28710c00eef",
-      "reason": "missing-selector",
-      "verdict": "fail",
-      "capability": "blocked-observer",
-      "scenario": "AC: entrée JSON invalide",
-      "file": "openspec/specs/blocked-observer/spec.md"
-    },
-    {
-      "id": "sg_f74f580f269fe4c0",
-      "reason": "missing-selector",
-      "verdict": "fail",
-      "capability": "blocked-observer",
-      "scenario": "AC: chiffres justes sur fixture",
       "file": "openspec/specs/blocked-observer/spec.md"
     },
     {
