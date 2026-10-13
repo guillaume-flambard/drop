@@ -88,6 +88,23 @@ async function until(check: () => boolean, timeoutMs = 3000): Promise<void> {
   }
 }
 
+describe('relay client shutdown (T4.39)', () => {
+  it('settles an outstanding acknowledgement as unconfirmed when explicitly closed', async () => {
+    const identity = await generateIdentity('Shutdown');
+    const instance = new RelayClient({ identity, url: 'ws://127.0.0.1:1/v1', onEnvelope: () => {} });
+    const fakeSocket = {
+      send: () => {},
+      close: () => {},
+    } as unknown as WebSocket;
+    const internal = instance as unknown as { ready: boolean; socket: WebSocket };
+    internal.ready = true;
+    internal.socket = fakeSocket;
+    const pending = instance.send({ id: 'shutdown-ack' } as Envelope);
+    instance.close();
+    expect(await pending).toBe('unconfirmed');
+  });
+});
+
 describe('relay', () => {
   it('keeps revoked members and their sponsored invitations refused after restore', async () => {
     const alice = await generateIdentity('Alice');
