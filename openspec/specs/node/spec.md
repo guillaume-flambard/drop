@@ -529,6 +529,16 @@ Le Node MUST conserver au plus 16 384 identifiants reçus, sans contenu, pendant
 - **WHEN** la marque d'horloge persistante est corrompue
 - **THEN** le Node refuse les nouvelles demandes sans consentement ni exécution
 
+#### Scenario: AC: corruption persistante expliquée sans fausse relance
+<!-- openspec-guard:test="private replay admission > refuses old drops and reports a broken replay store without asking to retry" -->
+- **WHEN** les métadonnées anti-rejeu persistantes sont corrompues et l'exécuteur ne peut plus vérifier les demandes
+- **THEN** le Node refuse avant consentement, consigne `E_REPLAY_STATE` localement et répond avec `E_RUNNER` sans inviter le demandeur à réessayer ; le message distant ne révèle aucun chemin privé
+
+#### Scenario: AC: panne passagère toujours réessayable
+<!-- openspec-guard:test="private replay admission > keeps transient replay-store failures retryable without losing later admissions" -->
+- **WHEN** une écriture ou la disponibilité du stockage anti-rejeu échoue ponctuellement sans corruption durable
+- **THEN** le Node conserve `E_RATE` pour la demande refusée et admet les demandes suivantes après reprise de l'écriture
+
 #### Scenario: AC: admission concurrente
 <!-- openspec-guard:test="bounded received drops > refuses a claim while another process owns the replay lock" -->
 - **WHEN** un autre processus possède le verrou d'admission du même `DROP_HOME`

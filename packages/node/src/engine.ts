@@ -109,6 +109,27 @@ const CLAIM_ERRORS: Record<Exclude<DropClaim, 'claimed'>, { code: DropErrorCode;
   capacity: { code: 'E_RATE', message: 'Trop de demandes reçues ; réessayez plus tard.' },
 };
 
+/** Persistent replay state failures are security failures, not transient rate limits.
+ * Keep the owner-only E_REPLAY_STATE log detailed, but reveal no storage details to peers. */
+const REPLAY_STORAGE_FAILURE: { code: DropErrorCode; message: string } = {
+  code: 'E_RUNNER',
+  message: 'Le contrôle de sécurité du destinataire est indisponible. Contactez son propriétaire.',
+};
+
+/** Only durable metadata corruption requires owner intervention. A filesystem
+ * write error or a short-lived lock can recover at the next admission; those
+ * still use the existing retryable E_RATE response. */
+const PERSISTENT_REPLAY_FAILURES = new Set([
+  'missing version',
+  'missing markers',
+  'corrupt version',
+  'missing clock',
+  'missing integrity',
+  'corrupt clock',
+  'marker integrity',
+  'unexpected marker',
+]);
+
 /** What a requester learns when the transport refuses its drop request for good, by the transport's outcome. */
 function sendRefusal(outcome: string): { code: DropErrorCode; message: string } {
   if (outcome === 'E_SCHEMA')
@@ -1467,14 +1488,9 @@ export class NodeEngine extends EventEmitter {
       try {
         claim = this.options.store.claimDrop(dropId, now);
       } catch (error) {
-        this.log({
-          event: 'drop_rejected',
-          code: 'E_REPLAY_STATE',
-          reason: replayFailureReason(error),
-          dropId,
-          peer: from,
-        });
-        claim = 'capacity';
+        const reason = replayFailureReason(error);
+        this.log({ event: 'drop_rejected', code: 'E_REPLAY_STATE', reason, dropId, peer: from });
+        return PERSISTENT_REPLAY_FAILURES.has(reason) ? REPLAY_STORAGE_FAILURE : CLAIM_ERRORS.capacity;
       }
       if (claim === 'expired') {
         // The id passed the wall-clock window above, so only a persisted replay clock ahead of it can refuse it.

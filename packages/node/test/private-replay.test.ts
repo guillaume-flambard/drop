@@ -2,7 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readdirSync, rmdirSync, rmSync, unlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   generateIdentity,
   openEnvelope,
@@ -628,7 +628,37 @@ describe('replay admission through the engine', () => {
 });
 
 describe('private replay admission', () => {
-  it('refuses an old drop before consent and reports a corrupt replay store as E_RATE', async () => {
+  it('keeps transient replay-store failures retryable without losing later admissions', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'drop-replay-transient-'));
+    try {
+      const node = await ownerNode(root);
+      const claim = node.home.claimDrop.bind(node.home);
+      const spy = vi
+        .spyOn(node.home, 'claimDrop')
+        .mockImplementationOnce(() => {
+          throw new Error('E_REPLAY_STATE storage unavailable');
+        })
+        .mockImplementation((id, now) => claim(id, now));
+      const rejected = uuidv7(NOW);
+      await node.send(rejected);
+      expect(await node.lastReply()).toMatchObject({ type: 'drop_error', dropId: rejected, code: 'E_RATE' });
+      expect(node.engine.pending()).toHaveLength(0);
+      expect(node.logs).toContainEqual(
+        expect.objectContaining({
+          event: 'drop_rejected',
+          code: 'E_REPLAY_STATE',
+          reason: 'storage unavailable',
+        }),
+      );
+      expect(spy).toHaveBeenCalledTimes(1);
+      await node.send(uuidv7(NOW + 1));
+      expect(node.engine.pending()).toHaveLength(1);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('refuses old drops and reports a broken replay store without asking to retry', async () => {
     const root = mkdtempSync(join(tmpdir(), 'drop-replay-engine-'));
     try {
       const owner = await generateIdentity('Owner');
@@ -648,6 +678,7 @@ describe('private replay admission', () => {
         publishedAt: new Date(NOW).toISOString(),
       });
       const replies: Envelope[] = [];
+      const ownerLogs: EngineLogEntry[] = [];
       const engine = new NodeEngine({
         identity: owner,
         ownerKind: 'human',
@@ -660,6 +691,7 @@ describe('private replay admission', () => {
           },
         },
         now: () => NOW,
+        log: (entry) => ownerLogs.push(entry),
       });
       const request = async (dropId: string) =>
         sealEnvelope(
@@ -699,7 +731,26 @@ describe('private replay admission', () => {
             now: NOW,
           })
         ).message,
-      ).toMatchObject({ type: 'drop_error', code: 'E_RATE' });
+      ).toMatchObject({ type: 'drop_error', code: 'E_RUNNER' });
+      const replied = (
+        await openEnvelope(requester, replies.at(-1), {
+          isKnownPeer: (id) => id === owner.nodeId,
+          replay: new ReplayCache(),
+          now: NOW,
+        })
+      ).message;
+      if (replied.type !== 'drop_error') throw new Error('Expected drop_error');
+      expect(replied.message.toLowerCase()).toContain('propriétaire');
+      expect(replied.message.toLowerCase()).not.toContain('réessay');
+      expect(replied.message).not.toContain(root);
+      expect(engine.memoryStats().executing).toBe(0);
+      expect(ownerLogs).toContainEqual(
+        expect.objectContaining({
+          event: 'drop_rejected',
+          code: 'E_REPLAY_STATE',
+          reason: 'corrupt clock',
+        }),
+      );
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
