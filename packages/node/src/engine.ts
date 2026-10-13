@@ -1935,6 +1935,7 @@ export class NodeEngine extends EventEmitter {
     if (
       drop &&
       drop.executor === from &&
+      message.receipt.requester === this.identity.nodeId &&
       drop.capabilityId === message.receipt.capabilityId &&
       message.receipt.decision === 'allow_once'
     ) {
