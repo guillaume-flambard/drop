@@ -249,6 +249,14 @@ export interface OutboundDrop {
   state: DropState;
   createdAt: number;
   result?: { output: unknown; outputSchemaHash: string };
+  /** Provenance supplied only by a verified executor-signed receipt (T4.44). */
+  provenance?: {
+    executor: NodeId;
+    approver: NodeId;
+    answeredBy?: 'capability' | 'human' | 'fact';
+    decidedAt?: number;
+    finishedAt?: number;
+  };
   error?: { code: DropErrorCode; message: string };
   /**
    * The request left for the relay, which never answered: the executor may or may not have it (T4.39). The same
@@ -1922,7 +1930,18 @@ export class NodeEngine extends EventEmitter {
     if (message.receipt.executor !== from || !(await verifyReceipt(message.receipt))) return;
     this.options.store.appendReceipt(message.receipt);
     const drop = this.outbound.get(message.receipt.dropId);
-    if (drop?.state === 'delivered') drop.state = 'receipted';
+    if (drop) {
+      drop.provenance = {
+        executor: message.receipt.executor,
+        approver: message.receipt.approver,
+        ...(message.receipt.answeredBy ? { answeredBy: message.receipt.answeredBy } : {}),
+        ...(message.receipt.timestamps.decided !== undefined ? { decidedAt: message.receipt.timestamps.decided } : {}),
+        ...(message.receipt.timestamps.finished !== undefined
+          ? { finishedAt: message.receipt.timestamps.finished }
+          : {}),
+      };
+      if (drop.state === 'delivered') drop.state = 'receipted';
+    }
     this.changed();
   }
 
