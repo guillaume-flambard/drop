@@ -96,14 +96,16 @@ export default function App() {
     Promise.allSettled([
       api<{ pending: PendingItem[] }>('GET', '/ui/pending'),
       api<{ drops: DropStatus[] }>('GET', '/ui/outbound'),
+      api<StatusData>('GET', '/ui/admin/status'),
     ]).then(
-      ([pending, outbound]) => {
+      ([pending, outbound, status]) => {
         if (mine !== liveVersion.current) return;
         setPendingFailed(pending.status === 'rejected');
         setData((current) => ({
           ...current,
           ...(pending.status === 'fulfilled' ? { pending: pending.value.pending } : {}),
           ...(outbound.status === 'fulfilled' ? { outbound: outbound.value } : {}),
+          ...(status.status === 'fulfilled' ? { status: status.value } : {}),
         }));
       },
       () => undefined,

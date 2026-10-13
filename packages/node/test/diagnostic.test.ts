@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { arch, platform, tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { generateIdentity } from '@drop/protocol';
 import { scanSecrets } from '@drop/runner';
 import { startDaemon } from '../src/daemon.ts';
@@ -119,6 +119,10 @@ describe('redacted diagnostic (T4.37)', () => {
 
   it('serves the diagnostic and opens the logs folder only with the token', async () => {
     const { home } = await newHome();
+    // A non-secret fixture token owned by this test; never read a private token
+    // from disk before sending a request, even to the loopback daemon.
+    const fixtureToken = 'drop-diagnostic-local-fixture-token-123456';
+    writeFileSync(join(home.root, 'local-token'), fixtureToken, { mode: 0o600 });
     const opened: string[] = [];
     const daemon = await startDaemon(home, {
       apiPort: 0,
@@ -131,7 +135,7 @@ describe('redacted diagnostic (T4.37)', () => {
     });
     cleanups.push(() => daemon.stop());
     const base = `http://127.0.0.1:${String(daemon.api.port)}`;
-    const auth = { Authorization: `Bearer ${home.localToken()}` };
+    const auth = { Authorization: `Bearer ${fixtureToken}` };
     expect((await fetch(`${base}/ui/admin/diagnostic`)).status).toBe(401);
     expect((await fetch(`${base}/ui/admin/logs/open`, { method: 'POST' })).status).toBe(401);
     expect(opened).toEqual([]);
@@ -150,7 +154,15 @@ describe('redacted diagnostic (T4.37)', () => {
 
     // The status gives the versions and the logs folder to the panel and the workspace.
     const state = (await (await fetch(`${base}/ui/admin/status`, { headers: auth })).json()) as Record<string, unknown>;
-    expect(state).toMatchObject({ version: { engine: ENGINE_VERSION }, logDir: logsDir(home.root) });
+    expect(state).toMatchObject({
+      version: { engine: ENGINE_VERSION },
+      logDir: logsDir(home.root),
+      security: { replayStorageBlocked: false },
+    });
+    vi.spyOn(daemon.engine, 'replayStorageAlert').mockReturnValue(true);
+    expect((await fetch(`${base}/ui/admin/status`)).status).toBe(401);
+    const guarded = await fetch(`${base}/ui/admin/status`, { headers: auth });
+    expect(await guarded.json()).toMatchObject({ security: { replayStorageBlocked: true } });
   });
 
   it('exports no ending of a key and no control or bidi character that could forge a section (review of PR #82)', async () => {

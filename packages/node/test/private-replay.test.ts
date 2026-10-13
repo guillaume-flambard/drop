@@ -1,5 +1,15 @@
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readdirSync, rmdirSync, rmSync, unlinkSync, utimesSync, writeFileSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmdirSync,
+  rmSync,
+  unlinkSync,
+  utimesSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
@@ -628,6 +638,34 @@ describe('replay admission through the engine', () => {
 });
 
 describe('private replay admission', () => {
+  it('shows owner warning on persistent corruption and clears after verified durable claim', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'drop-owner-alert-'));
+    try {
+      const node = await ownerNode(root);
+      const transitions: boolean[] = [];
+      node.engine.on('change', () => transitions.push(node.engine.replayStorageAlert()));
+      expect(node.engine.replayStorageAlert()).toBe(false);
+      await node.send(uuidv7(NOW));
+      const clock = join(root, 'received-drops-clock');
+      const original = readFileSync(clock, 'utf8');
+      writeFileSync(clock, 'corrupt');
+      await node.send(uuidv7(NOW + 1));
+      expect(node.engine.replayStorageAlert()).toBe(true);
+      expect(transitions.filter(Boolean)).toHaveLength(1);
+      expect(node.engine.pending()).toHaveLength(1);
+      expect(await node.lastReply()).toMatchObject({ type: 'drop_error', code: 'E_RUNNER' });
+      await node.send(uuidv7(NOW + 2));
+      expect(transitions.filter(Boolean)).toHaveLength(1);
+      writeFileSync(clock, original);
+      await node.send(uuidv7(NOW + 3));
+      expect(node.engine.replayStorageAlert()).toBe(false);
+      expect(node.engine.pending()).toHaveLength(2);
+      expect(transitions.at(-1)).toBe(false);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('keeps transient replay-store failures retryable without losing later admissions', async () => {
     const root = mkdtempSync(join(tmpdir(), 'drop-replay-transient-'));
     try {
@@ -651,6 +689,7 @@ describe('private replay admission', () => {
         }),
       );
       expect(spy).toHaveBeenCalledTimes(1);
+      expect(node.engine.replayStorageAlert()).toBe(false);
       await node.send(uuidv7(NOW + 1));
       expect(node.engine.pending()).toHaveLength(1);
     } finally {

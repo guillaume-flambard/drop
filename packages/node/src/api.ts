@@ -77,6 +77,8 @@ export interface AdminHooks {
     displayName: string;
     nodeId: string;
     relayConnected: boolean;
+    /** Only for authenticated local admin endpoints, never public health probes. */
+    security?: { replayStorageBlocked: boolean };
     lan?: string;
     internet?: string;
     policy?: unknown;

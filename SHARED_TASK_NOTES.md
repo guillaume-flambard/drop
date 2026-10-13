@@ -52,3 +52,58 @@ Check actual statuses of PRs 91, 98, 99, 100, before starting new code. If they 
 - `docs/TASKS.md`: T3.1d changed from todo to **doing**, not done. Other resilience subtasks and owner UI alert are queued.
 - The complete Vitest suite runs separately with SentinelX job `job_99690ba072e1`; do not claim its result before checking.
 - Next: review GitHub CI and branch protection; if it is green, merge via normal queue (no bypass), then continue one remaining T3.1d subtask. Do not publish a stable release or touch private user machines.
+
+## Relay 12 — T3.1d local owner alert for observed replay corruption (2026-10-13)
+
+**Selected focused slice:** When the private anti-replay metadata is persistently corrupt, the owner should see a clear warning in the local workspace. The requester already gets an `E_RUNNER` refusal in PR #103; no further remote detail should leak.
+
+**Breakdown written BEFORE code changes:**
+- `DONE` — Track a boolean replay-security block in the running NodeEngine only for the known persistent replay-state corruption reasons. Clear after a successful durable claim. Emit change only on actual transition.
+- `DONE` — Expose the flag only through the already authenticated owner `/ui/admin/status`, and render a concise accessible warning in the overview with a link to Diagnostic. Refresh owner status on existing engine change events.
+- `DONE` — Test persistent versus transient failure, recovery, HTTP authentication and workspace rendering; focused tests, lint/typecheck and OpenSpec guard PASS. Expanded UI regressions passed (44/44); GitHub PR #104 is awaiting required CI.
+- `QUEUED` — After a daemon restart the in-memory flag is unknown until a new claim. A startup read-only integrity probe/persistent detection is a separate future task. Do not change private replay storage layout or automatically repair it here.
+
+**Dependencies / safety:** This worktree is stacked on PR #103 head (`65729c9`), because the persistent/transient classification lives there. No production mutation, no credentials, no platform installations. The owner-only alert must never expose requester IDs, paths, exception messages or tokens.
+
+### Relay 12 implementation and handoff (initial)
+
+- `NodeEngine.replayStorageAlert()` exposes a **boolean only**, true after durable replay corruption is observed. Stable `E_REPLAY_STATE` diagnostics remain in local log only. One `change` event for first failure; subsequent corrupt requests do not repeatedly alert. A successful durable claim clears the indicator.
+- Authenticated `/ui/admin/status` includes `security.replayStorageBlocked`; there is no new public endpoint. Desktop workspace overview shows an accessible warning with a link to the existing Diagnostic page, and SSE-driven status refresh discovers it without restarting the window.
+- Regression tests cover persistent failure, repeated failure, recovery, transient no-alert, owner status authorization and UI rendering/navigation. The first targeted set (28 selected tests across 3 files) passed. CI/lint/typing and full suite evidence must be updated below before delivery.
+- This flag is **not yet restored at daemon startup** without receiving a new request. To achieve proactive startup detection, build a separate read-only durable integrity probe (not an automatic repair). Do not claim persisted warning support yet.
+- PR #103 was checked: all 11 PR checks PASS, no unresolved threads, and the PR is already **position 1 in GitHub merge queue**. It is not merged yet. This relay branch is based on PR #103 commit to avoid duplicating that work.
+
+### Relay 12 verification and next baton
+
+- 28 focused tests passed across `private-replay`, local authenticated `diagnostic` HTTP, and owner workspace rendering. Added a regression for repeated corruption and successful recovery, and no warning on transient replay I/O errors.
+- `pnpm -r lint` **PASS**; `pnpm -r typecheck` **PASS**; `git diff --check` **PASS**.
+- `openspec-guard@0.3.0` **PASS**, 698 criteria, 535 test-linked, existing 139 failures frozen in baseline (no new unfrozen failure). One new normative AC with exact selector.
+- GitHub PR #103 merged at `f7e200c`; the owner alert branch contains only the follow-up change relative to that commit. **Do not** mark T3.1d `done`: remaining resilience subtasks exist.
+- Expanded four-file regression job `job_42ffc8508442` **succeeded**: 44/44 tests PASS (35 replay, 5 diagnostics, 3 existing workspace, 1 new UI alert).
+- **Limitation to hand off:** owner alert is an in-process observed condition. After a daemon restart, before receiving another invalid request, the flag is unknown; a read-only startup anti-replay integrity probe is future work. No destructive automatic repair of security state.
+
+### Relay 12 GitHub handoff
+
+- PR #103 has MERGED at `f7e200c`; this branch adds only the owner alert.
+- PR #104: https://github.com/memolabs-dev/drop/pull/104 — OPEN with normal GitHub auto-merge enabled, Ubuntu/macOS/Windows/CodeQL checks pending at last check. No bypass of merge queue or protected checks.
+- **Next single task:** Proactively detect pre-existing persistent replay corruption at daemon startup via a *read-only* integrity validation, without mutating or resetting replay state. Begin by designing deterministic tests for healthy, old and corrupt stores; do not silently reset keys/markers.
+- Existing private beta installers do not include this new code until the normal signed release pipeline is run. No physical device claims, deploy, or stable publication in this relay.
+
+## Relay 14 — unblock PR #104 CodeQL review (2026-10-13)
+
+**Selected one focused task:** GitHub reports PR #104 has 11 passing checks but is BLOCKED from the merge queue by an unresolved CodeQL "File data in outbound network request" thread at `packages/node/test/diagnostic.test.ts:160` (alert #91). The test's HTTP authorization token is currently read from the private temporary home via `home.localToken()`. This is test-only, but CodeQL correctly traces a file-derived secret into a network call.
+
+**Breakdown recorded before implementation:**
+- `DONE` — Use a test-owned, non-secret fixture token generated as a constant in the test process and explicitly write it to the throwaway home *before* starting its daemon. Send only the test-owned value to loopback; avoid fetching a disk-derived secret into the request.
+- `DONE` — Diagnostic / owner UI tests 6/6 PASS; monorepo lint and typecheck PASS. Publish a PR #104 branch update for hosted CodeQL review.
+- `NEXT` — Only after hosted CodeQL confirms the finding no longer applies, resolve the corresponding review thread with evidence; enqueue through GitHub merge queue. Do not blindly dismiss security findings.
+- `QUEUED` — Retarget dependent PR #105 to main after PR #104 is merged, then rerun Windows/macOS/Linux required checks.
+
+**Safety:** No real local token is read or disclosed, no CI/security checker disabled, no release/deployment. Changes confined to a throwaway test fixture and this handoff log.
+
+### Relay 14 local verification
+
+- `packages/node/test/diagnostic.test.ts` now supplies an intentionally non-secret, predetermined test token *before* the daemon reads the throwaway home's token file. The HTTP request header is constructed from the test fixture variable, **not from `home.localToken()`** or another file read. Nothing changes in real daemon authentication.
+- `pnpm exec vitest run packages/node/test/diagnostic.test.ts packages/desktop-ui/test/replay-security-alert.test.tsx`: **6/6 PASS**.
+- `pnpm -r lint`, `pnpm -r typecheck`, `git diff --check`: PASS.
+- Remaining action: publish to PR #104, rerun hosted CodeQL; inspect alert #91 and resolve its thread only with evidence the issue no longer applies. Then enqueue normally.

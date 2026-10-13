@@ -306,6 +306,7 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
         displayName: identity.displayName,
         nodeId: identity.nodeId,
         relayConnected: relay.connected,
+        security: { replayStorageBlocked: engine.replayStorageAlert() },
         lan: lan.state(),
         internet: iroh.state(),
         // Shown in the workspace's « Diagnostic » (T4.37).

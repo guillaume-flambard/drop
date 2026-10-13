@@ -398,6 +398,9 @@ export class NodeEngine extends EventEmitter {
   // idle check and Tauri's updater installation. Clearing it resumes normal operations.
   private updateMaintenance = false;
   private activeIncoming = 0;
+  /** Ephemeral owner-only warning for observed persistent replay corruption.
+   * The durable replay store remains unchanged and always fails closed. */
+  private replayStorageBlocked = false;
 
   constructor(options: EngineOptions) {
     super();
@@ -413,6 +416,12 @@ export class NodeEngine extends EventEmitter {
   }
 
   // ---- queries -----------------------------------------------------------------------------------------------
+
+  /** Report only a boolean to the authenticated owner's workspace, never the
+   * corrupted path, failure text, peer ID or request ID. */
+  replayStorageAlert(): boolean {
+    return this.replayStorageBlocked;
+  }
 
   peers(): Peer[] {
     return this.options.store.peers();
@@ -1490,7 +1499,12 @@ export class NodeEngine extends EventEmitter {
       } catch (error) {
         const reason = replayFailureReason(error);
         this.log({ event: 'drop_rejected', code: 'E_REPLAY_STATE', reason, dropId, peer: from });
-        return PERSISTENT_REPLAY_FAILURES.has(reason) ? REPLAY_STORAGE_FAILURE : CLAIM_ERRORS.capacity;
+        const persistent = PERSISTENT_REPLAY_FAILURES.has(reason);
+        if (persistent && !this.replayStorageBlocked) {
+          this.replayStorageBlocked = true;
+          this.changed();
+        }
+        return persistent ? REPLAY_STORAGE_FAILURE : CLAIM_ERRORS.capacity;
       }
       if (claim === 'expired') {
         // The id passed the wall-clock window above, so only a persisted replay clock ahead of it can refuse it.
@@ -1503,6 +1517,12 @@ export class NodeEngine extends EventEmitter {
         });
       }
       if (claim !== 'claimed') return CLAIM_ERRORS[claim];
+      // Only a successful, durable claim proves the replay store can be trusted
+      // again. A transient failure or duplicate cannot clear the owner warning.
+      if (this.replayStorageBlocked) {
+        this.replayStorageBlocked = false;
+        this.changed();
+      }
     }
     if (this.executing.size >= MAX_ACTIVE_EXECUTING_DROPS) {
       this.log({
