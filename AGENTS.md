@@ -50,6 +50,20 @@ Les commandes `/opsx:*` s'écrivent `$openspec-*` dans Codex (ex. `$openspec-pro
 Reste dans le périmètre de la ligne de l'index. Un manque découvert devient une nouvelle ligne `todo` dans
 `docs/TASKS.md`.
 
+## Boucle STAR des chantiers (13 octobre 2026)
+
+Le registre dérivé [STAR_BACKLOG](docs/relays/STAR_BACKLOG.md) rend chaque chantier ouvert
+lisible en **Situation → Tâche → Action → Résultat**. Il ne remplace ni `docs/TASKS.md`
+(périmètre, dépendances et statuts), ni les specs OpenSpec (contrat), ni les tests (preuves).
+
+- Avant chaque tranche, relis l'index et la spec, choisis un seul chantier non revendiqué
+  avec ses dépendances satisfaites et écris S, T et A dans la note de relais.
+- Après le code, renseigne R avec tests, vérification sécurité, PR/merge queue, limites et
+  ce qui bloque encore. **Pas de `done` sans preuve complète**, pas de fusion forcée.
+- Régénère le registre après modification du backlog avec `node scripts/star-backlog.ts`,
+  puis vérifie `node scripts/star-backlog.ts --check` et les tests de registre.
+- Ne tente pas les recettes matérielles ou la collecte de témoignages à la place du propriétaire.
+
 ## Stack imposée
 
 - TypeScript strict, Node 22+, monorepo **pnpm workspaces**.
