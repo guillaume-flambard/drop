@@ -7,6 +7,7 @@ import {
   sha256Hex,
 } from '@drop/protocol';
 import type { CapabilityView, DropView, LocalNode } from './client.ts';
+import { explainFailure } from './failure-guidance.ts';
 
 export const LIST_DESCRIPTION =
   "Liste ce que les agents de tes collègues peuvent faire pour toi sans te donner leurs accès. À utiliser quand ta tâche est bloquée par une ressource, une donnée ou un contexte qui appartient à quelqu'un d'autre.";
@@ -217,7 +218,12 @@ export function createTools(node: LocalNode, agent: string) {
       if (drop.result) return text(wrapResult(drop, drop.result.output));
       if (drop.error)
         return text(
-          JSON.stringify({ status: 'error', code: peerText(drop.error.code), message: peerText(drop.error.message) }),
+          JSON.stringify({
+            status: 'error',
+            code: peerText(drop.error.code),
+            message: peerText(drop.error.message),
+            guidance: explainFailure(drop.error.code),
+          }),
           true,
         );
       return text(
@@ -280,7 +286,7 @@ export function createTools(node: LocalNode, agent: string) {
       for (const drop of others) {
         lines.push(
           drop.error
-            ? `${peerText(drop.ownerName)} (« ${peerText(drop.title)} ») : ${peerText(drop.error.code)}, ${peerText(drop.error.message)}`
+            ? `${peerText(drop.ownerName)} (« ${peerText(drop.title)} ») : ${peerText(drop.error.code)}, ${peerText(drop.error.message)}. Cause : ${explainFailure(drop.error.code).cause} Suite : ${explainFailure(drop.error.code).next}`
             : `${peerText(drop.ownerName)} (« ${peerText(drop.title)} ») : en attente (${peerText(drop.state)}${drop.delivery ? `, ${UNCONFIRMED}` : ''})`,
         );
       }
