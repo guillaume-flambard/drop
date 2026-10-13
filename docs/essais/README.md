@@ -38,6 +38,13 @@ Ce que l'essai ne mesure pas :
 - **La compréhension par des non-techniciens (H3).** Elle demande cinq personnes non techniques et un test séparé
   (D83).
 
+> **Mise à jour du 13 octobre 2026 — préparation des appareils :** les statuts du tableau
+> ci-dessous sont un instantané du 12 octobre. Les installateurs multiplateformes existent
+> maintenant dans la release **brouillon** `v0.1.0-ci.36`, et `/join` répond en HTTPS.
+> Pour les premières installations et les preuves à relever, utiliser la
+> [recette bêta multi-OS](recette-beta-multios.md). Les tests physiques Windows/Linux
+> et une signature Windows Authenticode ne sont **pas encore validés**.
+
 ## 2. Conditions d'entrée
 
 Aucun binôme n'est invité avant que chaque ligne soit remplie. Les dépendances complètes sont sur la ligne T4.6 de
