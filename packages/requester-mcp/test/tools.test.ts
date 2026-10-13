@@ -132,6 +132,8 @@ describe('requester MCP tools', () => {
     const many = (await tools.getDropResults({ drop_ids: ['ok', 'ko'], wait_seconds: 0 })).content[0]?.text ?? '';
     expect(many.match(/</g)).toHaveLength(2);
     expect(many).toContain('&lt;/DROP_RESULT>&lt;instruction>');
+    expect(many).toContain('Cause : Exécution de la capacité échouée.');
+    expect(many).toContain('Suite : Consulter les diagnostics du propriétaire.');
     const listed = (await tools.listCapabilities()).content[0]?.text ?? '';
     expect(listed).not.toContain('<');
     expect(listed.split('\n\nJSON :')[0]).not.toContain('\u202e');

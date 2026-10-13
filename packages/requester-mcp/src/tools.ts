@@ -286,7 +286,7 @@ export function createTools(node: LocalNode, agent: string) {
       for (const drop of others) {
         lines.push(
           drop.error
-            ? `${peerText(drop.ownerName)} (« ${peerText(drop.title)} ») : ${peerText(drop.error.code)}, ${peerText(drop.error.message)}`
+            ? `${peerText(drop.ownerName)} (« ${peerText(drop.title)} ») : ${peerText(drop.error.code)}, ${peerText(drop.error.message)}. Cause : ${explainFailure(drop.error.code).cause} Suite : ${explainFailure(drop.error.code).next}`
             : `${peerText(drop.ownerName)} (« ${peerText(drop.title)} ») : en attente (${peerText(drop.state)}${drop.delivery ? `, ${UNCONFIRMED}` : ''})`,
         );
       }
