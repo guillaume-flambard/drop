@@ -534,6 +534,11 @@ Le Node MUST conserver au plus 16 384 identifiants reçus, sans contenu, pendant
 - **WHEN** les métadonnées anti-rejeu persistantes sont corrompues et l'exécuteur ne peut plus vérifier les demandes
 - **THEN** le Node refuse avant consentement, consigne `E_REPLAY_STATE` localement et répond avec `E_RUNNER` sans inviter le demandeur à réessayer ; le message distant ne révèle aucun chemin privé
 
+#### Scenario: AC: alerte locale après corruption anti-rejeu persistante
+<!-- openspec-guard:test="private replay admission > shows owner warning on persistent corruption and clears after verified durable claim" -->
+- **WHEN** le stockage anti-rejeu présente une corruption persistante détectée pendant une demande
+- **THEN** le Node publie un indicateur local réservé au propriétaire, sans chemin ni identité de pair, jusqu'à la preuve d'une nouvelle admission durable ; l'indicateur ne devient jamais un message public
+
 #### Scenario: AC: panne passagère toujours réessayable
 <!-- openspec-guard:test="private replay admission > keeps transient replay-store failures retryable without losing later admissions" -->
 - **WHEN** une écriture ou la disponibilité du stockage anti-rejeu échoue ponctuellement sans corruption durable

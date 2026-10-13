@@ -52,3 +52,32 @@ Check actual statuses of PRs 91, 98, 99, 100, before starting new code. If they 
 - `docs/TASKS.md`: T3.1d changed from todo to **doing**, not done. Other resilience subtasks and owner UI alert are queued.
 - The complete Vitest suite runs separately with SentinelX job `job_99690ba072e1`; do not claim its result before checking.
 - Next: review GitHub CI and branch protection; if it is green, merge via normal queue (no bypass), then continue one remaining T3.1d subtask. Do not publish a stable release or touch private user machines.
+
+## Relay 12 — T3.1d local owner alert for observed replay corruption (2026-10-13)
+
+**Selected focused slice:** When the private anti-replay metadata is persistently corrupt, the owner should see a clear warning in the local workspace. The requester already gets an `E_RUNNER` refusal in PR #103; no further remote detail should leak.
+
+**Breakdown written BEFORE code changes:**
+- `DONE` — Track a boolean replay-security block in the running NodeEngine only for the known persistent replay-state corruption reasons. Clear after a successful durable claim. Emit change only on actual transition.
+- `DONE` — Expose the flag only through the already authenticated owner `/ui/admin/status`, and render a concise accessible warning in the overview with a link to Diagnostic. Refresh owner status on existing engine change events.
+- `DONE` — Test persistent versus transient failure, recovery, HTTP authentication and workspace rendering; focused tests, lint/typecheck and OpenSpec guard PASS. Expanded UI regressions are being run before PR delivery.
+- `QUEUED` — After a daemon restart the in-memory flag is unknown until a new claim. A startup read-only integrity probe/persistent detection is a separate future task. Do not change private replay storage layout or automatically repair it here.
+
+**Dependencies / safety:** This worktree is stacked on PR #103 head (`65729c9`), because the persistent/transient classification lives there. No production mutation, no credentials, no platform installations. The owner-only alert must never expose requester IDs, paths, exception messages or tokens.
+
+### Relay 12 implementation and handoff (initial)
+
+- `NodeEngine.replayStorageAlert()` exposes a **boolean only**, true after durable replay corruption is observed. Stable `E_REPLAY_STATE` diagnostics remain in local log only. One `change` event for first failure; subsequent corrupt requests do not repeatedly alert. A successful durable claim clears the indicator.
+- Authenticated `/ui/admin/status` includes `security.replayStorageBlocked`; there is no new public endpoint. Desktop workspace overview shows an accessible warning with a link to the existing Diagnostic page, and SSE-driven status refresh discovers it without restarting the window.
+- Regression tests cover persistent failure, repeated failure, recovery, transient no-alert, owner status authorization and UI rendering/navigation. The first targeted set (28 selected tests across 3 files) passed. CI/lint/typing and full suite evidence must be updated below before delivery.
+- This flag is **not yet restored at daemon startup** without receiving a new request. To achieve proactive startup detection, build a separate read-only durable integrity probe (not an automatic repair). Do not claim persisted warning support yet.
+- PR #103 was checked: all 11 PR checks PASS, no unresolved threads, and the PR is already **position 1 in GitHub merge queue**. It is not merged yet. This relay branch is based on PR #103 commit to avoid duplicating that work.
+
+### Relay 12 verification and next baton
+
+- 28 focused tests passed across `private-replay`, local authenticated `diagnostic` HTTP, and owner workspace rendering. Added a regression for repeated corruption and successful recovery, and no warning on transient replay I/O errors.
+- `pnpm -r lint` **PASS**; `pnpm -r typecheck` **PASS**; `git diff --check` **PASS**.
+- `openspec-guard@0.3.0` **PASS**, 698 criteria, 535 test-linked, existing 139 failures frozen in baseline (no new unfrozen failure). One new normative AC with exact selector.
+- GitHub PR #103 merged at `f7e200c`; the owner alert branch contains only the follow-up change relative to that commit. **Do not** mark T3.1d `done`: remaining resilience subtasks exist.
+- Expanded four-file regression job `job_42ffc8508442` must be inspected for the exact result before any claims about the expanded suite.
+- **Limitation to hand off:** owner alert is an in-process observed condition. After a daemon restart, before receiving another invalid request, the flag is unknown; a read-only startup anti-replay integrity probe is future work. No destructive automatic repair of security state.

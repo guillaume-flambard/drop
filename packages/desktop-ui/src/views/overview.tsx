@@ -62,6 +62,24 @@ export function OverviewView({ data, loading, toPage }: ViewProps) {
   const ongoing = drops.filter((d) => !['delivered', 'receipted', 'denied', 'expired', 'failed'].includes(d.state));
   return (
     <div className="space-y-6">
+      {data.status?.security?.replayStorageBlocked ? (
+        <section className="rounded-2xl border border-destructive/40 p-5" role="alert">
+          <h2 className="text-[14px] font-semibold">Vérification de sécurité indisponible</h2>
+          <p className="mt-2 text-[12px] leading-relaxed text-muted-foreground">
+            Drop refuse les nouvelles demandes pour protéger cet appareil. Le stockage anti-rejeu doit être vérifié par
+            son propriétaire. Ne supprime pas les données de Drop pour résoudre ce problème.
+          </p>
+          <Button
+            variant="secondary"
+            className="mt-3"
+            onClick={() => {
+              toPage('diagnostic');
+            }}
+          >
+            Voir le diagnostic
+          </Button>
+        </section>
+      ) : null}
       <section className="surface-warm relative overflow-hidden rounded-[23px] p-7 sm:p-9">
         <div className="relative z-10 max-w-[530px]">
           <p className="mb-3 text-[11px] font-medium tracking-wide text-[#777078] dark:text-muted-foreground">

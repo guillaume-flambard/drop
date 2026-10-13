@@ -67,6 +67,8 @@ export interface InternetData {
 export interface StatusData {
   displayName: string;
   relayConnected: boolean;
+  /** Authenticated local owner status only. No exception details or peer IDs. */
+  security?: { replayStorageBlocked: boolean };
   internet?: string;
   policy?: { policyId: string };
   /** The app's and the engine's versions (T4.37); `app` is absent for a node started outside the app. */
