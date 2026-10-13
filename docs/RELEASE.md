@@ -279,6 +279,7 @@ L'icône s'affiche dans la barre du bureau par le protocole AppIndicator : KDE, 
 
 ## Reste à faire
 
+- Le smoke-test automatique du paquet redémarre le Node embarqué deux fois avec le même domicile privé et vérifie le maintien de l'identité, du jeton API et du port, ainsi que la protection de `/_shell/update-ready`. Cela couvre la reprise du daemon, **pas** encore la vraie mise à jour d'un installateur N vers N+1.
 - Recette sur de vraies machines : Windows 10 et 11, Ubuntu GNOME et KDE, X11 et Wayland, Mac Intel. Installer, ouvrir le panneau depuis l'icône, redémarrer la session, tuer l'app depuis le gestionnaire de tâches et vérifier que le daemon s'arrête.
 - Windows : notifications natives, avec « Voir » et « Refuser » comme sur macOS (T4.30 ; le daemon les passe à l'app, qui ne les affiche que sur macOS), droits du dossier `.drop` (le mode `0600` ne vaut rien sous Windows, il faut des ACL), signature de `drop-iroh.exe`.
 - Linux : notifications natives (actions seulement si le serveur de notifications annonce `actions`), panneau sans protection contre la capture (aucun réglage sous Linux) ; recette du lien `drop://join` avec une AppImage (T4.31).
