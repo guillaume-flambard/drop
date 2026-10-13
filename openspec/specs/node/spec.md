@@ -539,6 +539,11 @@ Le Node MUST conserver au plus 16 384 identifiants reçus, sans contenu, pendant
 - **WHEN** le stockage anti-rejeu présente une corruption persistante détectée pendant une demande
 - **THEN** le Node publie un indicateur local réservé au propriétaire, sans chemin ni identité de pair, jusqu'à la preuve d'une nouvelle admission durable ; l'indicateur ne devient jamais un message public
 
+#### Scenario: AC: intégrité persistante vérifiée au démarrage en lecture seule
+<!-- openspec-guard:test="read-only replay integrity probe at startup (T3.1d) > reports existing corruption on authenticated owner status before any new request" -->
+- **WHEN** le Node démarre avec des métadonnées anti-rejeu déjà corrompues
+- **THEN** il active l'alerte réservée au propriétaire avant toute nouvelle demande, sans modifier le stockage, reprendre une migration ou réparer silencieusement les fichiers ; un verrou d'un autre processus ou une migration initiale interrompue reste indéterminé plutôt que déclaré corrompu
+
 #### Scenario: AC: panne passagère toujours réessayable
 <!-- openspec-guard:test="private replay admission > keeps transient replay-store failures retryable without losing later admissions" -->
 - **WHEN** une écriture ou la disponibilité du stockage anti-rejeu échoue ponctuellement sans corruption durable
