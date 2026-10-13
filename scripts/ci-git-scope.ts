@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { win32 } from 'node:path';
 import { classifyGitNameStatusZ } from './ci-git-diff.ts';
 import type { CiPathScope } from './ci-path-scope.ts';
 
@@ -31,7 +32,13 @@ export function classifyGitCommits(
 }
 
 /** The CLI emits only the scope, never filenames, credentials or invocation details. */
-if (process.argv[1]?.endsWith('/ci-git-scope.ts')) {
+// Windows GitHub runners pass a backslash-separated argv[1]. The CLI must
+// emit a scope on all operating systems or it will silently choose full CI.
+export function isCiScopeEntrypoint(argv1: string | undefined): boolean {
+  return win32.basename(argv1 ?? '') === 'ci-git-scope.ts';
+}
+
+if (isCiScopeEntrypoint(process.argv[1])) {
   process.stdout.write(
     classifyGitCommits(process.env.DROP_CI_BASE_SHA, process.env.DROP_CI_HEAD_SHA, process.cwd()) + '\n',
   );

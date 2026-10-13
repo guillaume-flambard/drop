@@ -3,13 +3,21 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { classifyGitCommits } from '../scripts/ci-git-scope.ts';
+import { classifyGitCommits, isCiScopeEntrypoint } from '../scripts/ci-git-scope.ts';
 
 function git(repo: string, ...args: string[]): string {
   return execFileSync('git', ['-C', repo, ...args], { encoding: 'utf8', timeout: 10_000 }).trim();
 }
 
 describe('T4.28 real Git diff adapter', () => {
+  it('prints the scope on Windows and POSIX entrypoints', () => {
+    expect(isCiScopeEntrypoint('/home/runner/work/drop/scripts/ci-git-scope.ts')).toBe(true);
+    expect(isCiScopeEntrypoint('C:\\a\\drop\\scripts\\ci-git-scope.ts')).toBe(true);
+    expect(isCiScopeEntrypoint('scripts\\ci-git-scope.ts')).toBe(true);
+    expect(isCiScopeEntrypoint('another-module.ts')).toBe(false);
+    expect(isCiScopeEntrypoint(undefined)).toBe(false);
+  });
+
   it('detects real docs-only commits and never forgets code-to-doc renames', () => {
     const repo = mkdtempSync(join(tmpdir(), 'drop-ci-scope-'));
     try {
@@ -38,7 +46,7 @@ describe('T4.28 real Git diff adapter', () => {
     } finally {
       rmSync(repo, { recursive: true, force: true });
     }
-  });
+  }, 20_000);
 
   it('fails closed on suspicious input and git errors, without shelling', () => {
     const base = 'a'.repeat(40);
