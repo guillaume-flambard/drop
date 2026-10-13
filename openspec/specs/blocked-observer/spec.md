@@ -104,6 +104,7 @@ horodatage, nom de l'outil, identifiant de session, motif détecté, et un hash 
 elle est identifiable. Il MUST NOT copier le contenu de la sortie de l'outil.
 
 #### Scenario: AC: 403 Forbidden sans extrait de la sortie
+<!-- openspec-guard:test="Claude Code hook (source B) > a fake tool result containing 403 Forbidden creates an event without any excerpt of the output" -->
 - **WHEN** un faux résultat d'outil contenant `403 Forbidden` est passé au hook
 - **THEN** un événement est créé avec `source: 'hook_claude'`
 - **AND** l'événement ne contient aucun extrait de la sortie de l'outil, seulement horodatage, outil, session, motif et éventuel `resource_hash`
@@ -117,6 +118,7 @@ elle est identifiable. Il MUST NOT copier le contenu de la sortie de l'outil.
 n'écrire aucun événement et MUST consigner l'erreur dans `~/.blocked-observer/errors.log`.
 
 #### Scenario: AC: entrée JSON invalide
+<!-- openspec-guard:test="Claude Code hook (source B) > never fails Claude Code: invalid JSON exits 0, writes no event, logs the error" -->
 - **WHEN** le hook reçoit une entrée JSON invalide sur stdin
 - **THEN** il sort en code 0
 - **AND** rien n'est écrit dans `~/.blocked-observer/events.jsonl`
@@ -227,6 +229,7 @@ hook et la config Codex.
 `blocked-observer list [--since 7d]` SHALL afficher un tableau des événements, filtrable par ancienneté avec `--since`.
 
 #### Scenario: AC: report_blocked visible dans list
+<!-- openspec-guard:test="report_blocked (source A) > an agent can call report_blocked and the event appears in list" -->
 - **WHEN** dans Claude Code l'agent appelle `report_blocked` puis l'utilisateur lance `blocked-observer list`
 - **THEN** l'événement apparaît dans le tableau
 
@@ -278,6 +281,7 @@ minutes perdues, et taux de blocages « YES » par dev-jour actif. Un « jour ac
 événement hook ou une session Codex détectée.
 
 #### Scenario: AC: chiffres justes sur fixture
+<!-- openspec-guard:test="report and linking > report gives exact figures on a fixture" -->
 - **WHEN** le test lance `report` sur un fichier d'événements de fixture
 - **THEN** les événements par jour actif, la répartition par classification, les minutes perdues et le taux de blocages « YES » par dev-jour actif sont égaux aux valeurs attendues
 
@@ -290,6 +294,7 @@ minutes perdues, et taux de blocages « YES » par dev-jour actif. Un « jour ac
 retirer ou anonymiser les champs texte, et le fichier écrit MUST NOT contenir un champ retiré.
 
 #### Scenario: AC: champ retiré absent de l'export
+<!-- openspec-guard:test="export review > export contains no field the user removed" -->
 - **WHEN** l'utilisateur retire un champ d'un événement pendant la relecture de `export`
 - **THEN** le fichier `--out` ne contient pas ce champ (test)
 
