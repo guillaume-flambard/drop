@@ -343,6 +343,8 @@ export interface EngineOptions {
   /** Executor side: who pays the model. 'requester' (default, D27) uses the requester's key when one is sent. */
   payer?: 'requester' | 'owner';
   privateProfile?: boolean;
+  /** Read-only replay integrity probe at daemon startup. No peer receives it. */
+  replayStorageBlockedAtStartup?: boolean;
   /** The coding agents this node's human uses, shared with the team (T2.9). */
   agents?: () => string[];
   /** Runs a call from a linked assistant (T2.13) with the requester tools, in this user's name. */
@@ -411,6 +413,7 @@ export class NodeEngine extends EventEmitter {
     this.lanKeyBytes = lanKeyBytes;
     this.options = options;
     this.identity = options.identity;
+    this.replayStorageBlocked = options.replayStorageBlockedAtStartup === true;
     this.now = options.now ?? Date.now;
     this.loadInvites();
   }

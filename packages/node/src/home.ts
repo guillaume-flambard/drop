@@ -330,6 +330,10 @@ function expectedDigest(stored: string, markerNames: string[]): string {
   return floorDigest(floor, live);
 }
 
+/** The startup probe never writes or claims, so a concurrent migration/lock is
+ * unknown rather than a reason to notify the owner of irreversible corruption. */
+export type ReplayStoreInspection = 'healthy' | 'uninitialized' | 'deferred' | 'corrupt';
+
 /** Never removes a lock another process has since taken over. */
 function releaseReplayLock(lock: string): void {
   if (lockOwner(lock) === REPLAY_LOCK_OWNER) rmSync(lock, { recursive: true, force: true });
@@ -356,6 +360,61 @@ export class DropHome {
     writeFileSync(join(this.root, 'config.json'), `${JSON.stringify(config, null, 2)}\n`);
     writePrivate(join(this.root, 'peers.json'), '[]\n');
     writePrivate(join(this.root, 'local-token'), randomBytes(32).toString('base64url'));
+  }
+
+  /**
+   * Inspect durable replay metadata before accepting traffic, without modifying
+   * any file, marker, lock, clock or migration journal. A lock held by another
+   * process, an interrupted first migration, or an I/O error is DEFERRED: those
+   * conditions are not proof of persistent corruption.
+   *
+   * A completed store uses the same digest verification as claimDropLocked.
+   * Unknown filenames from Finder/backups are ignored, as on admission.
+   */
+  inspectReplayStore(): ReplayStoreInspection {
+    const lock = join(this.root, 'received-drops.lock');
+    if (existsSync(lock)) return 'deferred';
+    try {
+      const readSnapshot = (): ReplayStoreInspection => {
+        const dir = join(this.root, 'received-drops');
+        const clock = join(this.root, 'received-drops-clock');
+        const version = join(this.root, 'received-drops-version');
+        const integrity = join(this.root, 'received-drops-integrity');
+        const journal = join(this.root, 'received-drops-migrating');
+        const hasVersion = existsSync(version);
+        const hasClock = existsSync(clock);
+        const hasIntegrity = existsSync(integrity);
+        if (!hasVersion && existsSync(journal)) return 'deferred';
+        if (!hasVersion) return hasClock || hasIntegrity ? 'corrupt' : 'uninitialized';
+        if (!existsSync(dir) || !hasClock) return 'corrupt';
+        const versionText = readFileSync(version, 'utf8');
+        if (versionText !== '1\n' && versionText !== '2\n') return 'corrupt';
+        if (versionText === '2\n' && !hasIntegrity) return 'corrupt';
+        const rawClock = readFileSync(clock, 'utf8').trim();
+        if (!/^(0|[1-9][0-9]*)$/.test(rawClock) || !Number.isSafeInteger(Number(rawClock))) return 'corrupt';
+        const entries = readdirSync(dir, { withFileTypes: true });
+        const markerNames: string[] = [];
+        for (const entry of entries) {
+          if (!UUID_SHAPE.test(entry.name)) continue;
+          if (!entry.isFile()) return 'corrupt';
+          if (uuidv7Timestamp(entry.name) === undefined && !LEGACY_MARKER.test(entry.name)) return 'corrupt';
+          markerNames.push(entry.name);
+        }
+        if (hasIntegrity) {
+          const stored = readFileSync(integrity, 'utf8');
+          if (stored !== expectedDigest(stored, markerNames)) return 'corrupt';
+        }
+        return 'healthy';
+      };
+      const result = readSnapshot();
+      // A writer may have acquired the replay lock while metadata was being
+      // read. Even a mismatch then is indeterminate, not proven corruption.
+      return existsSync(lock) ? 'deferred' : result;
+    } catch {
+      // Permission errors/partial reads cannot prove a corrupt on-disk state.
+      // Admission remains fail-closed independently of this owner-facing probe.
+      return 'deferred';
+    }
   }
 
   /** Bounded, durable tombstones: a past consent cannot be regained after restart or clock rollback. */

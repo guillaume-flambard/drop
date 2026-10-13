@@ -120,7 +120,12 @@ export async function startDaemon(home: DropHome, options: DaemonOptions = {}): 
       throw new DropError('E_INVITE_RELAY', 'E_INVITE_RELAY relay not allowed by policy');
     return 'adopt';
   };
+  // Check the durable anti-replay store without claiming, migrating or repairing.
+  // Only proven persisted corruption activates the owner-only alert.
+  const replayAtStartup = home.inspectReplayStore();
+  if (replayAtStartup === 'corrupt') logEntry({ event: 'replay_startup_corrupt', code: 'E_REPLAY_STATE' });
   const engine = new NodeEngine({
+    replayStorageBlockedAtStartup: replayAtStartup === 'corrupt',
     identity,
     ...(lanKey ? { lanKey } : {}),
     ownerKind: config.ownerKind,

@@ -89,6 +89,38 @@ Check actual statuses of PRs 91, 98, 99, 100, before starting new code. If they 
 - **Next single task:** Proactively detect pre-existing persistent replay corruption at daemon startup via a *read-only* integrity validation, without mutating or resetting replay state. Begin by designing deterministic tests for healthy, old and corrupt stores; do not silently reset keys/markers.
 - Existing private beta installers do not include this new code until the normal signed release pipeline is run. No physical device claims, deploy, or stable publication in this relay.
 
+## Relay 13 — T3.1d read-only startup anti-replay integrity inspection (2026-10-13)
+
+**Selected task:** Detect already-corrupted durable replay metadata when Drop starts, rather than waiting for an incoming request. The existing owner-only boolean/status/UI alert is in PR #104; this is a dependent one-slice follow-up.
+
+**Subtasks recorded BEFORE implementation:**
+- `DONE`: Add a synchronous, read-only `DropHome.inspectReplayStore()` classifier with results healthy, fresh/legacy, deferred (lock or migration), persistent corruption. Reuse the exact stored digest semantics from `claimDropLocked`, validate persisted versions/clocks/directory and live markers. No lock acquisition, migration, marker creation, delete, clock advance or auto-repair.
+- `DONE`: Seed NodeEngine's already-existing owner-only alert on startup when inspection returns persistent corruption; write only a stable non-sensitive diagnostic code. Avoid claiming corruption when another process holds the replay lock or interrupted initial migration is resumable.
+- `DONE`: Six new tests cover healthy/new/legacy/corrupt/missing metadata, digest mismatch, foreign lock, interrupted migration, unchanged disk contents and authenticated daemon status before requests; 6/6 PASS, lint/typecheck/OpenSpec guard PASS.
+- `QUEUED`: A future task can improve diagnosis of transient read failures and build a guided *manual* repair flow after backup; do not change storage to self-heal or falsely mark T3.1d fully done.
+
+**Dependency:** This branch starts at `feat/t3-1d-owner-replay-alert` (PR #104 pending). No stable release, no installation, no production service changes. Do not bypass GitHub merge checks. If parent merges, retarget the PR to main after verifying diff contains only this slice.
+
+### Relay 13 initial evidence and limitations
+
+- `DropHome.inspectReplayStore()` is strictly read-only: validates version, clock, marker directory, each UUID marker type, and the original floored-digest semantics shared with admission. It does not acquire a lock, write any replay file, migrate or reset persisted data.
+- Returns `uninitialized` for never-admitted and legacy metadata-free states, `deferred` for a concurrent lock, a resumable first-migration journal or an I/O exception, and `corrupt` only for durable metadata integrity mismatches. These statuses never lower runtime admission's existing fail-closed controls.
+- `startDaemon` calls it before starting connectivity and seeds only `NodeEngine`'s owner-only in-memory warning; owner log receives a fixed `replay_startup_corrupt` / `E_REPLAY_STATE`, no filenames or private fields. UI + authenticated local API contract inherited from PR #104.
+- `packages/node/test/replay-startup.test.ts`: 6/6 PASS, including verification the snapshot of each replay metadata file and marker directory remains bit-for-bit identical after probing, plus HTTP 401 without the local owner token and a blocked status visible with it.
+- `openspec/specs/node/spec.md` has a new normative startup scenario tied to its integration test.
+- Limitation: an undetectably concurrent mutation, a foreign lock, or an unreadable backing store yields `deferred`, not a false corruption notice. Runtime claims still enforce the original fail-closed path. Startup probe only reports an observed persistent integrity mismatch; it is not a general repair or filesystem-health service.
+
+### Relay 13 verification and handoff
+
+- `packages/node/src/home.ts`: added read-only startup `inspectReplayStore` matching the existing replay high-water/marker digest rules. It distinguishes `healthy`, `uninitialized`, `deferred` (foreign replay lock, resumable migration or unreadable data), and `corrupt` (durable metadata inconsistency). A second lock check prevents claiming corruption if another process acquires the lock during inspection.
+- `packages/node/src/daemon.ts` invokes the probe before accepting traffic, emits only stable `replay_startup_corrupt / E_REPLAY_STATE` local log metadata, seeds the owner-only flag on NodeEngine and leaves all persisted files untouched.
+- `packages/node/test/replay-startup.test.ts`: **6/6 PASS** proving freshly initialized, healthy v2, compatible legacy v1, corrupt clock/version/integrity/missing marker directory, locked store, resumable migration, absence of replay writes, and authenticated HTTP owner status showing the alert before a new request.
+- `pnpm -r lint`: PASS; `pnpm -r typecheck`: PASS; `openspec-guard@0.3.0`: PASS (699 criteria, 536 linked, no new unfrozen failures). `git diff --check`: PASS.
+- Expanded integration suite in SentinelX job `job_85c34ffde773` **PASS: 47/47 tests across 4 files** (6 startup, 35 replay, 5 diagnostics, 1 owner alert UI).
+- **No automatic recovery**. The startup probe can report no proven corruption even when some I/O is temporarily unavailable: in that case runtime admission still fails closed. If process dies or restarts, the next startup probe reevaluates disk state. This is a status signal, never an admission authorization.
+- Dependency: PR #104 is still OPEN with 11 passing required checks, but was not in merge queue at last check. This follow-up branch is based on PR #104; until #104 merges, use a stacked PR into `feat/t3-1d-owner-replay-alert` and retarget to main after the parent merges. Preserve normal GitHub checks.
+- **Next baton:** address only remaining T3.1d durable revocation and retry semantics, or a narrowly scoped follow-up to classify I/O diagnostics. Physical beta testing and Windows signing remain separate, blocked until the owner has devices or a provider.
+
 ## Relay 14 — unblock PR #104 CodeQL review (2026-10-13)
 
 **Selected one focused task:** GitHub reports PR #104 has 11 passing checks but is BLOCKED from the merge queue by an unresolved CodeQL "File data in outbound network request" thread at `packages/node/test/diagnostic.test.ts:160` (alert #91). The test's HTTP authorization token is currently read from the private temporary home via `home.localToken()`. This is test-only, but CodeQL correctly traces a file-derived secret into a network call.
