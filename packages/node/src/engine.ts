@@ -1093,6 +1093,15 @@ export class NodeEngine extends EventEmitter {
           replay: this.replay,
           now: this.now(),
           ...(this.hasLiveInvite() ? { acceptPairToken: (token: string) => this.hasInvite(token) } : {}),
+          onInvalidDropRequest: async (from, dropId) => {
+            // The protocol authenticated and decrypted a known peer first.
+            // Never admit, execute or ask for consent on a schema-invalid drop.
+            try {
+              await this.refuse(from, dropId, 'E_SCHEMA', 'Demande invalide : format non reconnu.');
+            } catch {
+              this.log({ event: 'schema_refusal_failed', code: 'E_RUNNER', peer: from });
+            }
+          },
         });
       } catch (error) {
         this.log({ event: 'envelope_rejected', code: isDropError(error) ? error.code : 'E_RUNNER' });
