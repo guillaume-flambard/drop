@@ -25,21 +25,42 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0 # Need both base and head to safely classify actual renamed paths.
       # Version read from `packageManager` in package.json.
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
           cache: pnpm
+      # Always report required test/test-windows/test-macos jobs: never path-filter this workflow.
+      - name: Classify changed paths conservatively
+        id: ci-scope
+        shell: bash
+        env:
+          CI_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before || '' }}
+          CI_HEAD_SHA: ${{ github.sha }}
+        run: |
+          # Merge queue statuses must always exercise the complete matrix.
+          scope=shared-or-unknown
+          if [ "$GITHUB_EVENT_NAME" != "merge_group" ]; then
+            scope="$(DROP_CI_BASE_SHA="$CI_BASE_SHA" DROP_CI_HEAD_SHA="$CI_HEAD_SHA" node scripts/ci-git-scope.ts 2>/dev/null)" || scope=shared-or-unknown
+          fi
+          if [ "$scope" = docs-only ]; then
+            echo "docs_only=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+          fi
       - run: pnpm install --frozen-lockfile
       # The release must never draft an update with a mismatched public key/signature.
       - name: Verify update-signature release gate unit tests
+        if: steps.ci-scope.outputs.docs_only != 'true'
         run: cargo test --locked --manifest-path crates/drop-update-verify/Cargo.toml
       # internet.test.ts drives the real drop-iroh binary and builds it in a beforeAll: without a cache every run compiled
       # iroh and its dependencies from scratch (2 to 7 minutes per OS, D94). The key follows our crate; the restore key
       # keeps the compiled dependencies when only our code changed. The cache is saved right after the build, not at the
       # end of the job, so a flaky test never keeps an OS without one.
       - id: cargo-cache
+        if: steps.ci-scope.outputs.docs_only != 'true'
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
@@ -50,8 +71,9 @@ jobs:
           key: drop-iroh-${{ runner.os }}-${{ hashFiles('crates/drop-iroh/Cargo.lock', 'crates/drop-iroh/Cargo.toml', 'crates/drop-iroh/src/**') }}
           restore-keys: drop-iroh-${{ runner.os }}-
       - name: Build drop-iroh
+        if: steps.ci-scope.outputs.docs_only != 'true'
         run: cargo build --release --manifest-path crates/drop-iroh/Cargo.toml
-      - if: steps.cargo-cache.outputs.cache-hit != 'true'
+      - if: steps.ci-scope.outputs.docs_only != 'true' && steps.cargo-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
@@ -60,9 +82,12 @@ jobs:
             ~/.cargo/registry/cache
             ~/.cargo/git/db
           key: ${{ steps.cargo-cache.outputs.cache-primary-key }}
-      - run: pnpm -r lint && pnpm -r typecheck && pnpm -r test
+      - run: pnpm -r lint
+      - if: steps.ci-scope.outputs.docs_only != 'true'
+        run: pnpm -r typecheck && pnpm -r test
       # The compiled desktop UI shipped in the Node must match its React sources (D87).
       - name: Desktop UI assets match their sources
+        if: steps.ci-scope.outputs.docs_only != 'true'
         run: node scripts/build-desktop-ui.ts --check
       # Every covered AC scenario keeps its test (AGENTS.md step 6); the baseline only shrinks.
       - run: npx --yes openspec-guard@0.3.0 check --require-selector --baseline .openspec-guard-baseline.json --fail-on fail
@@ -88,14 +113,33 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0 # Need both base and head to safely classify actual renamed paths.
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
           cache: pnpm
+      # Always report required test/test-windows/test-macos jobs: never path-filter this workflow.
+      - name: Classify changed paths conservatively
+        id: ci-scope
+        shell: bash
+        env:
+          CI_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before || '' }}
+          CI_HEAD_SHA: ${{ github.sha }}
+        run: |
+          # Merge queue statuses must always exercise the complete matrix.
+          scope=shared-or-unknown
+          if [ "$GITHUB_EVENT_NAME" != "merge_group" ]; then
+            scope="$(DROP_CI_BASE_SHA="$CI_BASE_SHA" DROP_CI_HEAD_SHA="$CI_HEAD_SHA" node scripts/ci-git-scope.ts 2>/dev/null)" || scope=shared-or-unknown
+          fi
+          if [ "$scope" = docs-only ]; then
+            echo "docs_only=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+          fi
       # The Helm chart test fails in CI without Helm (D81): the same pinned Helm on macOS, whose image lacks it, and on
       # Windows, whose image version may drift.
-      - if: matrix.label == 'macos' || matrix.label == 'windows'
+      - if: (matrix.label == 'macos' || matrix.label == 'windows') && steps.ci-scope.outputs.docs_only != 'true'
         uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
       - run: pnpm install --frozen-lockfile
       # internet.test.ts drives the real drop-iroh binary and builds it in a beforeAll: without a cache every run compiled
@@ -103,6 +147,7 @@ jobs:
       # keeps the compiled dependencies when only our code changed. The cache is saved right after the build, not at the
       # end of the job, so a flaky test never keeps an OS without one.
       - id: cargo-cache
+        if: steps.ci-scope.outputs.docs_only != 'true'
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
@@ -113,8 +158,9 @@ jobs:
           key: drop-iroh-${{ runner.os }}-${{ hashFiles('crates/drop-iroh/Cargo.lock', 'crates/drop-iroh/Cargo.toml', 'crates/drop-iroh/src/**') }}
           restore-keys: drop-iroh-${{ runner.os }}-
       - name: Build drop-iroh
+        if: steps.ci-scope.outputs.docs_only != 'true'
         run: cargo build --release --manifest-path crates/drop-iroh/Cargo.toml
-      - if: steps.cargo-cache.outputs.cache-hit != 'true'
+      - if: steps.ci-scope.outputs.docs_only != 'true' && steps.cargo-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
@@ -124,5 +170,7 @@ jobs:
             ~/.cargo/git/db
           key: ${{ steps.cargo-cache.outputs.cache-primary-key }}
       - run: pnpm -r lint
-      - run: pnpm -r typecheck
-      - run: pnpm -r test
+      - if: steps.ci-scope.outputs.docs_only != 'true'
+        run: pnpm -r typecheck
+      - if: steps.ci-scope.outputs.docs_only != 'true'
+        run: pnpm -r test
