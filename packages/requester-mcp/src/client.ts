@@ -22,6 +22,15 @@ export const DropViewSchema = z.object({
   ownerName: z.string(),
   state: z.string(),
   result: z.object({ output: z.unknown(), outputSchemaHash: z.string() }).optional(),
+  provenance: z
+    .object({
+      executor: z.string(),
+      approver: z.string(),
+      answeredBy: z.enum(['capability', 'human', 'fact']).optional(),
+      decidedAt: z.number().optional(),
+      finishedAt: z.number().optional(),
+    })
+    .optional(),
   error: z.object({ code: z.string(), message: z.string() }).optional(),
   /** Sent, but the relay never answered: the owner may or may not have the request yet (T4.39). */
   delivery: z.literal('unconfirmed').optional(),
