@@ -4,6 +4,7 @@
 // Usage: node scripts/desktop-smoke.ts <resources directory>
 // Run by .github/workflows/release.yml on the macOS DMG, the Windows installer and the Linux packages.
 import { spawn, spawnSync } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { accessSync, constants, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -71,6 +72,9 @@ const env: Record<string, string> = {
 };
 try {
   // The shell's first launch (apps/desktop/src-tauri/src/main.rs, ensure_identity), on a loopback relay nobody serves.
+  // The destination is chosen by this test, never taken from a file whose
+  // content could point the local API token at the wrong loopback process.
+  const smokePort = await freePort();
   const init = spawnSync(
     node,
     [
@@ -85,22 +89,25 @@ try {
       '--relay',
       'ws://127.0.0.1:9/v1',
       '--port',
-      String(await freePort()),
+      String(smokePort),
     ],
     { env, encoding: 'utf8' },
   );
   check(init.status === 0, `drop init succeeds${init.status === 0 ? '' : `: ${init.stderr}`}`);
   check(existsSync(join(temp, 'drop', 'identity.json')), 'the first launch writes a private identity');
   const config = JSON.parse(readFileSync(join(temp, 'drop', 'config.json'), 'utf8')) as { apiPort: number };
+  check(config.apiPort === smokePort, 'persisted API port equals the requested test-only port');
 
   // The bundle's shutdown/relaunch path is the same one used after a signed update.
   // Assert that private identity and authorization survive a real daemon restart.
   const originalIdentity = readFileSync(join(temp, 'drop', 'identity.json'), 'utf8');
-  const originalPort = config.apiPort;
+  const originalPort = smokePort;
   let originalToken: string | undefined;
 
   for (const attempt of [1, 2]) {
-    const marker = 'smoke-' + String(process.pid) + '-' + String(attempt);
+    // An unpredictable instance marker prevents a different loopback process
+    // from spoofing the health probe before we send a private API token.
+    const marker = 'smoke-' + randomUUID();
     const daemon = spawn(node, [cli, 'serve'], {
       env: { ...env, DROP_EXIT_WITH_PARENT: 'stdin', DROP_SHELL_INSTANCE: marker },
       stdio: ['pipe', 'ignore', 'inherit'],
@@ -115,7 +122,7 @@ try {
       let healthy = false;
       while (!healthy && Date.now() < deadline) {
         try {
-          const response = await fetch('http://127.0.0.1:' + String(config.apiPort) + '/_shell/health');
+          const response = await fetch('http://127.0.0.1:' + String(originalPort) + '/_shell/health');
           const body = (await response.json()) as { instance?: string };
           healthy = response.ok && body.instance === marker;
         } catch {
@@ -129,7 +136,7 @@ try {
       if (originalToken === undefined) originalToken = token;
       else check(token === originalToken, 'restart did not rotate the private API token');
 
-      const settings = await fetch('http://127.0.0.1:' + String(config.apiPort) + '/ui/admin/internet', {
+      const settings = await fetch('http://127.0.0.1:' + String(originalPort) + '/ui/admin/internet', {
         headers: { Authorization: 'Bearer ' + token },
       });
       if (settings.ok) {
@@ -139,9 +146,9 @@ try {
         process.stdout.write('skip drop-iroh discovery, HTTP ' + String(settings.status) + '\n');
       }
 
-      const unauthorized = await fetch('http://127.0.0.1:' + String(config.apiPort) + '/_shell/update-ready');
+      const unauthorized = await fetch('http://127.0.0.1:' + String(originalPort) + '/_shell/update-ready');
       check(unauthorized.status === 401, 'the update readiness API refuses unauthenticated callers');
-      const readiness = await fetch('http://127.0.0.1:' + String(config.apiPort) + '/_shell/update-ready', {
+      const readiness = await fetch('http://127.0.0.1:' + String(originalPort) + '/_shell/update-ready', {
         headers: { Authorization: 'Bearer ' + token },
       });
       const readinessBody = (await readiness.json()) as { ready?: boolean };
