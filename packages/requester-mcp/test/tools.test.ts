@@ -100,6 +100,18 @@ describe('requester MCP tools', () => {
       },
       { ok: true },
     );
+    const invalidDate = wrapResult(
+      {
+        dropId: 'd1',
+        capabilityId: 'x',
+        title: 'Bilan',
+        ownerName: 'VPS',
+        state: 'receipted',
+        provenance: { executor: 'executor-id', approver: 'approver-id', decidedAt: 9e20 },
+      },
+      { ok: true },
+    );
+    expect(invalidDate).toContain('date indisponible');
     expect(withReceipt).toContain('Reçu signé vérifié');
     expect(withReceipt).toContain('approver-id');
     expect(withReceipt).toContain('date indisponible');
