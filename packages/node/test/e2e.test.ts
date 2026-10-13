@@ -42,6 +42,10 @@ describe('end to end, in memory: relay and three nodes', () => {
     await m.approver.engine.decide(dropId, 'allow_once');
     await until(() => m.requester.engine.drop(dropId)?.state === 'receipted');
     expect(m.requester.engine.drop(dropId)?.result?.output).toEqual({ status: 'ok', detail: 'tout va bien' });
+    expect(m.requester.engine.drop(dropId)?.provenance).toMatchObject({
+      executor: m.executor.identity.nodeId,
+      approver: m.approver.identity.nodeId,
+    });
     await until(() => m.approver.store.receiptList.length === 1);
     for (const store of [m.requester.store, m.executor.store, m.approver.store]) {
       expect(store.receiptList).toHaveLength(1);

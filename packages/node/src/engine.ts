@@ -1930,7 +1930,14 @@ export class NodeEngine extends EventEmitter {
     if (message.receipt.executor !== from || !(await verifyReceipt(message.receipt))) return;
     this.options.store.appendReceipt(message.receipt);
     const drop = this.outbound.get(message.receipt.dropId);
-    if (drop) {
+    // A valid signature alone does not bind a receipt to this outbound request.
+    // Only the expected executor and matching capability may attest its origin.
+    if (
+      drop &&
+      drop.executor === from &&
+      drop.capabilityId === message.receipt.capabilityId &&
+      message.receipt.decision === 'allow_once'
+    ) {
       drop.provenance = {
         executor: message.receipt.executor,
         approver: message.receipt.approver,
