@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process';
+import { isAbsolute as posixAbsolute, win32 } from 'node:path';
 import { promisify } from 'node:util';
 
 /**
@@ -35,6 +36,10 @@ export function isWindowsShim(file: string): boolean {
 /** Bounded: an official command waiting for an update or a login must not hold the daemon, nor block it meanwhile. */
 export async function runOfficial(argv: string[], platform: NodeJS.Platform = process.platform): Promise<void> {
   const [file = '', ...args] = argv;
+  // Refuse an executable resolved relative to cwd/PATH at the command sink.
+  // Onboarding resolves official binaries to absolute file paths first.
+  const absolute = platform === 'win32' ? win32.isAbsolute(file) : posixAbsolute(file);
+  if (!absolute) throw new Error('E_CLI_BINARY_PATH');
   const shim = platform === 'win32' && isWindowsShim(file);
   // A fixed cmd.exe, never the ComSpec variable: the shell that runs a shim does not come from the environment.
   const command = shim ? windowsShimCommand(argv) : { file, args };
