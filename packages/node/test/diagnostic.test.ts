@@ -119,6 +119,10 @@ describe('redacted diagnostic (T4.37)', () => {
 
   it('serves the diagnostic and opens the logs folder only with the token', async () => {
     const { home } = await newHome();
+    // A non-secret fixture token owned by this test; never read a private token
+    // from disk before sending a request, even to the loopback daemon.
+    const fixtureToken = 'drop-diagnostic-local-fixture-token-123456';
+    writeFileSync(join(home.root, 'local-token'), fixtureToken, { mode: 0o600 });
     const opened: string[] = [];
     const daemon = await startDaemon(home, {
       apiPort: 0,
@@ -131,7 +135,7 @@ describe('redacted diagnostic (T4.37)', () => {
     });
     cleanups.push(() => daemon.stop());
     const base = `http://127.0.0.1:${String(daemon.api.port)}`;
-    const auth = { Authorization: `Bearer ${home.localToken()}` };
+    const auth = { Authorization: `Bearer ${fixtureToken}` };
     expect((await fetch(`${base}/ui/admin/diagnostic`)).status).toBe(401);
     expect((await fetch(`${base}/ui/admin/logs/open`, { method: 'POST' })).status).toBe(401);
     expect(opened).toEqual([]);

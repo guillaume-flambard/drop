@@ -88,3 +88,22 @@ Check actual statuses of PRs 91, 98, 99, 100, before starting new code. If they 
 - PR #104: https://github.com/memolabs-dev/drop/pull/104 — OPEN with normal GitHub auto-merge enabled, Ubuntu/macOS/Windows/CodeQL checks pending at last check. No bypass of merge queue or protected checks.
 - **Next single task:** Proactively detect pre-existing persistent replay corruption at daemon startup via a *read-only* integrity validation, without mutating or resetting replay state. Begin by designing deterministic tests for healthy, old and corrupt stores; do not silently reset keys/markers.
 - Existing private beta installers do not include this new code until the normal signed release pipeline is run. No physical device claims, deploy, or stable publication in this relay.
+
+## Relay 14 — unblock PR #104 CodeQL review (2026-10-13)
+
+**Selected one focused task:** GitHub reports PR #104 has 11 passing checks but is BLOCKED from the merge queue by an unresolved CodeQL "File data in outbound network request" thread at `packages/node/test/diagnostic.test.ts:160` (alert #91). The test's HTTP authorization token is currently read from the private temporary home via `home.localToken()`. This is test-only, but CodeQL correctly traces a file-derived secret into a network call.
+
+**Breakdown recorded before implementation:**
+- `DONE` — Use a test-owned, non-secret fixture token generated as a constant in the test process and explicitly write it to the throwaway home *before* starting its daemon. Send only the test-owned value to loopback; avoid fetching a disk-derived secret into the request.
+- `DONE` — Diagnostic / owner UI tests 6/6 PASS; monorepo lint and typecheck PASS. Publish a PR #104 branch update for hosted CodeQL review.
+- `NEXT` — Only after hosted CodeQL confirms the finding no longer applies, resolve the corresponding review thread with evidence; enqueue through GitHub merge queue. Do not blindly dismiss security findings.
+- `QUEUED` — Retarget dependent PR #105 to main after PR #104 is merged, then rerun Windows/macOS/Linux required checks.
+
+**Safety:** No real local token is read or disclosed, no CI/security checker disabled, no release/deployment. Changes confined to a throwaway test fixture and this handoff log.
+
+### Relay 14 local verification
+
+- `packages/node/test/diagnostic.test.ts` now supplies an intentionally non-secret, predetermined test token *before* the daemon reads the throwaway home's token file. The HTTP request header is constructed from the test fixture variable, **not from `home.localToken()`** or another file read. Nothing changes in real daemon authentication.
+- `pnpm exec vitest run packages/node/test/diagnostic.test.ts packages/desktop-ui/test/replay-security-alert.test.tsx`: **6/6 PASS**.
+- `pnpm -r lint`, `pnpm -r typecheck`, `git diff --check`: PASS.
+- Remaining action: publish to PR #104, rerun hosted CodeQL; inspect alert #91 and resolve its thread only with evidence the issue no longer applies. Then enqueue normally.
