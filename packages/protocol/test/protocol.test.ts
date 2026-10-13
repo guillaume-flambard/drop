@@ -77,6 +77,31 @@ describe('drop request id', () => {
     expect(MessageSchema.safeParse({ ...request, dropId: uuidv7(NOW) }).success).toBe(true);
   });
 
+  it('normalizes uppercase follow-up drop IDs on every message route', () => {
+    const id = uuidv7(NOW);
+    const upper = id.toUpperCase();
+    const messages = [
+      { type: 'drop_status', dropId: upper, state: 'running' },
+      { type: 'approval_decision', dropId: upper, decision: 'deny', decidedAt: NOW },
+      { type: 'human_answer', dropId: upper, answer: { kind: 'human', text: 'Ready' }, decidedAt: NOW },
+      { type: 'review_request', dropId: upper, output: { ok: true }, expiresAt: NOW + 1000 },
+      { type: 'review_decision', dropId: upper, decision: 'discard' },
+      { type: 'drop_result', dropId: upper, output: { ok: true }, outputSchemaHash: 'h' },
+      { type: 'drop_error', dropId: upper, code: 'E_DENIED', message: 'Not allowed' },
+    ];
+    for (const message of messages) {
+      const parsed = MessageSchema.safeParse(message);
+      expect(parsed.success, message.type).toBe(true);
+      if (parsed.success && 'dropId' in parsed.data) expect(parsed.data.dropId, message.type).toBe(id);
+    }
+    // Legacy follow-ups may refer to UUIDv4 request IDs: don't make
+    // that version invalid while normalizing the hex case.
+    const legacy = '550e8400-e29b-41d4-a716-446655440000';
+    expect(MessageSchema.parse({ type: 'drop_status', dropId: legacy.toUpperCase(), state: 'running' })).toMatchObject({
+      dropId: legacy,
+    });
+  });
+
   it('normalizes uppercase UUIDv7 before dispatch', () => {
     const id = uuidv7(NOW);
     const parsed = MessageSchema.parse({
@@ -207,6 +232,77 @@ describe('envelope', () => {
     await expectCode(open(resigned), 'E_DECRYPT');
     // E_MESSAGE_SCHEMA: decrypts fine but is not a protocol message.
     await expectCode(open(await sealRaw(alice, bob, '{"type":"nope"}')), 'E_MESSAGE_SCHEMA');
+  });
+
+  it('offers a bounded explicit refusal only for authenticated malformed drop requests', async () => {
+    const { alice, bob } = await pair();
+    const legacyId = '550e8400-e29b-41d4-a716-446655440000';
+    const malformed = await sealRaw(
+      alice,
+      bob,
+      JSON.stringify({
+        type: 'drop_request',
+        dropId: legacyId.toUpperCase(),
+        capabilityId: 'test.state',
+        capabilityVersion: '1.0.0',
+        input: {},
+        purpose: 'Legacy peer used UUIDv4',
+        requestedBy: { nodeId: alice.nodeId, displayName: 'Alice', agent: 'codex' },
+      }),
+    );
+    const notified: Array<{ peer: string; dropId: string }> = [];
+    const notify = (peer: string, dropId: string) => {
+      notified.push({ peer, dropId });
+    };
+    await expectCode(
+      openEnvelope(bob, malformed, {
+        isKnownPeer: (id) => id === alice.nodeId,
+        replay: new ReplayCache(),
+        now: NOW,
+        onInvalidDropRequest: notify,
+      }),
+      'E_MESSAGE_SCHEMA',
+    );
+    expect(notified).toEqual([{ peer: alice.nodeId, dropId: legacyId }]);
+
+    notified.length = 0;
+    await expectCode(
+      openEnvelope(bob, malformed, {
+        isKnownPeer: () => false,
+        replay: new ReplayCache(),
+        now: NOW,
+        onInvalidDropRequest: notify,
+      }),
+      'E_UNKNOWN_PEER',
+    );
+    expect(notified).toEqual([]);
+
+    await expectCode(
+      openEnvelope(
+        bob,
+        { ...malformed, sig: 'not-a-signature' },
+        {
+          isKnownPeer: (id) => id === alice.nodeId,
+          replay: new ReplayCache(),
+          now: NOW,
+          onInvalidDropRequest: notify,
+        },
+      ),
+      'E_SIG',
+    );
+    expect(notified).toEqual([]);
+
+    // JSON without a usable UUID (or without a drop_request type) produces no reply.
+    await expectCode(
+      openEnvelope(bob, await sealRaw(alice, bob, '{"type":"drop_request","dropId":"x"}'), {
+        isKnownPeer: (id) => id === alice.nodeId,
+        replay: new ReplayCache(),
+        now: NOW,
+        onInvalidDropRequest: notify,
+      }),
+      'E_MESSAGE_SCHEMA',
+    );
+    expect(notified).toEqual([]);
   });
 
   it('refuses an oversized envelope before sending', async () => {

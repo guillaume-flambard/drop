@@ -7,7 +7,11 @@ import { ReceiptSchema } from './receipt.ts';
 import { HumanAnswerSchema } from './human-answer.ts';
 import { IrohAddrSchema } from './iroh.ts';
 
-const DropId = z.uuid();
+// A UUID identifies the same drop irrespective of hex case. Normalize all
+// follow-up messages just as a new drop_request already does; otherwise an
+// uppercase result or decision cannot be matched to the stored lowercase ID.
+// This does not change the accepted UUID versions for pre-existing drops.
+const DropId = z.uuid().overwrite((id) => id.toLowerCase());
 // overwrite keeps the UUIDv7 pattern in the exported JSON Schema, unlike refine/transform.
 const NewDropId = z.uuidv7().overwrite((id) => id.toLowerCase());
 const Timestamp = z.number().int().nonnegative();

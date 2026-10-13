@@ -125,6 +125,10 @@ export class ReplayCache {
   }
 }
 
+// A response to malformed requests must be bounded to authenticated, paired
+// senders; invalid messages never become accepted protocol messages.
+const RejectedDropReference = z.object({ type: z.literal('drop_request'), dropId: z.uuid() });
+
 export interface OpenOptions {
   isKnownPeer: (nodeId: NodeId) => boolean;
   replay: ReplayCache;
@@ -141,6 +145,10 @@ export interface OpenOptions {
    * It MUST claim the session: true at most once per session, so that a grant cannot be replayed (T4.2d, D78).
    */
   acceptLinkSession?: (sessionId: string) => boolean;
+  /** Called only for a signed, decrypted and replay-checked message from a known
+   * peer that fails full schema validation but identifies a valid drop request.
+   * This is a best-effort explicit protocol refusal, never an authorization. */
+  onInvalidDropRequest?: (from: NodeId, dropId: string) => Promise<void> | void;
 }
 
 export interface Opened {
@@ -192,12 +200,26 @@ export async function openEnvelope(recipient: Identity, raw: unknown, options: O
     throw new DropError('E_DECRYPT', 'cannot decrypt body');
   }
 
-  let message: Message;
+  let decoded: unknown;
   try {
-    message = MessageSchema.parse(JSON.parse(plain));
+    decoded = JSON.parse(plain);
   } catch {
     throw new DropError('E_MESSAGE_SCHEMA', 'invalid message');
   }
+  const parsedMessage = MessageSchema.safeParse(decoded);
+  if (!parsedMessage.success) {
+    // The response is strictly narrower than accepting a malformed message:
+    // only a known, authenticated peer and a syntactically valid UUID can be
+    // identified. Anonymous pairing attempts and invalid signatures get silence.
+    if (known && options.onInvalidDropRequest) {
+      const reference = RejectedDropReference.safeParse(decoded);
+      if (reference.success) {
+        await options.onInvalidDropRequest(envelope.from, reference.data.dropId.toLowerCase());
+      }
+    }
+    throw new DropError('E_MESSAGE_SCHEMA', 'invalid message');
+  }
+  const message: Message = parsedMessage.data;
 
   const pairing = message.type === 'pair_request' && options.acceptPairToken?.(message.oneTimeToken) === true;
   const linking = message.type === 'link_grant' && options.acceptLinkSession?.(message.sessionId) === true;
